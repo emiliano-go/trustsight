@@ -680,6 +680,15 @@ domains = [
     "repo.yandex.ru",
     "nebula.gg",
     "downloads.sejda-cdn.com",
+    # Anomaly's release service for the Hex dictation app.  The vendor
+    # publishes the prebuilt binary from its own host while `url=` names the
+    # GitHub source repository, the same model as repo.secureblue.dev
+    # (hex-bin, 2026-10-31).
+    "anoma.ly",
+    # Wyrd Company's artifact CDN.  The vendor publishes wyrwood/toha
+    # prebuilt archives from repo.wyrd.foo while `url=` names the GitHub
+    # source repository (wyrwood-bin, toha-bin, 2026-10-31).
+    "wyrd.foo",
 ]
 
 [raw_hosting]

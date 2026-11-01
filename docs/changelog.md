@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **The 2026-10-31 watcher false-positive remainder, with true-positive twins.** C011 no longer reads a declared `LICENSE`/README source as a non-upstream prebuilt host (snishaper-bin); X002 treats a staged launcher heredoc as data even when the diff interleaves an older heredoc around it (tape16-bin); C007 ignores `source_version` scalars while still catching `source=` and `source_<arch>=` arrays (pivra); and the project-owned release hosts `anoma.ly` and `wyrd.foo` are official, so routine vendor `-bin` releases no longer pay C011/SOURCE_BUCKET (hex-bin, wyrwood-bin, toha-bin). The six reproducible alerts from that window now clear their named rules; every correction keeps its malicious positive control.
+
 ## [0.26.0] - 2026-10-30
 
 ### Added

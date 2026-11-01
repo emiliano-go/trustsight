@@ -136,30 +136,33 @@ def _non_shell_heredoc_body_indices(lines: list[str]) -> set[int]:
     not feed the command-position predicates: ``sys.argv[1]`` matched X002's
     ``glob`` shape and read as an obfuscated program name (ttf-google-sans).
     Shell-fed bodies (``bash <<EOF``, ``cat <<EOF | sh``) stay eligible.
+
+    Scanned per diff side: a removed heredoc's open delimiter must not
+    swallow an added opener, the same interleaving that hid tape16-bin's
+    staged launcher from X002.
     """
+    from ...line_lex import _diff_side_streams
+
     bodies: set[int] = set()
-    delimiter = ""
-    non_shell = False
-    for index, line in enumerate(lines):
-        if not line.startswith(("+", " ")) or line.startswith(("+++", "---")):
-            raw = line
-        else:
-            raw = line[1:]
-        if delimiter:
-            if raw.strip() == delimiter:
-                delimiter = ""
-                non_shell = False
-            elif non_shell:
-                bodies.add(index)
-            continue
-        match = _HEREDOC_OPEN_RE.search(raw)
-        if not match:
-            continue
-        opener = raw[:match.start()]
-        if (_NON_SHELL_INTERPRETER_RE.search(opener)
-                and not _SHELL_INTERPRETER_RE.search(opener)):
-            delimiter = match.group(2)
-            non_shell = True
+    for stream in _diff_side_streams(lines):
+        delimiter = ""
+        non_shell = False
+        for index, _raw, text in stream:
+            if delimiter:
+                if text.strip() == delimiter:
+                    delimiter = ""
+                    non_shell = False
+                elif non_shell:
+                    bodies.add(index)
+                continue
+            match = _HEREDOC_OPEN_RE.search(text)
+            if not match:
+                continue
+            opener = text[:match.start()]
+            if (_NON_SHELL_INTERPRETER_RE.search(opener)
+                    and not _SHELL_INTERPRETER_RE.search(opener)):
+                delimiter = match.group(2)
+                non_shell = True
     return bodies
 
 

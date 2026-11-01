@@ -14,6 +14,7 @@ they execute; a heredoc body does not, and neither does a comment.
 
 import re
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import lru_cache
 
@@ -501,6 +502,81 @@ def _heredoc_body_indices(lines: list[str]) -> set[int]:
     return set(_heredoc_body_indices_cached(tuple(lines)))
 
 
+def _diff_side_streams(
+    lines: tuple[str, ...] | list[str],
+) -> list[list[tuple[int, str, str]]]:
+    """Split diff-prefixed lines into one stream per diff side.
+
+    A diff is two files interleaved: ``-`` lines are the old side, ``+``
+    lines the new one, and context lines belong to both.  Heredoc state is
+    per file, so a removed ``<<'EOF'`` must not consume an added
+    ``<<'LAUNCHER'`` that appears before the removed closer.  That is
+    exactly the tape16-bin shape: the old launcher's ``EOF`` was still open
+    when the new ``LAUNCHER`` opener arrived, so the new body was read as
+    old-side content and X002 saw its ``exec "$APP_VAR"`` as a command.
+
+    Returns ``[(index, raw_line, shell_text), ...]`` per stream.  A non-diff
+    input is one stream and keeps the old single-file behaviour.
+    """
+    if not any(_diff_boundary(line) for line in lines):
+        # A caller may pass a diff fragment without its headers (the differ
+        # tests do); strip the one-character prefix the old single-stream
+        # reader stripped, or an executed `bash <<EOF` reads as file data.
+        return [[(i, line, line[1:] if line[:1] in ("+", "-") else line)
+                 for i, line in enumerate(lines)]]
+    add: list[tuple[int, str, str]] = []
+    remove: list[tuple[int, str, str]] = []
+    for i, line in enumerate(lines):
+        if _diff_boundary(line):
+            # Header/hunk boundaries belong to neither side; keep them in
+            # both so the scanner still clears a hunk-crossing heredoc.
+            add.append((i, line, line))
+            remove.append((i, line, line))
+        elif line[:1] == "+":
+            add.append((i, line, line[1:]))
+        elif line[:1] == "-":
+            remove.append((i, line, line[1:]))
+        else:
+            # Context line (leading space in a diff) is the same text in
+            # both files.
+            add.append((i, line, line))
+            remove.append((i, line, line))
+    return [add, remove]
+
+
+def _side_heredoc_bodies(
+    stream: list[tuple[int, str, str]],
+    classify: Callable[[str], bool],
+) -> set[int]:
+    """Body indices (in the original lines) for one diff side."""
+    body: set[int] = set()
+    delims: deque[tuple[str, bool]] = deque()
+    texts = [text for _index, _raw, text in stream]
+    lexed = lex_lines(texts, fragment=True)
+    for pos, (index, raw, text) in enumerate(stream):
+        if _diff_boundary(raw):
+            # A partial hunk can leave a heredoc open.  Its body cannot
+            # continue into the next file or hunk; carrying the queue there
+            # blanked unrelated payload lines.
+            delims.clear()
+        if delims:
+            delimiter, strip_tabs = delims[0]
+            probe = text.lstrip("\t") if strip_tabs else text
+            if probe == delimiter:
+                delims.popleft()
+                continue
+        if delims:
+            if delims[0][1]:
+                body.add(index)
+            continue
+        openers = lexed[pos].heredoc_openers
+        if openers:
+            flag = classify(text)
+            for delimiter, _strip_tabs in openers:
+                delims.append((delimiter, flag))
+    return body
+
+
 @lru_cache(maxsize=8)
 def _heredoc_body_indices_cached(lines: tuple[str, ...]) -> frozenset[int]:
     """Indices of lines that are literal heredoc content, not commands.
@@ -522,47 +598,26 @@ def _heredoc_body_indices_cached(lines: tuple[str, ...]) -> frozenset[int]:
         EOF
         }
 
-    The exemption is therefore decided per heredoc, by where it goes.
+    The exemption is therefore decided per heredoc, by where it goes, and
+    per diff side, because a removed and an added heredoc are different
+    files' state.  A diff's old side is scanned independently of its new
+    side; context lines belong to both.
     """
+    def is_data(text: str) -> bool:
+        # The destination may be named on either side of the delimiter:
+        # `bash <<EOF` puts it before, and `cat <<'EOF' | sh` puts it after
+        # the redirect.  Reading only the left half meant the piped form -
+        # which is how the shape is usually written - stayed classified as
+        # data.
+        return bool(_HEREDOC_TO_NON_SHELL_RE.search(text)) or not (
+            _HEREDOC_TO_INTERPRETER_RE.search(text)
+            or _HEREDOC_PIPED_RE.search(text)
+            or _HEREDOC_TO_EXECUTING_CONFIG_RE.search(text)
+        )
+
     body: set[int] = set()
-    delims: deque[tuple[str, bool]] = deque()
-    # The lexer owns opener detection: a `<<` inside a comment or a quoted
-    # string is prose.  Scanning the raw line here disagreed with
-    # line_lex._scan and turned `# upstream uses the <<EOF form` above a
-    # fetch into a fake delimiter that blanked every following line - and
-    # with it H069/H072/H082/H083 for the whole function.
-    lexed = lex_lines(list(lines), fragment=True)
-    for i, line in enumerate(lines):
-        content = line[1:] if line[:1] in ("+", "-") else line
-        if _diff_boundary(line):
-            # A partial hunk can leave a heredoc open.  Its body cannot
-            # continue into the next file or hunk; carrying the queue there
-            # blanked unrelated payload lines.
-            delims.clear()
-        if delims:
-            delimiter, strip_tabs = delims[0]
-            probe = content.lstrip("\t") if strip_tabs else content
-            if probe == delimiter:
-                delims.popleft()
-                continue
-        if delims:
-            if delims[0][1]:
-                body.add(i)
-            continue
-        openers = lexed[i].heredoc_openers
-        if openers:
-            # The destination may be named on either side of the
-            # delimiter: `bash <<EOF` puts it before, and
-            # `cat <<'EOF' | sh` puts it after the redirect.  Reading
-            # only the left half meant the piped form - which is how
-            # the shape is usually written - stayed classified as data.
-            is_data = bool(_HEREDOC_TO_NON_SHELL_RE.search(content)) or not (
-                _HEREDOC_TO_INTERPRETER_RE.search(content)
-                or _HEREDOC_PIPED_RE.search(content)
-                or _HEREDOC_TO_EXECUTING_CONFIG_RE.search(content)
-            )
-            for delimiter, _strip_tabs in openers:
-                delims.append((delimiter, is_data))
+    for stream in _diff_side_streams(lines):
+        body |= _side_heredoc_bodies(stream, is_data)
     return frozenset(body)
 
 
@@ -654,41 +709,24 @@ def _printed_heredoc_body_indices(lines: list[str]) -> set[int]:
 def _printed_heredoc_body_indices_cached(
     lines: tuple[str, ...],
 ) -> frozenset[int]:
-    body: set[int] = set()
-    delims: deque[tuple[str, bool]] = deque()
-    lexed = lex_lines(list(lines), fragment=True)
-    for i, line in enumerate(lines):
-        content = line[1:] if line[:1] in ("+", "-") else line
-        if _diff_boundary(line):
-            delims.clear()
-        if delims:
-            delimiter, strip_tabs = delims[0]
-            probe = content.lstrip("\t") if strip_tabs else content
-            if probe == delimiter:
-                delims.popleft()
-                continue
-        if delims:
-            if delims[0][1]:
-                body.add(i)
-            continue
-        openers = lexed[i].heredoc_openers
-        if not openers:
-            continue
+    def is_printed(text: str) -> bool:
         executed = bool(
-            _HEREDOC_PIPED_RE.search(content)
-            or _HEREDOC_TO_INTERPRETER_RE.search(content)
+            _HEREDOC_PIPED_RE.search(text)
+            or _HEREDOC_TO_INTERPRETER_RE.search(text)
         )
         printed = bool(
-            _PRINTED_HEREDOC_OPENER_RE.match(content) and not executed
+            _PRINTED_HEREDOC_OPENER_RE.match(text) and not executed
         )
         if not printed and not executed:
             # A heredoc captured into a variable is data here; it is inert
             # when that variable is only ever printed (gentoo-color-bash's
             # `_usage` block).  An executed capture stays eligible.
-            captured = _heredoc_capture_names(content)
-            printed = _capture_is_printed(lines, captured)
-        for delimiter, _strip_tabs in openers:
-            delims.append((delimiter, printed))
+            printed = _capture_is_printed(lines, _heredoc_capture_names(text))
+        return printed
+
+    body: set[int] = set()
+    for stream in _diff_side_streams(lines):
+        body |= _side_heredoc_bodies(stream, is_printed)
     return frozenset(body)
 
 

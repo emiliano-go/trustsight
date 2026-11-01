@@ -97,7 +97,7 @@ Twenty was originally the 95th percentile of the benign corpus. It is not any mo
 |---------|-------|
 | benign median | 0 |
 | benign 95th percentile | 30 |
-| benign diffs scoring 0 | 73.4% |
+| benign diffs scoring 0 | 74.8% |
 | benign diffs above 20 | 6.6% |
 | percentile that 20 now sits at | 93.4th |
 | malicious 5th percentile | 40 |

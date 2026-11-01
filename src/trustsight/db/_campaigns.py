@@ -34,11 +34,6 @@ __all__ = [
 #: real rather than a policy someone forgets to enforce.
 DEFAULT_TTL_OBSERVATIONS = 40
 
-#: Default minimum spacing, in observations, between re-activations of the
-#: same campaign class.  A class that re-arms faster than this is still
-#: refreshed, but :func:`reactivation_pressure` reports it (M006).
-DEFAULT_MIN_REACTIVATION_OBSERVATIONS = 5
-
 #: Largest scope a campaign may store.  A scope comes from a corpus
 #: finding's members/targets, but bounding the stored row keeps a pathological
 #: finding from writing an unbounded JSON blob.

@@ -176,15 +176,6 @@ SEVERITY_COLORS = {
     "INFO": "dim",
 }
 
-TIER_OF = {
-    "SOURCE_BUCKET": ("B", "Priors / context"),
-    "NOVELTY": ("C", "History / novelty"),
-    "PINNING": ("D", "Verification"),
-    "VERIFICATION": ("D", "Verification"),
-}
-
-
-
 def console() -> "Console":
     if not HAS_RICH:
         raise RuntimeError("rich is not available")
@@ -206,10 +197,6 @@ def err_console() -> "Console":
     if _err_console is None:
         _err_console = Console(stderr=True)
     return _err_console
-
-
-def _tier_of(entry) -> str:
-    return TIER_OF.get(entry.rule_id, ("A", ""))[0]
 
 
 def _severity_text(severity: str) -> "Text":

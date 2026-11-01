@@ -125,7 +125,6 @@ def _has_unquoted_redirect(line: str) -> bool:
         elif char == ">":
             return True
     return False
-    return False
 
 def clamp_diff_lines(diff_text: str, package_name: str = "") -> tuple[str, bool]:
     """Cut *diff_text* to :data:`MAX_SCANNED_LINES`, reporting whether it cut.

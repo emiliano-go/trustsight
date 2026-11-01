@@ -285,16 +285,6 @@ def get_srcinfo_at_commit(project, commit_oid: str) -> str:
     return project.file_at(commit_oid, ".SRCINFO") if commit_oid else ""
 
 
-def get_maintainer_from_repo(project) -> Optional[str]:
-    """Return the maintainer from *project*'s HEAD PKGBUILD or .SRCINFO."""
-    head = get_head_commit(project)
-    if not head:
-        return None
-    return extract_maintainer(
-        project.file_at(head, "PKGBUILD"), project.file_at(head, ".SRCINFO")
-    )
-
-
 def get_maintainer_from_commit(project, commit_oid: str) -> Optional[str]:
     """Return the maintainer from *project* at a specific *commit_oid*."""
     if not commit_oid:

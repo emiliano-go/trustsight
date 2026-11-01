@@ -159,7 +159,3 @@ def read_frame(fh, limit: int = MAX_FRAME_BYTES) -> bytes:
     return read_exact(fh, n)
 
 
-def read_header(fh) -> int:
-    """Read just a frame length; the caller enforces the cap."""
-    (n,) = _HEADER.unpack(read_exact(fh, _HEADER.size))
-    return n

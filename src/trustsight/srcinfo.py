@@ -22,8 +22,6 @@ MAX_SRCINFO_LINES = 100_000
 #: declaring millions is bounding this process's memory, not its packaging.
 MAX_SRCINFO_VALUES_PER_KEY = 4096
 
-SRCINFO_RE = re.compile(r"^\s*(?:\w+)\s*=\s*(.+)$")
-
 _LINE_RE = re.compile(r"^\s*(\w+)\s*=\s*(.+)$")
 
 
@@ -58,14 +56,6 @@ def parse_srcinfo(text: str) -> dict[str, list[str]]:
 SCALAR_KEYS = frozenset({
     "pkgbase", "pkgver", "pkgrel", "epoch", "pkgdesc",
     "url", "install", "changelog",
-})
-ARRAY_KEYS = frozenset({
-    "arch", "license", "groups", "source",
-    "noextract", "backup", "options", "validpgpkeys",
-    "depends", "makedepends", "checkdepends", "optdepends",
-    "provides", "conflicts", "replaces",
-    "md5sums", "sha1sums", "sha224sums", "sha256sums",
-    "sha384sums", "sha512sums", "b2sums",
 })
 
 

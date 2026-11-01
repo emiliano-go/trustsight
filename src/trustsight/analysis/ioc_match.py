@@ -53,10 +53,6 @@ def _checksum_digests(body: str) -> set[str]:
     return digests
 
 
-def _value_in_body(pattern: str, body: str) -> bool:
-    return bool(re.search(pattern, body, re.IGNORECASE))
-
-
 def _match_body(body: str, diff_text: str, want_domains: bool,
                 pattern_hits, source_allowed, add) -> None:
     """Emit baseline matches for one added body."""

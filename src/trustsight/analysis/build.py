@@ -283,28 +283,6 @@ def _obfuscation_density_threshold(config) -> int:
     return thresholds.get("obfuscation_density", 3)
 
 
-def _reconstructs_to_action(body: str, config=None) -> bool:
-    """True when *body* (already resolved and reconstructed) reveals an
-    executable action rather than inert obfuscation."""
-    return bool(_reconstructs_to_action_re(config).search(body))
-
-
-def reconstructs_to_js_pm_install(text: str) -> bool:
-    return bool(_foreign_pkg_re().search(text))
-
-
-def reconstructs_to_decode_pipe_sh(text: str) -> bool:
-    return bool(
-        re.search(
-            r"(?:base64|xxd|uudecode)\b[^|]*\|[^|]*(?:bash|sh|zsh|dash)\b",
-            text, re.IGNORECASE,
-        )
-    )
-
-
-def reconstructs_to_eval_of_decoded(text: str) -> bool:
-    return bool(re.search(r"\beval\b", text, re.IGNORECASE))
-
 _ENV_SUBVERSION_HIGH_RE = re.compile(
     r"\b(?:LD_PRELOAD|LD_LIBRARY_PATH)\s*(?:\+?=)",
 )

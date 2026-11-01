@@ -34,14 +34,6 @@ COMMAND_POSITION = r"(?:\A\s*|[;&|(]\s*|\$\(\s*|&&\s*|\|\|\s*)"
 #: Grouping and reserved words that also begin a command list:
 #: `{ pip install }`, `! pip install`, `time pip install`,
 #: `if …; then pip install`, `while …; do pip install` and a `case` arm.
-#: These occur inside ordinary quoted prose, so they must be matched against
-#: a quote-blanked view (``rules._blank_quoted`` or ``line_lex`` code), never
-#: the raw line.
-SHELL_COMMAND_POSITION = (
-    r"(?:!\s*|\{\s+|\btime\s+(?:-p\s+)?|\b(?:then|else|do)\s+"
-    r"|^\s*(?:[^\s();&|]+(?:\|[^\s();&|]+)*)\)\s+)"
-)
-
 #: A lookbehind-style anchor that keeps the match start at the separator.  It
 #: is what ``analysis.base._CMD`` uses; behaviour is the operator set it has
 #: always had, now defined in one place.

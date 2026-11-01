@@ -4,6 +4,18 @@ from __future__ import annotations
 import logging
 import re
 from ...deps import _strip_comment
+from ...shell_words import (
+    _ACCOUNT_OPTION_RE,
+    _ASSIGNMENT_RE,
+    _EVALUATION_RE,
+    _NUMERIC_RE,
+    _PRIVILEGE_WRAPPERS,
+    _REDIRECT_RE,
+    _opens_a_value,
+    COMMAND_WRAPPERS as _WRAPPERS,
+    command_starts as _command_starts,
+    split_shell_commands as _split_commands,
+)
 from ..base import _CMD
 from ._ownership import _ownership_yields
 
@@ -64,8 +76,6 @@ _INTERPRETER_DECODE = (
     r"|Compress::(?:Zlib|Raw)|Inflate|uncompress"
     r"|codecs\.decode|binascii\.[ab]2[ab]_"
 )
-
-_ASSIGNMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:\[[^\]]{0,40}\])?\+?=")
 
 _FENCE_RE = re.compile(r"^\s*(?:```|~~~|#|//|\*(?!\))|-\s)")
 
@@ -162,91 +172,6 @@ def _home_alias_hit(body: str):
 
 _DECEPTIVE_SPACE_RE = re.compile(r"[^\S \t\n\r]")
 
-def _split_commands(body: str) -> list[str]:
-    """Split *body* on command separators, respecting quotes.
-
-    A `|` inside a quoted argument does not start a command:
-    ``sed -i 's|"$LIBS -lfoo|...|'`` is one command, and splitting naively
-    on the pipe offered ``"$LIBS ...`` as a command word. That was the only
-    substitution-shaped false positive the benign corpus produced.
-    """
-    parts, current, quote = [], [], None
-    depth = 0
-    index = 0
-    while index < len(body):
-        ch = body[index]
-        if quote:
-            if ch == quote:
-                quote = None
-            current.append(ch)
-        elif ch in "'\"":
-            quote = ch
-            current.append(ch)
-        elif ch == "[" and body[index:index + 2] == "[[":
-            # `[[ -n "$a" && "$a" != "$b" ]]` is one test, not two commands.
-            # Splitting on the `&&` handed the second half to the scan with
-            # `"$a"` in first position, and a conditional that mentions a
-            # variable is most of the shell ever written. The guard at the
-            # top of the loop only sees a part that *begins* with `[[`.
-            depth += 1
-            current.append(body[index:index + 2])
-            index += 2
-            continue
-        elif ch == "]" and body[index:index + 2] == "]]":
-            depth = max(0, depth - 1)
-            current.append(body[index:index + 2])
-            index += 2
-            continue
-        elif ch == "(":
-            depth += 1
-            current.append(ch)
-        elif ch == ")":
-            depth = max(0, depth - 1)
-            current.append(ch)
-        elif ch in ";&|" and depth == 0:
-            parts.append("".join(current))
-            current = []
-            # Consume the second character of && and ||.
-            if index + 1 < len(body) and body[index + 1] == ch:
-                index += 1
-        elif ch in ";&|":
-            # Inside `(( ... && ... ))` or `$( ... )` this is arithmetic or a
-            # nested pipeline, not a new command.
-            current.append(ch)
-        else:
-            current.append(ch)
-        index += 1
-    parts.append("".join(current))
-    return parts
-
-_WRAPPERS = frozenset({
-    "env", "exec", "sudo", "doas", "nohup", "command", "builtin", "time",
-    "nice", "ionice", "timeout", "xargs", "setsid", "stdbuf", "unbuffer",
-    "script", "then", "else", "do", "!",
-    "if", "elif", "while", "until",
-})
-
-_REDIRECT_RE = re.compile(r"^\d?[<>]")
-
-_EVALUATION_RE = re.compile(r"^(?:\(\(|\[\[|\[\s|test\s)")
-
-_NUMERIC_RE = re.compile(r"^\d+$")
-
-def _opens_a_value(token: str) -> bool:
-    """True when *token* leaves a quote or a substitution unclosed.
-
-    `FOO=1 cmd` is an environment prefix and the scan must walk past it to
-    reach `cmd`. `outmsg=$(eval "$(...)" 2>&1)` is not: everything after the
-    first token is the assignment's *value*, and reading on found the `$(`
-    inside it and called it a command name. The two are told apart by
-    whether the token closes what it opened.
-    """
-    return bool(
-        token.count('"') % 2
-        or token.count("'") % 2
-        or token.count("(") > token.count(")")
-    )
-
 _WORD_VAR_RE = re.compile(r"\$(\{)?([A-Za-z_][A-Za-z0-9_]*)(?(1)\})")
 
 _LITERAL_WORD_RE = re.compile(r"^[A-Za-z0-9_./+-]+$")
@@ -278,133 +203,29 @@ def _resolves_to_a_literal(word: str, scalar_values: dict) -> bool:
     litt = "".join(resolved).strip("\"'")
     return bool(litt) and bool(_LITERAL_WORD_RE.match(litt))
 
-_PRIVILEGE_WRAPPERS = frozenset({"sudo", "doas", "run0"})
-
-_ACCOUNT_OPTION_RE = re.compile(r"^-{1,2}(?:u|user|g|group)(?:=(.*))?$")
 
 def _command_words(body: str, resolvable: frozenset[str] = frozenset(),
                    scalar_values: dict | None = None):
-    """Each command-position word on *body* that is not a literal.
+    """Each command-position word on *body* that is not a settled literal.
 
-    A command word is not always the first token. Every one of these hides
-    it one or more tokens to the right, and each was an evasion of an
-    earlier version of this rule:
-
-    * an environment assignment - `FOO=1 ${A[0]} x`
-    * a wrapper command - `env`, `exec`, `sudo`, `nohup`, `timeout 5`
-    * a redirection - `>out ${A[0]} x`
-    * a subshell or group opener - `( ${A[0]} x )`
-
-    So the scan skips prefixes rather than reading position zero. What it
-    will not do is examine *arguments*: `make "$pkgdir"` names a literal
-    command, and treating its arguments as command words would fire on most
-    of the corpus.
-
-    A variable the tokenizer reduced to a literal is dropped: `$DKMS add`
-    where the recipe assigned `DKMS=dkms` is a spelling choice, not an
-    evasion.
+    The scan itself lives in ``shell_words.command_starts``: assignments,
+    wrappers (``env``, ``sudo -u root``, ``timeout 5``), redirections,
+    group openers and case-arm labels are skipped there, in one place, so
+    X002 and every other command-position rule agree on what a command word
+    is.  This function keeps X002's *resolution* filter: a variable the
+    tokenizer reduced to a literal, or a splice of known scalars, is a
+    spelling choice rather than an evasion.
     """
-    for part in _split_commands(body):
-        # `(( ... ))` and `[[ ... ]]` evaluate an expression; nothing in them
-        # is a command name, and reading one as such fired on
-        # `(( $(vercmp ...) >= 0 ))`.
-        if _EVALUATION_RE.match(part.lstrip()):
+    for word, _tail in _command_starts(body, recurse=False):
+        bare = _PLAIN_VAR_RE.match(word)
+        if bare and bare.group(1) in resolvable:
             continue
-        seen_wrapper = False
-        wrapper = ""
-        account_option = False
-        for token in part.split():
-            if token.startswith("(("):
-                # `if (( $(vercmp $2 x) >= 0 ))` - arithmetic. The check at
-                # the top of the loop catches it when the part *begins*
-                # there; after a wrapper it does not, and the `$(` inside
-                # read as a command name.
-                break
-            word = token.lstrip("({")
-            if not word:
-                continue
-            if _ASSIGNMENT_RE.match(word):
-                if _opens_a_value(word):
-                    break
-                continue
-            if _REDIRECT_RE.match(word) or _NUMERIC_RE.match(word):
-                continue
-            if word.startswith("-"):
-                # A flag before any command means this line continues a
-                # previous one - `sed \` then `  -i "${dir}/x"` - so it has
-                # no command position at all. Inside a wrapper's arguments
-                # it is just a flag, and the scan goes on.
-                if not seen_wrapper:
-                    break
-                # ...unless the flag turns the wrapper into a *lookup*.
-                # `command -v "$cmd"` asks where `$cmd` is, and runs
-                # nothing; reading its argument as a command name fired on
-                # the ordinary dependency-check idiom.
-                if wrapper == "command" and word in ("-v", "-V"):
-                    break
-                if wrapper == "type" and word in ("-p", "-P", "-a"):
-                    break
-                # A privilege tool's account option takes a target that
-                # names an account, not a command.  `-u x` leaves it as the
-                # next token; `--user=x` carries it inline.
-                inline_word = None
-                if wrapper in _PRIVILEGE_WRAPPERS:
-                    account_match = _ACCOUNT_OPTION_RE.match(word)
-                    if account_match is not None:
-                        inline = account_match.group(1)
-                        if inline is None:
-                            account_option = True
-                        else:
-                            inline = inline.strip("\"'")
-                            # `--user=${A[0]}` hides a name in the account
-                            # slot: scan the inline value.  `--user=root`
-                            # is a literal account, and `--user=$SUDO_USER`
-                            # the de-escalation idiom; neither is a command.
-                            if (
-                                not _PLAIN_VAR_RE.match(inline)
-                                and ("$" in inline or "`" in inline)
-                            ):
-                                inline_word = inline
-                if inline_word is None:
-                    continue
-                word = inline_word
-            if word.strip("\"'") in _WRAPPERS:
-                seen_wrapper = True
-                wrapper = word.strip("\"'")
-                account_option = False
-                continue
-            bare = _PLAIN_VAR_RE.match(word)
-            if bare and bare.group(1) in resolvable:
-                break
-            if account_option:
-                # The word right after `sudo -u`/`--user`/`-g` is the target
-                # account, not the command.  A dynamic target is the
-                # de-escalation idiom (`sudo -u $SUDO_USER env … fcitx5`);
-                # a literal one (`sudo -u root`) is an ordinary escalation.
-                # Neither is a command *name*, so both keep scanning: a
-                # hidden command after the target (`sudo -u X ${A[0]} …`) is
-                # still yielded.
-                account_option = False
-                continue
-            # A static array subscript on a known array resolves to a
-            # literal, so it is a spelling choice like `$DKMS`; a dynamic
-            # subscript or an unknown array is not in *resolvable* and the
-            # word is yielded for X002 to claim.
-            element = _ARRAY_VAR_RE.match(word)
-            if element and element.group(1) in resolvable:
-                break
-            # A *spliced* name (`${_arch}-cmake`, `ba${x}sh`) is a spelling
-            # choice too when every expansion in it is a known scalar: the
-            # tokenizer never folds a mid-word splice, so `${_arch}-cmake`
-            # stayed unresolvable and X002 fired CRITICAL on a build target
-            # that is plain text one line up.  Resolve the word with the
-            # scalar table; if it collapses to a literal command name, it
-            # is not an evasion.  An unknown variable, an empty result or
-            # any surviving shell metacharacter keeps it yielded.
-            if _resolves_to_a_literal(word, scalar_values):
-                break
-            yield word
-            break
+        element = _ARRAY_VAR_RE.match(word)
+        if element and element.group(1) in resolvable:
+            continue
+        if _resolves_to_a_literal(word, scalar_values):
+            continue
+        yield word
 
 _PLAIN_VAR_RE = re.compile(r"^[\"\']?\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?[\"\']?$")
 

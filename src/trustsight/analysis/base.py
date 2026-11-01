@@ -7,6 +7,7 @@ from ..buckets import PINNING_ORDER, classify_pinning_level
 from ..config import ensure_default_configs, load_patterns
 from ..db import dependency_observation_counts, init_db
 from ..differ import _has_checksum_in_post_diff
+from ..shell_words import COMMAND_ANCHOR
 from ..subproc import minimal_env
 
 log = logging.getLogger(__name__)
@@ -14,7 +15,8 @@ log = logging.getLogger(__name__)
 _initialized_for: str | None = None
 
 #: Command position: start of a line, or just after a shell separator.
-_CMD = r"(?:\A|(?<=[;&|(\n])|(?<=&&)|(?<=\|\|)|^)[ \t]*"
+#: The definition lives in ``shell_words`` so every rule family reads one.
+_CMD = COMMAND_ANCHOR
 
 
 def _ensure_init() -> None:

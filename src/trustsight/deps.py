@@ -16,7 +16,6 @@ from .diffdoc import parse_diff_lines
 from .tokenizer import resolve_added_lines
 from .tokenizer import resolve_removed_lines
 from .tokenizer import split_lines
-
 DEP_FIELDS = (
     "depends", "makedepends", "optdepends", "checkdepends",
     # Not dependencies, but parsed by the same machinery: `provides`,
@@ -145,28 +144,6 @@ def unquote_shell_words(body: str) -> str:
         return re.sub(r"\\([\\\"$`])", r"\1", match.group(2))
 
     return _SHELL_QUOTE_RE.sub(_repl, body)
-
-
-#: Where a fresh command word can start in shell text: the operators and
-#: substitutions every consumer already understood.  Safe to apply to raw
-#: lines, including text inside quotes.
-COMMAND_POSITION = r"(?:\A\s*|[;&|(]\s*|\$\(\s*|&&\s*|\|\|\s*)"
-
-#: Shell grouping and reserved words that also begin a command list:
-#: `{ pip install }`, `! pip install`, `time pip install`,
-#: `if …; then pip install`, `while …; do pip install` and a `case` arm.
-#: The harness behaviour validator parses command position, so a manager
-#: reached these ways is a provable command; a lexical rule anchored only
-#: on COMMAND_POSITION missed it (2026-10-31).
-#:
-#: These anchors must be matched against a quote-blanked view.  Unlike
-#: `;` and `(`, a `{`, `!`, `then` or `do` also occurs inside ordinary
-#: quoted prose (`echo "{ npm install }"`), so matching the raw line would
-#: read documentation as a command.
-SHELL_COMMAND_POSITION = (
-    r"(?:!\s*|\{\s+|\btime\s+(?:-p\s+)?|\b(?:then|else|do)\s+"
-    r"|^\s*(?:[^\s();&|]+(?:\|[^\s();&|]+)*)\)\s+)"
-)
 
 
 def _closes_array(body: str) -> bool:

@@ -168,7 +168,7 @@ add("R008-ruby-e-url",
 # time, which is a different claim (H077 territory, not H004's).
 add("H004-sudo-in-build",
     header() + "build() {\n+    sudo cp /etc/shadow /tmp/out\n+}\n",
-    must_fire=["H004"], min_score=40, max_score=70)
+    must_fire=["H004", "H038", "H076"], min_score=40, max_score=100)
 
 # ── H077: top-level (parse-time) fetch ───────────────────────────────────────
 

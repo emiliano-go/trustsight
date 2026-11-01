@@ -78,8 +78,19 @@ _ANSI_C_LITERAL_RE = re.compile(r"\$'((?:\\.|[^'\\])*)'")
 _HEX_ESCAPE_RE = re.compile(r"\\x([0-9A-Fa-f]{2})")
 _OCTAL_ESCAPE_RE = re.compile(r"\\0([0-7]{1,3})")
 _CONTROL_ESCAPE_RE = re.compile(r"\\(?:e|a|v|f|b)")
-_COMMAND_POSITION_LITERAL_RE = re.compile(
-    r"(?:^|[;&|(]|\$\()\s*\$'((?:\\.|[^'\\])*)'", re.MULTILINE)
+def _ansi_c_command_literals(body: str):
+    """ANSI-C literals that are command words, under any shell wrapper.
+
+    The command word comes from ``shell_words.command_starts``, so
+    `env X=1 $'\x63\x75\x72\x6c'`, `time $'…'` and a brace group are the
+    same command position as a bare line start.
+    """
+    from ..shell_words import command_starts
+
+    for _word, tail in command_starts(body):
+        match = _ANSI_C_LITERAL_RE.match(tail)
+        if match is not None:
+            yield match.group(1)
 
 def _encoded_literal_classes(haystack: str, floor: int) -> list[str]:
     """The encoded-alphabet classes present above *floor* characters.
@@ -352,8 +363,7 @@ def refusal_findings(diff_text: str, config, add, current_text=None,
         body = post.functions.get(fn, "")
         if not body:
             continue
-        for match in _COMMAND_POSITION_LITERAL_RE.finditer(body):
-            literal = match.group(1)
+        for literal in _ansi_c_command_literals(body):
             hexes = _HEX_ESCAPE_RE.findall(literal)
             octals = _OCTAL_ESCAPE_RE.findall(literal)
             controls = _CONTROL_ESCAPE_RE.findall(literal)

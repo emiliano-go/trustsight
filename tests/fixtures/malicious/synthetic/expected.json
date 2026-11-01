@@ -94,12 +94,14 @@
     ]
   },
   "H004-sudo-in-build.diff": {
-    "max_score": 70,
+    "max_score": 100,
     "min_score": 40,
     "must_fire": [
-      "H004"
+      "H004",
+      "H038",
+      "H076"
     ],
-    "relabelled": "2026-08-07: fixture was wrong, not the rule - the sudo sat at top level, where it fires R058 (write outside $pkgdir) but not H004. H004 is scoped to build/install functions, so the diff now adds a build() body containing the sudo (H004 CRITICAL 40 + R058 HIGH 25 = 65)."
+    "relabelled": "2026-11-01: the command-position parser now reads the write behind `sudo cp` (H004 40 + R058 25 + H038 25 + H076 25 = 100), instead of only R058's last-argument match. All four findings name the same real write to a world-writable path outside $pkgdir, so the score is the true one."
   },
   "H005-validpgpkeys-added.diff": {
     "must_fire": [

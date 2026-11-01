@@ -328,7 +328,7 @@ def test_g007_negative_unrelated_package_gets_no_attribution(monkeypatch):
     monkeypatch.setattr("trustsight.db.active_campaigns", lambda: [{
         "campaign_id": "campaign", "scope": {"package_names": ["other"]},
     }])
-    score, breakdown = _campaign_corroboration(0, [], "demo", [])
+    score, breakdown, _ = _campaign_corroboration(0, [], "demo", [])
     assert score == 0 and breakdown == []
 
 

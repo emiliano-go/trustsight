@@ -1,0 +1,8 @@
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,4 +1,4 @@
+ pkgname=demo
+ pkgver=1.0
+-source=("https://example.com/demo-1.0.tar.gz")
++source=("http://example.com/demo-1.1.tar.gz")
+ sha256sums=('aaaa')

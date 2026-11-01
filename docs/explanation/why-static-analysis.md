@@ -15,7 +15,7 @@ The AUR is an unmoderated, user-submitted repository. Anyone can publish, and wh
 3. **It scales.** Analysing 50 packages in a review takes seconds, not minutes. No chroot, no root, no sandbox setup.
 4. **It does not modify your system.** TrustSight never runs `makepkg`, never fetches a URL a package declares, and never extracts an archive to disk. Every finding is traceable to a specific diff line, URL, or novelty record. There is no SSRF primitive to turn a reviewer into a probe. The tool does use the network for two things that are not the package: it downloads the AUR metadata snapshot to discover updates, and (when a baseline is available) the signed seed from the release channel. It never contacts a source the recipe names.
 
-The tradeoff is honest: static analysis cannot observe runtime behaviour. TrustSight's [W-series rules](../reference/rules/unverifiable.md) (W001-W012) flag cases where code runs and the analysis could not read it, as weight-0 unverifiable findings rather than pretending the surface was covered. See [What TrustSight Cannot See](what-trustsight-cannot-see.md) for the full ceiling.
+The tradeoff is honest: static analysis cannot observe runtime behaviour. TrustSight's [W-series rules](../reference/rules/unverifiable.md) (W001-W013) flag cases where code runs and the analysis could not read it, as weight-0 unverifiable findings rather than pretending the surface was covered. See [What TrustSight Cannot See](what-trustsight-cannot-see.md) for the full ceiling.
 
 ## What SAST means here
 
@@ -146,13 +146,13 @@ match_target = "resolved"
 
 R-series rules are regex-based and match against resolved strings or raw diff lines. H-series heuristics (103 rules) are emitted from code because they need diff context a single-line regex cannot see (for example, "did the build function change between two commits?", or "did the build function gain a network client?"). Their thresholds are tuned in `thresholds.toml`, and their weights come from `[severity_weights]` in `config.toml`.
 
-C-series rules (C001-C032) enforce structural invariants that depend on comparing multiple parsed fields (checksum state, source URL set, pkgver value). They are hard-coded because writing them as TOML patterns would require embedding logic in regex.
+C-series rules (C001-C034) enforce structural invariants that depend on comparing multiple parsed fields (checksum state, source URL set, pkgver value). They are hard-coded because writing them as TOML patterns would require embedding logic in regex.
 
 S-series sabotage rules (S001-S008) use command-position matching to distinguish build-sandbox cleanup from system damage: `rm -rf "$srcdir/x"` is housekeeping, `rm -rf /` is not.
 
 X-series crossfire rules (X001-X034) are anti-evasion rules that detect patterns designed to exploit the analysis itself.
 
-Two families report at weight 0 and never score: declared-practice findings (P001-P009) and [unverifiable findings (W001-W012)](../reference/rules/unverifiable.md), the latter naming what an analysis could not read.
+Two families report at weight 0 and never score: declared-practice findings (P001-P009) and [unverifiable findings (W001-W013)](../reference/rules/unverifiable.md), the latter naming what an analysis could not read.
 
 For the full rule catalog, see [Rules Reference](../reference/rules/index.md).
 
@@ -172,7 +172,7 @@ LOW = 5
 INFO = 0
 ```
 
-**`[review]`** selects a profile and its flagging threshold. Three profiles ship: `default` (threshold 20, about 6.6% of benign diffs enter the review queue), `quiet` (threshold 40, smaller queue), and `strict` (threshold 10, broader queue for operators who prefer sensitivity). Changing a profile does not change a score, risk band, or calibration result; it changes only the reports marked for review.
+**`[review]`** selects a profile and its flagging threshold. Three profiles ship: `default` (threshold 20, about 6.8% of benign diffs enter the review queue), `quiet` (threshold 40, smaller queue), and `strict` (threshold 10, broader queue for operators who prefer sensitivity). Changing a profile does not change a score, risk band, or calibration result; it changes only the reports marked for review.
 
 ```toml
 [review]

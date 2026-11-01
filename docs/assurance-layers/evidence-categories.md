@@ -120,6 +120,8 @@ from its family's. The mapping is data in `trustsight.layers`:
 | `H099` | L1 |
 | `H101` | L1 |
 | `H103` | L1 |
+| `T004` | L1 |
+| `T005` | L1 |
 | `U007` | L7 |
 | `U008` | L7 |
 | `U009` | L1 |

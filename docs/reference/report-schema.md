@@ -185,6 +185,12 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
 | `ioc_matches` | `list[dict]` | IOC federation baseline hits. Attribution, not score: each entry names the curator (`source`) that flagged the artifact, its `type`/`value`, `confidence`, `provenance`, `campaign`, the `surface` it was found on and its `line`, and whether the indicator is `expired`. IOC matches never appear in `score_breakdown` and never change `final_score`. See [the IOC reference](ioc.md). |
 | `indicators` | `list[dict]` | The indicator tier, promoted from `ioc_matches`: the same rows, exposed as the first-class I-series surface. Additive for one release. Outside the heuristic score, at maximum alert priority. |
 | `contacts` | `dict` | The Contact Ledger panel: weight-0 first contacts (`host`, `maintainer_account`, `file_kind`, `upstream`) as `available`, `note` and `records`, each record carrying `kind`, `value`, `basis` (`ledger`/`matched`) and `first_seen_utc`. Warm-only and never a score component. On a cold replay `available` is `false` and `note` carries the standing `contact_ledger_unavailable` text, so an empty panel never reads as a clean one. |
+| `tag_panel` | `list` | Weight-0 tag events grouped by the closed kind table (`contact`, `first_seen_host`, `first_seen_literal`, `entropy_bump`, `campaign`, `annotation`, `technique`), each with `count` and sorted `events`. Opsonization: a coating for later detection, never a score. `TAG_CONVERGENCE` appears in `findings` when the configured number of distinct kinds is reached. |
+| `self_state` | `dict` | The instrument's own state: `mode` (`cold`/`warm`), observation counts, ruleset versions, channel tags and observation-clock ages, federation/contacts availability, campaign state and a sorted `blind` list. Deterministic: no wall-clock age. A blind surface is named rather than rendered as an empty clean panel. |
+| `campaign_hold` | `bool` | Advisory: this package stood in an active campaign perimeter when it was analysed. Consumed by enforcement outside the tool; no scoring path. |
+| `campaign_id` | `str` | The active campaign behind `campaign_hold`; empty otherwise. |
+| `campaign_state` | `str` | `active`, `none`, or `unavailable` on a cold read. A cold read is not "no campaign". |
+| `tender_point` | `dict` | `state` (`clear`, `tender` or `unavailable`), `unresolved` count and `months` window. Counted from recorded review verdicts and the stored latest cycle time, never wall time. A tender point asks a human to look once; it never claims damage and never scores. |
 | `final_score` | `int` | Deterministic risk score, 0-100. Computed by `calculate_score()` in `src/trustsight/scoring.py`. |
 
 ### `diff_summary`
@@ -245,7 +251,7 @@ Each entry:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `rule_id` | `string` | Rule or category identifier from the published catalog: the R/H/C/D/S/X families, the M-series meta rules (`M001`-`M006`; M002/M003 weight 0), the E-series entropy rules (`E001`-`E003`, thresholds ship empty), the T-series temporal rules (`T001`-`T003` and `T006`-`T007`), the G-series correlation rules (`G001`-`G011` and `G012`-`G014`), the I-series indicator rules (H056, and future `I` ids), the U-series upstream rules (`U001`-`U012`: committed manifests and upstream release), and the A-series artifact rules (`A001`-`A008`, L9 only), plus `P001`-`P009` (declared practice, always weight 0; P004 is skipped), `W001`-`W012` (unverifiable, always weight 0), or `SOURCE_BUCKET`, `NOVELTY`, `COVERAGE`. |
+| `rule_id` | `string` | Rule or category identifier from the published catalog: the R/H/C/D/S/X families, the M-series meta rules (`M001`-`M006`; M002/M003 weight 0), the E-series entropy rules (`E001`-`E003`, thresholds ship empty), the T-series temporal rules (`T001`-`T007`), the G-series correlation rules (`G001`-`G011` and `G012`-`G014`), the I-series indicator rules (H056, and future `I` ids), the U-series upstream rules (`U001`-`U012`: committed manifests and upstream release), and the A-series artifact rules (`A001`-`A008`, L9 only), plus `P001`-`P009` (declared practice, always weight 0; P004 is skipped), `W001`-`W013` (unverifiable, always weight 0), or `SOURCE_BUCKET`, `NOVELTY`, `COVERAGE`. |
 | `severity` | `string` | `FATAL`, `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, or `INFO`. |
 | `weight` | `int` | Contribution to the score. Never negative: nothing lowers a score. `0` for annotations, coverage gaps, every `P` and `W` finding, and unchanged companion content. |
 | `reason` | `string` | Human-readable explanation of why this entry fired. The full string is carried in both JSON and CLI display. |
@@ -306,7 +312,8 @@ There are two JSON shapes, and they are not the same object.
   `ioc_matches`, `indicators`, `first_seen`, `comparison_base`, `is_trivial`, `diff_truncated`, `scan_truncated`, `failed`,
   `fully_vetted`, `dependencies`, `depth_truncated`, `required_by`, `review_profile`,
   `review_threshold`, `flagged`, `config_fingerprint`, `cached`, `cached_at`,
-  `contacts`.
+  `contacts`, `tag_panel`, `self_state`, `campaign_hold`, `campaign_id`,
+  `campaign_state`, `tender_point`.
 
   On request only:
 

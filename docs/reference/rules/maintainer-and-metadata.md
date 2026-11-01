@@ -28,6 +28,7 @@ severity weights and the reserved identifier ranges.
 |---|---|---|
 | [C006](#c006) | Maintainer Change With New Source Domain | HIGH |
 | [C030](#c030) | Epoch Removed With Version Unchanged | INFO |
+| [C034](#c034) | Metadata Inconsistency | INFO |
 | [H026](#h026) | New Maintainer Without Prior History | HIGH |
 | [H037](#h037) | Long-Stable Property Changed | MEDIUM |
 | [H044](#h044) | Ownership Transition | MEDIUM |
@@ -311,3 +312,18 @@ from `github.com/upstream/project` to `github.com/attacker/project` is a new
 source even though both are GitHub. A benign adopter moving to a new upstream
 can still be reviewed; the rule requires the execution sink, not merely the
 source change.
+
+### C034: Metadata Inconsistency {#c034}
+
+- **Target:** committed .SRCINFO
+- **Severity:** INFO (weight 0)
+- **Category:** `maintainer-and-metadata`
+
+- **Condition:** A committed `.SRCINFO` disagrees with its PKGBUILD on
+  `pkgver`, `pkgrel` or `epoch`, with both sides literal.
+
+H103 compares the fields that change what a build does and deliberately
+leaves the version line alone: stale metadata is ordinary. This reports that
+ordinary drift as INFO, feed-tier, so a consumer can see it without treating
+it as suspicious. Missing metadata or an unresolved variable stands the rule
+down.

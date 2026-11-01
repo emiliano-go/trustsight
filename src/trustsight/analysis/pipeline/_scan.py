@@ -94,6 +94,9 @@ def scan_diff(
     structural_rules: list[dict] | None = None,
 ) -> PackageFact:
     begin_stage_tracking()
+    from ..delivery._buildtree import normalise_tree_manifest
+
+    tree_manifest = normalise_tree_manifest(tree_manifest)
     if config is None:
         config = load_config()
 
@@ -352,6 +355,9 @@ def analyze_package_text(
     tree_manifest: list[tuple[str, bytes]] | None = None,
 ) -> PackageFact:
     begin_stage_tracking()
+    from ..delivery._buildtree import normalise_tree_manifest
+
+    tree_manifest = normalise_tree_manifest(tree_manifest)
     if config is None:
         config = load_config()
 

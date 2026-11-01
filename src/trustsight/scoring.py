@@ -1,5 +1,6 @@
 import re
 
+from .anergy import ANERGIC, entry as anergy_entry
 from .config import DEFAULT_NOVELTY_WEIGHTS, load_config
 from .coverage import GAP_REASONS, fail_closed, inconclusive_label, qualified_band
 from .schema import NoveltyContext, ScoreEntry
@@ -417,16 +418,28 @@ def calculate_score(
                 )
             )
             continue
+        anergic = anergy_entry(rule["rule_id"])
+        if anergic is not None and anergic.status != ANERGIC:
+            anergic = None
         weight = rule.get("weight_override", severity_weights.get(rule["severity"], 0))
         if not isinstance(weight, int):
             weight = severity_weights.get(rule["severity"], 0)
+        if anergic is not None:
+            # Two-signal activation: the rule is visible, but it has not
+            # earned a score until the signal the ledger names arrives.
+            weight = 0
+            evidence = dict(evidence or {})
+            evidence["anergic"] = True
+            evidence["anergic_signal"] = anergic.signal
         base += weight
         breakdown.append(
             ScoreEntry(
                 rule_id=rule["rule_id"],
                 severity=rule["severity"],
                 weight=weight,
-                reason=f"{rule['name']}: {rule.get('match', '')}",
+                reason=(f"{rule['name']}: {rule.get('match', '')}"
+                        + (" (anergic: weight 0 pending signal)"
+                           if anergic is not None else "")),
                 params=params,
                 template=template,
                 evidence=evidence,

@@ -22,6 +22,7 @@ from ._metadata import observation_seq
 __all__ = [
     "activate_campaign",
     "active_campaigns",
+    "campaign_state_available",
     "all_campaigns",
     "expired_unannounced",
     "mark_expiry_announced",
@@ -165,6 +166,21 @@ def all_campaigns() -> list[dict]:
     except Exception:  # noqa: BLE001 - no table means no campaigns
         return []
     return [_row_to_dict(row) for row in rows]
+
+
+def campaign_state_available() -> bool:
+    """True when the campaign table exists (warm state), false when cold.
+
+    An empty result on a cold replay is not "no campaign": it is "this run
+    could not see campaign state".  The report distinguishes the two so a
+    blind run cannot masquerade as a clean one.
+    """
+    try:
+        with get_connection() as conn:
+            conn.execute("SELECT 1 FROM campaign_alerts LIMIT 1").fetchone()
+        return True
+    except Exception:  # noqa: BLE001 - a missing table is a cold read
+        return False
 
 
 def active_campaigns(now_obs: Optional[int] = None) -> list[dict]:

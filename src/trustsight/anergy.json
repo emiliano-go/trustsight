@@ -1,0 +1,28 @@
+{
+  "rules": {
+    "C033": {
+      "changelog": "missing-self-axis",
+      "promoted_in": "Unreleased",
+      "promotion": "remove status or mark promoted after the calibration checkpoint; record the measured rate in the changelog",
+      "signal": "locked benign corpus fire-rate < 0.30 after the deletion-ratio threshold is corpus-adjudicated, plus a malicious twin",
+      "since": "0.27.0",
+      "status": "promoted"
+    },
+    "T004": {
+      "changelog": "missing-self-axis",
+      "promoted_in": "Unreleased",
+      "promotion": "remove status or mark promoted after the calibration checkpoint; record the measured rate in the changelog",
+      "signal": "locked benign corpus fire-rate < 0.30 plus a malicious partial-key-removal twin",
+      "since": "0.27.0",
+      "status": "promoted"
+    },
+    "T005": {
+      "changelog": "missing-self-axis",
+      "promoted_in": "Unreleased",
+      "promotion": "remove status or mark promoted after the calibration checkpoint; record the measured rate in the changelog",
+      "signal": "locked benign corpus fire-rate < 0.30 plus a malicious same-host path-changed downgrade twin",
+      "since": "0.27.0",
+      "status": "promoted"
+    }
+  }
+}

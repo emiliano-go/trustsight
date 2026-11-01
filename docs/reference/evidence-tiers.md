@@ -21,7 +21,7 @@ Pattern-matched from the PKGBUILD diff. Direct, observable facts about what the 
 
 - R-series regex rules and H-series heuristics, plus C/D/S/X rules where the signal requires structural, dependency, sabotage, or anti-evasion context.
 - H001/H002 checksum integrity rules (hard-coded, not TOML).
-- C001-C032 structural anomaly rules (checksum/source integrity heuristics).
+- C001-C034 structural anomaly rules (checksum/source integrity heuristics).
 - D001-D005 dependency-graph rules.
 
 ### Availability
@@ -40,7 +40,7 @@ Pattern-matched from the PKGBUILD diff. Direct, observable facts about what the 
 
 ### Benchmark
 
-CRITICAL recall: **100%**; every CRITICAL-class sample in the benchmark corpus (210 labelled fixtures) is detected.
+CRITICAL recall: **100%**; every CRITICAL-class sample in the benchmark corpus (213 labelled fixtures) is detected.
 
 ---
 
@@ -189,7 +189,7 @@ Checksum evidence is suppressed when `checksum_behavior` is `"changed_from_sha25
 ## Outside the tiers: the W series
 
 The four tiers classify **evidence about the recipe**. The W series
-(`W001`-`W012`) makes a different kind of statement: not that the recipe did
+(`W001`-`W013`) makes a different kind of statement: not that the recipe did
 something, but that this analysis could not read something the recipe will
 run. A tier answers "how strong is this signal"; a W finding answers "what
 was not looked at".

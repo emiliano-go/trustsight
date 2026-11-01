@@ -59,10 +59,19 @@ def record_pull(kind: str, tag: str | None, channel: str = "") -> None:
 
         ensure_dirs()
         data = _read()
+        try:
+            from .db import observation_seq
+
+            obs = int(observation_seq())
+        except Exception:  # noqa: BLE001 - a missing DB is a cold pull
+            obs = 0
         data[kind] = {
             "tag": str(tag or ""),
             "channel": str(channel or ""),
             "at": time.time(),
+            # The report ages a channel on the observation clock, never on
+            # wall time: a replay must produce the same self-state.
+            "obs": obs,
         }
         _path().write_text(json.dumps(data), encoding="utf-8")
     except Exception:  # noqa: BLE001 - the record is best-effort

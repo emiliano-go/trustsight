@@ -98,11 +98,11 @@ be a script the recipe executes.
 
 | Tier | Rule sources | What they measure |
 |------|-------------|-------------------|
-| A (Structural) | R001-R059, R078, R091, R099, R104, R144, R152, H001-H103, S001-S008, X001-X034, C001-C032, D001-D005 | Direct pattern matching against PKGBUILD commands and structure |
+| A (Structural) | R001-R059, R078, R091, R099, R104, R144, R152, H001-H103, S001-S008, X001-X034, C001-C034, D001-D005 | Direct pattern matching against PKGBUILD commands and structure |
 | B (Priors/Context) | Source bucket classification | Domain reputation of new URLs (not a rule, but a scoring input) |
 | C (History/Novelty) | URL and maintainer novelty | First-seen signals from the local database |
 | D (Verification) | Checksum, PGP, GPG presence | Declared integrity metadata, reported at weight 0 |
-| Reported, not scored | W001-W012 | Analysis boundaries: bytes the package will run that this run could not read. Weight 0, always shown. |
+| Reported, not scored | W001-W013 | Analysis boundaries: bytes the package will run that this run could not read. Weight 0, always shown. |
 
 The U-series reads what a recipe declares about upstream. From the committed dependency manifests beside a recipe: U003 (a new remote source) and U004 (a redirected resolver) score at MEDIUM; U001, U002, U005 and U006 are weight-0 ledger entries. From upstream release integrity: U007 (CI exfil shape) and U008 (git-history credential sweep) score at MEDIUM from the signed federation channel, U009 (new CI surface committed) is a weight-0 ledger entry, and U010 (unauditable upstream) scores at MEDIUM.
 
@@ -1206,6 +1206,10 @@ See [W011: Upstream Content Not Read](unverifiable.md#w011).
 
 See [W012: Federation Not Consulted](unverifiable.md#w012).
 
+### W013 {#w013}
+
+See [W013: Campaign Perimeter Boundary Note](unverifiable.md#w013).
+
 ### U001 {#u001}
 
 See [U001: Manifest Added Or Removed](upstream-manifests.md#u001).
@@ -1301,6 +1305,14 @@ See [T002: Maintainer Domain Novelty](temporal.md#t002).
 ### T003 {#t003}
 
 See [T003: Signing Key Rotated](temporal.md#t003).
+
+### T004 {#t004}
+
+See [T004: Vouch Surface Removed](temporal.md#t004).
+
+### T005 {#t005}
+
+See [T005: Scheme Downgrade](temporal.md#t005).
 
 ### T006 {#t006}
 
@@ -1421,6 +1433,14 @@ See [C031: Boot Or System Image Tool Run During Build](install-and-persist.md#c0
 ### C032 {#c032}
 
 See [C032: Scriptlet Executes Commands At Top Level](install-and-persist.md#c032).
+
+### C033 {#c033}
+
+See [C033: Context Bleed](integrity.md#c033).
+
+### C034 {#c034}
+
+See [C034: Metadata Inconsistency](maintainer-and-metadata.md#c034).
 
 ### W005 {#w005}
 
@@ -1754,6 +1774,6 @@ Measured against the TrustSight test corpus.
 | CRITICAL class (all) | 100 % | Every CRITICAL-class sample detected. |
 | R012 (prompt injection) | 17 % | Tripwire; catches obvious patterns only. Low recall is intentional. |
 | R013 (unicode bidi) | 88 % | Misses some bidi variants. |
-| Benign zero-rate | 74.8 % | Percentage of benign diffs scoring 0. |
+| Benign zero-rate | 74.5 % | Percentage of benign diffs scoring 0. |
 | Benign p95 | 30 | 95th percentile score on benign corpus. |
 | CRITICAL p5 | 40 | 5th percentile score on CRITICAL-class corpus. |

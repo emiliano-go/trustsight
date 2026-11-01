@@ -94,6 +94,18 @@ recorded history, it is **instrument state**: it changes what TrustSight
 knows, not what it is. Two machines with the same configuration and the same
 observations stay in step.
 
+## One stimulus, one alert
+
+A campaign alert is emitted once per `(rule, campaign-cell)` per window. The
+window is the campaign's observation TTL, and the refractory row is part of
+the cycle's audit record, so a replay emits the same set. This is
+debounce as semantics, not suppression: a signal that re-fired every cycle
+would carry no more information than one that fired once.
+
+The same guarantee covers rendering. When N packages share one campaign
+finding, the alert names all of them once, with members sorted and
+de-duplicated; per-package duplicates are not emitted.
+
 ## Related
 
 - [Alert Budget](alert-budget.md) - the other guard against a run becoming

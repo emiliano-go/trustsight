@@ -14,6 +14,14 @@ by side.
 
 ## How a rule is classified
 
+**Anergic rule.** A shipped detection held at weight 0 because the second signal it needs has not arrived. The rule still reports; the anergy ledger names the missing signal and the promotion evidence. See [Anergy](../standards.md#anergy-is-a-standing-state-not-a-silent-omission).
+
+**Two-signal activation.** A detection scores only after both signals hold: the detection shape and the calibration evidence (corpus rate below the fire-rate cap plus a true-positive twin). The anergy ledger is the state between them.
+
+**Tag convergence.** The weight-0 ledger entry emitted when a single diff carries N distinct tag kinds. Tags coat evidence for later detection; convergence says the coating is thick enough to look once.
+
+**Tender point.** A persistent report-header note that a package has accumulated unresolved review verdicts over a window. It asks a human to look; it never claims damage.
+
 **Finding.** One rule's report that it matched, with the file, side and line it
 matched. A run produces a list of findings; the report groups and reads them.
 

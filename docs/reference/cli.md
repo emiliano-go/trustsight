@@ -355,6 +355,45 @@ trustsight status [--json]
 
 ---
 
+## trustsight admin
+
+Operator state that is not a package command.
+
+### trustsight admin anergic
+
+List the rules currently held at weight 0 pending their second signal. A
+rule in this state still reports its findings; it cannot contribute to a
+score until the calibration signal named in the ledger arrives and the
+promotion is recorded in the changelog.
+
+```
+trustsight admin anergic [--json]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Emit the ledger rows as JSON. |
+
+---
+
+## trustsight verdict
+
+Record a human review verdict for the tender-point ledger.
+
+```
+trustsight verdict <package> --verdict confirmed|cleared|uncertain [--rule RULE] [--campaign ID] [--note TEXT] [--json]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--verdict` | `confirmed`, `cleared` or `uncertain` (required). |
+| `--rule` | Rule id the verdict applies to. |
+| `--campaign` | Campaign id the verdict applies to. |
+| `--note` | Short human note. |
+| `--json` | Emit the recorded verdict as JSON. |
+
+---
+
 ## trustsight config
 
 View or modify TrustSight configuration.

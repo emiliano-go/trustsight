@@ -467,7 +467,7 @@ def test_g007_corroborates_a_campaign_signal(db):
     activate_campaign(
         "G012:R001", {"package_names": ["a"], "signals": ["R001"]},
         "G012", ttl_obs=50, now_obs=observation_seq())
-    score, breakdown = _campaign_corroboration(
+    score, breakdown, _ = _campaign_corroboration(
         0, [ScoreEntry(rule_id="R001", severity="CRITICAL", weight=40)],
         "unrelated", [])
     assert [entry.rule_id for entry in breakdown] == ["R001", "G007"]

@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **One lexical command position, and the detection fixes behind it.** Every rule family now reads `shell_words` for command position, so wrappers, grouping, reserved words and `case` arms agree instead of drifting apart. X002 treats a file-writing launcher heredoc as packaged content even when the diff interleaves an older heredoc around it (tape16-bin), and C007 only matches architecture-keyed `source_<arch>=(...)` arrays, not a `source_version` scalar (pivra). Each correction keeps its malicious positive control.
+
 ## [0.26.0] - 2026-10-30
 
 ### Added

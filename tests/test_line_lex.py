@@ -207,3 +207,33 @@ def test_quote_state_carries_across_physical_lines():
     assert lexed[0].quote_after.open
     assert lexed[1].quoted_data
     assert lexed[2].quoted_data
+
+
+def test_diff_sides_do_not_share_heredoc_state():
+    """A removed heredoc must not swallow an added one (tape16-bin).
+
+    The old ``EOF`` is still open when the new ``LAUNCHER`` opener arrives
+    in the interleaved diff, so the new body's ``exec`` was read as a
+    command word.  The two sides are separate files' state.
+    """
+    from trustsight.line_lex import _heredoc_body_indices
+
+    lines = [
+        "--- a/PKGBUILD",
+        "+++ b/PKGBUILD",
+        "@@ -1,6 +1,7 @@",
+        "+package() {",
+        "-  cat <<'EOF'",
+        "+  cat <<'LAUNCHER'",
+        "-  echo old",
+        "-EOF",
+        "+  APP_BIN=/usr/lib/x/X",
+        '+  exec "$APP_BIN" "$@"',
+        "+LAUNCHER",
+        "+}",
+    ]
+    body = _heredoc_body_indices(lines)
+    assert 9 in body, "the added launcher body is packaged content"
+    assert 6 in body, "the removed heredoc body is still data"
+    assert 5 not in body, "the added opener is a command, not body"
+    assert 11 not in body

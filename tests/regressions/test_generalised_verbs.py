@@ -82,6 +82,51 @@ def test_a_package_manager_install_runs_fetched_code(install):
     assert "X011" in _x([f"  {install}"]), install
 
 
+@pytest.mark.parametrize("quoted", [
+    '"${srcdir}/v/bin/pip" install demo',
+    '"$venv/bin/pip" install demo',
+    '"${srcdir}/tools/node/bin/npm" install evil',
+    '"pip" install demo',
+    "\\pip install demo",
+])
+def test_a_quoted_or_escaped_manager_still_runs_fetched_code(quoted):
+    """The shell runs `"$venv/bin/pip"` and `\\pip` as the manager."""
+    assert "X011" in _x([f"  {quoted}"]), quoted
+
+
+@pytest.mark.parametrize("anchored", [
+    "  { pip install demo; }",
+    "  ! pip install demo",
+    "  time pip install demo",
+    "  time -p pip install demo",
+    "  if true; then pip install demo; fi",
+    "  while true; do pip install demo; break; done",
+])
+def test_a_shell_grouping_or_reserved_word_still_runs_the_manager(anchored):
+    """`{ … }`, `!`, `time`, `then` and `do` all begin a command list."""
+    assert "X011" in _x([anchored]), anchored
+
+
+@pytest.mark.parametrize("arm", ["*)", "0.*|1.*)", "foo)"])
+def test_a_case_arm_body_still_runs_the_manager(arm):
+    """A `case` arm's body is a command; the label is data before the `)`."""
+    assert "X011" in _x(["  case \"$pkgver\" in", f"    {arm} pip install demo ;;",
+                         "  esac"]), arm
+
+
+@pytest.mark.parametrize("prose", [
+    'echo "{ pip install demo; }"',
+    'echo "! pip install demo"',
+    'echo "time pip install demo"',
+    'echo "if true; then pip install demo; fi"',
+    'msg="while true; do pip install demo; done"',
+    'echo "* pip install demo"',
+])
+def test_a_manager_named_in_prose_is_not_a_command(prose):
+    """The new anchors must be read on a quote-blanked view."""
+    assert "X011" not in _x([f"  {prose}"]), prose
+
+
 @pytest.mark.parametrize("careful", [
     "npm install --ignore-scripts",
     'pip install --prefix="$pkgdir" --root-user-action=ignore --no-deps .',

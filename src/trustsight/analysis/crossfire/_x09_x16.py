@@ -8,10 +8,10 @@ from ...config import (
     OTHER_FETCH_CLIENT as _OTHER_FETCH_CLIENT,
     PACKAGE_MANAGER_INSTALL as _PACKAGE_MANAGER_INSTALL,
 )
-from ...deps import _strip_comment
+from ...deps import COMMAND_POSITION, SHELL_COMMAND_POSITION, _strip_comment
 from ._common import _DATA_CONSUMER, _EXEC_WRAPPER, _SHELL
 
-__all__ = ['_x013_is_trusted_registry', 'X009_RE', 'X010_RE', 'X011_RE', 'X011_STANDDOWN_RE', 'X012_CONSUMER_RE', 'X012_RE', 'X013_RE', 'X013_STANDDOWN_RE', 'X014_RE', 'X014_STANDDOWN_RE', 'X015_RE', 'X018_RE', 'X019_RE', '_DISTRO_INSTALL_RE', '_X009_CLIENT_RE', '_X016_CONSUMER_RE', '_X016_FETCH_RE', '_X016_KNOWN_EXECUTOR_RE', '_consumer_after_override', '_consumer_at']
+__all__ = ['_x013_is_trusted_registry', 'X009_RE', 'X010_RE', 'X011_RE', 'X011_SHELL_ANCHOR_RE', 'X011_STANDDOWN_RE', 'X012_CONSUMER_RE', 'X012_RE', 'X013_RE', 'X013_STANDDOWN_RE', 'X014_RE', 'X014_STANDDOWN_RE', 'X015_RE', 'X018_RE', 'X019_RE', '_DISTRO_INSTALL_RE', '_X009_CLIENT_RE', '_X016_CONSUMER_RE', '_X016_FETCH_RE', '_X016_KNOWN_EXECUTOR_RE', '_consumer_after_override', '_consumer_at']
 
 X009_RE = re.compile(
     r"\b(?:" + _OTHER_FETCH_CLIENT + r")\b[^\n|;&]*+"
@@ -99,14 +99,30 @@ _DISTRO_INSTALL_RE = re.compile(
 )
 
 X011_RE = re.compile(
-    r"(?:\A\s*|[;&|(]\s*|&&\s*|\|\|\s*)"
-    r"(?:" + _EXEC_WRAPPER + r")?"
+    COMMAND_POSITION
+    + r"(?:" + _EXEC_WRAPPER + r")?"
+    # A leading backslash escapes the command word: `\pip install` runs
+    # `pip install`, but the token no longer starts with the manager name.
+    r"\\?"
     # A vendored toolchain runs the manager through a path: `v/bin/pip` and
     # `./tools/node/bin/npm` are the same command to the shell as `pip` and
     # `npm`, and both resolve from the registry.
     r"(?:/?(?:[\w.$~{}-]+/)+)?"
     # `python3 -m pip install` and `node --require ... npm` reach the same
     # manager through the interpreter that ships it.
+    r"(?:(?:python[23]?|py|node|ruby|perl)\s+-\S+\s+)?"
+    r"(?:" + _PACKAGE_MANAGER_INSTALL + r")\b",
+    re.IGNORECASE,
+)
+
+#: X011 under a shell grouping or reserved-word anchor.  Matched against a
+#: quote-blanked view (see ``deps.SHELL_COMMAND_POSITION``), so a manager name
+#: printed inside a message is not read as a command.
+X011_SHELL_ANCHOR_RE = re.compile(
+    SHELL_COMMAND_POSITION
+    + r"(?:" + _EXEC_WRAPPER + r")?"
+    r"\\?"
+    r"(?:/?(?:[\w.$~{}-]+/)+)?"
     r"(?:(?:python[23]?|py|node|ruby|perl)\s+-\S+\s+)?"
     r"(?:" + _PACKAGE_MANAGER_INSTALL + r")\b",
     re.IGNORECASE,

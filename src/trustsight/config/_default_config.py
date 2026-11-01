@@ -337,6 +337,14 @@ allow = [
     # and serves the hardened-chromium build from its own repo host
     # (repo.secureblue.dev), the download named by the project's own docs.
     "secureblue.dev",
+    # Anomaly publishes the Hex dictation build from its own release host
+    # (anoma.ly) while `url=` names the GitHub source repository.  This is a
+    # C011-only exemption: the host is deliberately not in
+    # [official_projects], so SOURCE_BUCKET and novelty still report it
+    # (hex-bin, 2026-10-31).  Wyrd Company's repo.wyrd.foo was considered
+    # and is not listed: a new, zero-vote vendor host does not meet the
+    # official-domain trust bar.
+    "anoma.ly",
 ]
 
 [contacts]

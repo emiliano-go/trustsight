@@ -194,6 +194,13 @@ def _structural_findings(
     cs_behavior = source_changes.checksum_behavior
     added = source_changes.added_urls
     removed = source_changes.removed_urls
+    # Declared documentation sources (LICENSE/README/COPYING) are fetched but
+    # are not the build input a provenance rule judges.  They are also absent
+    # from the bucket map by design, so reading one as "unknown" made C011
+    # report a `-bin` package's LICENSE as a non-upstream prebuilt host
+    # (snishaper-bin, 2026-10-31).
+    declared = set(getattr(source_changes, "declared_urls", ()) or ())
+    provenance_added = [url for url in added if url not in declared]
     # The integrity rules' one definition of "the version moved": pkgver,
     # pkgrel or epoch by resolved value.  A pkgrel rebuild with a changed
     # checksum is C002, not the HIGH C001 that claims the version stood still.
@@ -504,7 +511,7 @@ def _structural_findings(
     upstream_reg = _registered_domain(upstream_host) if upstream_host else ""
     divergence_allow = _source_divergence_allow(config)
 
-    for url in added:
+    for url in provenance_added:
         if not _BINARY_ARTIFACT_RE.search(url):
             continue
         bucket = source_buckets.get(url, "unknown")
@@ -527,9 +534,9 @@ def _structural_findings(
             url=url, bucket=bucket)
         break
 
-    if maintainer_changed and added:
+    if maintainer_changed and provenance_added:
         old_domains = {_url_domain(u) for u in removed}
-        new_domains = {_url_domain(u) for u in added} - old_domains
+        new_domains = {_url_domain(u) for u in provenance_added} - old_domains
         if new_domains:
             add("C006", "Maintainer Change With New Source Domain", "HIGH", "source",
                 f"maintainer changed and new domain(s) appeared: {sorted(new_domains)}",
@@ -544,7 +551,7 @@ def _structural_findings(
     # (the bytes behind the URL) stays outside static analysis.
     if package_name.endswith(_PREBUILT_SUFFIX) and upstream_host:
         divergence = _prebuilt_host_divergence(
-            added, source_buckets, package_name, upstream_host,
+            provenance_added, source_buckets, package_name, upstream_host,
             divergence_allow,
         )
         if divergence is not None:
@@ -560,10 +567,11 @@ def _structural_findings(
     # domain.  R013b only sees mixed-script homoglyphs and the package/dep
     # typosquat never looks at domains, so a pure-ASCII `githab.com` was
     # invisible.  Scoped to a trusted-forge/official upstream for precision.
-    if added:
+    if provenance_added:
         upstream_host = _head_upstream_host(diff_text, current_text)
         if upstream_host:
-            typo = _upstream_domain_typosquat(added, source_buckets, upstream_host)
+            typo = _upstream_domain_typosquat(
+                provenance_added, source_buckets, upstream_host)
             if typo is not None:
                 url, source_reg, upstream_reg, distance = typo
                 add("C012", "Source Domain Resembles Declared Upstream", "MEDIUM",
@@ -578,12 +586,12 @@ def _structural_findings(
     # code from a same-named fork under a different owner on the same forge.
     # `-git` packages that build a maintainer's fork hit this, so it names the
     # divergence rather than asserting intent.
-    if added:
+    if provenance_added:
         upstream_url = _declared_upstream_url(
             _head_upstream_text(diff_text, current_text)
         )
         if upstream_url:
-            fork = _fork_source_divergence(added, upstream_url)
+            fork = _fork_source_divergence(provenance_added, upstream_url)
             if fork is not None:
                 url, forge, src_owner, repo, up_owner = fork
                 add("C013", "Source Fork Diverges From Declared Upstream", "MEDIUM",

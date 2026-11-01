@@ -133,6 +133,10 @@ Three exclusions keep it precise:
   and still fires.
 - A glob needs a name character before the metacharacter, so the `[` of
   `if [ -f x ]` is not a command name.
+- A heredoc body written to a file is packaged content, not a command. That
+  includes a launcher staged with `install -Dm755 /dev/stdin … <<'EOF'`.
+  The scan reads each diff side separately, so a removed heredoc's delimiter
+  cannot consume an added one and expose the new body's `exec "$VAR"`.
 
 ### X003: Obfuscated Command Argument {#x003}
 

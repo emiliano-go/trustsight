@@ -30,14 +30,14 @@ from .delivery import (
 # Write-target extraction
 # ---------------------------------------------------------------------------
 
-_WRITE_CMD_START = r"(?:\A\s*|[;&|]\s*)"
-
-# install/cp/mv/ln destinations: the ``-t DIR`` form first, else the last
-# argument.  Command-position anchored so ``'cp ... ~/.zshrc'`` inside a
-# quoted string never reads as a write.
+# The verbs are matched against the *tail* of one command segment (see
+# ``shell_words.command_starts``), so the command-position prefix - including
+# assignments, wrappers (`time`, `env A=1`, `sudo -u x`, `timeout 5`), brace
+# groups and case arms - is already stripped.  A quoted `'cp ... ~/.zshrc'`
+# is an argument, not a command, and never reaches this matcher.
 _COPY_TARGET_RE = re.compile(
-    _WRITE_CMD_START + r"(?:install|cp|mv|ln)\b[^;&|]*?-t\s+(\S+)"
-    r"|" + _WRITE_CMD_START + r"(?:install|cp|mv|ln)\b([^;&|]*)$",
+    r"(?:install|cp|mv|ln)\b[^;&|]*?-t\s+(\S+)"
+    r"|(?:install|cp|mv|ln)\b([^;&|]*)$",
     re.IGNORECASE,
 )
 
@@ -47,22 +47,19 @@ _REDIRECT_TARGET_RE = re.compile(r"(?<![<&0-9])(?:>>|>)\s*([^;&|>\s][^;&|>]*)")
 
 # The other ways a shell names a destination.  Without these the whole
 # write-target family is bypassed by substituting a verb: ``tee /etc/x``,
-# ``dd of=/etc/x`` and ``mkdir -p /opt/x`` do what ``cp`` does.  Each is
-# command-position anchored like _COPY_TARGET_RE, and each names its
-# destination explicitly rather than by position, except rsync (last
-# argument, same shape as cp).
-_TEE_TARGET_RE = re.compile(_WRITE_CMD_START + r"tee\s+(?:-\S+\s+)*(\S+)", re.IGNORECASE)
-_DD_TARGET_RE = re.compile(_WRITE_CMD_START + r"dd\b[^;&|]*?\bof=(\S+)", re.IGNORECASE)
+# ``dd of=/etc/x`` and ``mkdir -p /opt/x`` do what ``cp`` does.
+_TEE_TARGET_RE = re.compile(r"tee\s+(?:-\S+\s+)*(\S+)", re.IGNORECASE)
+_DD_TARGET_RE = re.compile(r"dd\b[^;&|]*?\bof=(\S+)", re.IGNORECASE)
 _MKDIR_TARGET_RE = re.compile(
-    _WRITE_CMD_START + r"(?:mkdir|touch|mkfifo|mknod)\s+(?:-\S+\s+)*(\S+)", re.IGNORECASE
+    r"(?:mkdir|touch|mkfifo|mknod)\s+(?:-\S+\s+)*(\S+)", re.IGNORECASE
 )
 # sed -i edits its last argument in place.  The expression itself routinely
 # contains ``|`` as the s/// delimiter, so unlike the other verbs this one
 # cannot stop at a pipe: it takes the last token on the line.
 _SED_INPLACE_RE = re.compile(
-    _WRITE_CMD_START + r"sed\s+(?:-\S+\s+)*-i\S*\s.*?(\S+)\s*$", re.IGNORECASE
+    r"sed\s+(?:-\S+\s+)*-i\S*\s.*?(\S+)\s*$", re.IGNORECASE
 )
-_RSYNC_TARGET_RE = re.compile(_WRITE_CMD_START + r"rsync\b([^;&|]*)$", re.IGNORECASE)
+_RSYNC_TARGET_RE = re.compile(r"rsync\b([^;&|]*)$", re.IGNORECASE)
 
 _NAMED_TARGET_RES = (
     _TEE_TARGET_RE, _DD_TARGET_RE, _MKDIR_TARGET_RE, _SED_INPLACE_RE,
@@ -96,21 +93,26 @@ def _inside_quotes(line: str, pos: int) -> bool:
 
 def _raw_targets(body: str) -> list[str]:
     """Raw write destinations on *body* (quote characters preserved)."""
+    from ..shell_words import command_starts
+
     targets: list[str] = []
-    for m in _COPY_TARGET_RE.finditer(body):
-        if m.group(1):
-            targets.append(m.group(1))
-        elif m.group(2):
-            args = m.group(2).split()
+    for _word, tail in command_starts(body):
+        m = _COPY_TARGET_RE.match(tail)
+        if m is not None:
+            if m.group(1):
+                targets.append(m.group(1))
+            elif m.group(2):
+                args = m.group(2).split()
+                if args and not args[-1].startswith("-"):
+                    targets.append(args[-1])
+        m = _RSYNC_TARGET_RE.match(tail)
+        if m is not None:
+            args = m.group(1).split()
             if args and not args[-1].startswith("-"):
                 targets.append(args[-1])
-    for m in _RSYNC_TARGET_RE.finditer(body):
-        args = m.group(1).split()
-        if args and not args[-1].startswith("-"):
-            targets.append(args[-1])
-    for regex in _NAMED_TARGET_RES:
-        for m in regex.finditer(body):
-            if m.group(1) and not m.group(1).startswith("-"):
+        for regex in _NAMED_TARGET_RES:
+            m = regex.match(tail)
+            if m is not None and m.group(1) and not m.group(1).startswith("-"):
                 targets.append(m.group(1))
     for m in _REDIRECT_TARGET_RE.finditer(body):
         # The command-position verbs above cannot fire inside a quoted string;
@@ -127,7 +129,6 @@ def _raw_targets(body: str) -> list[str]:
         if t and not t.startswith("("):
             targets.append(t)
     return targets
-
 
 _STAGED_PREFIX_RE = re.compile(
     r"^\$(?:\{)?(?:pkgdir|srcdir|startdir|BUILDDIR)(?:\})?(?:/|$)"

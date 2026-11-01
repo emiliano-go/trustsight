@@ -6,6 +6,7 @@
 
 ### Fixed
 
+- **One lexical command position, and the detection fixes behind it.** Every rule family now reads `shell_words` for command position, so wrappers, grouping, reserved words and `case` arms agree instead of drifting apart. X002 treats a file-writing launcher heredoc as packaged content even when the diff interleaves an older heredoc around it (tape16-bin), and C007 only matches architecture-keyed `source_<arch>=(...)` arrays, not a `source_version` scalar (pivra). Each correction keeps its malicious positive control.
 - **C011 ignores declared documentation sources and exempts one vendor host.** A URL declared as a documentation source (`LICENSE`, `README`, `COPYING`) is not the prebuilt artifact and can no longer supply C011's divergent host (snishaper-bin). Anomaly's `anoma.ly` is added to `[source_host_divergence] allow` as a C011-only exemption; it is deliberately not in `[official_projects]`, so SOURCE_BUCKET and novelty still report it (hex-bin). Wyrd Company's `repo.wyrd.foo` remains reported: a new, zero-vote vendor host does not meet the official-domain trust bar (wyrwood-bin, toha-bin). The locked benign corpus re-measures at a 74.8% zero-rate and a 29.5% ruleset trigger rate; benign p95 stays 30 against malicious p5 40.
 
 ## [0.26.0] - 2026-10-30

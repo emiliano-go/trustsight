@@ -32,10 +32,11 @@ from __future__ import annotations
 import re
 from functools import lru_cache
 
-from ..deps import COMMAND_POSITION, SHELL_COMMAND_POSITION, _strip_comment, unquote_shell_words
+from ..deps import _strip_comment, unquote_shell_words
+from ..shell_words import command_starts
 from ..diffdoc import parse_diff_lines
 from ..tokenizer import join_line_continuations, split_lines
-from ..rules import ScopeResolver, _blank_quoted, clamp_text
+from ..rules import ScopeResolver, clamp_text
 from .build import _recipe_lines
 
 #: Functions makepkg runs while building.  ``package()`` is included: it
@@ -82,20 +83,11 @@ _REGISTRY_RESOLVE = [
 # `./tools/node/bin/npm`) is the same registry fetch as the bare name.
 _PATH_PREFIX = r"(?:/?(?:[\w.$~{}-]+/)+)?"
 
-_REGISTRY_RESOLVE_RE = re.compile(
-    # A backslash escapes the command word (`\pip install`), which the
-    # shell runs exactly like `pip install`.
-    f"{COMMAND_POSITION}\\\\?{_PATH_PREFIX}"
-    f"(?:{'|'.join(_REGISTRY_RESOLVE)})",
-    re.IGNORECASE,
-)
-
-#: The same resolution under a shell grouping or reserved word (`{ … }`,
-#: `! …`, `time …`, `if …; then …`, `while …; do …`, a case arm).  Matched
-#: against a quote-blanked view so prose that mentions a manager is inert.
-_REGISTRY_RESOLVE_SHELL_RE = re.compile(
-    f"{SHELL_COMMAND_POSITION}\\\\?{_PATH_PREFIX}"
-    f"(?:{'|'.join(_REGISTRY_RESOLVE)})",
+_REGISTRY_WORD_RE = re.compile(
+    # Anchored because the caller matches a command *tail*: without `\A` a
+    # `.search` on a hostile one-word line retried the path prefix at every
+    # position (the audit caught it).
+    rf"\A\\?{_PATH_PREFIX}(?:{'|'.join(_REGISTRY_RESOLVE)})",
     re.IGNORECASE,
 )
 
@@ -171,13 +163,13 @@ def _registry_resolutions_uncached(
             continue
         if _OFFLINE_RE.search(body):
             continue
-        match = (
-            _REGISTRY_RESOLVE_RE.search(body)
-            or _REGISTRY_RESOLVE_RE.search(unquote_shell_words(body))
-            or _REGISTRY_RESOLVE_SHELL_RE.search(_blank_quoted(body))
-        )
-        if match:
-            found.append((function, body.strip()[:200]))
+        # The shared scanner decides where a command starts (wrappers,
+        # assignments, grouping, reserved words, quoted command words), so a
+        # manager reached as `{ pip install x; }` is the same fact as a bare
+        # one, and a manager printed in a message is neither.
+        for _word, tail in command_starts(body):
+            if _REGISTRY_WORD_RE.match(unquote_shell_words(tail)):
+                found.append((function, tail.strip()[:200]))
     return found
 
 

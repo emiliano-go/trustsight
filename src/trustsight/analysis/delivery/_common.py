@@ -10,6 +10,7 @@ from ...config import (
     _SUBCOMMAND_OPTS as _SUBCOMMAND_OPTS,
 )
 from ...coverage import note_stage_failure
+from ...shell_words import COMMAND_START
 from ...diffdoc import parse_diff_lines
 from ...expansion import resolve_text
 from ...line_lex import (
@@ -109,15 +110,10 @@ _HEREDOC_PATH_BEFORE_RE = re.compile(
 
 _EXEC_PREFIX = r"(?:" + _EXEC_WRAPPER + r")*"
 
-_CMD_START = (
-    # `(?![;&|{(])` after the separator: a command word cannot begin with
-    # another separator, so a run of `;` fails here instead of carrying the
-    # whole arm alternation to the next character.  Without it the audit's
-    # `;` probe cost every arm a scan per position, which is what leaves
-    # `_SOURCE_EXEC_RE` over budget on a slow machine.
-    r"(?:\A\s*+|[;&|{(]\s*+(?![;&|{(])|\b(?:do|then|else|elif)\s++)"
-    + _EXEC_PREFIX
-)
+# The operator/grouping set is shared with every other command-position rule
+# (``shell_words``); only the wrapper run is local, because delivery pairs a
+# verb with the artifact it executes.
+_CMD_START = COMMAND_START + _EXEC_PREFIX
 
 _EXECUTION_RE = re.compile(
     # `_CMD_START` is factored out of the arms that share it rather than

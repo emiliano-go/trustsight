@@ -873,7 +873,7 @@ def test_corpus_noextract_is_a_gap_on_first_seen_and_incremental_paths():
         assert fact.risk == "Inconclusive"
 
 
-def test_corpus_path_records_added_literals_for_g002():
+def test_corpus_path_records_added_literals_for_g002(tmp_path, monkeypatch):
     """G002 joins added literals across packages; the corpus analysis path
     must write them to the feed the cycle-end correlation reads."""
     from trustsight.config import ensure_default_configs
@@ -882,6 +882,10 @@ def test_corpus_path_records_added_literals_for_g002():
     )
     from trustsight.full_aur.analyze import TemporalContext, analyze_package_text
 
+    # Isolated: the corpus write below records a plaintext maintainer row
+    # when the database has no salt yet.  In the shared suite database that
+    # row made a later test's init_db perform the legacy migration and warn.
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
     ensure_default_configs()
     init_db()
 

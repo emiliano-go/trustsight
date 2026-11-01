@@ -318,14 +318,21 @@ def extract_urls_from_diff(diff_text: str) -> SourceChanges:
         declared_urls=sorted(declared_urls),
     )
 
+#: Makepkg's architecture-keyed source arrays (`source_x86_64=(...)`).  A
+#: variable that merely starts with `source_` is not one: `source_version`
+#: is a recipe's own scalar, and a command substitution in it is not C007.
+_SOURCE_ARCH = (
+    r"(?:x86_64|aarch64|i[3-6]86|arm\w*|any|riscv64|loong64|ppc64le|s390x)"
+)
+
 _SOURCE_CMD_SUBST_RE = re.compile(
     # A source declaration is the scalar/array `source=`, or an
-    # architecture array `source_<suffix>=(...)`.  `_?\w*source\w*`
-    # matched any variable whose name merely contains "source", so
+    # architecture array `source_<arch>=(...)`.  `_?\w*source\w*` matched
+    # any variable whose name merely contains "source", so
     # `source_version=$(python ...)` in prepare() scored C007 CRITICAL.
     r"^\+\s*(?:"
     r"source\s*=[^)]*(?:\$\(|`)"
-    r"|_?source_[A-Za-z0-9_]+\s*=\s*\([^)]*(?:\$\(|`)"
+    rf"|_?source_{_SOURCE_ARCH}\s*=\s*\([^)]*(?:\$\(|`)"
     r")",
     re.IGNORECASE,
 )
@@ -365,7 +372,10 @@ def extract_source_array_urls(diff_text: str, side: str = "after") -> set[str]:
             in_array = False
     return urls
 
-_SOURCE_OPEN_RE = re.compile(r"^\+\s*(?:_?\w*source\w*)\s*=\s*\(", re.IGNORECASE)
+_SOURCE_OPEN_RE = re.compile(
+    rf"^\+\s*(?:source\s*=\s*\(|_?source_{_SOURCE_ARCH}\s*=\s*\()",
+    re.IGNORECASE,
+)
 
 _CMD_SUBST_RE = re.compile(r"\$\(|`")
 

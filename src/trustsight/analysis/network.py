@@ -31,6 +31,7 @@ from ..config import (
 )
 from ..deps import _strip_comment
 from ..line_lex import lex_lines
+from ..shell_words import command_starts as _command_starts
 from ..tokenizer import join_line_continuations, resolve_added_lines
 from .base import compile_configured_patterns, iter_scheme_urls, mask_to_recipe
 from .version import any_version_scalar_moved
@@ -318,10 +319,7 @@ _DOH_HOST_RE = re.compile(r"https?://([a-z0-9.-]{1,253})/", re.IGNORECASE)
 
 def _covert_clients(config) -> list[re.Pattern]:
     frags = _hosts(config).get("covert_egress_clients") or DEFAULT_COVERT_EGRESS_CLIENTS
-    return [
-        re.compile(r"(?:\A\s*|[;&|]\s*)(?:" + f + r")", re.IGNORECASE)
-        for f in frags
-    ]
+    return [re.compile(r"(?:" + f + r")", re.IGNORECASE) for f in frags]
 
 
 def _covert_endpoints(config) -> frozenset[str]:
@@ -371,12 +369,14 @@ def edge_covert_egress(ctx, add) -> None:
             continue
         body = _strip_comment(line[1:])
         for client in clients:
-            if client.search(body):
-                add("H071", "Covert Egress", "HIGH", "network",
-                    f"{fn}() invokes a tunneling/covert client: "
-                    f"{body.strip()[:80]}",
-                    position=fn, body=body.strip()[:80])
-                return
+            for word, _tail in _command_starts(body):
+                name = word.strip("\"'").rsplit("/", 1)[-1]
+                if client.match(name):
+                    add("H071", "Covert Egress", "HIGH", "network",
+                        f"{fn}() invokes a tunneling/covert client: "
+                        f"{body.strip()[:80]}",
+                        position=fn, body=body.strip()[:80])
+                    return
 
 # ---------------------------------------------------------------------------
 # H077 - network fetch at parse time
@@ -574,10 +574,17 @@ def edge_parse_time_fetch(ctx, add) -> None:
 
 # The client, then anything up to the end of the command.  The upload flags
 # are matched inside that span, so `curl -sf -F file=@x https://0x0.st` and
-# `curl https://0x0.st -T x` both read as uploads.
-_HTTP_CLIENT_RE = re.compile(
-    r"(?:\A\s*|[;&|]\s*|\$\(\s*)((?:curl|wget)\b[^;&|]*)", re.IGNORECASE
-)
+# `curl https://0x0.st -T x` both read as uploads.  The command word comes
+# from the shared scanner, so wrappers (`time curl`, `{ curl …; }`,
+# `sudo -u x curl`) and quoted text are decided in one place.
+_HTTP_CLIENT_WORD_RE = re.compile(r"(?:curl|wget)\b", re.IGNORECASE)
+
+
+def _http_commands(body: str):
+    for word, tail in _command_starts(body):
+        name = word.strip("\"'").rsplit("/", 1)[-1]
+        if _HTTP_CLIENT_WORD_RE.match(name):
+            yield tail
 
 
 def _upload_flags(config=None) -> list[re.Pattern]:
@@ -629,8 +636,7 @@ def edge_paste_egress(ctx, add) -> None:
         if not line.startswith("+") or fn not in _SCOPE_FUNCTIONS:
             continue
         body = _strip_comment(line[1:])
-        for match in _HTTP_CLIENT_RE.finditer(body):
-            command = match.group(1)
+        for command in _http_commands(body):
             if not any(flag.search(command) for flag in flags):
                 continue
             for _, url in iter_scheme_urls(command, _URL_STOP_CHARS):
@@ -665,8 +671,7 @@ def claims_upload_line(body: str, config=None) -> bool:
     """
     flags = _upload_flags(config)
     hosts = _paste_hosts(config)
-    for match in _HTTP_CLIENT_RE.finditer(body):
-        command = match.group(1)
+    for command in _http_commands(body):
         if not any(flag.search(command) for flag in flags):
             continue
         outside = _uploads_from_outside_the_tree(command)

@@ -22,6 +22,7 @@ from trustsight.config import (  # noqa: E402
     shipped_fatal_rule_ids,
 )
 from trustsight.coverage import (  # noqa: E402
+    CoverageSignals,
     DIFF_TRUNCATED,
     INCOMPLETE_SUFFIX,
     LINE_TRUNCATED,
@@ -222,8 +223,9 @@ def test_a_complete_analysis_is_not_downgraded():
 
 
 def test_gaps_are_listed_in_a_stable_order():
-    gaps = gaps_from(diff_truncated=True, tree_analyzed=False,
-                     unresolved_sources=["_url=$(curl ...)"])
+    gaps = gaps_from(CoverageSignals(
+        diff_truncated=True, tree_analyzed=False,
+        unresolved_sources=["_url=$(curl ...)"]))
     assert gaps == [DIFF_TRUNCATED, TREE_NOT_ANALYZED, UNRESOLVED_SOURCE]
 
 
@@ -408,7 +410,7 @@ def test_parent_baseline_is_a_real_gap():
 
     assert "parent_baseline" in GAPS
     assert "parent_baseline" in GAP_REASONS
-    assert gaps_from(parent_baseline=True) == ["parent_baseline"]
+    assert gaps_from(CoverageSignals(parent_baseline=True)) == ["parent_baseline"]
 
 
 def test_an_unknown_gap_falls_back_to_generic_wording():

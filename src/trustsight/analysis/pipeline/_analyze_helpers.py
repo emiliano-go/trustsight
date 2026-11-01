@@ -7,7 +7,7 @@ from ...config import (
 from ...db import (
     get_last_analysis,
 )
-from ...diffdoc import parse_diff_lines
+from ...diffdoc import as_added_diff, parse_diff_lines
 from ...differ import (
     map_diff_lines,
     truncate_diff,
@@ -26,12 +26,15 @@ from ...rules import (
     get_raw_diff_lines_indexed,
 )
 from ...coverage import (
+    CoverageSignals,
     cut_hunk_details,
     gaps_from,
     note_stage_failure,
     stage_failures,
     oversized_lines,
+    parse_time_substitution_lines,
     unresolved_assignment_rows,
+    unresolved_source_lines,
 )
 from ...scoring import calculate_score
 from ...schema import (
@@ -48,6 +51,7 @@ from ..structural import (
     recipe_checksum_parity_finding,
 )
 from ..structural_rules import apply_structural_rules
+from ..buildfetch import has_unpinned_build_deps
 from ..version import (
     compare_installed_to_aur,
     is_vcs_package,
@@ -332,7 +336,12 @@ def _make_fresh_analysis(
     # was false whenever there was no commit to read a tree from: a first
     # analysis of an empty repository examined nothing and reported a bare
     # "Low".  It is the same coverage accounting as every other producer.
-    gaps = gaps_from(
+    # A first analysis has no diff, but the recipe is still what the build
+    # runs.  Present it as an addition so the coverage readers can answer:
+    # a new package with a build-time registry install or an unresolved
+    # source must not read as fully covered.
+    recipe_diff = as_added_diff(head_pkgbuild or "")
+    gaps = gaps_from(CoverageSignals(
         # There is no diff on this path, so the recipe itself is what
         # names the scriptlet.
         tree_analyzed=(bool(tree_manifest) and tree_complete
@@ -342,7 +351,13 @@ def _make_fresh_analysis(
         degraded_stages=stage_failures(),
         unresolved_assignments=bool(unresolved_assignments),
         noextract_present=_has_noextract(head_pkgbuild or ""),
-    )
+        unresolved_sources=unresolved_source_lines(recipe_diff),
+        long_lines=oversized_lines(recipe_diff.split("\n")),
+        parse_time_substitutions=parse_time_substitution_lines(
+            recipe_diff, head_pkgbuild or ""),
+        unpinned_build_deps=has_unpinned_build_deps(
+            recipe_diff, head_pkgbuild or ""),
+    ))
     # The same scorer the incremental path uses, on the findings this path
     # actually made.  Novelty is empty and stays empty - "first seen" means
     # the novelty tier has nothing to say, not that the rules did not fire -

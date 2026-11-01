@@ -718,7 +718,16 @@ def gate_every_producer_accounts_for_coverage() -> Gate:
             name = _call_name(node).split(".")[-1]
             if name == "gaps_from":
                 gap_calls += 1
-                kwargs = {kw.arg for kw in node.keywords}
+                # The signal set is built as CoverageSignals(...); read the
+                # keywords from that construction so the check follows the
+                # call shape instead of pinning the old keyword bag.
+                signal = next(
+                    (arg for arg in node.args
+                     if isinstance(arg, ast.Call)
+                     and _call_name(arg).split(".")[-1] == "CoverageSignals"),
+                    None,
+                )
+                kwargs = {kw.arg for kw in (signal or node).keywords}
                 for required in ("unresolved_assignments", "noextract_present"):
                     if required not in kwargs:
                         hits.append(f"{_rel(path)}:{node.lineno} no {required}=")

@@ -76,6 +76,7 @@ from ...rules import (
     get_raw_diff_lines_indexed,
 )
 from ...coverage import (
+    CoverageSignals,
     begin_stage_tracking,
     cut_hunk_details,
     gaps_from,
@@ -366,7 +367,14 @@ def analyze_package_text(
             triggered_rules.append(volume)
         tree_analyzed = bool(tree_manifest) and not _scriptlet_files_unread(
             recipe_diff, tree_manifest)
-        gaps = gaps_from(
+        # A first-seen recipe has no previous text, but the coverage readers
+        # still apply to the recipe itself.  `recipe_diff` is the all-added
+        # presentation of it, so a new package with a build-time registry
+        # install, an unresolved source or an oversized line is not reported
+        # as fully covered.
+        first_sources = unresolved_source_lines(recipe_diff)
+        first_subs = parse_time_substitution_lines(recipe_diff, new_pkgbuild)
+        gaps = gaps_from(CoverageSignals(
             tree_analyzed=tree_analyzed,
             snapshot_refused=snapshot_refused,
             upstream_manifest_incomplete=upstream_manifest_incomplete,
@@ -375,7 +383,12 @@ def analyze_package_text(
             degraded_stages=stage_failures(),
             unresolved_assignments=bool(unresolved_assignments),
             noextract_present=_has_noextract(new_pkgbuild),
-        )
+            unresolved_sources=first_sources,
+            long_lines=oversized_lines(recipe_diff.split("\n")),
+            parse_time_substitutions=first_subs,
+            unpinned_build_deps=has_unpinned_build_deps(
+                recipe_diff, new_pkgbuild),
+        ))
         score, breakdown, risk = calculate_score(
             triggered_rules, {}, novelty, config, coverage_gaps=gaps,
             prebuilt=prebuilt,
@@ -655,7 +668,7 @@ def analyze_package_text(
         triggered_rules.append(volume)
     tree_analyzed = bool(tree_manifest) and not _scriptlet_files_unread(
         recipe_diff, tree_manifest)
-    gaps = gaps_from(
+    gaps = gaps_from(CoverageSignals(
         diff_truncated=diff_truncated,
         scan_truncated=scan_truncated,
         partial_hunks=len(cut_hunks),
@@ -672,7 +685,7 @@ def analyze_package_text(
         degraded_stages=stage_failures(),
         unresolved_assignments=bool(unresolved_assignments),
         noextract_present=_has_noextract(new_pkgbuild),
-    )
+    ))
 
     score, breakdown, risk = calculate_score(
         triggered_rules,

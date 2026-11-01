@@ -21,6 +21,7 @@ from unittest.mock import patch
 from trustsight.analysis.base import iter_scheme_urls
 from trustsight.bounded_io import ReadTooLarge, read_capped
 from trustsight.coverage import (
+    CoverageSignals,
     SNAPSHOT_REFUSED,
     TREE_NOT_ANALYZED,
     fail_closed,
@@ -535,7 +536,7 @@ def test_a_refused_snapshot_is_reported_as_a_coverage_gap(monkeypatch):
     assert manifest is None
     assert refused is True
 
-    gaps = gaps_from(tree_analyzed=bool(manifest), snapshot_refused=refused)
+    gaps = gaps_from(CoverageSignals(tree_analyzed=bool(manifest), snapshot_refused=refused))
     assert SNAPSHOT_REFUSED in gaps
     assert TREE_NOT_ANALYZED in gaps  # the tree really was not examined
     assert fail_closed("Low", gaps, []) == "Inconclusive"

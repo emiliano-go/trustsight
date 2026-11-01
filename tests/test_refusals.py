@@ -539,3 +539,27 @@ def test_a_local_used_as_a_command_still_refuses():
         "}\n"
     ))
     assert "X026" in ids
+
+
+def test_a_failed_current_text_parse_is_recorded(monkeypatch):
+    """The fallback to the diff projection is a boundary, not silence."""
+    from trustsight import recipedoc
+    from trustsight.coverage import begin_stage_tracking, stage_failures
+    from trustsight.analysis import refusals
+
+    def _boom(*_args, **_kwargs):
+        raise ValueError("unparseable")
+
+    real_doc = recipedoc.parse_recipe("pkgname=demo\npkgver=1.0\n",
+                                      file="PKGBUILD")
+    # Keep the diff projection real; only the current_text re-parse fails.
+    monkeypatch.setattr(refusals, "_recipe_post_doc", lambda _doc: real_doc)
+    monkeypatch.setattr(recipedoc, "parse_recipe", _boom)
+    begin_stage_tracking()
+    refusals.refusal_findings(
+        _diff("build() {\n  :\n}\n"),
+        {},
+        lambda *_args, **_kwargs: None,
+        current_text="pkgname=demo\npkgver=1.0\nbuild() {\n  :\n}\n",
+    )
+    assert "recipe-current-text-parse" in stage_failures()

@@ -39,6 +39,28 @@ from pathlib import Path
 
 from .tokenizer import split_lines
 
+
+def as_added_diff(text: str, path: str = "PKGBUILD") -> str:
+    """Present a whole file as a one-sided, all-added diff.
+
+    A first analysis has no previous text to compare against.  Several
+    coverage signals are still derivable from the recipe itself (a build
+    step that resolves from a registry, an unresolved ``source=``, an
+    oversized line), and the readers for them take diff text.  Presenting
+    the recipe as an addition lets those readers run instead of reporting
+    a bare "no change" and silently clearing the package.
+
+    Uses ``tokenizer.split_lines``, not ``str.splitlines``: U+2028 and
+    friends are characters in a PKGBUILD word, and splitting on them would
+    invent boundaries the shell never sees.
+    """
+    lines = split_lines(text) if text else []
+    if not lines:
+        return ""
+    added = "".join("+" + line + "\n" for line in lines)
+    return (f"--- /dev/null\n+++ b/{path}\n"
+            f"@@ -0,0 +1,{len(lines)} @@\n{added}")
+
 #: Bumped whenever the parse or the dataclass shape changes.  A cached
 #: document written under a different version is a cache miss, never a
 # partial read. v2 adds the typed file metadata (mode and

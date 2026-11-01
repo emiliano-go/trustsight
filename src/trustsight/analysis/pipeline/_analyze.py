@@ -59,6 +59,7 @@ from ..adoption import adoption_findings, credential_egress_finding, source_take
 from ..buildfetch import has_unpinned_build_deps
 from ...changes import change_delta
 from ...coverage import (
+    CoverageSignals,
     begin_stage_tracking,
     gaps_from,
     note_stage_failure,
@@ -605,7 +606,7 @@ def analyze_package(
         added_names=added_names,
     )
 
-    gaps = gaps_from(
+    gaps = gaps_from(CoverageSignals(
         diff_truncated=diff_truncated,
         scan_truncated=scan_truncated,
         tree_analyzed=(bool(tree_manifest) and tree_complete
@@ -635,7 +636,7 @@ def analyze_package(
         noextract_present=_has_noextract(head_pkgbuild or diff_text),
         partial_hunks=len(cut_hunks),
         partial_files=partial_files,
-    )
+    ))
 
     # T-series temporal novelty. Cold index declines
     # (the rule is silent until the ecosystem ledger has observations).

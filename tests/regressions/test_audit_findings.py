@@ -232,7 +232,7 @@ def test_a_failed_stage_is_recorded_as_a_coverage_gap():
     coverage.begin_stage_tracking()
     coverage.note_stage_failure("source-parse")
     assert coverage.stage_failures() == ["source-parse"]
-    gaps = coverage.gaps_from(degraded_stages=coverage.stage_failures())
+    gaps = coverage.gaps_from(coverage.CoverageSignals(degraded_stages=coverage.stage_failures()))
     assert coverage.STAGE_DEGRADED in gaps
     assert coverage.describe(gaps)
     assert "Inconclusive" in coverage.inconclusive_label(gaps)

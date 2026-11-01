@@ -789,3 +789,30 @@ def test_a_manifest_without_a_version_still_imports(baseline_dir, isolated_db):
     import_baseline(baseline_dir, allow_unsigned=True)
     assert {entry.value for entry in active_iocs("test-feed")} >= {
         "malware.example", "evil-pkg"}
+
+
+def test_a_broken_ioc_store_is_a_stage_failure(monkeypatch):
+    """A store that raises is not the same answer as a store with no match.
+
+    Returning [] silently made a corrupt or half-initialised database read
+    as a clean sheet.  The failure is recorded so the verdict can say the
+    lookup was not answered.
+    """
+    import sqlite3
+    from contextlib import contextmanager
+
+    import trustsight.ioc_baseline as baseline
+    from trustsight.coverage import begin_stage_tracking, stage_failures
+
+    class _Broken:
+        def execute(self, *_args, **_kwargs):
+            raise sqlite3.OperationalError("no such table: ioc_entries")
+
+    @contextmanager
+    def _connection():
+        yield _Broken()
+
+    monkeypatch.setattr(baseline, "get_connection", _connection)
+    begin_stage_tracking()
+    assert baseline.match_ioc("package", "demo") == []
+    assert "ioc-store" in stage_failures()

@@ -251,3 +251,33 @@ def test_g5_context_line_ip_source_does_not_fire():
         "-pkgver=1.0\n+pkgver=1.1\n"
     )
     assert "C023" not in _ids(text)
+
+
+def test_every_coverage_signal_is_read_by_gaps_from():
+    """A new signal must be consumed, not merely carried.
+
+    The previous keyword bag let a producer omit a signal silently; this
+    asserts the other half: adding a field to ``CoverageSignals`` without
+    reading it in ``gaps_from`` is a no-op gap that no run can ever report.
+    """
+    import ast
+    import dataclasses
+    from pathlib import Path
+
+    from trustsight import coverage
+
+    source = Path(coverage.__file__).read_text()
+    tree = ast.parse(source)
+    function = next(
+        node for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "gaps_from"
+    )
+    read = {
+        node.attr
+        for node in ast.walk(function)
+        if isinstance(node, ast.Attribute)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "signals"
+    }
+    fields = {field.name for field in dataclasses.fields(coverage.CoverageSignals)}
+    assert fields <= read, f"CoverageSignals fields not read: {sorted(fields - read)}"

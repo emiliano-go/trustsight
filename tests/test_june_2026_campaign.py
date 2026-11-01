@@ -26,7 +26,7 @@ from trustsight.analysis.buildfetch import (
     registry_install_names,
     registry_resolutions,
 )
-from trustsight.coverage import UNPINNED_BUILD_DEPS, fail_closed, gaps_from
+from trustsight.coverage import CoverageSignals, UNPINNED_BUILD_DEPS, fail_closed, gaps_from
 
 # The recipe change, with upstream provably identical: same source URL, same
 # checksum, same pkgver. Only the build recipe moved.
@@ -143,7 +143,7 @@ def test_a_shell_grouping_or_reserved_word_is_a_registry_install():
 
 def test_the_gap_forbids_an_unflagged_result():
     """B2: a run that could not see what will execute cannot read as clean."""
-    gaps = gaps_from(tree_analyzed=True, unpinned_build_deps=True)
+    gaps = gaps_from(CoverageSignals(tree_analyzed=True, unpinned_build_deps=True))
     assert gaps == [UNPINNED_BUILD_DEPS]
     assert fail_closed("Low", gaps, []) == "Inconclusive"
 

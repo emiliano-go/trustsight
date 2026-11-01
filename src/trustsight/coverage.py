@@ -32,6 +32,7 @@ the codebase allowed to turn coverage into a verdict.
 
 import re
 import threading
+from dataclasses import dataclass
 from collections.abc import Collection
 
 from .diffdoc import parse_diff_lines
@@ -456,36 +457,48 @@ def oversized_lines(lines: list[str]) -> int:
     return sum(1 for line in lines if len(line) > MAX_RULE_LINE_BYTES)
 
 
-def gaps_from(
-    diff_truncated: bool = False,
-    scan_truncated: bool = False,
-    tree_analyzed: bool = True,
-    companion_truncated: bool = False,
-    binary_metadata: bool = False,
-    unresolved_sources: list[str] | None = None,
-    long_lines: int = 0,
-    parse_time_substitutions: list[str] | None = None,
-    snapshot_refused: bool = False,
-    unpinned_build_deps: bool = False,
-    deps_not_scanned: bool = False,
-    parent_baseline: bool = False,
-    ruleset_drifted: bool = False,
-    degraded_stages: list[str] | None = None,
-    unresolved_assignments: bool = False,
-    noextract_present: bool = False,
-    partial_hunks: int = 0,
-    partial_files: list[str] | None = None,
-    upstream_manifest_incomplete: bool = False,
-) -> list[str]:
+@dataclass(frozen=True)
+class CoverageSignals:
+    """The facts that make one analysis partial.
+
+    A plain keyword bag was the previous interface.  Nothing enforced that a
+    new signal was forwarded by every producer, and two first-seen paths had
+    already stopped supplying four of them.  Making the signal set a type
+    means omission is a visible construction, and the completeness test in
+    ``tests/test_coverage_gap_machinery.py`` fails if ``gaps_from`` stops
+    reading a field.
+    """
+    diff_truncated: bool = False
+    scan_truncated: bool = False
+    tree_analyzed: bool = True
+    companion_truncated: bool = False
+    binary_metadata: bool = False
+    unresolved_sources: list[str] | None = None
+    long_lines: int = 0
+    parse_time_substitutions: list[str] | None = None
+    snapshot_refused: bool = False
+    unpinned_build_deps: bool = False
+    deps_not_scanned: bool = False
+    parent_baseline: bool = False
+    ruleset_drifted: bool = False
+    degraded_stages: list[str] | None = None
+    unresolved_assignments: bool = False
+    noextract_present: bool = False
+    partial_hunks: int = 0
+    partial_files: list[str] | None = None
+    upstream_manifest_incomplete: bool = False
+
+
+def gaps_from(signals: "CoverageSignals") -> list[str]:
     """Assemble the gap list for one analysis, in a stable order."""
     gaps: list[str] = []
-    if diff_truncated:
+    if signals.diff_truncated:
         gaps.append(DIFF_TRUNCATED)
     # Distinct from DIFF_TRUNCATED rather than folded into it: both mean
     # content was dropped, but they point at different dials. A reader who
     # saw only "the diff was truncated" would raise `diff.max_diff_bytes`
     # and find it changed nothing, because the line count was the bound.
-    if scan_truncated:
+    if signals.scan_truncated:
         gaps.append(SCAN_TRUNCATED)
     # A hunk carrying fewer lines than its header declares was cut
     # mid-stream.  The byte and line caps set their own gaps above, so
@@ -493,55 +506,55 @@ def gaps_from(
     # hand, a stored blob that was capped upstream, a generator that
     # stopped early.  Every array reader downstream then treated a
     # fragment as a whole array with no notice.
-    if partial_hunks and not (diff_truncated or scan_truncated):
+    if signals.partial_hunks and not (signals.diff_truncated or signals.scan_truncated):
         gaps.append(PARTIAL_HUNK)
     # an install script shown only in part is not read as a whole
     # script; the hook rules stand down and the gap names the boundary.
-    if partial_files:
+    if signals.partial_files:
         gaps.append(PARTIAL_FILE_ANALYSIS)
-    if long_lines:
+    if signals.long_lines:
         gaps.append(LINE_TRUNCATED)
-    if not tree_analyzed:
+    if not signals.tree_analyzed:
         gaps.append(TREE_NOT_ANALYZED)
     # Separate from TREE_NOT_ANALYZED: that gap says no manifest was
     # available at all, this one says a file the recipe *executes* was read
     # only in part, which points at a different dial (MAX_COMPANION_BYTES).
-    if companion_truncated:
+    if signals.companion_truncated:
         gaps.append(COMPANION_TRUNCATED)
     # A binary metadata file is a *different* skip from a truncated
     # companion: the companion was read in part, this was not read at all,
     # and the file is the one that decides what the build runs.
-    if binary_metadata:
+    if signals.binary_metadata:
         gaps.append(BINARY_METADATA)
-    if unresolved_sources:
+    if signals.unresolved_sources:
         gaps.append(UNRESOLVED_SOURCE)
-    if parse_time_substitutions:
+    if signals.parse_time_substitutions:
         gaps.append(UNRESOLVED_PARSE_TIME)
     # Reported alongside TREE_NOT_ANALYZED rather than instead of it: that
     # gap says the tree was not examined, and this one says a bound is why.
     # A14 requires a bound that drops content to be visible *as a bound*,
     # and "the manifest was unavailable" would read as an absent snapshot.
-    if snapshot_refused:
+    if signals.snapshot_refused:
         gaps.append(SNAPSHOT_REFUSED)
     # A manifest the corpus could not read whole means the dependency set
     # used for G004's comparison is absent, not empty: the package keeps
     # its prior snapshot and the omission is visible rather than reading
     # as "this package gained nothing".
-    if upstream_manifest_incomplete:
+    if signals.upstream_manifest_incomplete:
         gaps.append(UPSTREAM_MANIFEST_INCOMPLETE)
-    if unpinned_build_deps:
+    if signals.unpinned_build_deps:
         gaps.append(UNPINNED_BUILD_DEPS)
     # Only a walk cut short by a ceiling, or one that could not analyse a
     # dependency, is a gap.  Asking for depth 1 and getting depth 1 is a
     # complete answer to the question the operator asked, even though a
     # level 2 exists.
-    if deps_not_scanned:
+    if signals.deps_not_scanned:
         gaps.append(DEPS_NOT_SCANNED)
     # No prior observation is not "nothing suspicious": the tool compared
     # the parent commit, so the package's earlier history is outside what
     # this run can claim.  The gap keeps a first review from reading as a
     # whole-history verdict.
-    if parent_baseline:
+    if signals.parent_baseline:
         gaps.append(PARENT_BASELINE)
     # `rules.toml` is written once, at install time, and never rewritten.
     # A user who never hand-edits rules therefore runs whatever the
@@ -555,21 +568,20 @@ def gaps_from(
     # drifted ruleset is a run whose detection surface is not the one this
     # version documents, and B2 says an analysis that could not do what it
     # claims must say so rather than report a clean verdict.
-    if ruleset_drifted:
+    if signals.ruleset_drifted:
         gaps.append(RULESET_DRIFTED)
     # Last, because it is the least specific: when a named gap already
     # explains the same shortfall the reader wants that one first.  Unresolved
     # assignments use this existing boundary rather than reporting Low beside
     # W008 and a structured refusal list.
-    if degraded_stages or unresolved_assignments:
+    if signals.degraded_stages or signals.unresolved_assignments:
         gaps.append(STAGE_DEGRADED)
     # noextract=() suppresses extraction of specific source archives.
     # When present, the contents of those archives are not available to
     # the analysis, so any rule that would examine them cannot fire.
-    if noextract_present:
+    if signals.noextract_present:
         gaps.append(NOEXTRACT_SUPPRESSED)
     return gaps
-
 
 def resolution_coverage(resolved, unresolved, triggered_rules,
                         rules) -> dict:

@@ -34,7 +34,7 @@ from functools import lru_cache
 
 from ..deps import _strip_comment, unquote_shell_words
 from ..shell_words import command_starts
-from ..diffdoc import parse_diff_lines
+from ..diffdoc import as_added_diff, parse_diff_lines
 from ..tokenizer import join_line_continuations, split_lines
 from ..rules import ScopeResolver, clamp_text
 from .build import _recipe_lines
@@ -170,6 +170,15 @@ def _registry_resolutions_uncached(
         for _word, tail in command_starts(body):
             if _REGISTRY_WORD_RE.match(unquote_shell_words(tail)):
                 found.append((function, tail.strip()[:200]))
+    if not found and not diff_text.strip() and current_text:
+        # First analysis: there is no diff to read, but the recipe itself is
+        # what the build will run.  Present it as an addition so a new
+        # package with `npm install` in prepare() records the same coverage
+        # gap an update would.  Only for an *empty* diff: a diff with no
+        # added lines still describes a change, and scanning the whole
+        # current text there would report pre-existing installs as new.
+        return _registry_resolutions_uncached(
+            as_added_diff(current_text), current_text)
     return found
 
 
@@ -193,7 +202,9 @@ _SUBCOMMANDS = frozenset({
 _NAME_RE = re.compile(r"^(@[A-Za-z0-9][\w.-]*/)?[A-Za-z0-9][\w.-]*")
 
 
-def registry_install_names(diff_text: str) -> list[tuple[str, str, str]]:
+def registry_install_names(diff_text: str,
+                           current_text: str | None = None,
+                           ) -> list[tuple[str, str, str]]:
     """``(function, command, package_name)`` for names a build step installs.
 
     An IOC ``package`` indicator is matched against the AUR package name,
@@ -209,7 +220,7 @@ def registry_install_names(diff_text: str) -> list[tuple[str, str, str]]:
     is not reported rather than reported wrongly.
     """
     found: list[tuple[str, str, str]] = []
-    for function, command in registry_resolutions(diff_text):
+    for function, command in registry_resolutions(diff_text, current_text):
         # Only the first shell command on the line owns the argument list.
         head = re.split(r"[;&|]", command)[0]
         tokens = head.split()

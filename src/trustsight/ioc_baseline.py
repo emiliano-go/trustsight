@@ -595,6 +595,19 @@ def _is_expired(expires_at: str | None) -> bool:
         return False
 
 
+def _note_store_unavailable() -> None:
+    """Record that an IOC lookup could not read the store.
+
+    A cold store (no table yet) is a legitimate "no indicators".  A store
+    that raises ``OperationalError`` is different: the analysis asked and
+    was not answered.  Silently returning an empty result made a corrupt or
+    half-initialised database look like a clean sheet.
+    """
+    from .coverage import note_stage_failure
+
+    note_stage_failure("ioc-store")
+
+
 def active_iocs(source: str | None = None, expired: bool = False) -> list[IocEntry]:
     """Return active IOC entries, optionally filtered by source.
 
@@ -609,6 +622,7 @@ def active_iocs(source: str | None = None, expired: bool = False) -> list[IocEnt
         try:
             rows = conn.execute(query, params).fetchall()
         except sqlite3.OperationalError:
+            _note_store_unavailable()
             return []
     entries = [_row_to_entry(r) for r in rows]
     if not expired:
@@ -642,6 +656,7 @@ def all_ioc_sources() -> list[str]:
                 "SELECT DISTINCT source FROM ioc_entries ORDER BY source"
             ).fetchall()
         except sqlite3.OperationalError:
+            _note_store_unavailable()
             return []
     return [r["source"] for r in rows]
 
@@ -662,6 +677,7 @@ def match_ioc(type_: str, value: str) -> list[IocMatch]:
         try:
             rows = conn.execute(query, params).fetchall()
         except sqlite3.OperationalError:
+            _note_store_unavailable()
             return []
 
     matches: list[IocMatch] = []

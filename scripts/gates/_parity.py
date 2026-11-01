@@ -216,7 +216,9 @@ def gate_unpinned_build_deps_is_a_declared_gap() -> Gate:
     run from reading as clean.
     """
     from trustsight.analysis.buildfetch import has_unpinned_build_deps
-    from trustsight.coverage import UNPINNED_BUILD_DEPS, fail_closed, gaps_from
+    from trustsight.coverage import (
+        CoverageSignals, UNPINNED_BUILD_DEPS, fail_closed, gaps_from,
+    )
 
     attack = (
         "diff --git a/PKGBUILD b/PKGBUILD\n"
@@ -244,7 +246,8 @@ def gate_unpinned_build_deps_is_a_declared_gap() -> Gate:
     if has_unpinned_build_deps(offline):
         problems.append("an explicitly offline build recorded the gap")
 
-    gaps = gaps_from(tree_analyzed=True, unpinned_build_deps=True)
+    gaps = gaps_from(CoverageSignals(
+        tree_analyzed=True, unpinned_build_deps=True))
     if UNPINNED_BUILD_DEPS not in gaps:
         problems.append("gaps_from does not carry the gap")
     if fail_closed("Low", gaps, []) != "Inconclusive":

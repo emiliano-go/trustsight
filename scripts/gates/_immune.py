@@ -190,7 +190,7 @@ def gate_campaign_points_are_attributed() -> Gate:
                              ttl_obs=50, now_obs=db.observation_seq())
         from trustsight.analysis.pipeline._analyze import _campaign_corroboration
 
-        score, breakdown = _campaign_corroboration(10, [], "yyay", [])
+        score, breakdown, _ = _campaign_corroboration(10, [], "yyay", [])
         if score != 10:
             problems.append(f"campaign corroboration moved the score: {score}")
         if not breakdown or getattr(breakdown[-1], "rule_id", "") != "G007":
@@ -201,7 +201,7 @@ def gate_campaign_points_are_attributed() -> Gate:
             problems.append("the entry carried no campaign_id")
         # The impersonated target is not corroboration: reviewing yay itself
         # does not stand in the campaign.
-        if _campaign_corroboration(10, [], "yay", []) != (10, []):
+        if _campaign_corroboration(10, [], "yay", [])[:2] != (10, []):
             problems.append("the impersonated target was scored as corroborated")
     return Gate("campaign points are attributed", not problems,
                 problems or "G007 is weight-0 and names its campaign")
@@ -266,7 +266,7 @@ def gate_escalation_never_reaches_fatal() -> Gate:
                              "G005", ttl_obs=50, now_obs=db.observation_seq())
         from trustsight.analysis.pipeline._analyze import _campaign_corroboration
 
-        score, _ = _campaign_corroboration(100, [], "fatal-pkg", [])
+        score, _, _ = _campaign_corroboration(100, [], "fatal-pkg", [])
         if score != 100:
             fatal_ok = False
     return Gate("escalation never reaches fatal", fatal_ok,

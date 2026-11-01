@@ -23,6 +23,12 @@
       "C031"
     ]
   },
+  "C033-comment-gutting.diff": {
+    "min_score": 0,
+    "must_fire": [
+      "C033"
+    ]
+  },
   "H001-skip-git-justified.diff": {
     "min_score": 25,
     "must_fire": [
@@ -1266,6 +1272,18 @@
   "S008-lookalike.diff": {
     "must_not_fire": [
       "S008"
+    ]
+  },
+  "T004-partial-key-removal.diff": {
+    "min_score": 0,
+    "must_fire": [
+      "T004"
+    ]
+  },
+  "T005-path-changed-downgrade.diff": {
+    "min_score": 0,
+    "must_fire": [
+      "T005"
     ]
   },
   "U003-manifest-git-dep.diff": {

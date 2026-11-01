@@ -93,6 +93,18 @@ SERIES_DEPENDENCIES: dict[str, frozenset[str]] = {
 #: external-list match a "behavioral heuristic" and hide the indicator
 #: list and keyring it actually depends on.
 RULE_METADATA_OVERRIDES: dict[str, dict] = {
+    # T004/T005 are filed in T for identity but read the diff, not stored
+    # history: naming "historical observation" would overstate the evidence.
+    "T004": {
+        "mechanism": "missing-self diff predicate",
+        "evidence": "parsed recipe/diff documents",
+        "shared_dependencies": ["recipedoc", "diffdoc"],
+    },
+    "T005": {
+        "mechanism": "missing-self diff predicate",
+        "evidence": "parsed recipe/diff documents",
+        "shared_dependencies": ["recipedoc", "diffdoc"],
+    },
     "H056": {
         "mechanism": "external indicator membership",
         "evidence": "signed indicator baselines",

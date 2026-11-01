@@ -72,6 +72,7 @@ def test_payload_carries_the_alerts_and_the_cycle_counts():
     ]
     assert payload["cycle"] == {
         "added": 3, "changed": 2, "removed": 1, "processed": 5,
+        "refractory": [],
     }
     assert payload["over_threshold"] == []
 
@@ -715,3 +716,18 @@ def test_headline_prefers_the_cause_of_an_h046_cascade():
     )
     body = alert_payload(cycle)
     assert body["title"].startswith("TrustSight: H044 on pulseaudio-dlna-cygn")
+
+
+def test_one_campaign_cluster_names_all_members_deterministically():
+    """Lateral inhibition: N packages sharing one campaign are one alert.
+
+    The members are sorted and de-duplicated, and the payload carries one
+    cluster for the campaign rather than one row per package.
+    """
+    cycle = _cycle(cluster_findings=[
+        {"rule_id": "G001", "params": {"members": ["c", "a", "b", "a"]}},
+    ])
+    payload = alert_payload(cycle)
+    assert payload["campaign_cluster"] == [
+        {"rule_id": "G001", "members": ["a", "b", "c"], "count": 3},
+    ]

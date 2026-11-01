@@ -40,6 +40,12 @@ A new detection ships at weight 0 (INFO) until the benign corpus calibrates it. 
 
 **Enforced by:** [Scoring Philosophy](explanation/scoring-philosophy.md) and `tests/test_calibration_gates.py`.
 
+### Anergy is a standing state, not a silent omission
+
+A report-only rule is listed in the shipped anergy ledger. The ledger names the signal that is missing, and scoring reads it: an anergic rule reports its findings at weight 0 whatever severity it declares. Promotion removes the entry and names the release and the changelog bullet that records the measured outcome. A release cannot silently score a rule that is still anergic.
+
+**Enforced by:** `trustsight.anergy`, `scripts/gates/_process.py` and `trustsight admin anergic`.
+
 ### Scored rules pass the fire-rate gate
 
 A rule firing on at least 30% of the benign corpus is describing a census, not detecting an anomaly. It must be INFO and weight 0.

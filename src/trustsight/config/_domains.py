@@ -235,9 +235,15 @@ def config_fingerprint() -> str:
         }
 
     import sys
+
+    from ..anergy import anergic_ids
+
     cfg_mod = sys.modules[__package__]
     config = cfg_mod.load_config()
     material = {
+        # The anergy ledger decides which rules are allowed to score, so it is
+        # part of the instrument rather than a cosmetic registry.
+        "anergic": anergic_ids(),
         "rules": sorted((rule_key(r) for r in cfg_mod.load_rules()),
                         key=lambda r: r.get("id") or ""),
         "structural_rules": sorted(

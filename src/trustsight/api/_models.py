@@ -233,6 +233,16 @@ class Report:
         object per coverage gap and per W-series rendering.
     :ivar indicators: the indicator tier, promoted from
         ``ioc_matches``.  Outside the heuristic score.
+    :ivar campaign_hold: advisory; this package stood in an active campaign
+        perimeter.  Consumed outside the tool; no scoring path.
+    :ivar campaign_id: the active campaign behind :attr:`campaign_hold`.
+    :ivar campaign_state: ``active``, ``none``, or ``unavailable`` on a cold
+        read.  A cold read is not "no campaign".
+    :ivar tag_panel: grouped weight-0 tag events (opsonization panel).
+    :ivar self_state: the instrument's own state: cold/warm mode, channel
+        tags and observation ages, and a sorted blind list.
+    :ivar tender_point: unresolved review verdicts over the window, or
+        ``unavailable``.  Never a damage claim and never a score.
 
     Example:
         .. code-block:: python
@@ -386,6 +396,20 @@ class Report:
     """The recorded analysis was served unchanged (#20); nothing was re-computed."""
     cached_at: str = ""
     """When the reused analysis was recorded; empty unless :attr:`cached`."""
+
+    campaign_hold: bool = False
+    """Advisory: this package stood in an active campaign perimeter."""
+    campaign_id: str = ""
+    """The active campaign that produced :attr:`campaign_hold`."""
+    campaign_state: str = "unavailable"
+    """``active``, ``none``, or ``unavailable`` on a cold read."""
+
+    tag_panel: tuple = ()
+    """Grouped weight-0 tag events (opsonization panel)."""
+    self_state: dict = field(default_factory=dict)
+    """The instrument's own state: cold/warm, channel tags, blind surfaces."""
+    tender_point: dict = field(default_factory=dict)
+    """Unresolved review verdicts over the window, or ``unavailable``."""
 
     _raw: dict = field(default_factory=dict, repr=False, compare=False)
     _evaluated: dict = field(default_factory=dict, repr=False, compare=False)
@@ -799,6 +823,8 @@ class CycleReport:
     :ivar new_alerts: ``(package, rule_id)`` for clusters seen for the
         first time.  A cluster already reported on an earlier cycle is
         counted, not re-announced.
+    :ivar refractory: per-``(rule, campaign)`` emission audit: the window
+        start and whether the alert was emitted or debounced.
 
     Example:
         .. code-block:: python
@@ -828,6 +854,9 @@ class CycleReport:
     new_alerts: tuple[tuple[str, str], ...] = ()
     """``(package, rule_id)`` for clusters seen for the first time.  A cluster
     already reported on an earlier cycle is counted, not re-announced."""
+    refractory: tuple[dict, ...] = ()
+    """Per-(rule, campaign) emission audit: the window and whether the alert
+    was emitted or debounced."""
 
     def to_dict(self) -> dict:
         """Serialize to a plain dict for ``full-aur`` JSON output."""
@@ -844,6 +873,7 @@ class CycleReport:
             "ioc_hits": [list(f) for f in self.ioc_hits],
             "cluster_findings": [c.to_dict() for c in self.cluster_findings],
             "new_alerts": [list(a) for a in self.new_alerts],
+            "refractory": [dict(row) for row in self.refractory],
         }
 
 @dataclass(frozen=True)
@@ -968,6 +998,12 @@ def _evaluate_fact_dict_fallback(report: "Report") -> dict:
         "failed": False,
         "cached": report.cached,
         "cached_at": report.cached_at,
+        "campaign_hold": report.campaign_hold,
+        "campaign_id": report.campaign_id,
+        "campaign_state": report.campaign_state,
+        "tag_panel": list(report.tag_panel),
+        "self_state": dict(report.self_state),
+        "tender_point": dict(report.tender_point),
         "config_fingerprint": report.config_fingerprint,
         "review_profile": report.review_profile,
         "review_threshold": report.review_threshold,

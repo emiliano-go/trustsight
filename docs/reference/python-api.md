@@ -478,7 +478,7 @@ for dep in report.flagged_dependencies:
 
 ### `CycleReport`
 
-`added`, `changed`, `removed`, `processed`, `bootstrap`, `backfilling` (this cycle is part of a `--since` replay), `elapsed`, `flagged` (`(package, score)` pairs scoring 40 or above, worst first), `over_threshold` (`(package, score)` pairs scoring above the alerting bar, worst first), `ioc_hits` (`(package, indicator)` pairs whose analysis matched a baseline entry), `cluster_findings`, `new_alerts` (`(package, rule_id)` pairs for clusters seen for the first time).
+`added`, `changed`, `removed`, `processed`, `bootstrap`, `backfilling` (this cycle is part of a `--since` replay), `elapsed`, `flagged` (`(package, score)` pairs scoring 40 or above, worst first), `over_threshold` (`(package, score)` pairs scoring above the alerting bar, worst first), `ioc_hits` (`(package, indicator)` pairs whose analysis matched a baseline entry), `cluster_findings`, `new_alerts` (`(package, rule_id)` pairs for clusters seen for the first time), `refractory` (the per-`(rule, campaign)` emission audit: window start and whether the alert was emitted or debounced).
 
 ### `ClusterFinding`
 

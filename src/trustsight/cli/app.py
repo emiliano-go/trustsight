@@ -57,6 +57,7 @@ from .ioc import register_commands as _register_ioc
 from .watchlist import register_commands as _register_watchlist
 from .seed import register_commands as _register_seed
 from .rules import register_commands as _register_rules
+from .verdict import register_commands as _register_verdict
 
 _register_review(app)
 _register_inspect(app)
@@ -71,6 +72,7 @@ _register_ioc(app)
 _register_watchlist(app)
 _register_seed(app)
 _register_rules(app)
+_register_verdict(app)
 
 
 class _StderrHandler(logging.StreamHandler):

@@ -168,6 +168,67 @@ def register_commands(app: typer.Typer):
     _register_db(app)
     _register_baseline(app)
 
+    admin_app = typer.Typer(help="Operator state that is not a package command.")
+
+    @admin_app.command("anergic")
+    def anergic(
+        json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+    ):
+        """List rules held at weight 0 pending their second signal."""
+        from ..anergy import anergic_ids, entry
+
+        try:
+            rows = [row.to_dict() for rule_id in anergic_ids()
+                    if (row := entry(rule_id)) is not None]
+        except Exception as exc:  # noqa: BLE001 - a corrupt ledger is reportable
+            if json_output:
+                typer.echo(json.dumps({"error": clean(str(exc))}))
+            else:
+                _print_colored(f"could not read the anergy ledger: {exc}",
+                               "red", stderr=True)
+            raise typer.Exit(code=2)
+        if json_output:
+            typer.echo(json.dumps(rows, indent=2))
+            return
+
+        if not rows:
+            print("No rules are anergic; every shipped rule is calibrated.")
+            return
+
+        from ..registry import REGISTRY
+
+        if use_rich():
+            from rich.table import Table
+            from rich.text import Text
+
+            con = console()
+            table = Table(title="Anergic rules (weight 0 pending signal)")
+            table.add_column("Rule")
+            table.add_column("Status")
+            table.add_column("Signal")
+            table.add_column("Since")
+            table.add_column("Promotion")
+            for row in rows:
+                rule = REGISTRY.resolve(row["rule_id"])
+                label = f"{row['rule_id']} {rule.name or ''}".strip()
+                table.add_row(
+                    Text(clean(label)),
+                    Text(clean(row["status"])),
+                    Text(clean(row["signal"])),
+                    Text(clean(row["since"])),
+                    Text(clean(row["promotion"])),
+                )
+            con.print(table)
+            return
+
+        for row in rows:
+            rule = REGISTRY.resolve(row["rule_id"])
+            label = f"{row['rule_id']} {rule.name or ''}".strip()
+            print(f"{label}\n  status: {row['status']}\n  signal: {row['signal']}"
+                  f"\n  since: {row['since']}\n  promotion: {row['promotion']}")
+
+    app.add_typer(admin_app, name="admin")
+
     @app.command()
     def seed_db(
         do_import: bool = typer.Option(False, "--import", help="Import the seed (default action)"),

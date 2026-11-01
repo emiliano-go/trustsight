@@ -160,6 +160,7 @@ TEMPLATES: dict[str, str] = {
     "W010": "{match}",
     "W011": "{match}",
     "W012": "{match}",
+    "W013": "{match}",
     # --- Upstream manifests (U series) ---
     "U001": "{match}",
     "U002": "{match}",
@@ -174,10 +175,14 @@ TEMPLATES: dict[str, str] = {
     "U011": "{match}",
     "U012": "{match}",
     "T003": "signing key rotated: {match}",
+    "T004": "vouch surface removed: {match}",
+    "T005": "scheme downgrade: {match}",
     "X032": "command name assembled by splicing: {shape}",
     "C028": "build cache written outside the build trees: {match}",
     "C029": "{match}",
     "C030": "{match}",
+    "C033": "context bleed: {match}",
+    "C034": "metadata inconsistency: {match}",
     # --- Class E indicator ---
     "H056": "{surface} matches known indicator {ioc_value} ({confidence}, {provenance})",
     # --- Build environment overrides ---
@@ -244,4 +249,9 @@ NON_CONTENT_RULES = {
     # finding: its evidence names the campaign, not a line.
     "G007": "correlation",
     "G012": "correlation", "G013": "correlation", "G014": "correlation",
+    # The missing-self predicates are diff-level facts; a removed line has
+    # no post-file location to cite.
+    "T004": "temporal", "T005": "temporal",
+    "C033": "integrity", "C034": "maintainer-and-metadata",
+    "W013": "unverifiable",
 }

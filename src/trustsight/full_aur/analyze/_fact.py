@@ -164,6 +164,9 @@ def analyze_package_text(
     Returns:
         A fully-scored PackageFact.
     """
+    from ...analysis.delivery._buildtree import normalise_tree_manifest
+
+    tree_manifest = normalise_tree_manifest(tree_manifest)
     config = load_config()
     old_maintainer: Optional[str] = None
 
@@ -683,6 +686,10 @@ def analyze_package_text(
         coverage_gaps=gaps,
         prebuilt=prebuilt,
     )
+    from ...analysis.pipeline._analyze_helpers import _campaign_corroboration
+
+    score, breakdown, campaign_context = _campaign_corroboration(
+        score, breakdown, pkg_name, source_changes.added_urls, gaps)
 
     fact = PackageFact(
         package_name=pkg_name,
@@ -730,6 +737,9 @@ def analyze_package_text(
         score_breakdown=breakdown,
         final_score=score,
         ioc_matches=ioc_baseline_matches(diff_text, pkg_name, current_text=new_pkgbuild),
+        campaign_hold=bool(campaign_context.get("campaign_hold")),
+        campaign_id=str(campaign_context.get("campaign_id") or ""),
+        campaign_state=str(campaign_context.get("campaign_state") or "unavailable"),
     )
 
     fact.resolution_coverage = resolution_coverage(

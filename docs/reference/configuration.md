@@ -68,7 +68,7 @@ the selected policy too.
 
 | Profile | Default threshold | Intended use |
 |---------|-------------------|--------------|
-| `default` | `20` | Historical behavior; about 6.6% of locked benign-corpus diffs enter the review queue. |
+| `default` | `20` | Historical behavior; about 6.8% of locked benign-corpus diffs enter the review queue. |
 | `quiet` | `40` | Smaller queue; it does not claim the same labelled-fixture coverage as `default`. |
 | `strict` | `10` | Broader queue for operators who prefer sensitivity over review volume. |
 
@@ -481,6 +481,10 @@ own project's names from firing a scope-expansion rule.
 | `t_key.min_observations` | T001 | `1` | Ecosystem signing keys recorded before T001 judges a new `validpgpkeys` fingerprint novel; below the floor the rule declines silently. |
 | `t_dom.min_observations` / `t_dom.window_days` | T002 | `1` / `30` | Domains recorded before T002 judges a maintainer domain novel, and the observation window that counts as "new". |
 | `t006.min_divergence_hours` | T006 | `24` | Hours the AUR `LastModified` may lead the git tip commit date before T006 reports a history rewrite. |
+| `t004.min_removed_keys` | T004 | `1` | `validpgpkeys` entries that must be removed, with none added and at least one remaining, before T004 reports a vouch-surface removal. |
+| `c033.min_deleted_comment_ratio` / `c033.min_deleted_comment_lines` | C033 | `0.50` / `8` | Fraction and absolute floor of a diff's pre-state comment prose deleted before C033 reports context bleed. Both are corpus-adjudicated and the rule ships anergic (weight 0). |
+| `tags.convergence_kinds` | `TAG_CONVERGENCE` | `4` | Distinct weight-0 tag kinds on one diff that emit the INFO convergence ledger entry. |
+| `tender.min_unresolved` / `tender.window_months` | tender point | `3` / `6` | Unresolved review verdicts in the window that turn the report header's tender point on. |
 | `e001.max_ratio` | E001 | *empty* | gzip ratio below which added lines read as repetitive/padded. Ships empty: silent until the calibration job or an operator sets it. |
 | `e002.min_fraction` / `e002.min_length` | E002 | *empty* / `64` | Fraction of added tokens that must be base64/base32/hex runs, and the run-length floor. |
 | `e003.min_entropy` / `e003.max_entropy` / `e003.min_bigram` / `e003.max_bigram` | E003 | *empty* | Unigram and bigram entropy band for newly assigned variable/function names; generated names sit low, packed names high. |

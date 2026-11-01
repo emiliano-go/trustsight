@@ -80,7 +80,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 ## C-series: **Check** Structural Invariants
 
-**Count:** 32 rules (C001-C032)
+**Count:** 34 rules (C001-C034)
 
 **Mechanism:** Deterministic structural checks across the PKGBUILD. C-series rules enforce invariants that cannot be expressed as a single regex match: two conditions must hold simultaneously, or a relationship between fields must be consistent. Unlike H-series (which reasons about behavioral suspicion), C-series checks are purely mechanical: if condition A and condition B co-occur, the invariant is violated.
 
@@ -195,7 +195,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 ## W-series: **Warning** Analysis Boundaries
 
-**Count:** 12 rules (W001-W012)
+**Count:** 12 rules (W001-W013)
 
 **Mechanism:** Reports what the analysis *could not read*. W-series findings mark visibility boundaries in the analysis: a package will run code the examination did not cover, and silence about that would be dishonest. They **warn** the reviewer where the analysis stopped.
 
@@ -215,7 +215,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 ## T-series: **Temporal** Observation History
 
-**Count:** 5 rules (T001-T003, T006-T007; 16 further history-backed rules still carry H ids)
+**Count:** 7 rules (T001-T007; 16 further history-backed rules still carry H ids)
 
 **Mechanism:** Predicates over the observation database - the history of the package, its maintainers, its signing keys and its rates. The input is stored history, not the diff, which is what makes T a distinct kind from H: fire rates depend on how much history exists, cold-start semantics are special, and reproducibility requires a pinned DB fixture. The observation-database H rules (H020, H021, H022, H026, H037, H044, H045, H046, H058, H060, H073, H074, H086, H088) are T-natured and keep their H ids for citation stability; new history-backed rules take T ids.
 

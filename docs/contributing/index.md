@@ -84,6 +84,6 @@ benign corpus and real case reports are the arguments that matter.
 | Python             | 3.11+                           |
 | Test runner        | pytest                          |
 | Linter             | ruff                            |
-| Rules              | 206 scoring rules across R/H/C/D/S/X, plus P001-P009 declared practice (P004 is skipped) and W001-W012 unverifiable |
+| Rules              | 206 scoring rules across R/H/C/D/S/X, plus P001-P009 declared practice (P004 is skipped) and W001-W013 unverifiable |
 | Rule config        | `rules.toml`                    |
 | Benign corpus lock | `tests/fixtures/corpus.lock`    |

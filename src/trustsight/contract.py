@@ -218,7 +218,7 @@ def sample_ingest() -> dict:
 def contract() -> dict:
     """The whole contract document."""
     return {
-        "version": 1,
+        "version": 2,
         "rule_ids": rule_ids(),
         "pseudo_rule_ids": pseudo_rule_ids(),
         "severities": severities(),

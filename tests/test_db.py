@@ -1156,7 +1156,7 @@ def test_campaign_corroboration_is_attributed_and_unscored(db):
                       now_obs=observation_seq())
     # A campaign member is corroborated: one attributed INFO entry, weight 0,
     # and the score does not move.
-    score, breakdown = _campaign_corroboration(10, [], "yyay", [])
+    score, breakdown, _ = _campaign_corroboration(10, [], "yyay", [])
     assert score == 10
     assert breakdown[-1].rule_id == "G007"
     assert breakdown[-1].weight == 0
@@ -1164,14 +1164,14 @@ def test_campaign_corroboration_is_attributed_and_unscored(db):
 
     # The impersonated target is not corroboration: reviewing `yay` does not
     # stand in the campaign, it is what the campaign imitates.
-    assert _campaign_corroboration(10, [], "yay", []) == (10, [])
+    assert _campaign_corroboration(10, [], "yay", [])[:2] == (10, [])
     # An unrelated package is untouched.
-    assert _campaign_corroboration(10, [], "other", []) == (10, [])
+    assert _campaign_corroboration(10, [], "other", [])[:2] == (10, [])
 
     # A gained host in a host campaign corroborates instead of the name.
     activate_campaign("g001:new.cdn", {"hosts": ["new.cdn"]}, "G001",
                       ttl_obs=50, now_obs=observation_seq())
-    score2, breakdown2 = _campaign_corroboration(10, [], "other",
+    score2, breakdown2, _ = _campaign_corroboration(10, [], "other",
                                                  ["https://new.cdn/x"])
     assert score2 == 10 and breakdown2[-1].rule_id == "G007"
 

@@ -66,9 +66,9 @@ Per-rule rates are below. The aggregate figures the security model cites are:
 | benign corpus size | 8,393 diffs |
 | benign median | 0 |
 | benign 95th percentile | 30 |
-| benign diffs scoring 0 | 74.8% |
-| benign diffs above the 20-point threshold | 6.6% |
-| percentile at which 20 sits | 93.4th |
+| benign diffs scoring 0 | 74.5% |
+| benign diffs above the 20-point threshold | 6.8% |
+| percentile at which 20 sits | 93.2th |
 | malicious 5th percentile | 40 |
 | malicious minimum | 20 |
 
@@ -82,7 +82,7 @@ in the same commit. `rebaseline.py` scans under the shipped config, the same
 isolation the gates use, so its distribution figures and the gate's separation
 numbers come from one basis.
 
-The 6.6% threshold rate is the practical workload figure: on this locked
+The 6.8% threshold rate is the practical workload figure: on this locked
 benign corpus, about **1 in 15** updates would be flagged for review. It is more
 useful for capacity planning than the zero-rate, and must not be generalized
 beyond this corpus snapshot and configuration.
@@ -200,7 +200,7 @@ be measured against the static corpus.
 |------|------|------|-----------|------|-------|
 | H028 | Accelerated Release Cadence | metadata | - | - | 3+ ancestors in 24 h; never a scored finding. Not corpus-measurable. |
 
-## Structural rules (C001-C032)
+## Structural rules (C001-C034)
 
 These depend on the shape of a diff rather than a single-line pattern, so their fire rates are corpus-dependent and not reported as a single number. They appear per-stratum in `baseline.json`.
 

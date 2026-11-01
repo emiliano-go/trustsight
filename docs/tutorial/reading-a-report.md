@@ -30,9 +30,9 @@ No significant risk signals. Routine version bumps with checksum updates, truste
 
 A Low verdict does not mean "safe." It means "no detectable risk signals in this diff."
 
-**74.8 % of diffs score 0** (zero-rate) across the 8,393-diff benign corpus. At the 95th percentile benign packages score **30**; the CRITICAL-class corpus has a 5th percentile of **40** and a minimum of **20**. The calibration gates re-measure both figures against the shipped configuration on every push and fail the build if the benign p95 stops being strictly below the malicious p5 (the strict separation gate; see [using TrustSight in CI](../guides/using-in-ci.md) and [benchmarks and methodology](../explanation/benchmarks-and-methodology.md)). These numbers are the tails measured on the locked 8,393-diff corpus, not a claim that the two distributions as a whole do not overlap. Run `uv run --extra dev pytest` for the current test count.
+**74.5 % of diffs score 0** (zero-rate) across the 8,393-diff benign corpus. At the 95th percentile benign packages score **30**; the CRITICAL-class corpus has a 5th percentile of **40** and a minimum of **20**. The calibration gates re-measure both figures against the shipped configuration on every push and fail the build if the benign p95 stops being strictly below the malicious p5 (the strict separation gate; see [using TrustSight in CI](../guides/using-in-ci.md) and [benchmarks and methodology](../explanation/benchmarks-and-methodology.md)). These numbers are the tails measured on the locked 8,393-diff corpus, not a claim that the two distributions as a whole do not overlap. Run `uv run --extra dev pytest` for the current test count.
 
-The 20-point threshold is therefore **not** the benign 95th percentile: it sits at the 93.4th, so about **6.6%** of benign diffs land above it. That is a deliberate consequence of [B10](../security.md#b10-positive-evidence-is-reported-never-credited), which stopped crediting declared verification; the separation that matters, benign p95 below malicious p5, is what the gate enforces.
+The 20-point threshold is therefore **not** the benign 95th percentile: it sits at the 93.2th, so about **6.8%** of benign diffs land above it. That is a deliberate consequence of [B10](../security.md#b10-positive-evidence-is-reported-never-credited), which stopped crediting declared verification; the separation that matters, benign p95 below malicious p5, is what the gate enforces.
 
 ### Medium / High / Critical (score > 20)
 
@@ -144,7 +144,7 @@ Break this down left to right:
 |------|---------|
 | `+25` | Weight contributed to the total score. Never negative: nothing lowers a score. `0` marks an annotation, a coverage gap, or a declared-practice `P` finding. |
 | `HIGH` | Severity tier. Determines the weight magnitude. Order: INFO (0) < LOW (5) < MEDIUM (15) < HIGH (25) < CRITICAL (40) < FATAL (weight 0; names itself in the verdict label). |
-| `H001` | Rule identifier from the published R/H/C/D/S/X catalog; P001-P009 are declared-practice findings and W001-W012 are unverifiable findings; SOURCE_BUCKET, NOVELTY and COVERAGE are structural categories. |
+| `H001` | Rule identifier from the published R/H/C/D/S/X catalog; P001-P009 are declared-practice findings and W001-W013 are unverifiable findings; SOURCE_BUCKET, NOVELTY and COVERAGE are structural categories. |
 | `Checksum Disabled` | Rule name. |
 | `sha256sums=SKIP` | Match reason : the exact text or summary that triggered the rule. |
 

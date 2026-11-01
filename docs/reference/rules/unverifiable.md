@@ -66,6 +66,7 @@ rules, because a W is weight-0 by construction:
 | [W010](#w010) | Alert Volume Capped | - |
 | [W011](#w011) | Upstream Content Not Read | - |
 | [W012](#w012) | Federation Not Consulted | - |
+| [W013](#w013) | Campaign Perimeter Boundary Note | INFO |
 <!-- /generated: page-index -->
 
 ### W001: Executes Code This Analysis Did Not Read {#w001}
@@ -301,3 +302,20 @@ Measured on the locked benign corpus: 1,940 on the v1 corpus (51.9%), identical 
 W011 because the shipped channel carries no `upstream_repo` entries, so
 every declared upstream is cold. A populated federation channel lowers this
 rate: a consulted channel that misses returns to W011 alone.
+
+### W013: Campaign Perimeter Boundary Note {#w013}
+
+- **Target:** campaign perimeter + standing boundary notes
+- **Severity:** INFO (weight 0)
+- **Category:** `unverifiable`
+
+**INFO** (weight 0) · category `unverifiable`
+
+Fires when a package stands inside an active campaign perimeter and the same
+run carries a standing boundary note (`W009`, another `W` finding, or a
+coverage gap). The note is not new evidence and does not accuse the package:
+it says the campaign's neighbourhood is being reviewed with a known blind
+spot, until the campaign TTL expires.
+
+Escalation-only, weight 0. It is louder under campaign context and never
+quieter, so the score and the clean/not-clean boundary are untouched.

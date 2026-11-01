@@ -57,8 +57,15 @@ jobs:
       # The feed finds core at `../trustsight` (its sibling), so no env needed.
       - name: Feed conformance
         working-directory: ../trustsight-feed
+        env:
+          # Generate the feed catalog from *this* checkout before testing.
+          # The feed's committed catalog is checked by the feed's own CI; this
+          # job proves the parser and taxonomy resolve every id the candidate
+          # core emits, including ids added in the same change.
+          TRUSTSIGHT_SRC: ${{ github.workspace }}/src
         run: |
           npm ci
+          python scripts/build_rule_catalog.py
           npx vitest run test/contract.test.js
 
       # 3. Harness conformance against this checkout (its uv source points at

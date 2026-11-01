@@ -359,6 +359,24 @@
     "target": null,
     "uid": "TS-0040"
   },
+  "c033": {
+    "canonical": true,
+    "capability": "integrity",
+    "name": "Context Bleed",
+    "severity": "MEDIUM",
+    "severity_text": "MEDIUM (weight 15)",
+    "target": null,
+    "uid": "TS-0285"
+  },
+  "c034": {
+    "canonical": true,
+    "capability": "maintainer-and-metadata",
+    "name": "Metadata Inconsistency",
+    "severity": "INFO",
+    "severity_text": "INFO (weight 0)",
+    "target": "committed .SRCINFO",
+    "uid": "TS-0286"
+  },
   "d001": {
     "canonical": true,
     "capability": "dependency",
@@ -2024,6 +2042,24 @@
     "target": "programmatic (`validpgpkeys` pre/post)",
     "uid": "TS-0213"
   },
+  "t004": {
+    "canonical": true,
+    "capability": "temporal",
+    "name": "Vouch Surface Removed",
+    "severity": "MEDIUM",
+    "severity_text": "MEDIUM (weight 15)",
+    "target": "programmatic (validpgpkeys pre/post)",
+    "uid": "TS-0287"
+  },
+  "t005": {
+    "canonical": true,
+    "capability": "temporal",
+    "name": "Scheme Downgrade",
+    "severity": "MEDIUM",
+    "severity_text": "MEDIUM (weight 15)",
+    "target": "programmatic (source URL pre/post)",
+    "uid": "TS-0288"
+  },
   "t006": {
     "canonical": true,
     "capability": "temporal",
@@ -2257,6 +2293,15 @@
     "severity_text": null,
     "target": null,
     "uid": "TS-0272"
+  },
+  "w013": {
+    "canonical": true,
+    "capability": "unverifiable",
+    "name": "Campaign Perimeter Boundary Note",
+    "severity": "INFO",
+    "severity_text": "INFO (weight 0)",
+    "target": "campaign perimeter + standing boundary notes",
+    "uid": "TS-0289"
   },
   "x001": {
     "canonical": true,

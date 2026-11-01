@@ -52,7 +52,7 @@ The benchmark enforces three gates:
 
 | Gate | Requirement | What it prevents |
 |------|-------------|------------------|
-| Malicious fixture coverage | Every labelled malicious fixture still detects what it is labelled for (skips known_gap) | A change that weakens detection of a labelled fixture is rejected. The committed corpus is 210 self-authored fixtures across historical, holdout, evasion, synthetic, campaign and warm groups; `scripts/verify_fixtures.py` enforces record-to-diff completeness. This is not independently sampled recall. |
+| Malicious fixture coverage | Every labelled malicious fixture still detects what it is labelled for (skips known_gap) | A change that weakens detection of a labelled fixture is rejected. The committed corpus is 213 self-authored fixtures across historical, holdout, evasion, synthetic, campaign and warm groups; `scripts/verify_fixtures.py` enforces record-to-diff completeness. This is not independently sampled recall. |
 | Separation | benign p95 stays below malicious p5 (strict; currently 30 < 40, a 10-point margin) | A change that narrows the gap (by reducing malicious scores or inflating benign scores) is rejected. |
 | Benign fire rates | No scoring rule fires on >= 30% of benign diffs | Prevents weight inflation: a rule that becomes a census on benign packages is rejected. |
 | Score-not-size + weight-zero annotations | \|Pearson(score, diff_lines)\| < 0.30; weight-0 rules move the score by exactly 0 | Prevents measuring activity instead of risk. |
@@ -72,9 +72,9 @@ Measured against the locked benign corpus as `tests/fixtures/corpus.lock` record
 
 | Metric | Value | Benchmark target |
 |--------|-------|------------------|
-| Benign zero-rate | 74.8% | no minimum; fire-rate cap controls FPs |
-| Ruleset trigger rate | 29.5% | benign diffs that fire at least one non-INFO entry (rule or annotation) |
-| Benign flag rate | 6.6% | about **1 in 15** benign corpus diffs exceed the default profile's 20-point threshold |
+| Benign zero-rate | 74.5% | no minimum; fire-rate cap controls FPs |
+| Ruleset trigger rate | 29.8% | benign diffs that fire at least one non-INFO entry (rule or annotation) |
+| Benign flag rate | 6.8% | about **1 in 15** benign corpus diffs exceed the default profile's 20-point threshold |
 | Labelled-fixture detection | 100% | 100% of labelled fixtures; not independent recall |
 | CRITICAL p5 | 40 | > benign p95 |
 | Benign p95 | 30 | < CRITICAL p5 (margin: 10) |
@@ -82,7 +82,7 @@ Measured against the locked benign corpus as `tests/fixtures/corpus.lock` record
 
 The numbers are not aspirational; they are the measured state of the current rule set and scoring model on this corpus and fixture set. CI rejects gate regressions, not changes to an external performance claim.
 
-In one line: 74.8% benign zero-rate, benign p95 = 30 against malicious p5 = 40 on the 8,393-diff locked corpus.
+In one line: 74.5% benign zero-rate, benign p95 = 30 against malicious p5 = 40 on the 8,393-diff locked corpus.
 
 ## Reproducible methodology
 
@@ -100,7 +100,7 @@ A stratum is selected by packaging shape, never by a rule target. The provenance
 
 The corpus-level gate is the `>= 30%` benign fire-rate cap (`scripts/calibration_gates.py`): no scoring rule may fire on 30% or more of the benign diffs, so a rule cannot become a census on ordinary packaging.
 
-Per-rule fire rates (false-positive rate of each rule on the benign corpus) are tracked separately in [Fire Rates](fire-rates.md). The 74.8% zero-rate means 74.8% of benign diffs score 0, while **6.6% exceed the 20-point threshold**: roughly one reviewer workload item per thirteen benign corpus diffs. A score of 0 and a clean fire record are not the same thing: the largest contributors to the remaining fires are H015 (Build Function Modified, INFO/weight 0, fires on 19.7% of diffs but never moves a score) and R010/R011 (curl/wget in PKGBUILD, LOW, fire on <2%).
+Per-rule fire rates (false-positive rate of each rule on the benign corpus) are tracked separately in [Fire Rates](fire-rates.md). The 74.5% zero-rate means 74.5% of benign diffs score 0, while **6.8% exceed the 20-point threshold**: roughly one reviewer workload item per fifteen benign corpus diffs. A score of 0 and a clean fire record are not the same thing: the largest contributors to the remaining fires are H015 (Build Function Modified, INFO/weight 0, fires on 19.7% of diffs but never moves a score) and R010/R011 (curl/wget in PKGBUILD, LOW, fire on <2%).
 
 ## The methodology habit
 

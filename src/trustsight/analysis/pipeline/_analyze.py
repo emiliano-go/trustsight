@@ -702,8 +702,8 @@ def analyze_package(
         diff_text, pkg_name, current_text=head_pkgbuild
     )
 
-    score, breakdown = _campaign_corroboration(
-        score, breakdown, pkg_name, source_changes.added_urls)
+    score, breakdown, campaign_context = _campaign_corroboration(
+        score, breakdown, pkg_name, source_changes.added_urls, gaps)
 
     # Companion content the recorded baseline already held: reported, never
     # scored.  Appended after the campaign pass so it cannot corroborate a
@@ -788,6 +788,9 @@ def analyze_package(
         score_breakdown=breakdown,
         final_score=score,
         ioc_matches=ioc_matches,
+        campaign_hold=bool(campaign_context.get("campaign_hold")),
+        campaign_id=str(campaign_context.get("campaign_id") or ""),
+        campaign_state=str(campaign_context.get("campaign_state") or "unavailable"),
     )
     # An override marked `requires_clear_indicators` is visible-only when an
     # indicator matched this run: the finding renders (with the override and

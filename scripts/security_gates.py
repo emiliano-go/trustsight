@@ -156,6 +156,8 @@ def run_gates() -> list[Gate]:
     gates.append(gate_manifest_parses_are_bounded_and_refusing())
     gates.append(gate_manifest_table_is_configuration())
     gates.append(gate_u003_joins_the_host_view())
+    gates.append(gate_anergic_rules_never_score())
+    gates.append(gate_anergic_promotions_are_changelogged())
     gates.append(gate_manifest_ledger_stays_weight_zero())
     gates.append(gate_archive_listing_adds_no_extraction())
     gates.append(gate_yaml_is_only_safe_load())
@@ -335,6 +337,10 @@ from scripts.gates._immune import (
     gate_escalation_never_reaches_fatal,
     gate_expired_overrides_are_reported,
     gate_overrides_never_hide_indicator_corroboration,
+)
+from scripts.gates._process import (
+    gate_anergic_promotions_are_changelogged,
+    gate_anergic_rules_never_score,
 )
 from scripts.gates._reporting import (
     gate_alert_counts_reconcile,

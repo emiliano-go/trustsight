@@ -188,6 +188,13 @@ class PackageFact:
     # they cannot disagree.  Empty on facts stored before the field existed.
     change: dict = field(default_factory=dict)
 
+    # Campaign context is instrument state, captured at analysis time.
+    # ``campaign_state`` distinguishes "no campaign" from "this run could not
+    # see campaign state", so a cold replay never reads as clean.
+    campaign_hold: bool = False
+    campaign_id: str = ""
+    campaign_state: str = "unavailable"
+
     # R1: how much of the diff the tokenizer could read, and
     # which resolution-coupled R-rules matched.  Additive.
     resolution_coverage: dict = field(default_factory=dict)
@@ -360,6 +367,9 @@ def fact_to_dict(fact: PackageFact) -> dict:
         "partial_hunks": fact.partial_hunks,
         "partial_files": fact.partial_files,
         "change": fact.change,
+        "campaign_hold": fact.campaign_hold,
+        "campaign_id": fact.campaign_id,
+        "campaign_state": fact.campaign_state,
         "resolution_coverage": fact.resolution_coverage,
         "risk": fact.risk,
         "score_breakdown": [
@@ -542,6 +552,9 @@ def fact_from_dict(data: dict) -> PackageFact | None:
             partial_hunks=list(data.get("partial_hunks", [])),
             partial_files=list(data.get("partial_files", [])),
             change=dict(data.get("change", {})),
+            campaign_hold=bool(data.get("campaign_hold", False)),
+            campaign_id=str(data.get("campaign_id") or ""),
+            campaign_state=str(data.get("campaign_state") or "unavailable"),
             resolution_coverage=dict(data.get("resolution_coverage", {})),
             risk=data["risk"],
             score_breakdown=[

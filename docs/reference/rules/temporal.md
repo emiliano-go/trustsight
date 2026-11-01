@@ -34,6 +34,8 @@ severity weights and the reserved identifier ranges.
 | [T001](#t001) | Signing-Key Novelty | HIGH |
 | [T002](#t002) | Maintainer Domain Novelty | MEDIUM |
 | [T003](#t003) | Signing Key Rotated | HIGH |
+| [T004](#t004) | Vouch Surface Removed | MEDIUM |
+| [T005](#t005) | Scheme Downgrade | MEDIUM |
 | [T006](#t006) | Metadata-Git Divergence | MEDIUM |
 | [T007](#t007) | Packager Not In History | INFO |
 <!-- /generated: page-index -->
@@ -118,6 +120,35 @@ prior footprint. Cold index declines, like T001.
 The xz backdoor's shape: the trusted signer is swapped, not merely widened
 (H078) or narrowed (H024). Unlike T001 it needs no ecosystem history - the
 rotation of trust inside one commit is its own fact - so it fires cold.
+
+### T004: Vouch Surface Removed {#t004}
+
+- **Target:** programmatic (validpgpkeys pre/post)
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `temporal`
+
+- **Condition:** A `validpgpkeys` entry is removed and no key is added, while
+  at least one key remains declared.
+
+The missing-self shape: the recipe used to prove something about its signer
+and now proves less. Whole-array removal is H024; a rotation is T003/H078;
+checksum loss is H091/H001/C004. This rule owns only the partial-key gap, so
+the same change is never scored twice by two different names. The locked benign corpus adjudicates it; the measured rate is recorded in the changelog.
+
+### T005: Scheme Downgrade {#t005}
+
+- **Target:** programmatic (source URL pre/post)
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `temporal`
+
+- **Condition:** A source entry at the same array position moves from
+  `https://` to `http://` on the same host while its path or query also
+  changes.
+
+H019 owns the exact `https://x` -> `http://x` swap. This covers the quieter
+version of the same move, where a new filename or version hides the scheme
+fall. The host must be routable, the origin must have been TLS, and a host
+change is not this shape. The locked benign corpus adjudicates it; the measured rate is recorded in the changelog.
 
 ### T006: Metadata-Git Divergence {#t006}
 

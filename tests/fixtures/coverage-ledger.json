@@ -28,13 +28,13 @@
       "status": "promoted"
     }
   },
-  "catalog_size": 300,
+  "catalog_size": 301,
   "corpus_content_sha256": "a4cbea4ef14029c97d7746e2be080a2e5c931502429ee261d974810b35f5cafc",
   "counts": {
     "adversarial_only": 18,
     "cold_only": 42,
     "measured": 166,
-    "zero_fire": 74
+    "zero_fire": 75
   },
   "rules": {
     "A001": {
@@ -5506,6 +5506,18 @@
       "state": "cold_only",
       "strata": [],
       "uid": "TS-0215"
+    },
+    "TAG_CONVERGENCE": {
+      "expected_strata": [],
+      "fires": 0,
+      "id": "TAG_CONVERGENCE",
+      "pseudo": true,
+      "reason": "no benign shape in the locked corpus yet; add a shape stratum, never a rule-targeted sample",
+      "series": "T",
+      "sources": {},
+      "state": "zero_fire",
+      "strata": [],
+      "uid": null
     },
     "U001": {
       "expected_strata": [],

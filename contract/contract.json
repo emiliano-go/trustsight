@@ -347,7 +347,8 @@
     "P007",
     "P008",
     "P009",
-    "SOURCE_BUCKET"
+    "SOURCE_BUCKET",
+    "TAG_CONVERGENCE"
   ],
   "report_body": {
     "acknowledged_urls": [],

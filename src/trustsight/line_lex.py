@@ -523,46 +523,63 @@ def _heredoc_body_indices_cached(lines: tuple[str, ...]) -> frozenset[int]:
         }
 
     The exemption is therefore decided per heredoc, by where it goes.
+
+    The two sides of a diff are separate files.  A removed heredoc's opener
+    must not consume an added one that the diff interleaves with it, which
+    exposed a staged launcher's ``exec`` as a command word (tape16-bin).
+    Each side is scanned as its own document and the results are unioned; a
+    shared context line is body if either side has it open.
     """
     body: set[int] = set()
-    delims: deque[tuple[str, bool]] = deque()
-    # The lexer owns opener detection: a `<<` inside a comment or a quoted
-    # string is prose.  Scanning the raw line here disagreed with
-    # line_lex._scan and turned `# upstream uses the <<EOF form` above a
-    # fetch into a fake delimiter that blanked every following line - and
-    # with it H069/H072/H082/H083 for the whole function.
-    lexed = lex_lines(list(lines), fragment=True)
-    for i, line in enumerate(lines):
-        content = line[1:] if line[:1] in ("+", "-") else line
-        if _diff_boundary(line):
-            # A partial hunk can leave a heredoc open.  Its body cannot
-            # continue into the next file or hunk; carrying the queue there
-            # blanked unrelated payload lines.
-            delims.clear()
-        if delims:
-            delimiter, strip_tabs = delims[0]
-            probe = content.lstrip("\t") if strip_tabs else content
-            if probe == delimiter:
-                delims.popleft()
+    for skip in ("-", "+"):
+        # Blank the other side, keeping every original index, so quote and
+        # heredoc state cannot leak across the diff's two files.
+        view = tuple(
+            "" if (ln.startswith(skip) and not ln.startswith(skip * 3)) else ln
+            for ln in lines
+        )
+        # The lexer owns opener detection: a `<<` inside a comment or a
+        # quoted string is prose.  Scanning the raw line here disagreed with
+        # line_lex._scan and turned `# upstream uses the <<EOF form` above a
+        # fetch into a fake delimiter that blanked every following line - and
+        # with it H069/H072/H082/H083 for the whole function.
+        lexed = lex_lines(list(view), fragment=True)
+        delims: deque[tuple[str, bool]] = deque()
+        for i, line in enumerate(view):
+            if lines[i].startswith(skip) and not lines[i].startswith(skip * 3):
+                # The other side's line, blanked in this view.  It must not
+                # be recorded as body here, nor close this side's delimiter.
                 continue
-        if delims:
-            if delims[0][1]:
-                body.add(i)
-            continue
-        openers = lexed[i].heredoc_openers
-        if openers:
-            # The destination may be named on either side of the
-            # delimiter: `bash <<EOF` puts it before, and
-            # `cat <<'EOF' | sh` puts it after the redirect.  Reading
-            # only the left half meant the piped form - which is how
-            # the shape is usually written - stayed classified as data.
-            is_data = bool(_HEREDOC_TO_NON_SHELL_RE.search(content)) or not (
-                _HEREDOC_TO_INTERPRETER_RE.search(content)
-                or _HEREDOC_PIPED_RE.search(content)
-                or _HEREDOC_TO_EXECUTING_CONFIG_RE.search(content)
-            )
-            for delimiter, _strip_tabs in openers:
-                delims.append((delimiter, is_data))
+            content = line[1:] if line[:1] in ("+", "-") else line
+            if _diff_boundary(line):
+                # A partial hunk can leave a heredoc open.  Its body cannot
+                # continue into the next file or hunk; carrying the queue there
+                # blanked unrelated payload lines.
+                delims.clear()
+            if delims:
+                delimiter, strip_tabs = delims[0]
+                probe = content.lstrip("\t") if strip_tabs else content
+                if probe == delimiter:
+                    delims.popleft()
+                    continue
+            if delims:
+                if delims[0][1]:
+                    body.add(i)
+                continue
+            openers = lexed[i].heredoc_openers
+            if openers:
+                # The destination may be named on either side of the
+                # delimiter: `bash <<EOF` puts it before, and
+                # `cat <<'EOF' | sh` puts it after the redirect.  Reading
+                # only the left half meant the piped form - which is how
+                # the shape is usually written - stayed classified as data.
+                is_data = bool(_HEREDOC_TO_NON_SHELL_RE.search(content)) or not (
+                    _HEREDOC_TO_INTERPRETER_RE.search(content)
+                    or _HEREDOC_PIPED_RE.search(content)
+                    or _HEREDOC_TO_EXECUTING_CONFIG_RE.search(content)
+                )
+                for delimiter, _strip_tabs in openers:
+                    delims.append((delimiter, is_data))
     return frozenset(body)
 
 

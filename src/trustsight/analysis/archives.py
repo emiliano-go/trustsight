@@ -16,8 +16,6 @@ the bytes belong to a corpus-side fetch where downloads are centralised,
 rate-limited, and distributed as facts - never to a user's review.
 """
 
-import gzip
-import io
 import struct
 import zlib
 
@@ -221,9 +219,3 @@ def check_archive_trailer(data: bytes) -> dict | None:
     return None
 
 
-def _gzip_bytes(payload: bytes) -> bytes:
-    """Compress *payload* as a single gzip member (test helper)."""
-    buf = io.BytesIO()
-    with gzip.GzipFile(fileobj=buf, mode="wb", mtime=0) as gz:
-        gz.write(payload)
-    return buf.getvalue()

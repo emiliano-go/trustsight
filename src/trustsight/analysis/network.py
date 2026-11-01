@@ -122,18 +122,6 @@ def _source_schemes(config=None) -> frozenset[str]:
     return frozenset(s.lower() for s in schemes)
 
 
-def _exotic_protocol_findings(diff_text, config, add) -> None:
-    """A source URL uses a scheme outside the configured allowlist (H034)."""
-    allowed = _source_schemes(config) | _declared_dlagent_schemes(diff_text)
-    for scheme, url in _source_url_tokens(diff_text):
-        base = scheme.rsplit("+", 1)[-1].lower()
-        if base not in allowed:
-            add("H034", "Exotic Source Protocol", "MEDIUM", "network",
-                f"source URL uses non-allowlisted scheme {scheme}: {url[:70]}",
-                url=url[:70], scheme=scheme)
-            return
-
-
 # ---------------------------------------------------------------------------
 # H033 - moved git ref
 # ---------------------------------------------------------------------------

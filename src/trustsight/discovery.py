@@ -158,20 +158,6 @@ def _run_pacman(args: list[str]) -> subprocess.CompletedProcess:
         ) from None
 
 
-def get_installed_aur_packages() -> dict[str, str]:
-    """Return a dict of installed AUR package names to versions."""
-    result = _run_pacman(["pacman", "-Qm"])
-    packages = {}
-    for line in result.stdout.strip().splitlines():
-        if not line:
-            continue
-        parts = line.split()
-        if len(parts) >= 2:
-            name, version = parts[0], parts[1]
-            packages[name] = version
-    return packages
-
-
 def _aur_info_url(names: list[str]) -> str:
     """Build an AUR RPC v5 info URL for one or more package names."""
     params = [("v", "5"), ("type", "info")]
@@ -374,33 +360,6 @@ def get_aur_latest_versions(pkg_names: list[str]) -> dict[str, str]:
         for name, record in get_aur_package_info(pkg_names).items()
         if "Version" in record
     }
-
-
-def find_outdated_packages(
-    installed: dict[str, str], latest: dict[str, str]
-) -> dict[str, tuple[str, str]]:
-    """Compare installed vs latest, returning outdated name->(installed, latest)."""
-    outdated = {}
-    for name, installed_ver in installed.items():
-        latest_ver = latest.get(name)
-        if latest_ver and installed_ver != latest_ver:
-            outdated[name] = (installed_ver, latest_ver)
-    return outdated
-
-
-def fetch_package_info(name: str) -> Optional[dict]:
-    """Fetch full package info from the AUR RPC for *name*."""
-    # Encoded, not interpolated: an unescaped "&" or "#" in the name would
-    # otherwise inject or truncate RPC query parameters.
-    url = _aur_info_url([name])
-    try:
-        with urllib.request.urlopen(url, timeout=10) as resp:
-            data = _load_rpc_json(resp)
-            if data["resultcount"] > 0:
-                return data["results"][0]
-    except (OSError, ValueError, _RpcResponseTooLarge):
-        pass
-    return None
 
 
 def get_all_installed() -> dict[str, str]:

@@ -235,16 +235,6 @@ _RM_RECURSIVE_RE = re.compile(
 # `find` reaches the same recursive delete without `rm`.
 _FIND_DELETE_RE = re.compile(
     _CMD + r"find\b[^\n;&|]*?(?:-delete\b|-exec\s+rm\b)", re.MULTILINE)
-_RM_TARGET_SYSTEM_RE = re.compile(
-    # Unbounded for the same reason: 201 characters of flags between `rm`
-    # and its target used to be enough to walk past this, and the target is
-    # what the rule is about.
-    _CMD + r"rm\s[^\n;&|]*?\s(?:--no-preserve-root\s+)?"
-    r"[\"']?(?:" + _SYSTEM_PATH_ALT + r"|" + _HOME_ALT + r")[\"']?(?:\s|$|;|&)",
-    re.MULTILINE,
-)
-
-
 # ---------------------------------------------------------------------------
 # S003: raw block device write.
 # ---------------------------------------------------------------------------

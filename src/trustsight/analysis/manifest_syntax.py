@@ -59,7 +59,6 @@ MAX_WALK_DEPTH = 64
 #: ``<!ENTITY`` is the billion-laughs primitive, and refusing it up front is
 #: independent of the expat version bundled with the interpreter.
 _XML_ENTITY_RE = re.compile(r"<!\s*ENTITY\b", re.IGNORECASE)
-_XML_DOCTYPE_RE = re.compile(r"<!\s*DOCTYPE\b", re.IGNORECASE)
 
 
 class ManifestSyntaxError(Exception):

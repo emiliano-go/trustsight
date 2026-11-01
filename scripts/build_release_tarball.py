@@ -108,7 +108,19 @@ def _worktree_tree() -> str:
             "does not, or pass --rev to archive a committed revision."
         )
 
-    index = ROOT / ".git" / "release-tarball.index"
+    # A linked worktree's ``.git`` is a file pointing at the real git dir;
+    # writing ``.git/release-tarball.index`` there raised NotADirectoryError.
+    # Ask git for the path it would use, so a checkout and a worktree behave
+    # the same.
+    git_path = subprocess.run(
+        ["git", "rev-parse", "--git-path", "release-tarball.index"],
+        cwd=ROOT, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    if not git_path:
+        raise SystemExit("git did not report an index path for the release tree")
+    index = Path(git_path)
+    if not index.is_absolute():
+        index = ROOT / index
     env = {**os.environ, "GIT_INDEX_FILE": str(index)}
     try:
         subprocess.run(["git", "read-tree", "HEAD"], cwd=ROOT, env=env,

@@ -628,11 +628,24 @@ def _run_baseline_build(
         and not (finding["rule_id"] in _IMPERSONATION_GATED_RULES
                  and not finding.get("params", {}).get("impersonated"))
     ]
-    result.new_alerts = record_alerts([
-        (member, finding["rule_id"])
-        for finding in alerting
-        for member in finding["params"]["members"]
-    ])
+    refractory: list[dict] = []
+    pairs: list[tuple] = []
+    for finding in alerting:
+        campaign_id = (finding.get("params") or {}).get("campaign_id", "")
+        for member in finding["params"]["members"]:
+            pairs.append((member, finding["rule_id"], campaign_id)
+                         if campaign_id else (member, finding["rule_id"]))
+    try:
+        import inspect
+
+        accepts_audit = "audit" in inspect.signature(record_alerts).parameters
+    except (TypeError, ValueError):
+        accepts_audit = False
+    if accepts_audit:
+        result.new_alerts = record_alerts(pairs, audit=refractory)
+    else:  # a caller/test double with the pre-audit signature
+        result.new_alerts = record_alerts(pairs)
+    result.refractory = refractory
     if cluster_findings:
         _log(f"Corpus sweep: {len(cluster_findings)} cluster finding(s), "
              f"{len(alerting)} alerting")

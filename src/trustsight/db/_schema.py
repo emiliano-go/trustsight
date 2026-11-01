@@ -228,6 +228,34 @@ def init_db():
                 PRIMARY KEY (package_name, rule_id)
             );
 
+            /* Review verdicts: the disposition a human recorded.  The
+               tender point counts unresolved verdicts over a window; it is
+               not a score and never claims damage. */
+            CREATE TABLE IF NOT EXISTS review_verdicts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                package_name TEXT NOT NULL,
+                rule_id TEXT NOT NULL DEFAULT '',
+                campaign_id TEXT NOT NULL DEFAULT '',
+                verdict TEXT NOT NULL,
+                observed_at TEXT NOT NULL,
+                observed_seq INTEGER NOT NULL DEFAULT 0,
+                note TEXT NOT NULL DEFAULT ''
+            );
+            CREATE INDEX IF NOT EXISTS idx_review_verdicts_package
+                ON review_verdicts(package_name, observed_at);
+
+            /* Refractory period: one alert per (rule, campaign-cell) per
+               window.  The window is the campaign's observation TTL, not
+               wall time, so a replay emits the same alert set. */
+            CREATE TABLE IF NOT EXISTS alert_refractory (
+                rule_id TEXT NOT NULL,
+                campaign_id TEXT NOT NULL,
+                window_start_obs INTEGER NOT NULL,
+                first_emitted_obs INTEGER NOT NULL,
+                last_observed_obs INTEGER NOT NULL,
+                PRIMARY KEY (rule_id, campaign_id, window_start_obs)
+            );
+
             /* Durable delivery queue.  A cycle records the alert document
                before it tries any sink, and a failed POST stays here for the
                next cycle instead of disappearing with the log line. */

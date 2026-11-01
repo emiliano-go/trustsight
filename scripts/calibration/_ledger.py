@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
+from trustsight.anergy import ledger_section
 from trustsight.contract import pseudo_rule_ids, rule_ids
 from trustsight.registry import REGISTRY
 
@@ -43,7 +44,9 @@ COLD_ONLY_RULES = frozenset(
         # Correlation, meta, temporal and artifact families.
         *{f"G{n:03d}" for n in range(1, 15)},
         *{f"M{n:03d}" for n in range(1, 7)},
-        *{f"T{n:03d}" for n in range(1, 8)},
+        # T004/T005 are pure-diff missing-self predicates and replay cold;
+        # the rest of T needs observation history.
+        *{f"T{n:03d}" for n in range(1, 8) if n not in (4, 5)},
         *{f"A{n:03d}" for n in range(1, 9)},
     }
 )
@@ -174,6 +177,10 @@ def build_ledger(
         "corpus_content_sha256": corpus_sha256,
         "catalog_size": len(all_ids),
         "counts": dict(sorted(counts.items())),
+        # Weight-0 rules held pending a second signal.  This is state, not a
+        # coverage verdict: an anergic rule can be measured, zero-fire or
+        # cold-only and still never score.
+        "anergic": ledger_section(),
         "rules": dict(sorted(by_rule.items())),
     }
 

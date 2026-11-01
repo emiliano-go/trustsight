@@ -86,6 +86,37 @@ def _has_variable(values) -> bool:
     return any("$" in value for value in values)
 
 
+def version_metadata_divergence(pkgbuild: str, srcinfo: str | None) -> list[str]:
+    """Version fields the metadata and the recipe disagree on (C034).
+
+    H103 deliberately compares only the fields that change what a build does;
+    a stale ``pkgver`` is ordinary.  This is the separate, INFO, feed-tier
+    view: when both sides are literal and differ, the drift is reported
+    without being treated as suspicious.
+    """
+    if not srcinfo or not pkgbuild:
+        return []
+    try:
+        metadata = parse_srcinfo(srcinfo)
+        recipe = parse_recipe(pkgbuild)
+    except Exception:  # noqa: BLE001 - an unreadable pair is not a finding
+        return []
+    divergent: list[str] = []
+    for key in ("pkgver", "pkgrel", "epoch"):
+        meta_values = metadata.get(key) or []
+        recipe_value = recipe.scalars.get(key, "") or ""
+        if not meta_values or not recipe_value:
+            continue
+        meta_value = str(meta_values[0]).strip()
+        if "$" in meta_value or "$" in recipe_value:
+            continue
+        if meta_value != recipe_value.strip():
+            divergent.append(
+                f"{key}: .SRCINFO {meta_value!r} vs PKGBUILD "
+                f"{recipe_value.strip()!r}")
+    return divergent
+
+
 def metadata_recipe_divergence(pkgbuild: str, srcinfo: str | None) -> list[str]:
     """Security-relevant fields the metadata and the recipe disagree on.
 

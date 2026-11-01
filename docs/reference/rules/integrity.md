@@ -44,6 +44,7 @@ severity weights and the reserved identifier ranges.
 | [C023](#c023) | IP-Literal Source Host | MEDIUM |
 | [C026](#c026) | Empty File Added | INFO |
 | [C027](#c027) | Declared Install Script Is Absent | INFO |
+| [C033](#c033) | Context Bleed | MEDIUM |
 | [H001](#h001) | Checksum Disabled | HIGH |
 | [H002](#h002) | Checksum Emptied | HIGH |
 | [H005](#h005) | validpgpkeys Added | - |
@@ -840,3 +841,17 @@ Requires tree knowledge: without the manifest, the file's absence could just
 be an unchanged file outside the hunk, so the rule never fires on a bare
 diff (never guess). The inverse of C024, which owns an `.install` shipped
 without a declaration.
+
+### C033: Context Bleed {#c033}
+
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `integrity`
+
+- **Condition:** A diff deletes at least `min_deleted_comment_lines` comment
+  lines, and that is at least `min_deleted_comment_ratio` of the diff's
+  pre-state comment prose.
+
+Honest edits rarely gut prose wholesale. A campaign that removes comments
+shrinks what a reviewer reads without touching the payload. The ratio and
+the absolute floor are config-pinned and corpus-adjudicated; a one-line
+comment deletion is never a finding. The locked benign corpus adjudicates it; the measured rate is recorded in the changelog.

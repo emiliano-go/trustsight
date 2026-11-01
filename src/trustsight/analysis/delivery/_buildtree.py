@@ -335,6 +335,35 @@ _COMMITTED_CARRIER_RE = re.compile(
     re.IGNORECASE,
 )
 
+def normalise_tree_manifest(files) -> list[tuple[str, bytes]] | None:
+    """A bounded ``[(path, bytes)]`` view of a caller-supplied manifest.
+
+    The sandbox always passes bytes, but ``scan_diff`` and
+    ``analyze_package_text`` are public and a malformed member used to abort
+    the analysis in a later consumer.  Skip what cannot be read.
+    """
+    if files is None:
+        return None
+    try:
+        entries = list(files)
+    except TypeError:
+        return None
+    safe: list[tuple[str, bytes]] = []
+    for entry in entries:
+        try:
+            name, head = entry
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(name, str):
+            name = str(name)
+        if isinstance(head, (bytearray, memoryview)):
+            head = bytes(head)
+        if not isinstance(head, bytes):
+            continue
+        safe.append((name, head))
+    return safe
+
+
 def scan_tree_manifest(files, source_urls, package_name: str = "") -> list[dict]:
     """H066, H090 and C032 findings for a repository file manifest.
 
@@ -348,6 +377,8 @@ def scan_tree_manifest(files, source_urls, package_name: str = "") -> list[dict]
     source_basenames = {_source_basename(u) for u in source_urls if _source_basename(u)}
     from ..edges import edge_committed_payload, edge_scriptlet_top_level_execution
     from ..persistence_engine import emit_committed_build_path
+
+    files = normalise_tree_manifest(files) or []
 
     findings: list[dict] = []
     for name, head in files:

@@ -38,6 +38,8 @@ python scripts/security_gates.py
 | `every stream read is bounded` | A4, A14 | source-wide AST scan for a `read()` with no size, plus `read_text`/`read_bytes` in the document cache; `doc_cache.py` reads through `read_file_capped` under `MAX_DOC_CACHE_BYTES` |
 | `artifact reads are bounded before verification` | A4 | `db/`, `ioc_baseline.py`, `seed_build.py`, `full_aur/export.py` |
 | `rule matching is bounded on hostile input` | A5 | `rules.MAX_RULE_LINE_BYTES` |
+| `anergic rules never score` | B1, B10 | `trustsight.anergy`, `trustsight.scoring` |
+| `anergic promotions are changelogged` | process | `trustsight.anergy`, `docs/changelog.md` |
 | `H-series intake is frozen` | internal | `categories.RULE_CATEGORIES` |
 | `H-series reduction residue` | internal | `categories.RULE_CATEGORIES`, target 55-65 |
 | `retired ids resolve to live survivors` | internal | `rule_id_history.RETIRED_RULE_IDS` |

@@ -125,6 +125,50 @@ def _strip_comment(body: str) -> str:
     return body
 
 
+_SHELL_QUOTE_RE = re.compile(r"""'([^']*)'|"((?:\\.|[^"\\])*)\"""")
+
+
+def unquote_shell_words(body: str) -> str:
+    """Drop one layer of shell quoting so a quoted command word reads plainly.
+
+    Command-position patterns cannot see through quotes: the shell runs
+    ``"$venv/bin/pip" install`` as surely as ``$venv/bin/pip install``,
+    and ``"pip" install`` as ``pip install``.  A quoted or escaped manager
+    name therefore walked past X011 and the registry-resolution gap.  This
+    is a lexical unquote for matching only; it is never executed and never
+    used to build a path.  Comments are stripped by the callers first, so a
+    quoted ``#`` cannot reappear.
+    """
+    def _repl(match: "re.Match[str]") -> str:
+        if match.group(1) is not None:
+            return match.group(1)
+        return re.sub(r"\\([\\\"$`])", r"\1", match.group(2))
+
+    return _SHELL_QUOTE_RE.sub(_repl, body)
+
+
+#: Where a fresh command word can start in shell text: the operators and
+#: substitutions every consumer already understood.  Safe to apply to raw
+#: lines, including text inside quotes.
+COMMAND_POSITION = r"(?:\A\s*|[;&|(]\s*|\$\(\s*|&&\s*|\|\|\s*)"
+
+#: Shell grouping and reserved words that also begin a command list:
+#: `{ pip install }`, `! pip install`, `time pip install`,
+#: `if …; then pip install`, `while …; do pip install` and a `case` arm.
+#: The harness behaviour validator parses command position, so a manager
+#: reached these ways is a provable command; a lexical rule anchored only
+#: on COMMAND_POSITION missed it (2026-10-31).
+#:
+#: These anchors must be matched against a quote-blanked view.  Unlike
+#: `;` and `(`, a `{`, `!`, `then` or `do` also occurs inside ordinary
+#: quoted prose (`echo "{ npm install }"`), so matching the raw line would
+#: read documentation as a command.
+SHELL_COMMAND_POSITION = (
+    r"(?:!\s*|\{\s+|\btime\s+(?:-p\s+)?|\b(?:then|else|do)\s+"
+    r"|^\s*(?:[^\s();&|]+(?:\|[^\s();&|]+)*)\)\s+)"
+)
+
+
 def _closes_array(body: str) -> bool:
     """True when an unquoted ``)`` ends the array on this line.
 

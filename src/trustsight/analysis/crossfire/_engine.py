@@ -4,14 +4,14 @@ from __future__ import annotations
 import re
 from ...buckets import url_host_is_non_routable, url_line_is_inert
 from ...coverage import note_stage_failure
-from ...deps import _strip_comment
+from ...deps import _strip_comment, unquote_shell_words
 from ...file_kinds import files_at_line, is_shell_file
 from ...tokenizer import join_line_continuations, split_lines
 from ...rules import _PRINTER_LINE_RE, _blank_quoted, clamp_text
 from ._common import _DECEPTIVE_SPACE_RE, _FENCE_RE, _command_words, _continuation_lines, _dependency_array_lines, _executes, _home_alias_hit, _loop_variable_names, _path_lookup_names, _pipeline_sink, _resolved_records, log
 from ._x01_x08 import (X001_RE, X002_SHAPES, X003_SHAPES, X004_SHAPES, X006_SHAPES,
                        X034_ARCHIVE_RE, X034_EXECUTOR_RE)
-from ._x09_x16 import X009_RE, X010_RE, X011_RE, X011_STANDDOWN_RE, X012_RE, X013_RE, X013_STANDDOWN_RE, X014_RE, X014_STANDDOWN_RE, X015_RE, X018_RE, X019_RE, _DISTRO_INSTALL_RE, _X009_CLIENT_RE, _X016_CONSUMER_RE, _X016_FETCH_RE, _X016_KNOWN_EXECUTOR_RE, _consumer_after_override, _consumer_at, _x013_is_trusted_registry
+from ._x09_x16 import X009_RE, X010_RE, X011_RE, X011_SHELL_ANCHOR_RE, X011_STANDDOWN_RE, X012_RE, X013_RE, X013_STANDDOWN_RE, X014_RE, X014_STANDDOWN_RE, X015_RE, X018_RE, X019_RE, _DISTRO_INSTALL_RE, _X009_CLIENT_RE, _X016_CONSUMER_RE, _X016_FETCH_RE, _X016_KNOWN_EXECUTOR_RE, _consumer_after_override, _consumer_at, _x013_is_trusted_registry
 from ._x17_x25 import X017_RE, X021_RE, X024_RE, _BUILD_MANIFEST_RE, _CONTENT_WRITE_VERB_RE, _HEREDOC_OPEN_RE, _MANIFEST_COMMAND_RE, _X017_FIND_RE, _X021_RUN_POSITIONAL_RE, _X021_SET_GLOB_RE, _X022_CONFIG_FLAG_RE, _X022_PAYLOAD_RE, _X022_WRITE_RE, _multiline_function_shadow_lines, _normalise_dest, _redirect_target, _x017_find_runs_a_script, _x024_is_benign_build_path, _x024_is_git_provenance, _x024_is_passthrough, _x024_is_test_pythonpath, _x024_is_trusted_path_append, _x024_is_benign_path_suffix
 
 __all__ = ['crossfire_techniques']
@@ -32,8 +32,12 @@ _CASE_CLOSE_RE = re.compile(r"esac\b")
 
 
 def _is_case_label(line: str) -> bool:
-    """True for a bare `case` arm label such as `0.*|1.*)` or `*)`."""
-    text = line.strip()
+    """True for a bare `case` arm label such as `0.*|1.*) ;;` or `*)`."""
+    text = _strip_comment(line).strip()
+    for terminator in (";;&", ";;", ";&"):
+        if text.endswith(terminator):
+            text = text[: -len(terminator)].rstrip()
+            break
     if not text.endswith(")"):
         return False
     body = text[:-1].strip()
@@ -194,6 +198,12 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
         _printed_heredoc_body_indices(lines)
         | _non_shell_heredoc_body_indices(lines)
     )
+    #: A heredoc written to a file is packaged content, not a build-time
+    #: command.  X002 read the launcher script a `-bin` recipe stages into
+    #: /usr/bin (`exec "$APP_BIN" "$@"`) as an obfuscated command word;
+    #: the interpreter/piped bodies stay eligible in `_heredoc_body_indices`.
+    from ...line_lex import _heredoc_body_indices
+    data_heredoc = _heredoc_body_indices(lines)
     #: X015 also stands down in a hook the recipe does not wire up: work
     #: scheduled inside a `.install` file that `install=` never names never
     #: runs (notebook; C024 already names that nit).  Certainty needs the
@@ -329,7 +339,7 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
         # is `curl`), so R001 owns the pipeline and X002 claiming it too
         # would score one command twice.  A dynamic `${A[$i]}` or a nameref
         # does not resolve and is still yielded.
-        if index not in carried:
+        if index not in carried and index not in data_heredoc:
             for word in _command_words(body, resolvable, scalar_values):
                 for shape, pattern in X002_SHAPES:
                     if pattern.match(word):
@@ -520,7 +530,9 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
         in_hook = bool(path) and path.endswith(".install")
         if (index not in dependency_data
                 and not in_hook
-                and X011_RE.search(body)
+                and (X011_RE.search(body)
+                     or X011_RE.search(unquote_shell_words(body))
+                     or X011_SHELL_ANCHOR_RE.search(_blank_quoted(body)))
                 and (distro or not (X011_STANDDOWN_RE.search(body) or local_target))):
             record("X011", line_no, "package manager runs fetched code",
                    body.strip())

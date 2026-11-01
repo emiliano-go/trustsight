@@ -570,6 +570,72 @@ _PRINTED_HEREDOC_OPENER_RE = re.compile(
     r"^\s*(?:cat|echo|printf)\b(?![^\n]*>)"
 )
 
+#: A heredoc captured into shell variables instead of piped to a printer:
+#: ``IFS= read -r -d '' _usage <<'EOF'`` and ``msg=$(cat <<'EOF'``.  The
+#: body is data at the opener either way; whether it is *inert* depends on
+#: what the variable is later used for, decided by ``_capture_is_printed``.
+_READ_CAPTURE_RE = re.compile(
+    r"(?:^|[;&|])\s*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*read\b(?P<args>[^<]*)",
+    re.IGNORECASE,
+)
+_ASSIGN_CAPTURE_RE = re.compile(
+    r"(?:^|[;&|])\s*"
+    r"(?:local\s+|readonly\s+|declare\s+(?:-\S+\s+)*)?"
+    r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)=\$?\(?[^)]*<<"
+)
+#: ``read`` options that consume the following token; the rest of the
+#: arguments are the variable names the heredoc is split into.
+_READ_OPTS_WITH_ARG = frozenset("dnNptui")
+#: A line that only produces output.  A captured heredoc referenced solely
+#: from such lines is documentation, not a script (gentoo-color-bash's
+#: ``_usage`` block, printed by ``echo``).
+_PRINTER_LINE_RE = re.compile(
+    r"^\s*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*(?:echo|printf|cat|tee)\b"
+)
+
+
+def _heredoc_capture_names(content: str) -> tuple[str, ...]:
+    """Variables a heredoc is captured into, if its opener assigns one."""
+    match = _READ_CAPTURE_RE.search(content)
+    if match is not None:
+        names: list[str] = []
+        args = match.group("args").split()
+        skip = False
+        for token in args:
+            if skip:
+                skip = False
+                continue
+            if token.startswith("-") and len(token) > 1:
+                skip = token[-1] in _READ_OPTS_WITH_ARG
+                continue
+            if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", token):
+                names.append(token)
+        if names:
+            return tuple(names)
+    match = _ASSIGN_CAPTURE_RE.search(content)
+    return (match.group("name"),) if match is not None else ()
+
+
+def _capture_is_printed(lines: tuple[str, ...], names: tuple[str, ...]) -> bool:
+    """True when every use of *names* is on an output-only line.
+
+    A captured heredoc that is never referenced, or only echoed/printed,
+    never runs; one handed to a shell or ``eval`` still may.  An unknown
+    use keeps the body eligible, so a real staged script is not exempted.
+    """
+    if not names:
+        return False
+    ref = re.compile(
+        r"\$(?:\{)?(?:" + "|".join(map(re.escape, names)) + r")(?![A-Za-z0-9_])"
+    )
+    for line in lines:
+        text = line[1:] if line[:1] in ("+", "-") else line
+        if not ref.search(text):
+            continue
+        if not _PRINTER_LINE_RE.match(text):
+            return False
+    return True
+
 
 def _printed_heredoc_body_indices(lines: list[str]) -> set[int]:
     """Indices of lines inside a heredoc that only prints its body.
@@ -608,10 +674,19 @@ def _printed_heredoc_body_indices_cached(
         openers = lexed[i].heredoc_openers
         if not openers:
             continue
-        printed = bool(
-            _PRINTED_HEREDOC_OPENER_RE.match(content)
-            and not _HEREDOC_PIPED_RE.search(content)
+        executed = bool(
+            _HEREDOC_PIPED_RE.search(content)
+            or _HEREDOC_TO_INTERPRETER_RE.search(content)
         )
+        printed = bool(
+            _PRINTED_HEREDOC_OPENER_RE.match(content) and not executed
+        )
+        if not printed and not executed:
+            # A heredoc captured into a variable is data here; it is inert
+            # when that variable is only ever printed (gentoo-color-bash's
+            # `_usage` block).  An executed capture stays eligible.
+            captured = _heredoc_capture_names(content)
+            printed = _capture_is_printed(lines, captured)
         for delimiter, _strip_tabs in openers:
             delims.append((delimiter, printed))
     return frozenset(body)

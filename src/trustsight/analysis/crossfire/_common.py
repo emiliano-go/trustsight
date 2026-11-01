@@ -67,7 +67,7 @@ _INTERPRETER_DECODE = (
 
 _ASSIGNMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:\[[^\]]{0,40}\])?\+?=")
 
-_FENCE_RE = re.compile(r"^\s*(?:```|~~~|#|//|\*|-\s)")
+_FENCE_RE = re.compile(r"^\s*(?:```|~~~|#|//|\*(?!\))|-\s)")
 
 def _confusable_class() -> str:
     """The confusable characters, as a regex character class.

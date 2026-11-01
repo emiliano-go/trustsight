@@ -107,6 +107,40 @@ def test_a_path_qualified_manager_is_a_build_time_registry_install():
     ]
 
 
+def test_a_quoted_or_escaped_manager_is_a_build_time_registry_install():
+    """`"$venv/bin/pip"` and `\\pip` run the same registry fetch as `pip`."""
+    diff = """diff --git a/PKGBUILD b/PKGBUILD
+ build() {
++  "${srcdir}/v/bin/pip" install demo
++  "pip" install demo
++  \\pip install demo
+ }
+"""
+    assert has_unpinned_build_deps(diff)
+    assert {command for _fn, command in registry_resolutions(diff)} == {
+        '"${srcdir}/v/bin/pip" install demo',
+        '"pip" install demo',
+        "\\pip install demo",
+    }
+
+
+def test_a_shell_grouping_or_reserved_word_is_a_registry_install():
+    """`{ … }`, `!`, `time`, `then`, `do` and a case arm are command positions."""
+    diff = """diff --git a/PKGBUILD b/PKGBUILD
+ build() {
++  { pip install demo; }
++  ! npm install evil
++  time -p pip install demo
++  case "$x" in
++    *) pip install demo ;;
++  esac
+ }
+"""
+    assert has_unpinned_build_deps(diff)
+    commands = [command for _fn, command in registry_resolutions(diff)]
+    assert len(commands) == 4
+
+
 def test_the_gap_forbids_an_unflagged_result():
     """B2: a run that could not see what will execute cannot read as clean."""
     gaps = gaps_from(tree_analyzed=True, unpinned_build_deps=True)
@@ -119,6 +153,8 @@ def test_a_registry_name_in_a_comment_or_string_is_not_a_resolution():
     quiet = """diff --git a/PKGBUILD b/PKGBUILD
 +# npm install foo
 +echo "npm install foo"
++echo "{ pip install foo; }"
++echo "if true; then npm install foo; fi"
 +makedepends=(npm)
 """
     assert not has_unpinned_build_deps(quiet)

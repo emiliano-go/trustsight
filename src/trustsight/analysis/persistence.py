@@ -117,6 +117,12 @@ def _raw_targets(body: str) -> list[str]:
         # a redirect can, so it is the one that needs the quote test.
         if _inside_quotes(body, m.start()):
             continue
+        # `dsh-tui-<version>.tgz` is a documentation placeholder, not a
+        # `>` redirect: the `>` closes an angle-bracket token, as in
+        # `foo=<version>.tgz`.  Without this the `.tgz` tail read as a
+        # hidden-file drop (dsh-tui-git's pre_remove guard).
+        if re.search(r"<[^<>\s/]+>$", body[: m.start() + 1]):
+            continue
         t = m.group(1).strip().strip("\"'")
         if t and not t.startswith("("):
             targets.append(t)

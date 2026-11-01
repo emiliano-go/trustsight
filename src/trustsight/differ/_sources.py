@@ -319,7 +319,14 @@ def extract_urls_from_diff(diff_text: str) -> SourceChanges:
     )
 
 _SOURCE_CMD_SUBST_RE = re.compile(
-    r"^\+\s*(?:_?\w*source\w*)\s*=\s*\(?[^)]*(?:\$\(|`)",
+    # A source declaration is the scalar/array `source=`, or an
+    # architecture array `source_<suffix>=(...)`.  `_?\w*source\w*`
+    # matched any variable whose name merely contains "source", so
+    # `source_version=$(python ...)` in prepare() scored C007 CRITICAL.
+    r"^\+\s*(?:"
+    r"source\s*=[^)]*(?:\$\(|`)"
+    r"|_?source_[A-Za-z0-9_]+\s*=\s*\([^)]*(?:\$\(|`)"
+    r")",
     re.IGNORECASE,
 )
 

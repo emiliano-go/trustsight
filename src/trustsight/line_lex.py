@@ -637,6 +637,56 @@ def _capture_is_printed(lines: tuple[str, ...], names: tuple[str, ...]) -> bool:
     return True
 
 
+def _captured_and_executed_heredoc_body_indices(lines: list[str]) -> set[int]:
+    """Bodies captured into a variable that is *not* only printed.
+
+    ``_heredoc_body_indices`` classifies a captured heredoc as data because
+    its opener is not an interpreter or a pipe.  That holds only while the
+    variable stays inert: ``read -d '' _p <<'EOF' … EOF`` followed by
+    ``bash "$_p"`` runs the body, and exempting it let a staged script hide
+    from X002.  A capture that is never printed stays eligible; one that is
+    only echoed remains data.
+    """
+    return set(_captured_and_executed_heredoc_body_indices_cached(tuple(lines)))
+
+
+@lru_cache(maxsize=8)
+def _captured_and_executed_heredoc_body_indices_cached(
+    lines: tuple[str, ...],
+) -> frozenset[int]:
+    body: set[int] = set()
+    delims: deque[tuple[str, bool]] = deque()
+    lexed = lex_lines(list(lines), fragment=True)
+    for i, line in enumerate(lines):
+        content = line[1:] if line[:1] in ("+", "-") else line
+        if _diff_boundary(line):
+            delims.clear()
+        if delims:
+            delimiter, strip_tabs = delims[0]
+            probe = content.lstrip("\t") if strip_tabs else content
+            if probe == delimiter:
+                delims.popleft()
+                continue
+        if delims:
+            if delims[0][1]:
+                body.add(i)
+            continue
+        openers = lexed[i].heredoc_openers
+        if not openers:
+            continue
+        if (_HEREDOC_PIPED_RE.search(content)
+                or _HEREDOC_TO_INTERPRETER_RE.search(content)):
+            # Executed from the opener; not a capture-exemption question.
+            executed_capture = False
+        else:
+            names = _heredoc_capture_names(content)
+            executed_capture = bool(names) and not _capture_is_printed(
+                lines, names)
+        for delimiter, _strip_tabs in openers:
+            delims.append((delimiter, executed_capture))
+    return frozenset(body)
+
+
 def _printed_heredoc_body_indices(lines: list[str]) -> set[int]:
     """Indices of lines inside a heredoc that only prints its body.
 

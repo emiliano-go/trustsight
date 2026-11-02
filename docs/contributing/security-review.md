@@ -129,7 +129,7 @@ is not a rule, and `no interpreter or shell execution` plus
 ## The adversarial replay in CI
 
 A change can close one bypass and reopen another, so the external harness runs
-against this checkout on every push and pull request
+against this checkout on every pull request and every push to `master`
 (`.github/workflows/harness-regression.yml`), and it is a required check. The
 harness declares the core version it measures, and the job fails on a mismatch
 rather than measuring the wrong build. It clones `trustsight-harness` at a

@@ -30,9 +30,29 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# One replay per shard, on its own runner.  The scan is CPU-bound and the
+# corpus is thousands of bypasses, so the wall clock is a single machine's
+# slice; eight shards bring it from ~305s to roughly 40-50s of replay plus
+# the merge.  Runner minutes are free for a public repo, and the merge job
+# keeps the required `replay` check as one status.
+env:
+  HARNESS_SHARDS: 8
+
 jobs:
-  replay:
+  shard:
+    name: shard ${{ matrix.shard }}
     runs-on: ubuntu-latest
+    # A blocked shard normally finishes in about a minute; one still alive
+    # after this is stuck.
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
@@ -49,7 +69,7 @@ jobs:
         run: |
           git init ../trustsight-harness
           git -C ../trustsight-harness remote add origin https://github.com/emiliano-go/trustsight-harness.git
-          git -C ../trustsight-harness fetch --depth 1 origin d7e5b7d3920f8aafabae7b3a14d9a909e603aa5d
+          git -C ../trustsight-harness fetch --depth 1 origin 347e43705226aa8e5f242d2013427beb26ea648a
           git -C ../trustsight-harness checkout --detach FETCH_HEAD
 
       # The harness clones unprivileged user namespaces everywhere (the
@@ -81,11 +101,6 @@ jobs:
             exit 1
           }
 
-      - name: Baseline before the run
-        # The harness' committed report is the baseline the gate judges
-        # against.
-        run: cp ../trustsight-harness/regression/report.json baseline-report.json
-
       # The harness's committed lock already names this core version as an
       # editable path dependency, so `--locked` is enough and no resolver
       # runs here: an unpinned `uv lock` would add a live PyPI resolve to the
@@ -95,15 +110,91 @@ jobs:
           cd ../trustsight-harness
           uv sync --locked --all-extras
 
-      - name: Replay every committed bypass
-        # `shell: bash` is not cosmetic: GitHub's explicit bash shell enables
-        # `-eo pipefail`, so a harness that exits nonzero fails this step even
-        # through the `| tee`.  The default `bash -e` has no pipefail, which
-        # would mask the failure and let the gate pass without measuring.
+      - name: Replay shard ${{ matrix.shard }} of ${{ env.HARNESS_SHARDS }}
         shell: bash
         run: |
           cd ../trustsight-harness
-          uv run python -m harness regression --jobs auto | tee regression-summary.txt
+          uv run python -m harness regression \
+            --shard ${{ matrix.shard }}/${{ env.HARNESS_SHARDS }} \
+            --jobs auto | tee shard-summary.txt
+
+      - name: Collect the shard result
+        if: always()
+        run: |
+          cp "../trustsight-harness/regression/shard-${{ matrix.shard }}.json" \
+             "shard-${{ matrix.shard }}.json"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: harness-shard-${{ matrix.shard }}
+          path: shard-${{ matrix.shard }}.json
+          if-no-files-found: warn
+
+  # The required check.  It merges the shards and is the only job that judges
+  # the numbers, so the status context stays `replay` regardless of how many
+  # shards the replay is split into.
+  replay:
+    needs: shard
+    # Always report: a shard failure must fail this required check, not skip
+    # it.  The merge refuses an incomplete set.
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Clone the harness
+        run: |
+          git init ../trustsight-harness
+          git -C ../trustsight-harness remote add origin https://github.com/emiliano-go/trustsight-harness.git
+          git -C ../trustsight-harness fetch --depth 1 origin 347e43705226aa8e5f242d2013427beb26ea648a
+          git -C ../trustsight-harness checkout --detach FETCH_HEAD
+
+      - name: Enable unprivileged user namespaces
+        run: |
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+          unshare --user --map-root-user true
+
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+
+      - name: The harness declares this core version
+        run: |
+          core=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          declared=$(sed -n 's/^trustsight_version:[[:space:]]*"\?\([^"]*\)"\?.*/\1/p' ../trustsight-harness/defaults/environment.yml)
+          echo "core=$core harness=$declared"
+          test "$core" = "$declared" || {
+            echo "the harness declares $declared, this checkout is $core; move the harness pin and campaigns before this job can measure the change" >&2
+            exit 1
+          }
+
+      - name: Baseline before the run
+        # The harness' committed report is the baseline the gate judges
+        # against.  Copied before the merge, which overwrites report.json.
+        run: cp ../trustsight-harness/regression/report.json baseline-report.json
+
+      - name: Sync the harness against this checkout
+        run: |
+          cd ../trustsight-harness
+          uv sync --locked --all-extras
+
+      - name: Download the shard results
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: harness-shard-*
+          path: harness-shards
+          merge-multiple: true
+
+      - name: Merge the shards into the whole-corpus report
+        shell: bash
+        run: |
+          cd ../trustsight-harness
+          uv run python -m harness regression \
+            --merge-shards "$GITHUB_WORKSPACE/harness-shards" \
+            --no-archive \
+            | tee regression-summary.txt
 
       - name: Report
         run: |
@@ -115,7 +206,8 @@ jobs:
           print("### Harness regression\n")
           print("| field | baseline | this run |")
           print("|---|---|---|")
-          for field in ("total", "closed", "open", "degraded", "unreplayable"):
+          for field in ("total", "closed", "open", "degraded", "unreplayable",
+                           "inconclusive"):
               print(f"| {field} | {baseline[field]} | {report[field]} |")
           regressed = [f for f in ("open", "degraded", "unreplayable")
                        if report[f] > baseline[f]]

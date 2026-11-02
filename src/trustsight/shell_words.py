@@ -177,7 +177,8 @@ def _split_case_arms(part: str) -> list[str]:
 #: parser split on `;` but still saw the function token as the command word,
 #: so a one-line body `f() { "$X"; }` hid the indirect command.
 _FUNCTION_PREFIX_RE = re.compile(
-    r"^(?:function\s+)?[A-Za-z_][A-Za-z0-9_]*(?:\s*\(\))?\s*\{")
+    r"^(?:function\s+[A-Za-z_][A-Za-z0-9_]*(?:\s*\(\))?\s*\{"
+    r"|[A-Za-z_][A-Za-z0-9_]*\s*\(\)\s*\{)")
 
 
 def _first_command_start(part: str) -> tuple[str, str] | None:

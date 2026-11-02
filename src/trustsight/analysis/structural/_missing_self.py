@@ -21,7 +21,9 @@ from urllib.parse import urlsplit
 
 from ...buckets import canonical_host, host_is_non_routable
 from ...deps import _strip_comment
+from ...diffdoc import parse_diff_lines
 from ...rules import find_line_in_diff
+from ...tokenizer import split_lines
 
 #: Bound every list read from a parsed recipe.  The tokenizer already caps
 #: input, but these helpers are also called directly by tests and callers.
@@ -271,17 +273,12 @@ def _srcinfo_from_diff(diff_text: str) -> str:
     enough for the INFO drift comparison; an unchanged .SRCINFO cannot
     introduce drift, so its absence is not a blind spot for this rule.
     """
-    path = ""
     fields: dict[str, str] = {}
-    for raw in str(diff_text or "").splitlines():
-        if raw.startswith("+++ "):
-            path = raw[4:].strip()
+    for line in parse_diff_lines(split_lines(str(diff_text or ""))).lines:
+        if line.side != "add" or not str(line.file).endswith(".SRCINFO"):
             continue
-        if not path.endswith(".SRCINFO") or not raw.startswith("+"):
-            continue
-        if raw.startswith("+++"):
-            continue
-        match = re.match(r"\s*(pkgver|pkgrel|epoch)\s*=\s*(\S+)", raw[1:])
+        match = re.match(
+            r"\s*(pkgver|pkgrel|epoch)\s*=\s*(\S+)", line.content)
         if match:
             fields[match.group(1)] = match.group(2).strip("\"'")
     if not fields:

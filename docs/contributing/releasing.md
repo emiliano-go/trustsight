@@ -179,7 +179,7 @@ SHA-256 manifest, verify the uploaded bytes, and publish GitHub followed by
 PyPI. `release-pkgbuild.yml` remains a post-publication audit; it is also
 dispatched automatically by `publishing.yml` after the release is published.
 
-`pkgbuild.yml` runs on every push and pull request. It builds the deterministic
+`pkgbuild.yml` runs on every pull request and every push to `master`. It builds the deterministic
 tarball from the checked-out tree, verifies the PKGBUILD checksum against it,
 and installs from that artifact with `check()` enabled. It does not wait for or
 download a published release asset; the release workflow performs the

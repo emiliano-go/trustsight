@@ -5,10 +5,21 @@ name: Calibration Gates
 # whole.  A rule drifting into noise, an annotation acquiring weight, or a
 # labelled attack going undetected fails here rather than being noticed a
 # month later in the drift report.
-on: [push, pull_request]
+on:
+  push:
+    branches: [master]
+  pull_request:
 
 permissions:
   contents: read
+
+# A superseded commit is not worth finishing: the newer one's run measures
+# the same corpus.  `github.ref` is the branch on a push and the pull
+# request's merge ref, so a new commit on the same branch/PR cancels the
+# previous run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 # The tag of the channel release carrying baseline-benign-corpus.tar.gz.
 # It moves in the same commit as corpus.lock: the asset IS the corpus the
@@ -17,8 +28,11 @@ env:
   CALIBRATION_CORPUS_TAG: baseline-2026-10-22
   # Shard count.  Keep in sync with the matrix below.  The plan's per-package
   # tasks are independent (each carries its novelty prefix), so the merged
-  # shards are byte-identical to a single-process scan.
-  CALIBRATION_SHARDS: 4
+  # shards are byte-identical to a single-process scan.  Eight shards: the
+  # scan is the only per-shard cost, package sizes vary enough that four
+  # left one shard running 2.3x the fastest, and runner minutes are free so
+  # the extra runners buy a shorter critical path.
+  CALIBRATION_SHARDS: 8
 
 jobs:
   # The scan is the whole cost of this workflow, so it runs as a matrix:
@@ -29,7 +43,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3]
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
@@ -67,15 +81,15 @@ jobs:
           name: scan-shard-${{ matrix.shard }}
           path: shard-${{ matrix.shard }}.json
 
-  gates:
+  # The gate evaluation needs every shard's rows, so it waits for the scan.
+  # Everything that reads the corpus independently runs in its own job in
+  # parallel with it (parity, diffdoc, audits) rather than after the merge:
+  # those checks used to serialize a 96s tail behind a 103s gate pass.
+  calibration-gates:
     needs: scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          # The published-figures check runs pytest, and `tests/test_pkgbuild.py`
-          # ties the PKGBUILD checksum to a tag, so the checkout must carry tags.
-          fetch-depth: 0
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
@@ -124,28 +138,102 @@ jobs:
       - name: Audit H-series overlap and zero-fire (reporting)
         run: uv run python scripts/h_reduction_audit.py --json h-reduction-audit.json --rows scan-rows.json
 
-      # The typed diff core's projection lock: every diff's parse is checked
-      # against the committed baseline, so a change that moves file
-      # attribution, a side, a line number or hunk arithmetic fails until
-      # the baseline is deliberately regenerated.  The default suite runs a
-      # sample; here it runs whole.
+      - name: Upload gate results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: calibration-gates
+          path: |
+            gates.json
+            h-reduction-audit.json
+            coverage-ledger.json
+
+  # The ChangeDelta parity lock (spec §1): every diff's ChangeDelta is
+  # checked to reproduce the host/checksum/local-source facts the change
+  # summary reads, so a migration cannot make one surface re-derive a fact
+  # differently.  The default suite runs a sample; here it runs whole.
+  change-parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+      - name: Install
+        run: uv sync --locked --extra dev --python 3.12
+
+      - name: Fetch the calibration corpus
+        run: |
+          curl -fL --retry 3 -o /tmp/baseline-benign-corpus.tar.gz \
+            "https://github.com/emiliano-go/trustsight/releases/download/${CALIBRATION_CORPUS_TAG}/baseline-benign-corpus.tar.gz"
+          mkdir -p tests/fixtures/benign-corpus
+          tar -xzf /tmp/baseline-benign-corpus.tar.gz -C tests/fixtures/benign-corpus
+          uv run python scripts/pack_calibration_corpus.py --check
+
+      - name: Check ChangeDelta parity over the whole corpus
+        run: uv run python tests/harness/change_parity.py
+
+  # The typed diff core's projection lock: every diff's parse is checked
+  # against the committed baseline, so a change that moves file attribution,
+  # a side, a line number or hunk arithmetic fails until the baseline is
+  # deliberately regenerated.  The default suite runs a sample; here whole.
+  diffdoc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+      - name: Install
+        run: uv sync --locked --extra dev --python 3.12
+
+      - name: Fetch the calibration corpus
+        run: |
+          curl -fL --retry 3 -o /tmp/baseline-benign-corpus.tar.gz \
+            "https://github.com/emiliano-go/trustsight/releases/download/${CALIBRATION_CORPUS_TAG}/baseline-benign-corpus.tar.gz"
+          mkdir -p tests/fixtures/benign-corpus
+          tar -xzf /tmp/baseline-benign-corpus.tar.gz -C tests/fixtures/benign-corpus
+          uv run python scripts/pack_calibration_corpus.py --check
+
+      - name: Check the diffdoc projection baseline over the whole corpus
+        run: uv run python tests/harness/diffdoc_parity.py --check tests/fixtures/diffdoc-projections.json.gz
+
+  # Reporting-only audits and the published-figure check, none of which read
+  # the shard rows and so none of which need to wait for the merge.
+  audits:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # The published-figures check runs pytest, and `tests/test_pkgbuild.py`
+          # ties the PKGBUILD checksum to a tag, so the checkout must carry tags.
+          fetch-depth: 0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+      - name: Install
+        run: uv sync --locked --extra dev --python 3.12
+
+      - name: Fetch the calibration corpus
+        run: |
+          curl -fL --retry 3 -o /tmp/baseline-benign-corpus.tar.gz \
+            "https://github.com/emiliano-go/trustsight/releases/download/${CALIBRATION_CORPUS_TAG}/baseline-benign-corpus.tar.gz"
+          mkdir -p tests/fixtures/benign-corpus
+          tar -xzf /tmp/baseline-benign-corpus.tar.gz -C tests/fixtures/benign-corpus
+          uv run python scripts/pack_calibration_corpus.py --check
+
       # The E-series ships its thresholds empty; this measures the corpus
       # distributions and prints the suggested floors (Q3 auto-calibration),
       # as an artifact for the next deliberate calibration commit.  Reporting
       # only: it never rewrites the shipped defaults.
       - name: Measure the entropy thresholds (reporting)
         run: uv run python scripts/entropy_calibrate.py --json entropy-thresholds.json
-
-      - name: Check the diffdoc projection baseline over the whole corpus
-        run: uv run python tests/harness/diffdoc_parity.py --check tests/fixtures/diffdoc-projections.json.gz
-
-      # The ChangeDelta parity lock (spec §1): every diff's ChangeDelta is
-      # checked to reproduce the host/checksum/local-source facts the change
-      # summary reads, so a migration cannot make one surface re-derive a
-      # fact differently.  The default suite runs a sample; here it runs
-      # whole.
-      - name: Check ChangeDelta parity over the whole corpus
-        run: uv run python tests/harness/change_parity.py
 
       # Addendum 3: the history-exercising corpus (the observation-history
       # rules the stateless corpus never fires).  A drift in H026/H044,
@@ -164,13 +252,11 @@ jobs:
           TRUSTSIGHT_PUBLISHED_FIGURES_STRICT: "1"
         run: uv run --extra dev pytest tests/test_published_figures.py -q
 
-      - name: Upload gate results
+      - name: Upload audit results
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: calibration-gates
+          name: calibration-audits
           path: |
-            gates.json
-            h-reduction-audit.json
+            entropy-thresholds.json
             history-replay.json
-            coverage-ledger.json

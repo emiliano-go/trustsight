@@ -8,11 +8,11 @@ from ...deps import _strip_comment, unquote_shell_words
 from ...file_kinds import files_at_line, is_shell_file
 from ...tokenizer import join_line_continuations, split_lines
 from ...rules import _PRINTER_LINE_RE, _blank_quoted, clamp_text
-from ._common import _DECEPTIVE_SPACE_RE, _FENCE_RE, _command_starts, _command_words, _continuation_lines, _dependency_array_lines, _executes, _home_alias_hit, _loop_variable_names, _path_lookup_names, _pipeline_sink, _resolved_records, log
+from ._common import _DECEPTIVE_SPACE_RE, _FENCE_RE, _array_body_lines, _command_starts, _command_words, _continuation_lines, _dependency_array_lines, _executes, _home_alias_hit, _loop_variable_names, _path_lookup_names, _pipeline_sink, _resolved_records, log
 from ._x01_x08 import (X001_RE, X002_SHAPES, X003_SHAPES, X004_SHAPES, X006_SHAPES,
                        X034_ARCHIVE_RE, X034_EXECUTOR_RE)
 from ._x09_x16 import X009_RE, X010_RE, X011_WORD_RE, X011_STANDDOWN_RE, X012_RE, X013_RE, X013_STANDDOWN_RE, X014_RE, X014_STANDDOWN_RE, X015_RE, X018_RE, X019_RE, _DISTRO_INSTALL_RE, _X009_CLIENT_RE, _X016_CONSUMER_RE, _X016_FETCH_RE, _X016_KNOWN_EXECUTOR_RE, _consumer_after_override, _consumer_at, _x013_is_trusted_registry
-from ._x17_x25 import X017_RE, X021_RE, X024_RE, _BUILD_MANIFEST_RE, _CONTENT_WRITE_VERB_RE, _HEREDOC_OPEN_RE, _MANIFEST_COMMAND_RE, _X017_FIND_RE, _X021_RUN_POSITIONAL_RE, _X021_SET_GLOB_RE, _X022_CONFIG_FLAG_RE, _X022_PAYLOAD_RE, _X022_WRITE_RE, _multiline_function_shadow_lines, _normalise_dest, _redirect_target, _x017_find_runs_a_script, _x024_is_benign_build_path, _x024_is_git_provenance, _x024_is_passthrough, _x024_is_test_pythonpath, _x024_is_trusted_path_append, _x024_is_benign_path_suffix
+from ._x17_x25 import X017_RE, X021_RE, X024_RE, _BUILD_MANIFEST_RE, _CONTENT_WRITE_VERB_RE, _HEREDOC_OPEN_RE, _MANIFEST_COMMAND_RE, _X017_FIND_RE, _X021_RUN_POSITIONAL_RE, _X021_SET_GLOB_RE, _X022_CONFIG_FLAG_RE, _X022_PAYLOAD_RE, _X022_WRITE_RE, _multiline_function_shadow_lines, _normalise_dest, _redirect_target, _x017_find_runs_a_script, _x024_is_benign_build_path, _x024_is_git_provenance, _x024_is_passthrough, _x024_is_test_pythonpath, _x024_is_trusted_loader_append, _x024_is_trusted_path_append, _x024_is_benign_path_suffix
 
 __all__ = ['crossfire_techniques']
 
@@ -186,6 +186,10 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
     resolvable, scalar_values, resolved_lines = _resolved_vocabulary(
         clamped, lines, readable, current_text)
     carried = _continuation_lines(raw_lines, len(lines))
+    #: Array elements are data, not command words.  A multi-line
+    #: ``source=()`` entry used to reach X002 and a tarball name read as a
+    #: non-literal executable.
+    array_data = _array_body_lines(lines)
     #: X011 stands down inside a dependency array: the words there are a
     #: description, not a command the build runs.
     dependency_data = _dependency_array_lines(lines)
@@ -349,7 +353,8 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
         # is `curl`), so R001 owns the pipeline and X002 claiming it too
         # would score one command twice.  A dynamic `${A[$i]}` or a nameref
         # does not resolve and is still yielded.
-        if index not in carried and index not in data_heredoc:
+        if (index not in carried and index not in data_heredoc
+                and index not in array_data):
             for word in _command_words(body, resolvable, scalar_values):
                 for shape, pattern in X002_SHAPES:
                     if pattern.match(word):
@@ -521,6 +526,8 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
                 and not _x024_is_test_pythonpath(
                     x024_body, indirect, enclosing.get(index))
                 and not _x024_is_trusted_path_append(
+                    x024_body, indirect, lines, index)
+                and not _x024_is_trusted_loader_append(
                     x024_body, indirect, lines, index)):
             record("X024", line_no,
                    "sensitive variable assigned an indirect value",

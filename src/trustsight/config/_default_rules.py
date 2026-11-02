@@ -453,7 +453,7 @@ name = "Persistence Unit Outside Package Root"
 # `if [[ -f /etc/profile.d/cuda.sh ]]`, which tests for a file rather than
 # planting one - and a rule that reads "persistence unit installed" must not
 # fire on a package checking whether one exists.
-pattern = '(?:\\b(?:install|cp|mv|ln|tee|dd|rsync|mkdir|cat|printf|echo)\\b|>)[^;&|\\n]*?(?<!\\})[\\s"\\x27](?:(?:/etc/(?:cron\\.[a-z]+|cron\\.d|systemd/(?:system|user)|profile\\.d|bash\\.bashrc\\.d|zsh(?:/zshrc\\.d|rc\\.d)|X11/(?:Xsession|xinit/xinitrc)\\.d|xdg/autostart|dbus-1/(?:system|session)\\.d|sudoers\\.d|ld\\.so\\.conf\\.d|pam\\.d|security/pam_\\w+\\.conf|NetworkManager/dispatcher\\.d|xinetd\\.d|(?:init|rc)\\.d|logrotate\\.d|tmpfiles\\.d|sysusers\\.d|binfmt\\.d|sysctl\\.d|environment\\.d|polkit-1/(?:rules|actions)\\.d|polkit-1/(?:rules|actions)|skel|update-motd\\.d|systemd/(?:system|user)-preset)|/usr/lib/systemd/(?:system|user)|/usr/lib/systemd/(?:system|user)-(?:generators|sleep|shutdown)|/usr/share/dbus-1/(?:system|session)-services|/var/spool/cron)/|(?:/etc/(?:rc\\.local|profile|bash\\.bashrc|ld\\.so\\.preload|environment|csh\\.cshrc|zsh/(?:zshrc|zprofile|zshenv)|X11/xinit/xinitrc|X11/Xsession))(?![\\w./-]))'
+pattern = '(?:\\b(?:install|cp|mv|ln|tee|dd|rsync|mkdir)\\b|>)[^;&|\\n]*?(?<!\\})[\\s"\\x27](?:(?:/etc/(?:cron\\.[a-z]+|cron\\.d|systemd/(?:system|user)|profile\\.d|bash\\.bashrc\\.d|zsh(?:/zshrc\\.d|rc\\.d)|X11/(?:Xsession|xinit/xinitrc)\\.d|xdg/autostart|dbus-1/(?:system|session)\\.d|sudoers\\.d|ld\\.so\\.conf\\.d|pam\\.d|security/pam_\\w+\\.conf|NetworkManager/dispatcher\\.d|xinetd\\.d|(?:init|rc)\\.d|logrotate\\.d|tmpfiles\\.d|sysusers\\.d|binfmt\\.d|sysctl\\.d|environment\\.d|polkit-1/(?:rules|actions)\\.d|polkit-1/(?:rules|actions)|skel|update-motd\\.d|systemd/(?:system|user)-preset)|/usr/lib/systemd/(?:system|user)|/usr/lib/systemd/(?:system|user)-(?:generators|sleep|shutdown)|/usr/share/dbus-1/(?:system|session)-services|/var/spool/cron)/|(?:/etc/(?:rc\\.local|profile|bash\\.bashrc|ld\\.so\\.preload|environment|csh\\.cshrc|zsh/(?:zshrc|zprofile|zshenv)|X11/xinit/xinitrc|X11/Xsession))(?![\\w./-]))'
 severity = "HIGH"
 category = "persistence"
 match_target = "raw_line"
@@ -680,6 +680,18 @@ domains = [
     "repo.yandex.ru",
     "nebula.gg",
     "downloads.sejda-cdn.com",
+    # Discord's own desktop-client CDN.  The package declares discord.com
+    # and every artifact comes from dl.discordapp.net or
+    # stable.dl2.discordapp.net; the registered domain differs, so the
+    # declared-upstream comparison cannot recover it and each release
+    # charged SOURCE_BUCKET and NOVELTY on the vendor's own host.
+    "discordapp.net",
+    # Izoone's project release host (automation.izoone.com), used by
+    # bootrecov, sway-session, sway-title-animator and emqutiti.  The
+    # package's own `url=` points at this host; the move away from the
+    # previous forge is reported by H049 and novelty, so charging the
+    # bucket again double-counts the same provenance change.
+    "izoone.com",
 ]
 
 [raw_hosting]

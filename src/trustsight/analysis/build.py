@@ -187,7 +187,9 @@ _REGISTRY_OVERRIDE_RE = re.compile(
 _SERVICE_ENABLE_RE = re.compile(
     r"\bsystemctl\s+(?:--user\s+)?enable\b"
     r"|\bloginctl\s+enable-linger\b"
-    r"|\bcrontab\b(?!\s+-l\b)"
+    # A relative path is not a command: `rm /etc/sudoers.d/x-crontab`
+    # matched the bare word and read as scheduling work.
+    r"|(?<![\w/.-])crontab\b(?!\s+-l\b)"
     r"|\bat\s+(?!-l\b)"
     r"|\bsystemd-run\s+--unit\b"
     r"|\bupdate-rc\.d\b"
@@ -213,8 +215,13 @@ def _service_enable_findings(ctx, add) -> None:
     """H108: build/install code enables a service or cron job."""
     lines = ctx.lines
     scopes = ctx.scopes
+    # A notice printed by `cat <<'EOF'` is an instruction to the user, not
+    # work the hook performs.  bsg-diaspora-sa's "run wxlauncher once, then
+    # ..." text read as a service enable.
+    from .delivery import _printed_heredoc_body_indices
+    printed = _printed_heredoc_body_indices(lines)
     for i, line in enumerate(lines):
-        if not line.startswith("+"):
+        if not line.startswith("+") or i in printed:
             continue
         scope = scopes.within(i, _CRITICAL_FUNCTIONS + _INSTALL_HOOKS)
         if scope is None:

@@ -20,7 +20,7 @@ from ...shell_words import (
 from ..base import _CMD
 from ._ownership import _ownership_yields
 
-__all__ = ['_ACCOUNT_OPTION_RE', '_ARRAY_ASSIGN_OPEN_RE', '_ARRAY_VAR_RE', '_ASSIGNMENT_RE', '_CMD', '_CONFUSABLE_CHARS', '_DATA_CONSUMER', '_DECEPTIVE_SPACE_RE', '_DEP_ARRAY_OPEN_RE', '_EVALUATION_RE', '_EXECUTING_SCOPES', '_EXEC_WRAPPER', '_FENCE_RE', '_FIRST_WORD_RE', '_FOR_LOOP_RE', '_H032_CLAIMS_RE', '_HOME_ALIASES', '_INTERPRETER_DECODE', '_LITERAL_WORD_RE', '_NUMERIC_RE', '_PATH_LOOKUP_ASSIGN_RE', '_PIPE_WRAPPER_RE', '_PLAIN_VAR_RE', '_PRIVILEGE_WRAPPERS', '_REDIRECT_RE', '_SHELL', '_SHELL_CMD', '_SHELL_NAME', '_STAGED_RE', '_WORD_VAR_RE', '_WRAPPERS', '_WRITE_COMMAND_RE', '_WRITE_PREFIX', '_command_words', '_confusable_class', '_continuation_lines', '_dependency_array_lines', '_executes', '_home_alias_hit', '_loop_variable_names', '_opens_a_value', '_path_lookup_names', '_pipeline_sink', '_quote_open_at_end', '_resolved_records', '_resolves_to_a_literal', '_split_commands', '_unquoted_paren_delta', '_word_around', 'log']
+__all__ = ['_ACCOUNT_OPTION_RE', '_ARRAY_ASSIGN_OPEN_RE', '_ARRAY_VAR_RE', '_ASSIGNMENT_RE', '_CMD', '_CONFUSABLE_CHARS', '_DATA_CONSUMER', '_DECEPTIVE_SPACE_RE', '_DEP_ARRAY_OPEN_RE', '_EVALUATION_RE', '_EXECUTING_SCOPES', '_EXEC_WRAPPER', '_FENCE_RE', '_FIRST_WORD_RE', '_FOR_LOOP_RE', '_H032_CLAIMS_RE', '_HOME_ALIASES', '_INTERPRETER_DECODE', '_LITERAL_WORD_RE', '_NUMERIC_RE', '_PATH_LOOKUP_ASSIGN_RE', '_PIPE_WRAPPER_RE', '_PLAIN_VAR_RE', '_PRIVILEGE_WRAPPERS', '_REDIRECT_RE', '_SHELL', '_SHELL_CMD', '_SHELL_NAME', '_STAGED_RE', '_WORD_VAR_RE', '_WRAPPERS', '_WRITE_COMMAND_RE', '_WRITE_PREFIX', '_array_body_lines', '_command_words', '_confusable_class', '_continuation_lines', '_dependency_array_lines', '_executes', '_home_alias_hit', '_loop_variable_names', '_opens_a_value', '_path_lookup_names', '_pipeline_sink', '_quote_open_at_end', '_resolved_records', '_resolves_to_a_literal', '_split_commands', '_unquoted_paren_delta', '_word_around', 'log']
 
 log = logging.getLogger(__name__)
 
@@ -270,6 +270,8 @@ _ARRAY_ASSIGN_OPEN_RE = re.compile(
     r"^\s*[A-Za-z_][A-Za-z0-9_]*(?:\[[^\]]{0,40}\])?\+?=\s*\("
 )
 
+_HUNK_CONTEXT_RE = re.compile(r"@@[^@]*@@\s*(.*)$")
+
 def _quote_open_at_end(text: str, quote: str | None) -> str | None:
     """The quote character still open when *text* ends, or None.
 
@@ -343,6 +345,34 @@ def _dependency_array_lines(lines: list[str]) -> set[int]:
             continue
         body = _strip_comment(line[1:] if line[:1] in "+ " else line)
         if depth > 0 or _DEP_ARRAY_OPEN_RE.match(body):
+            out.add(index)
+            depth = max(0, depth + _unquoted_paren_delta(body))
+    return out
+
+def _array_body_lines(lines: list[str]) -> set[int]:
+    """Indices inside any array assignment's value.
+
+    An array element is data, never a command word.  Only dependency
+    arrays were tracked (for X011's stand-down), so a continuation line of
+    ``source=()`` still reached the command-position rules and a tarball
+    name such as ``"${pkgname%-bin}.js"`` read as X002's non-literal
+    executable.  Tracked like :func:`_dependency_array_lines`, across
+    ``+`` and context lines and abandoned on a removed one.
+    """
+    out: set[int] = set()
+    depth = 0
+    for index, line in enumerate(lines):
+        if line.startswith("-"):
+            continue
+        body = _strip_comment(line[1:] if line[:1] in "+ " else line)
+        # A hunk header carries the function or assignment the hunk opens
+        # in: ``@@ -26,12 +26,14 @@ source=(``.  The array opener is
+        # there, not on a context line of its own, so the continuation
+        # lines below it must inherit that depth.
+        if body.startswith("@@"):
+            header = _HUNK_CONTEXT_RE.search(body)
+            body = header.group(1) if header else ""
+        if depth > 0 or _ARRAY_ASSIGN_OPEN_RE.match(body):
             out.add(index)
             depth = max(0, depth + _unquoted_paren_delta(body))
     return out

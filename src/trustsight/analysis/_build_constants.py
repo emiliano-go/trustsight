@@ -53,7 +53,12 @@ _HOOK_EXEC_RE = re.compile(
 # the ordinary shape of a legitimate hook, and treating every
 # `systemctl enable` as "runs as root" overscored the common case.
 _HOOK_ADMIN_RE = re.compile(
-    r"\b(?:systemctl\s+enable|useradd|usermod|visudo|"
+    # `visudo` is deliberately absent: a hook can only probe for it
+    # (`command -v visudo`) or validate a file (`visudo -cf`); neither is
+    # privileged setup, and the cachy-auto-update hook was flagged on the
+    # probe.  A sudoers drop-in is claimed by R054, and an account change
+    # by useradd/usermod.
+    r"\b(?:systemctl\s+enable|useradd|usermod|"
     r"chmod\s+[0-7]*[2467][0-7]{3}|chmod\s+[ugoa]*\+s)\b",
     re.IGNORECASE,
 )

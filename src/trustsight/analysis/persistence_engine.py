@@ -22,7 +22,7 @@ from ..deps import _strip_comment
 from ..diffdoc import parse_diff_lines
 from ..findings import stamp
 from ..line_lex import strip_shell_cexec_opener
-from ..rules import MAX_RULE_LINE_BYTES
+from ..rules import MAX_RULE_LINE_BYTES, _PRINTER_LINE_RE
 from ..tokenizer import split_lines
 from .build import (
     _HOOK_ADMIN_RE,
@@ -265,6 +265,14 @@ def emit_install_hook(ctx: GraphContext, add: Callable) -> None:
             # in a dead hook does nothing (mercure's useradd).
             continue
         body = _strip_comment(line)
+        # A line that only prints is output, not privileged setup:
+        # android-emulator's "source /etc/profile" notice read as H017.  A
+        # printer that runs a command substitution or pipes to a shell
+        # still executes and keeps the finding.
+        if (_PRINTER_LINE_RE.match(body)
+                and not re.search(r"\$\(|`|\|\s*(?:sudo\s+)?(?:ba|z|da|k|)sh\b",
+                                  body)):
+            continue
         # A literal `sh -c '<lit>'` re-exec executes the inner literal, so
         # strip the wrapper token and let the inner lines (already in this
         # hook scope) carry the signal.  Debian templates wrap every hook

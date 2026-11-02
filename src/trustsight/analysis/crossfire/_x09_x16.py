@@ -160,7 +160,12 @@ X013_RE = re.compile(
     # switched on so it reads as diligence.  `--verify` is untouched: that
     # is the check, not the trust.
     r"|\bgpg2?\b[^\n;&|]*?--(?:import\b|recv-keys|keyserver|import-ownertrust)"
-    r"|\bpacman-key\b[^\n;&|]*?--(?:add|recv-keys|lsign-key|populate)"
+    # `--populate <name>` installs the keyring this package ships in
+    # /usr/share/pacman/keyrings; the trust decision is the package
+    # install itself, not a substitution.  Adding a key (`--add`,
+    # `--recv-keys`, `--lsign-key`) is the shape that changes the trust
+    # root, so those stay.
+    r"|\bpacman-key\b[^\n;&|]*?--(?:add|recv-keys|lsign-key)"
     r"|\bapt-key\s+add|\brpm\s+--import"
     r"|\bpip\s+config\s+set\b[^\n;&|]*?index-url",
     re.IGNORECASE,
@@ -291,6 +296,12 @@ X014_STANDDOWN_RE = re.compile(
     # exec slot whenever a build-tree script followed.
     r"(?:\A\s*|[;&|(]\s*|&&\s*)(?:[A-Za-z_]\w*=\S+\s+)*"
     r"(?:python3?|pypy3?)\b[^\n;&|]*?\s-\S+\s+[\"']?\$\{?(?:srcdir|startdir|PWD|BUILDDIR)\}?/"
+    # A path-qualified interpreter (`"$srcdir/venv/bin/python" -I
+    # "$srcdir/check.py"`) is the same normal invocation as the bare
+    # `python -P` form above; the flag names an option, not an exec slot.
+    r"|(?:\A\s*|[;&|(]\s*|&&\s*)(?:[A-Za-z_]\w*=\S+\s+)*"
+    r"[\"']?(?:[^\s\"';|&]+/)*+python3?(?:\.\d+)?[\"']?\s+"
+    r"(?:-\S++\s+)*-{1,2}\S++\s+[\"']?\$\{?(?:srcdir|startdir|PWD|BUILDDIR)\}?/"
     r"|(?:\A\s*|[;&|(]\s*|&&\s*)(?:install|cp|mv|ln)\s"
     r"|=\s*[\"']?(?:cat|true|false|:|/bin/true|/usr/bin/true|less|more|vi|vim"
     r"|nano|/dev/null)[\"']?\s*(?:;|$)",

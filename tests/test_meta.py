@@ -235,3 +235,19 @@ def test_m006_stands_down_without_reactivation_pressure():
     assert campaign_reactivation_notes(None) == []
     assert campaign_reactivation_notes([]) == []
     assert campaign_reactivation_notes([None, "not-a-row"]) == []
+
+
+def test_unreadable_thresholds_are_a_stage_failure(monkeypatch):
+    """M004 inputs failing to load must not read as "no pairs"."""
+    from trustsight.analysis import meta
+    from trustsight.coverage import begin_stage_tracking, stage_failures
+
+    def _boom():
+        raise OSError("unreadable")
+
+    import trustsight.config as config
+
+    monkeypatch.setattr(config, "load_thresholds", _boom)
+    begin_stage_tracking()
+    assert meta._cofire_pairs() == []
+    assert "thresholds-unreadable" in stage_failures()

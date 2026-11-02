@@ -1019,3 +1019,14 @@ def test_report_body_carries_the_shape_fingerprint_and_technique_tags():
     body = report_body(evaluate_fact(fact))
     assert body["diff_shape_fp"] == "sha256:0123456789abcdef"
     assert body["findings"][0]["techniques"] == ["X002:partial-quote"]
+
+
+def test_api_rejects_path_shaped_package_names():
+    import pytest
+
+    from trustsight.api._validation import _validate_name
+
+    for bad in ("..", "../x", "a/b", "with space"):
+        with pytest.raises(ValueError):
+            _validate_name(bad)
+    _validate_name("valid-pkg")

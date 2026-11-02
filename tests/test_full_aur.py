@@ -44,7 +44,7 @@ def test_fetch_metadata_on_progress_callback():
 
     assert result == {"pkg-a": entries[0], "pkg-b": entries[1]}
     assert len(calls) >= 1, "on_progress was never called"
-    for pos, t in calls:
+    for _pos, t in calls:
         assert t == total, f"expected total={total}, got {t}"
     assert calls[-1][0] == total, "final progress must match Content-Length"
 

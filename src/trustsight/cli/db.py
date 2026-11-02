@@ -1,7 +1,7 @@
 import json
 import logging
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import typer
@@ -112,7 +112,7 @@ def db_backup(
 
     db_path = get_db_path()
     if not output:
-        ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
         output = str(db_path) + f".{ts}.bak"
 
     out_path = Path(output)

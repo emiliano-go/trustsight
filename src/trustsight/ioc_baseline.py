@@ -661,6 +661,101 @@ def all_ioc_sources() -> list[str]:
     return [r["source"] for r in rows]
 
 
+def _entry_to_match(entry: IocEntry) -> IocMatch:
+    return IocMatch(
+        type=entry.type,
+        value=entry.value,
+        source=entry.source,
+        confidence=entry.confidence,
+        provenance=entry.provenance,
+        campaign=entry.campaign,
+        added=entry.added,
+        surface="",
+        line=None,
+        expired=_is_expired(entry.expires_at),
+        shape=entry.shape,
+    )
+
+
+#: SQLite's bind-parameter ceiling is 999 on older builds.
+_MATCH_BATCH = 900
+
+
+def match_many(type_: str, values) -> dict[str, list[IocMatch]]:
+    """Batch form of :func:`match_ioc`: one query per 900 values.
+
+    A diff can name hundreds of hosts, digests and packages; querying the
+    store once per value is the N+1 shape the analysis path paid for every
+    reviewed package.  The result is keyed by the *original* value, and every
+    value that normalises to the same stored value gets the same matches.
+    """
+    originals: dict[str, list[str]] = {}
+    for value in values:
+        normalized = _normalize_value(type_, value)
+        if normalized is not None:
+            originals.setdefault(normalized, []).append(value)
+    if not originals:
+        return {}
+
+    found: dict[str, list[IocMatch]] = {}
+    normalized_values = list(originals)
+    with get_connection() as conn:
+        for start in range(0, len(normalized_values), _MATCH_BATCH):
+            chunk = normalized_values[start:start + _MATCH_BATCH]
+            placeholders = ",".join("?" * len(chunk))
+            try:
+                rows = conn.execute(
+                    "SELECT * FROM ioc_entries "
+                    f"WHERE type = ? AND value IN ({placeholders})",
+                    (type_, *chunk),
+                ).fetchall()
+            except sqlite3.OperationalError:
+                _note_store_unavailable()
+                return {}
+            for row in rows:
+                entry = _row_to_entry(row)
+                found.setdefault(entry.value, []).append(_entry_to_match(entry))
+
+    out: dict[str, list[IocMatch]] = {}
+    for normalized, sources in originals.items():
+        matches = found.get(normalized, [])
+        for original in sources:
+            out[original] = matches
+    return out
+
+
+def match_domains(hosts) -> dict[str, list[IocMatch]]:
+    """Batch form of :func:`match_domain` for a group of hosts."""
+    variants = {host: _domain_variants(host) for host in hosts}
+    all_variants = sorted({v for vs in variants.values() for v in vs})
+    found = match_many("domain", all_variants)
+    out: dict[str, list[IocMatch]] = {}
+    for host, host_variants in variants.items():
+        seen: set[tuple[str, str]] = set()
+        matches: list[IocMatch] = []
+        for variant in host_variants:
+            for match in found.get(variant, ()):
+                key = (match.value, match.source)
+                if key in seen:
+                    continue
+                seen.add(key)
+                matches.append(match)
+        out[host] = matches
+    return out
+
+
+def match_hashes(digests) -> dict[str, list[IocMatch]]:
+    return match_many("hash", digests)
+
+
+def match_packages(names) -> dict[str, list[IocMatch]]:
+    return match_many("package", names)
+
+
+def match_file_paths(paths) -> dict[str, list[IocMatch]]:
+    return match_many("file_path", paths)
+
+
 def match_ioc(type_: str, value: str) -> list[IocMatch]:
     """Return all active IOC entries matching (*type_*, *value*).
 
@@ -680,26 +775,7 @@ def match_ioc(type_: str, value: str) -> list[IocMatch]:
             _note_store_unavailable()
             return []
 
-    matches: list[IocMatch] = []
-    for row in rows:
-        entry = _row_to_entry(row)
-        expired = _is_expired(entry.expires_at)
-        matches.append(
-            IocMatch(
-                type=entry.type,
-                value=entry.value,
-                source=entry.source,
-                confidence=entry.confidence,
-                provenance=entry.provenance,
-                campaign=entry.campaign,
-                added=entry.added,
-                surface="",
-                line=None,
-                expired=expired,
-                shape=entry.shape,
-            )
-        )
-    return matches
+    return [_entry_to_match(_row_to_entry(row)) for row in rows]
 
 
 def _domain_variants(host: str) -> set[str]:

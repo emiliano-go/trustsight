@@ -410,7 +410,7 @@ def test_parent_baseline_is_a_real_gap():
 
     assert "parent_baseline" in GAPS
     assert "parent_baseline" in GAP_REASONS
-    assert gaps_from(CoverageSignals(parent_baseline=True)) == ["parent_baseline"]
+    assert gaps_from(CoverageSignals(tree_analyzed=True, parent_baseline=True)) == ["parent_baseline"]
 
 
 def test_an_unknown_gap_falls_back_to_generic_wording():

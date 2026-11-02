@@ -816,3 +816,21 @@ def test_a_broken_ioc_store_is_a_stage_failure(monkeypatch):
     begin_stage_tracking()
     assert baseline.match_ioc("package", "demo") == []
     assert "ioc-store" in stage_failures()
+
+
+def test_batch_matching_equals_single_lookup(baseline_dir, isolated_db):
+    from trustsight.ioc_baseline import (
+        match_domains,
+        match_hashes,
+        match_many,
+        match_packages,
+    )
+
+    import_baseline(baseline_dir, source_name="test-feed", allow_unsigned=True)
+    assert match_many("package", ["evil-pkg", "absent-pkg"])["evil-pkg"] == \
+        match_package("evil-pkg")
+    assert match_packages({"evil-pkg"})["evil-pkg"] == match_package("evil-pkg")
+    host = "cdn.malware.example"
+    assert match_domains([host])[host] == match_domain(host)
+    digest = "a" * 64
+    assert match_hashes([digest])[digest] == match_hash(digest)

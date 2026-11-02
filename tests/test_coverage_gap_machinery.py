@@ -281,3 +281,11 @@ def test_every_coverage_signal_is_read_by_gaps_from():
     }
     fields = {field.name for field in dataclasses.fields(coverage.CoverageSignals)}
     assert fields <= read, f"CoverageSignals fields not read: {sorted(fields - read)}"
+
+
+def test_an_unset_tree_claim_is_not_coverage():
+    """The dataclass default must fail closed, not claim the tree was read."""
+    from trustsight.coverage import TREE_NOT_ANALYZED, CoverageSignals, gaps_from
+
+    gaps = gaps_from(CoverageSignals())
+    assert TREE_NOT_ANALYZED in gaps

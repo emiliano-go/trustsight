@@ -164,7 +164,7 @@ def test_threaded_calls_do_not_cross_contaminate_memoization():
     diffs = [f"+V{i}=value-{i}\n+echo $V{i}\n" for i in range(24)]
     with ThreadPoolExecutor(max_workers=8) as pool:
         results = list(pool.map(tokenize_and_resolve, diffs * 3))
-    for i, diff in enumerate(diffs * 3):
+    for i, _diff in enumerate(diffs * 3):
         expected = f"value-{i % len(diffs)}"
         assert expected in " ".join(results[i][0])
 

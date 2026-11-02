@@ -17,6 +17,7 @@ import hashlib
 import json
 import logging
 import os
+import stat
 import time
 import urllib.request
 from pathlib import Path
@@ -607,6 +608,46 @@ _PRIORITY_HEADERS = {
 }
 
 
+def _redact_url(text: str) -> str:
+    """Strip userinfo, path, query and fragment from URLs in *text*.
+
+    A webhook or feed endpoint is a bearer secret: the ntfy topic and the
+    ingest path are what grant write access.  ``urllib`` errors and
+    ``read_capped_with_deadline`` messages can quote the full URL, so a
+    warning that logs the exception must not log the credential too.
+
+    A linear scan rather than a regex: the regex engine retried a
+    scheme/host alternation at every position of a hostile exception string
+    (the adversarial regex audit caught it).
+    """
+    out: list[str] = []
+    index = 0
+    while True:
+        marker = text.find("://", index)
+        if marker == -1:
+            out.append(text[index:])
+            break
+        start = marker
+        while start > 0 and (text[start - 1].isalnum() or text[start - 1] in "+.-"):
+            start -= 1
+        end = marker + 3
+        while end < len(text) and text[end] not in "/ \t\r\n?#":
+            end += 1
+        authority = text[marker + 3:end]
+        if start == marker or not authority:
+            out.append(text[index:marker + 3])
+            index = marker + 3
+            continue
+        out.append(text[index:start])
+        out.append(text[start:marker + 3])
+        out.append(authority.rsplit("@", 1)[-1])
+        out.append("/...")
+        index = end
+        while index < len(text) and not text[index].isspace():
+            index += 1
+    return "".join(out)
+
+
 def post_webhook(url: str, payload: dict, timeout: float = _TIMEOUT_S) -> None:
     """POST *payload* as JSON to *url*.  Raises on any failure.
 
@@ -665,9 +706,19 @@ def _feed_key() -> tuple[str, str]:
     if not key:
         path = os.environ.get(_FEED_KEY_FILE_ENV, "").strip()
         if path:
+            key_path = Path(path)
+            try:
+                mode = stat.S_IMODE(key_path.stat().st_mode)
+            except OSError:
+                mode = None
+            if mode is not None and mode & 0o077:
+                log.warning(
+                    "feed key file %s is readable by group or others; "
+                    "restrict it to 0600", key_path,
+                )
             try:
                 key = read_file_capped(
-                    Path(path), 4096, "feed key"
+                    key_path, 4096, "feed key"
                 ).decode("ascii").strip()
             except (OSError, UnicodeDecodeError):
                 key = ""
@@ -733,7 +784,7 @@ def _deliver_sinks(
             ntfy_ok = True
         except Exception as exc:  # noqa: BLE001 - a notification never kills the loop
             ntfy_ok = False
-            log.warning("alert webhook failed: %s", exc)
+            log.warning("alert webhook failed: %s", _redact_url(str(exc)))
     if feed is None:
         feed = feed_url()
     if not key:
@@ -749,7 +800,7 @@ def _deliver_sinks(
             feed_ok = True
         except Exception as exc:  # noqa: BLE001
             feed_ok = False
-            log.warning("feed webhook failed: %s", exc)
+            log.warning("feed webhook failed: %s", _redact_url(str(exc)))
     return ntfy_ok, feed_ok, ntfy_configured, feed_configured
 
 

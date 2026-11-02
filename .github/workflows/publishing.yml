@@ -19,6 +19,12 @@ on:
 permissions:
   contents: read
 
+# The release trust anchor is a default-branch value, deliberately not read
+# from the target tree.  A target branch cannot re-pin the key that verifies
+# the release it is trying to publish.
+env:
+  TRUSTSIGHT_RELEASE_FINGERPRINT: F759D6D49B0A395AB922414A5CC3B4C50D37E793
+
 concurrency:
   group: software-release-${{ inputs.tag }}
   cancel-in-progress: false
@@ -56,6 +62,14 @@ jobs:
       - id: head
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
+      - name: Release target must be an ancestor of master
+        run: |
+          git fetch origin master --depth=1
+          git merge-base --is-ancestor HEAD origin/master || {
+            echo "::error::release target ${{ inputs.target }} is not an ancestor of master"
+            exit 1
+          }
+
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
       - run: uv sync --locked --extra dev --python 3.12
       - run: uv run --extra dev pytest
@@ -85,6 +99,7 @@ jobs:
             --tag "${{ inputs.tag }}" \
             --dist dist \
             --release-tarball "${{ steps.release_tar.outputs.path }}" \
+            --fingerprint "$TRUSTSIGHT_RELEASE_FINGERPRINT" \
             --write-checksums release/SHA256SUMS
 
       - name: Smoke test wheel and source distribution

@@ -19,6 +19,7 @@ import logging
 import os
 import time
 import urllib.request
+from urllib.parse import urlsplit
 from pathlib import Path
 
 from .bounded_io import read_capped_with_deadline, read_file_capped
@@ -628,7 +629,9 @@ def post_webhook(url: str, payload: dict, timeout: float = _TIMEOUT_S) -> None:
         # Drain the body under a byte cap and the same deadline: an
         # unbounded read here would let a slow-drip receiver stall the
         # watcher past the timeout.
-        read_capped_with_deadline(resp, _MAX_RESPONSE_BYTES, url, timeout)
+        read_capped_with_deadline(
+            resp, _MAX_RESPONSE_BYTES,
+            urlsplit(url).netloc or "webhook response", timeout)
 
 
 def notify_url(config: dict | None = None) -> str:
@@ -711,7 +714,9 @@ def post_feed(url: str, payload: dict, key_b64: str, key_id: str,
     ))
     req = urllib.request.Request(url, data=body, headers=headers, method="POST")
     with urllib.request.urlopen(req, timeout=timeout) as resp:
-        read_capped_with_deadline(resp, _MAX_RESPONSE_BYTES, url, timeout)
+        read_capped_with_deadline(
+            resp, _MAX_RESPONSE_BYTES,
+            urlsplit(url).netloc or "feed response", timeout)
 
 
 def _deliver_sinks(
@@ -733,7 +738,7 @@ def _deliver_sinks(
             ntfy_ok = True
         except Exception as exc:  # noqa: BLE001 - a notification never kills the loop
             ntfy_ok = False
-            log.warning("alert webhook failed: %s", exc)
+            log.warning("alert webhook failed: %s", type(exc).__name__)
     if feed is None:
         feed = feed_url()
     if not key:
@@ -749,7 +754,7 @@ def _deliver_sinks(
             feed_ok = True
         except Exception as exc:  # noqa: BLE001
             feed_ok = False
-            log.warning("feed webhook failed: %s", exc)
+            log.warning("feed webhook failed: %s", type(exc).__name__)
     return ntfy_ok, feed_ok, ntfy_configured, feed_configured
 
 

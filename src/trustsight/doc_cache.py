@@ -17,6 +17,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import tempfile
 from pathlib import Path
 
 from .bounded_io import ReadTooLarge, read_file_capped
@@ -62,6 +63,8 @@ def _load(path: Path, loader):
     is exactly the malformed entry the cache must not turn into a crash.
     """
     try:
+        if path.is_symlink():
+            return None
         raw = read_file_capped(
             path, MAX_DOC_CACHE_BYTES, "document cache entry")
         return loader(json.loads(raw.decode("utf-8")))
@@ -87,11 +90,19 @@ def _store(path: Path, payload: dict) -> None:
             if len(encoded) + len(chunk) > MAX_DOC_CACHE_BYTES:
                 return
             encoded.extend(chunk.encode("utf-8"))
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_name(path.name + ".tmp")
-        with open(tmp, "wb") as handle:
-            handle.write(encoded)
-        os.replace(tmp, path)
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        os.chmod(path.parent, 0o700)
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=path.name + ".", suffix=".tmp", dir=str(path.parent))
+        tmp = Path(tmp_name)
+        try:
+            os.chmod(tmp, 0o600)
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(encoded)
+            os.replace(tmp, path)
+            os.chmod(path, 0o600)
+        finally:
+            tmp.unlink(missing_ok=True)
     except OSError:
         pass
 

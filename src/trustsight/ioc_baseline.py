@@ -14,6 +14,7 @@ expired rows untouched.
 
 from __future__ import annotations
 
+import io
 import json
 import logging
 import re
@@ -51,6 +52,11 @@ MAX_BASELINE_BYTES = 256 * 1024 * 1024
 #: JSONL is millions of `IocEntry` instances, and a curated indicator set is
 #: thousands.
 MAX_BASELINE_ENTRIES = 100_000
+#: Lines read before the parser gives up.  The entry cap alone let a file of
+#: blank lines allocate hundreds of millions of strings before any row counted.
+MAX_BASELINE_LINES = 1_000_000
+MAX_IOC_LINE_BYTES = 64 * 1024
+MAX_IOC_FIELD_CHARS = 4_096
 
 #: The indicator types, re-exported from the single source of truth so the
 #: federation layer and the legacy H056 list cannot drift apart.
@@ -144,7 +150,7 @@ def _is_hex_digest(value: str) -> bool:
 def _normalize_value(type_: str, value: str) -> str | None:
     """Return the canonical form of *value* for *type_*, or None."""
     value = str(value).strip().strip("'\"")
-    if not value:
+    if not value or len(value) > MAX_IOC_FIELD_CHARS:
         return None
     if type_ == "hash":
         lowered = value.lower()
@@ -266,13 +272,19 @@ def _load_iocs(path: Path) -> list[IocEntry]:
         raise MalformedBaselineError("iocs.jsonl is not valid UTF-8") from exc
     entries: list[IocEntry] = []
     seen: set[tuple[str, str, str]] = set()
-    for lineno, line in enumerate(text.splitlines(), start=1):
+    for lineno, line in enumerate(io.StringIO(text), start=1):
+        if lineno > MAX_BASELINE_LINES:
+            raise MalformedBaselineError(
+                f"iocs.jsonl exceeds {MAX_BASELINE_LINES} lines")
         if len(entries) >= MAX_BASELINE_ENTRIES:
             log.warning(
                 "iocs.jsonl: stopping at %d entries; the rest were not read",
                 MAX_BASELINE_ENTRIES,
             )
             break
+        if len(line) > MAX_IOC_LINE_BYTES:
+            raise MalformedBaselineError(
+                f"iocs.jsonl line {lineno} exceeds the line cap")
         line = line.strip()
         if not line:
             continue
@@ -295,7 +307,7 @@ def _load_iocs(path: Path) -> list[IocEntry]:
                 lineno, row.get("value"), type_,
             )
             continue
-        source = str(row.get("source", "")).strip()
+        source = str(row.get("source", ""))[:MAX_IOC_FIELD_CHARS].strip()
         if not source:
             log.warning("iocs.jsonl line %d: missing source; skipping", lineno)
             continue
@@ -313,10 +325,10 @@ def _load_iocs(path: Path) -> list[IocEntry]:
                 value=value,
                 source=source,
                 confidence=str(row.get("confidence", "")).strip().lower(),
-                provenance=str(row.get("provenance", "")),
-                campaign=str(row.get("campaign", "")),
-                added=str(row.get("added", "")),
-                expires_at=str(row.get("expires_at", "")),
+                provenance=str(row.get("provenance", ""))[:MAX_IOC_FIELD_CHARS],
+                campaign=str(row.get("campaign", ""))[:MAX_IOC_FIELD_CHARS],
+                added=str(row.get("added", ""))[:MAX_IOC_FIELD_CHARS],
+                expires_at=str(row.get("expires_at", ""))[:MAX_IOC_FIELD_CHARS],
                 shape=str(row.get("shape", "")).strip().lower(),
             )
         )

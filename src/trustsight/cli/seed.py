@@ -19,6 +19,7 @@ from ..db import (
     init_db,
     seed_observation_count,
 )
+from ..safe_text import clean
 from .display import (
     _print_colored,
     console,
@@ -78,23 +79,24 @@ def seed_info(
         table.add_column("Key", style="cyan")
         table.add_column("Value", overflow="fold")
         table.add_row("Seeded", "Yes" if data["seeded"] else "No")
-        table.add_row("Salt", salt or "-")
-        table.add_row("Hash algorithm", algorithm or "-")
+        from rich.text import Text
+        table.add_row("Salt", Text(clean(salt or "-")))
+        table.add_row("Hash algorithm", Text(clean(algorithm or "-")))
         table.add_row("Hashed maintainers", f"{maint_count:,}")
         table.add_row("Seed observations", f"{data['seed_observations']:,}")
-        table.add_row("Seed version", data["seed_version"] or "-")
-        table.add_row("Seed hash", data["seed_hash"] or "-")
-        table.add_row("Seed origin", data["seed_origin"] or "-")
+        table.add_row("Seed version", Text(clean(data["seed_version"] or "-")))
+        table.add_row("Seed hash", Text(clean(data["seed_hash"] or "-")))
+        table.add_row("Seed origin", Text(clean(data["seed_origin"] or "-")))
         console().print(table)
     else:
         print(f"Seeded             : {'Yes' if data['seeded'] else 'No'}")
-        print(f"Salt               : {salt or '-'}")
-        print(f"Hash algorithm     : {algorithm or '-'}")
+        print(f"Salt               : {clean(salt or '-')}")
+        print(f"Hash algorithm     : {clean(algorithm or '-')}")
         print(f"Hashed maintainers : {maint_count}")
         print(f"Seed observations  : {data['seed_observations']}")
-        print(f"Seed version       : {data['seed_version'] or '-'}")
-        print(f"Seed hash          : {data['seed_hash'] or '-'}")
-        print(f"Seed origin        : {data['seed_origin'] or '-'}")
+        print(f"Seed version       : {clean(data['seed_version'] or '-')}")
+        print(f"Seed hash          : {clean(data['seed_hash'] or '-')}")
+        print(f"Seed origin        : {clean(data['seed_origin'] or '-')}")
 
 
 @seed_app.command("fetch")
@@ -229,14 +231,15 @@ def seed_stats(
             src_table.add_column("Source", style="dim")
             src_table.add_column("Count", justify="right")
             for r in sources:
-                src_table.add_row(r["source"] or "(none)", f"{r['n']:,}")
+                from rich.text import Text
+                src_table.add_row(Text(clean(r["source"] or "(none)")), f"{r['n']:,}")
             console().print(src_table)
     else:
         print(f"Total maintainers   : {total}")
         print(f"With email hash     : {with_email}")
         print(f"Total package count : {int(total_packages)}")
         for r in sources:
-            print(f"  {r['source'] or '(none)'}: {r['n']}")
+            print(f"  {clean(r['source'] or '(none)')}: {r['n']}")
 
 
 @seed_app.command("migrate")

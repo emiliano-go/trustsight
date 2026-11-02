@@ -120,6 +120,10 @@ SERIES_LAYER: dict[str, Layer] = {
 #: unrelated rules; they are structural-coherence violations and are pinned to
 #: L1 here so the profile does not read them as generic L5 suspicion.
 RULE_LAYER_OVERRIDES: dict[str, Layer] = {
+    # T004/T005 are filed under T but the evidence is parsed diff structure,
+    # not ecosystem memory, so they catch at L1.
+    "T004": Layer.L1,
+    "T005": Layer.L1,
     "X026": Layer.L2,
     "X027": Layer.L2,
     "H099": Layer.L1,   # source host swapped under a kept local name

@@ -69,8 +69,8 @@
       {
         "count": 2,
         "members": [
-          "yyay",
-          "parru"
+          "parru",
+          "yyay"
         ],
         "rule_id": "G005"
       }
@@ -79,6 +79,7 @@
       "added": 3,
       "changed": 41,
       "processed": 44,
+      "refractory": [],
       "removed": 2
     },
     "event": "trustsight.alerts",
@@ -242,8 +243,8 @@
         {
           "count": 2,
           "members": [
-            "yyay",
-            "parru"
+            "parru",
+            "yyay"
           ],
           "rule_id": "G005"
         }
@@ -252,6 +253,7 @@
         "added": 3,
         "changed": 41,
         "processed": 44,
+        "refractory": [],
         "removed": 2
       },
       "event": "trustsight.alerts",
@@ -345,13 +347,17 @@
     "P007",
     "P008",
     "P009",
-    "SOURCE_BUCKET"
+    "SOURCE_BUCKET",
+    "TAG_CONVERGENCE"
   ],
   "report_body": {
     "acknowledged_urls": [],
     "boundaries": [],
     "cached": false,
     "cached_at": "",
+    "campaign_hold": false,
+    "campaign_id": "",
+    "campaign_state": "unavailable",
     "change": {},
     "changes": [],
     "cofire_health": [],
@@ -413,7 +419,10 @@
     "scan_truncated": false,
     "score": 45,
     "score_breakdown": [],
+    "self_state": {},
     "suppressed_rules": [],
+    "tag_panel": [],
+    "tender_point": {},
     "unresolved_assignments": [],
     "verdict": "Version bump. modified PKGBUILD. Review the diff before building.",
     "version_comparison": ""
@@ -459,6 +468,8 @@
     "C030",
     "C031",
     "C032",
+    "C033",
+    "C034",
     "D001",
     "D002",
     "D003",
@@ -643,6 +654,8 @@
     "T001",
     "T002",
     "T003",
+    "T004",
+    "T005",
     "T006",
     "T007",
     "U001",
@@ -669,6 +682,7 @@
     "W010",
     "W011",
     "W012",
+    "W013",
     "X001",
     "X002",
     "X003",
@@ -712,5 +726,5 @@
     "LOW",
     "MEDIUM"
   ],
-  "version": 1
+  "version": 2
 }

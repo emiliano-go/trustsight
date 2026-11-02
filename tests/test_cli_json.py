@@ -82,6 +82,8 @@ CASES = [
     ("seed fetch", ["seed", "fetch"]),
     ("seed stats", ["seed", "stats"]),
     ("seed migrate", ["seed", "migrate"]),
+    ("admin anergic", ["admin", "anergic"]),
+    ("verdict", ["verdict", "demo", "--verdict", "cleared"]),
 ]
 
 

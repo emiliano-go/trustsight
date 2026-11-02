@@ -79,7 +79,7 @@ def test_a_padded_companion_cannot_starve_the_ones_after_it():
 
 
 def test_a_cut_companion_becomes_a_coverage_gap():
-    from trustsight.coverage import COMPANION_TRUNCATED, gaps_from
+    from trustsight.coverage import COMPANION_TRUNCATED, CoverageSignals, gaps_from
 
-    assert COMPANION_TRUNCATED in gaps_from(companion_truncated=True)
-    assert COMPANION_TRUNCATED not in gaps_from(companion_truncated=False)
+    assert COMPANION_TRUNCATED in gaps_from(CoverageSignals(companion_truncated=True))
+    assert COMPANION_TRUNCATED not in gaps_from(CoverageSignals(companion_truncated=False))

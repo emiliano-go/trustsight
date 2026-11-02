@@ -142,7 +142,7 @@ Score changes: the demoted/disabled rule contributes less. Verify that the packa
 
 ## Step 5: Validate with benchmarks
 
-TrustSight's current test suite has a zero-rate of **74.8%** (benign packages scoring 0). After tuning, re-run:
+TrustSight's current test suite has a zero-rate of **74.5%** (benign packages scoring 0). After tuning, re-run:
 
 ```bash
 uv run --extra dev pytest tests/
@@ -220,7 +220,7 @@ add it to `source=()` with a checksum, not to silence H016.
 ## When not to tune
 
 - **First-seen novelty scores** (5-15) are not false positives. They are honest uncertainty that resolves as the database-wide maturity gate accumulates observations.
-- **C-series rules** (C001-C032) are structural invariants. They cannot be disabled through config. If they fire, they are detecting a real property of the PKGBUILD: investigate before suppressing.
+- **C-series rules** (C001-C034) are structural invariants. They cannot be disabled through config. If they fire, they are detecting a real property of the PKGBUILD: investigate before suppressing.
 - **INCONCLUSIVE** verdicts from a cold database are not rule false positives. Let the maturity gate accumulate 50 observations before judging.
 
 ## See also

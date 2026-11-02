@@ -3,6 +3,7 @@
 from __future__ import annotations
 import logging
 import re
+from ...config import SHELL_EXECUTOR
 from ...deps import _strip_comment
 from ...shell_words import (
     _ACCOUNT_OPTION_RE,
@@ -53,7 +54,8 @@ def _executes(function: str | None) -> bool:
     """
     return function is not None
 
-_SHELL_CMD = r"(?:ba|z|da|k|mk|pdk|ya|po|a)?sh|busybox\s+(?:ash|sh)"
+# One definition: config owns the executor alternation every rule reads.
+_SHELL_CMD = SHELL_EXECUTOR
 
 _SHELL_NAME = _SHELL_CMD + r"|python3?|perl|ruby|node"
 

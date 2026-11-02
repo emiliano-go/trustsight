@@ -801,6 +801,9 @@ class CycleResult:
     # Per-package alert context: score, version transition, LastModified,
     # firing rules - what a webhook document is built from.
     detail: dict[str, dict] = field(default_factory=dict)
+    # Refractory audit: one row per (rule, campaign) this cycle saw, naming
+    # the window and whether the alert was emitted or debounced.
+    refractory: list[dict] = field(default_factory=list)
     elapsed: float = 0.0
     bootstrap: bool = False
     # True when the cycle deliberately did no work and the caller should

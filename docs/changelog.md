@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+### Added
+
+- **T004/T005 start the missing-self axis.** T004 reports a partial `validpgpkeys` removal with no replacement; T005 reports a same-host TLS downgrade whose path also changed (the gap H019's exact match misses). Both are MEDIUM after the locked benign corpus adjudicated them; their measured rates are below.
+- **C033/C034 report reviewability damage.** C033 reports a diff that deletes a large fraction of the recipe's comment prose; C034 reports committed `.SRCINFO`/PKGBUILD version drift at INFO, feed-tier. C033 is MEDIUM after calibration; C034 is INFO by design. On the locked 8,393-diff benign corpus, T004 and T005 each fire on two diffs and C033 on 64 (0.02%, 0.02%, 0.76%); C034 fires on none. All are below the 30% fire-rate cap, so T004, T005 and C033 are promoted to MEDIUM (weight 15); C034 remains INFO.
+- **Anergy is a standing state.** `trustsight.anergy` forces listed rules to weight 0 whatever severity they declare, `trustsight admin anergic` lists them, the coverage ledger carries an `anergic` section, and two process gates refuse a silent promotion.
+- **Campaign context is visible.** W013 promotes standing boundary notes for packages inside an active campaign perimeter, and `campaign_hold`/`campaign_state` carry the advisory into the report.
+- **The report states its own state.** A deterministic `self_state` block names cold/warm mode, observation counts, channel tags and observation ages, federation/contact availability, campaign state and a sorted blind list.
+- **Weight-0 tags have one home.** The `tag_panel` groups contacts, first-seen events, entropy bumps, annotations and techniques; `TAG_CONVERGENCE` is the bounded INFO escalation.
+- **Campaign alerts debounce per window.** One alert per `(rule, campaign-cell)` per campaign TTL, with the refractory state in the cycle audit; shared campaign members are rendered once, sorted and de-duplicated.
+- **Tender points record review verdicts.** `trustsight verdict` stores a human disposition, and the report header counts unresolved verdicts over the configured window without claiming damage.
+- **The immune-inspired design is documented**, including the rejected runtime gain-control mechanism.
+
 ### Fixed
 
 - **One lexical command position, and the detection fixes behind it.** Every rule family now reads `shell_words` for command position, so wrappers, grouping, reserved words and `case` arms agree instead of drifting apart. X002 treats a file-writing launcher heredoc as packaged content even when the diff interleaves an older heredoc around it (tape16-bin), and C007 only matches architecture-keyed `source_<arch>=(...)` arrays, not a `source_version` scalar (pivra). Each correction keeps its malicious positive control.

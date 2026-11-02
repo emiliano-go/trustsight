@@ -1,11 +1,40 @@
 {
-  "catalog_size": 295,
+  "anergic": {
+    "C033": {
+      "changelog": "missing-self-axis",
+      "promoted_in": "Unreleased",
+      "promotion": "remove status or mark promoted after the calibration checkpoint; record the measured rate in the changelog",
+      "rule_id": "C033",
+      "signal": "locked benign corpus fire-rate < 0.30 after the deletion-ratio threshold is corpus-adjudicated, plus a malicious twin",
+      "since": "0.27.0",
+      "status": "promoted"
+    },
+    "T004": {
+      "changelog": "missing-self-axis",
+      "promoted_in": "Unreleased",
+      "promotion": "remove status or mark promoted after the calibration checkpoint; record the measured rate in the changelog",
+      "rule_id": "T004",
+      "signal": "locked benign corpus fire-rate < 0.30 plus a malicious partial-key-removal twin",
+      "since": "0.27.0",
+      "status": "promoted"
+    },
+    "T005": {
+      "changelog": "missing-self-axis",
+      "promoted_in": "Unreleased",
+      "promotion": "remove status or mark promoted after the calibration checkpoint; record the measured rate in the changelog",
+      "rule_id": "T005",
+      "signal": "locked benign corpus fire-rate < 0.30 plus a malicious same-host path-changed downgrade twin",
+      "since": "0.27.0",
+      "status": "promoted"
+    }
+  },
+  "catalog_size": 301,
   "corpus_content_sha256": "a4cbea4ef14029c97d7746e2be080a2e5c931502429ee261d974810b35f5cafc",
   "counts": {
     "adversarial_only": 18,
-    "cold_only": 41,
-    "measured": 162,
-    "zero_fire": 71
+    "cold_only": 42,
+    "measured": 166,
+    "zero_fire": 75
   },
   "rules": {
     "A001": {
@@ -153,40 +182,26 @@
     },
     "C001": {
       "expected_strata": [],
-      "fires": 22,
+      "fires": 16,
       "id": "C001",
       "pseudo": false,
       "reason": "",
       "series": "C",
       "sources": {
         "cold": {
-          "fires": 12,
+          "fires": 16,
           "strata": [
             "appimage_repack",
             "autotools",
             "bin_repack",
             "data_fonts",
             "dkms_kernel",
-            "lang_deep",
+            "maintainer_churn",
             "multi_client_fetch",
             "persist_surface",
             "signed_sources",
-            "source_patched"
-          ]
-        },
-        "warm": {
-          "fires": 10,
-          "strata": [
-            "appimage_repack",
-            "autotools",
-            "bin_repack",
-            "data_fonts",
-            "dkms_kernel",
-            "lang_deep",
-            "multi_client_fetch",
-            "persist_surface",
-            "signed_sources",
-            "source_patched"
+            "source_patched",
+            "vcs_git"
           ]
         }
       },
@@ -197,45 +212,25 @@
         "bin_repack",
         "data_fonts",
         "dkms_kernel",
-        "lang_deep",
+        "maintainer_churn",
         "multi_client_fetch",
         "persist_surface",
         "signed_sources",
-        "source_patched"
+        "source_patched",
+        "vcs_git"
       ],
       "uid": "TS-0009"
     },
     "C002": {
       "expected_strata": [],
-      "fires": 500,
+      "fires": 616,
       "id": "C002",
       "pseudo": false,
       "reason": "",
       "series": "C",
       "sources": {
         "cold": {
-          "fires": 484,
-          "strata": [
-            "appimage_repack",
-            "autotools",
-            "bin_repack",
-            "data_fonts",
-            "dependency_heavy",
-            "dkms_kernel",
-            "lang_deep",
-            "lang_ecosystem",
-            "large_electron",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "signed_sources",
-            "source_patched",
-            "vcs_git",
-            "vcs_other"
-          ]
-        },
-        "warm": {
-          "fires": 16,
+          "fires": 616,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -279,14 +274,14 @@
     },
     "C003": {
       "expected_strata": [],
-      "fires": 164,
+      "fires": 116,
       "id": "C003",
       "pseudo": false,
       "reason": "",
       "series": "C",
       "sources": {
         "cold": {
-          "fires": 142,
+          "fires": 107,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -307,29 +302,8 @@
           ]
         },
         "malicious": {
-          "fires": 6,
+          "fires": 9,
           "strata": []
-        },
-        "warm": {
-          "fires": 16,
-          "strata": [
-            "appimage_repack",
-            "autotools",
-            "bin_repack",
-            "data_fonts",
-            "dependency_heavy",
-            "dkms_kernel",
-            "lang_deep",
-            "lang_ecosystem",
-            "large_electron",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "signed_sources",
-            "source_patched",
-            "vcs_git",
-            "vcs_other"
-          ]
         }
       },
       "state": "measured",
@@ -355,97 +329,52 @@
     },
     "C004": {
       "expected_strata": [],
-      "fires": 46,
+      "fires": 4,
       "id": "C004",
       "pseudo": false,
       "reason": "",
       "series": "C",
       "sources": {
         "cold": {
-          "fires": 34,
+          "fires": 4,
           "strata": [
-            "appimage_repack",
-            "bin_repack",
-            "data_fonts",
-            "dkms_kernel",
-            "lang_deep",
             "lang_ecosystem",
             "large_electron",
-            "maintainer_churn",
             "persist_surface",
-            "source_patched",
-            "vcs_git",
-            "vcs_other"
-          ]
-        },
-        "warm": {
-          "fires": 12,
-          "strata": [
-            "appimage_repack",
-            "bin_repack",
-            "data_fonts",
-            "dkms_kernel",
-            "lang_deep",
-            "lang_ecosystem",
-            "large_electron",
-            "maintainer_churn",
-            "persist_surface",
-            "source_patched",
-            "vcs_git",
-            "vcs_other"
+            "vcs_git"
           ]
         }
       },
       "state": "measured",
       "strata": [
-        "appimage_repack",
-        "bin_repack",
-        "data_fonts",
-        "dkms_kernel",
-        "lang_deep",
         "lang_ecosystem",
         "large_electron",
-        "maintainer_churn",
         "persist_surface",
-        "source_patched",
-        "vcs_git",
-        "vcs_other"
+        "vcs_git"
       ],
       "uid": "TS-0012"
     },
     "C005": {
       "expected_strata": [],
-      "fires": 197,
+      "fires": 184,
       "id": "C005",
       "pseudo": false,
       "reason": "",
       "series": "C",
       "sources": {
         "cold": {
-          "fires": 190,
+          "fires": 183,
           "strata": [
             "appimage_repack",
             "data_fonts",
             "dependency_heavy",
             "large_electron",
-            "persist_surface",
-            "vcs_git"
+            "persist_surface"
           ]
         },
         "malicious": {
           "fires": 1,
           "strata": []
-        },
-        "warm": {
-          "fires": 6,
-          "strata": [
-            "appimage_repack",
-            "data_fonts",
-            "dependency_heavy",
-            "large_electron",
-            "persist_surface",
-            "vcs_git"
-          ]
         }
       },
       "state": "measured",
@@ -454,8 +383,7 @@
         "data_fonts",
         "dependency_heavy",
         "large_electron",
-        "persist_surface",
-        "vcs_git"
+        "persist_surface"
       ],
       "uid": "TS-0013"
     },
@@ -475,31 +403,22 @@
     },
     "C007": {
       "expected_strata": [],
-      "fires": 5,
+      "fires": 1,
       "id": "C007",
       "pseudo": false,
       "reason": "",
       "series": "C",
       "sources": {
         "cold": {
-          "fires": 3,
+          "fires": 1,
           "strata": [
-            "persist_surface",
-            "vcs_git"
-          ]
-        },
-        "warm": {
-          "fires": 2,
-          "strata": [
-            "persist_surface",
-            "vcs_git"
+            "persist_surface"
           ]
         }
       },
       "state": "measured",
       "strata": [
-        "persist_surface",
-        "vcs_git"
+        "persist_surface"
       ],
       "uid": "TS-0015"
     },
@@ -541,38 +460,26 @@
     },
     "C011": {
       "expected_strata": [],
-      "fires": 21,
+      "fires": 16,
       "id": "C011",
       "pseudo": false,
       "reason": "",
       "series": "C",
       "sources": {
         "cold": {
-          "fires": 17,
+          "fires": 15,
           "strata": [
-            "multi_client_fetch",
-            "persist_surface",
-            "source_patched"
+            "persist_surface"
           ]
         },
         "malicious": {
           "fires": 1,
           "strata": []
-        },
-        "warm": {
-          "fires": 3,
-          "strata": [
-            "multi_client_fetch",
-            "persist_surface",
-            "source_patched"
-          ]
         }
       },
       "state": "measured",
       "strata": [
-        "multi_client_fetch",
-        "persist_surface",
-        "source_patched"
+        "persist_surface"
       ],
       "uid": "TS-0019"
     },
@@ -595,17 +502,15 @@
     },
     "C013": {
       "expected_strata": [],
-      "fires": 45,
+      "fires": 36,
       "id": "C013",
       "pseudo": false,
       "reason": "",
       "series": "C",
       "sources": {
         "cold": {
-          "fires": 39,
+          "fires": 35,
           "strata": [
-            "dkms_kernel",
-            "multi_client_fetch",
             "signed_sources",
             "source_patched",
             "vcs_git"
@@ -614,22 +519,10 @@
         "malicious": {
           "fires": 1,
           "strata": []
-        },
-        "warm": {
-          "fires": 5,
-          "strata": [
-            "dkms_kernel",
-            "multi_client_fetch",
-            "signed_sources",
-            "source_patched",
-            "vcs_git"
-          ]
         }
       },
       "state": "measured",
       "strata": [
-        "dkms_kernel",
-        "multi_client_fetch",
         "signed_sources",
         "source_patched",
         "vcs_git"
@@ -638,35 +531,20 @@
     },
     "C014": {
       "expected_strata": [],
-      "fires": 28,
+      "fires": 11,
       "id": "C014",
       "pseudo": false,
       "reason": "",
       "series": "C",
       "sources": {
         "cold": {
-          "fires": 20,
+          "fires": 11,
           "strata": [
             "appimage_repack",
             "dependency_heavy",
             "dkms_kernel",
             "lang_deep",
-            "maintainer_churn",
             "signed_sources",
-            "source_patched",
-            "vcs_git"
-          ]
-        },
-        "warm": {
-          "fires": 8,
-          "strata": [
-            "appimage_repack",
-            "dependency_heavy",
-            "dkms_kernel",
-            "lang_deep",
-            "maintainer_churn",
-            "signed_sources",
-            "source_patched",
             "vcs_git"
           ]
         }
@@ -677,16 +555,14 @@
         "dependency_heavy",
         "dkms_kernel",
         "lang_deep",
-        "maintainer_churn",
         "signed_sources",
-        "source_patched",
         "vcs_git"
       ],
       "uid": "TS-0022"
     },
     "C015": {
       "expected_strata": [],
-      "fires": 24,
+      "fires": 20,
       "id": "C015",
       "pseudo": false,
       "reason": "",
@@ -694,15 +570,6 @@
       "sources": {
         "cold": {
           "fires": 20,
-          "strata": [
-            "data_fonts",
-            "dependency_heavy",
-            "dkms_kernel",
-            "multi_client_fetch"
-          ]
-        },
-        "warm": {
-          "fires": 4,
           "strata": [
             "data_fonts",
             "dependency_heavy",
@@ -749,7 +616,7 @@
     },
     "C018": {
       "expected_strata": [],
-      "fires": 34,
+      "fires": 25,
       "id": "C018",
       "pseudo": false,
       "reason": "",
@@ -757,20 +624,6 @@
       "sources": {
         "cold": {
           "fires": 25,
-          "strata": [
-            "appimage_repack",
-            "bin_repack",
-            "data_fonts",
-            "dependency_heavy",
-            "dkms_kernel",
-            "maintainer_churn",
-            "persist_surface",
-            "source_patched",
-            "vcs_git"
-          ]
-        },
-        "warm": {
-          "fires": 9,
           "strata": [
             "appimage_repack",
             "bin_repack",
@@ -800,7 +653,7 @@
     },
     "C019": {
       "expected_strata": [],
-      "fires": 41,
+      "fires": 30,
       "id": "C019",
       "pseudo": false,
       "reason": "",
@@ -808,22 +661,6 @@
       "sources": {
         "cold": {
           "fires": 30,
-          "strata": [
-            "autotools",
-            "bin_repack",
-            "dependency_heavy",
-            "dkms_kernel",
-            "lang_deep",
-            "maintainer_churn",
-            "persist_surface",
-            "signed_sources",
-            "source_patched",
-            "vcs_git",
-            "vcs_other"
-          ]
-        },
-        "warm": {
-          "fires": 11,
           "strata": [
             "autotools",
             "bin_repack",
@@ -857,41 +694,26 @@
     },
     "C020": {
       "expected_strata": [],
-      "fires": 2,
+      "fires": 0,
       "id": "C020",
       "pseudo": false,
-      "reason": "",
+      "reason": "no benign shape in the locked corpus yet; add a shape stratum, never a rule-targeted sample",
       "series": "C",
-      "sources": {
-        "cold": {
-          "fires": 1,
-          "strata": [
-            "signed_sources"
-          ]
-        },
-        "warm": {
-          "fires": 1,
-          "strata": [
-            "signed_sources"
-          ]
-        }
-      },
-      "state": "measured",
-      "strata": [
-        "signed_sources"
-      ],
+      "sources": {},
+      "state": "zero_fire",
+      "strata": [],
       "uid": "TS-0028"
     },
     "C021": {
       "expected_strata": [],
-      "fires": 76,
+      "fires": 51,
       "id": "C021",
       "pseudo": false,
       "reason": "",
       "series": "C",
       "sources": {
         "cold": {
-          "fires": 62,
+          "fires": 51,
           "strata": [
             "bin_repack",
             "data_fonts",
@@ -899,26 +721,6 @@
             "dkms_kernel",
             "lang_deep",
             "lang_ecosystem",
-            "large_electron",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "signed_sources",
-            "source_patched",
-            "vcs_git",
-            "vcs_other"
-          ]
-        },
-        "warm": {
-          "fires": 14,
-          "strata": [
-            "bin_repack",
-            "data_fonts",
-            "dependency_heavy",
-            "dkms_kernel",
-            "lang_deep",
-            "lang_ecosystem",
-            "large_electron",
             "maintainer_churn",
             "multi_client_fetch",
             "persist_surface",
@@ -937,7 +739,6 @@
         "dkms_kernel",
         "lang_deep",
         "lang_ecosystem",
-        "large_electron",
         "maintainer_churn",
         "multi_client_fetch",
         "persist_surface",
@@ -950,33 +751,14 @@
     },
     "C022": {
       "expected_strata": [],
-      "fires": 37,
+      "fires": 22,
       "id": "C022",
       "pseudo": false,
       "reason": "",
       "series": "C",
       "sources": {
         "cold": {
-          "fires": 23,
-          "strata": [
-            "appimage_repack",
-            "autotools",
-            "bin_repack",
-            "data_fonts",
-            "dependency_heavy",
-            "dkms_kernel",
-            "lang_deep",
-            "lang_ecosystem",
-            "large_electron",
-            "maintainer_churn",
-            "persist_surface",
-            "signed_sources",
-            "source_patched",
-            "vcs_git"
-          ]
-        },
-        "warm": {
-          "fires": 14,
+          "fires": 22,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -1028,7 +810,7 @@
     },
     "C024": {
       "expected_strata": [],
-      "fires": 40,
+      "fires": 30,
       "id": "C024",
       "pseudo": false,
       "reason": "",
@@ -1052,21 +834,6 @@
         "malicious": {
           "fires": 3,
           "strata": []
-        },
-        "warm": {
-          "fires": 10,
-          "strata": [
-            "autotools",
-            "bin_repack",
-            "data_fonts",
-            "dependency_heavy",
-            "dkms_kernel",
-            "maintainer_churn",
-            "persist_surface",
-            "signed_sources",
-            "source_patched",
-            "vcs_git"
-          ]
         }
       },
       "state": "measured",
@@ -1086,14 +853,14 @@
     },
     "C025": {
       "expected_strata": [],
-      "fires": 70,
+      "fires": 58,
       "id": "C025",
       "pseudo": false,
       "reason": "",
       "series": "C",
       "sources": {
         "cold": {
-          "fires": 54,
+          "fires": 56,
           "strata": [
             "appimage_repack",
             "bin_repack",
@@ -1114,25 +881,6 @@
         "malicious": {
           "fires": 2,
           "strata": []
-        },
-        "warm": {
-          "fires": 14,
-          "strata": [
-            "appimage_repack",
-            "bin_repack",
-            "dependency_heavy",
-            "dkms_kernel",
-            "lang_deep",
-            "lang_ecosystem",
-            "large_electron",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "signed_sources",
-            "source_patched",
-            "vcs_git",
-            "vcs_other"
-          ]
         }
       },
       "state": "measured",
@@ -1156,7 +904,7 @@
     },
     "C026": {
       "expected_strata": [],
-      "fires": 9,
+      "fires": 6,
       "id": "C026",
       "pseudo": false,
       "reason": "",
@@ -1164,14 +912,6 @@
       "sources": {
         "cold": {
           "fires": 6,
-          "strata": [
-            "bin_repack",
-            "lang_deep",
-            "large_electron"
-          ]
-        },
-        "warm": {
-          "fires": 3,
           "strata": [
             "bin_repack",
             "lang_deep",
@@ -1201,7 +941,7 @@
     },
     "C028": {
       "expected_strata": [],
-      "fires": 54,
+      "fires": 46,
       "id": "C028",
       "pseudo": false,
       "reason": "",
@@ -1223,19 +963,6 @@
         "malicious": {
           "fires": 2,
           "strata": []
-        },
-        "warm": {
-          "fires": 8,
-          "strata": [
-            "appimage_repack",
-            "lang_deep",
-            "lang_ecosystem",
-            "large_electron",
-            "multi_client_fetch",
-            "persist_surface",
-            "source_patched",
-            "vcs_git"
-          ]
         }
       },
       "state": "measured",
@@ -1255,25 +982,14 @@
       "expected_strata": [
         "persist_surface"
       ],
-      "fires": 15,
+      "fires": 10,
       "id": "C029",
       "pseudo": false,
       "reason": "",
       "series": "C",
       "sources": {
         "cold": {
-          "fires": 9,
-          "strata": [
-            "autotools",
-            "dependency_heavy",
-            "dkms_kernel",
-            "persist_surface",
-            "source_patched",
-            "vcs_git"
-          ]
-        },
-        "warm": {
-          "fires": 6,
+          "fires": 10,
           "strata": [
             "autotools",
             "dependency_heavy",
@@ -1297,20 +1013,13 @@
     },
     "C030": {
       "expected_strata": [],
-      "fires": 4,
+      "fires": 2,
       "id": "C030",
       "pseudo": false,
       "reason": "",
       "series": "C",
       "sources": {
         "cold": {
-          "fires": 2,
-          "strata": [
-            "dkms_kernel",
-            "lang_ecosystem"
-          ]
-        },
-        "warm": {
           "fires": 2,
           "strata": [
             "dkms_kernel",
@@ -1356,9 +1065,72 @@
       "strata": [],
       "uid": "TS-0040"
     },
+    "C033": {
+      "expected_strata": [
+        "source_patched"
+      ],
+      "fires": 64,
+      "id": "C033",
+      "pseudo": false,
+      "reason": "",
+      "series": "C",
+      "sources": {
+        "cold": {
+          "fires": 63,
+          "strata": [
+            "bin_repack",
+            "data_fonts",
+            "dependency_heavy",
+            "dkms_kernel",
+            "lang_deep",
+            "large_electron",
+            "maintainer_churn",
+            "multi_client_fetch",
+            "persist_surface",
+            "source_patched",
+            "vcs_git",
+            "vcs_other"
+          ]
+        },
+        "malicious": {
+          "fires": 1,
+          "strata": []
+        }
+      },
+      "state": "measured",
+      "strata": [
+        "bin_repack",
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "large_electron",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "uid": "TS-0285"
+    },
+    "C034": {
+      "expected_strata": [
+        "maintainer_churn"
+      ],
+      "fires": 0,
+      "id": "C034",
+      "pseudo": false,
+      "reason": "no benign shape in the locked corpus; expected from maintainer_churn",
+      "series": "C",
+      "sources": {},
+      "state": "zero_fire",
+      "strata": [],
+      "uid": "TS-0286"
+    },
     "COVERAGE": {
       "expected_strata": [],
-      "fires": 8618,
+      "fires": 8608,
       "id": "COVERAGE",
       "pseudo": true,
       "reason": "",
@@ -1386,34 +1158,13 @@
           ]
         },
         "malicious": {
-          "fires": 206,
+          "fires": 212,
           "strata": []
         },
         "manifest": {
           "fires": 3,
           "strata": [
             "signed_sources"
-          ]
-        },
-        "warm": {
-          "fires": 16,
-          "strata": [
-            "appimage_repack",
-            "autotools",
-            "bin_repack",
-            "data_fonts",
-            "dependency_heavy",
-            "dkms_kernel",
-            "lang_deep",
-            "lang_ecosystem",
-            "large_electron",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "signed_sources",
-            "source_patched",
-            "vcs_git",
-            "vcs_other"
           ]
         }
       },
@@ -1470,27 +1221,24 @@
     },
     "D003": {
       "expected_strata": [],
-      "fires": 84,
+      "fires": 43,
       "id": "D003",
       "pseudo": false,
       "reason": "",
       "series": "D",
       "sources": {
         "cold": {
-          "fires": 65,
+          "fires": 39,
           "strata": [
             "appimage_repack",
             "autotools",
             "data_fonts",
             "dependency_heavy",
-            "dkms_kernel",
             "lang_deep",
             "lang_ecosystem",
             "large_electron",
-            "maintainer_churn",
             "multi_client_fetch",
             "persist_surface",
-            "signed_sources",
             "source_patched",
             "vcs_git",
             "vcs_other"
@@ -1499,26 +1247,6 @@
         "malicious": {
           "fires": 4,
           "strata": []
-        },
-        "warm": {
-          "fires": 15,
-          "strata": [
-            "appimage_repack",
-            "autotools",
-            "data_fonts",
-            "dependency_heavy",
-            "dkms_kernel",
-            "lang_deep",
-            "lang_ecosystem",
-            "large_electron",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "signed_sources",
-            "source_patched",
-            "vcs_git",
-            "vcs_other"
-          ]
         }
       },
       "state": "measured",
@@ -1527,14 +1255,11 @@
         "autotools",
         "data_fonts",
         "dependency_heavy",
-        "dkms_kernel",
         "lang_deep",
         "lang_ecosystem",
         "large_electron",
-        "maintainer_churn",
         "multi_client_fetch",
         "persist_surface",
-        "signed_sources",
         "source_patched",
         "vcs_git",
         "vcs_other"
@@ -1779,14 +1504,14 @@
         "vcs_git",
         "vcs_other"
       ],
-      "fires": 192,
+      "fires": 93,
       "id": "H001",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 169,
+          "fires": 82,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -1795,6 +1520,7 @@
             "dkms_kernel",
             "lang_deep",
             "lang_ecosystem",
+            "large_electron",
             "maintainer_churn",
             "multi_client_fetch",
             "persist_surface",
@@ -1805,27 +1531,8 @@
           ]
         },
         "malicious": {
-          "fires": 9,
+          "fires": 11,
           "strata": []
-        },
-        "warm": {
-          "fires": 14,
-          "strata": [
-            "appimage_repack",
-            "autotools",
-            "data_fonts",
-            "dependency_heavy",
-            "dkms_kernel",
-            "lang_deep",
-            "lang_ecosystem",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "signed_sources",
-            "source_patched",
-            "vcs_git",
-            "vcs_other"
-          ]
         }
       },
       "state": "measured",
@@ -1837,6 +1544,7 @@
         "dkms_kernel",
         "lang_deep",
         "lang_ecosystem",
+        "large_electron",
         "maintainer_churn",
         "multi_client_fetch",
         "persist_surface",
@@ -1854,7 +1562,7 @@
         "vcs_git",
         "vcs_other"
       ],
-      "fires": 6,
+      "fires": 4,
       "id": "H002",
       "pseudo": false,
       "reason": "",
@@ -1870,13 +1578,6 @@
         "malicious": {
           "fires": 2,
           "strata": []
-        },
-        "warm": {
-          "fires": 2,
-          "strata": [
-            "dependency_heavy",
-            "vcs_git"
-          ]
         }
       },
       "state": "measured",
@@ -1888,22 +1589,19 @@
     },
     "H003": {
       "expected_strata": [],
-      "fires": 59,
+      "fires": 28,
       "id": "H003",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 46,
+          "fires": 26,
           "strata": [
-            "appimage_repack",
-            "autotools",
             "data_fonts",
             "dkms_kernel",
             "lang_ecosystem",
             "maintainer_churn",
-            "multi_client_fetch",
             "persist_surface",
             "signed_sources",
             "source_patched",
@@ -1912,36 +1610,16 @@
           ]
         },
         "malicious": {
-          "fires": 1,
+          "fires": 2,
           "strata": []
-        },
-        "warm": {
-          "fires": 12,
-          "strata": [
-            "appimage_repack",
-            "autotools",
-            "data_fonts",
-            "dkms_kernel",
-            "lang_ecosystem",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "signed_sources",
-            "source_patched",
-            "vcs_git",
-            "vcs_other"
-          ]
         }
       },
       "state": "measured",
       "strata": [
-        "appimage_repack",
-        "autotools",
         "data_fonts",
         "dkms_kernel",
         "lang_ecosystem",
         "maintainer_churn",
-        "multi_client_fetch",
         "persist_surface",
         "signed_sources",
         "source_patched",
@@ -1952,7 +1630,7 @@
     },
     "H004": {
       "expected_strata": [],
-      "fires": 4,
+      "fires": 3,
       "id": "H004",
       "pseudo": false,
       "reason": "",
@@ -1967,12 +1645,6 @@
         "malicious": {
           "fires": 2,
           "strata": []
-        },
-        "warm": {
-          "fires": 1,
-          "strata": [
-            "vcs_git"
-          ]
         }
       },
       "state": "measured",
@@ -2108,14 +1780,14 @@
         "autotools",
         "source_patched"
       ],
-      "fires": 1849,
+      "fires": 1832,
       "id": "H015",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 1787,
+          "fires": 1784,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -2136,29 +1808,8 @@
           ]
         },
         "malicious": {
-          "fires": 46,
+          "fires": 48,
           "strata": []
-        },
-        "warm": {
-          "fires": 16,
-          "strata": [
-            "appimage_repack",
-            "autotools",
-            "bin_repack",
-            "data_fonts",
-            "dependency_heavy",
-            "dkms_kernel",
-            "lang_deep",
-            "lang_ecosystem",
-            "large_electron",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "signed_sources",
-            "source_patched",
-            "vcs_git",
-            "vcs_other"
-          ]
         }
       },
       "state": "measured",
@@ -2194,10 +1845,11 @@
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 10,
+          "fires": 15,
           "strata": [
             "data_fonts",
             "dkms_kernel",
+            "multi_client_fetch",
             "persist_surface",
             "source_patched",
             "vcs_git"
@@ -2206,22 +1858,13 @@
         "malicious": {
           "fires": 1,
           "strata": []
-        },
-        "warm": {
-          "fires": 5,
-          "strata": [
-            "data_fonts",
-            "dkms_kernel",
-            "persist_surface",
-            "source_patched",
-            "vcs_git"
-          ]
         }
       },
       "state": "measured",
       "strata": [
         "data_fonts",
         "dkms_kernel",
+        "multi_client_fetch",
         "persist_surface",
         "source_patched",
         "vcs_git"
@@ -2232,7 +1875,7 @@
       "expected_strata": [
         "large_electron"
       ],
-      "fires": 10,
+      "fires": 8,
       "id": "H017",
       "pseudo": false,
       "reason": "",
@@ -2248,13 +1891,6 @@
         "malicious": {
           "fires": 2,
           "strata": []
-        },
-        "warm": {
-          "fires": 2,
-          "strata": [
-            "bin_repack",
-            "maintainer_churn"
-          ]
         }
       },
       "state": "measured",
@@ -2266,31 +1902,34 @@
     },
     "H018": {
       "expected_strata": [],
-      "fires": 0,
+      "fires": 2,
       "id": "H018",
       "pseudo": false,
-      "reason": "no benign shape in the locked corpus yet; add a shape stratum, never a rule-targeted sample",
+      "reason": "",
       "series": "H",
-      "sources": {},
-      "state": "zero_fire",
-      "strata": [],
+      "sources": {
+        "cold": {
+          "fires": 2,
+          "strata": [
+            "source_patched"
+          ]
+        }
+      },
+      "state": "measured",
+      "strata": [
+        "source_patched"
+      ],
       "uid": "TS-0074"
     },
     "H019": {
       "expected_strata": [],
-      "fires": 2,
+      "fires": 1,
       "id": "H019",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 1,
-          "strata": [
-            "source_patched"
-          ]
-        },
-        "warm": {
           "fires": 1,
           "strata": [
             "source_patched"
@@ -2345,33 +1984,14 @@
         "dkms_kernel",
         "source_patched"
       ],
-      "fires": 1668,
+      "fires": 1688,
       "id": "H023",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 1654,
-          "strata": [
-            "autotools",
-            "bin_repack",
-            "data_fonts",
-            "dependency_heavy",
-            "dkms_kernel",
-            "lang_deep",
-            "large_electron",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "signed_sources",
-            "source_patched",
-            "vcs_git",
-            "vcs_other"
-          ]
-        },
-        "warm": {
-          "fires": 14,
+          "fires": 1688,
           "strata": [
             "autotools",
             "bin_repack",
@@ -2411,7 +2031,7 @@
     },
     "H024": {
       "expected_strata": [],
-      "fires": 7,
+      "fires": 4,
       "id": "H024",
       "pseudo": false,
       "reason": "",
@@ -2428,14 +2048,6 @@
         "malicious": {
           "fires": 1,
           "strata": []
-        },
-        "warm": {
-          "fires": 3,
-          "strata": [
-            "maintainer_churn",
-            "signed_sources",
-            "source_patched"
-          ]
         }
       },
       "state": "measured",
@@ -2448,7 +2060,7 @@
     },
     "H025": {
       "expected_strata": [],
-      "fires": 54,
+      "fires": 42,
       "id": "H025",
       "pseudo": false,
       "reason": "",
@@ -2456,23 +2068,6 @@
       "sources": {
         "cold": {
           "fires": 42,
-          "strata": [
-            "appimage_repack",
-            "autotools",
-            "data_fonts",
-            "dependency_heavy",
-            "lang_deep",
-            "large_electron",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "source_patched",
-            "vcs_git",
-            "vcs_other"
-          ]
-        },
-        "warm": {
-          "fires": 12,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -2531,14 +2126,14 @@
     },
     "H027": {
       "expected_strata": [],
-      "fires": 1158,
+      "fires": 1081,
       "id": "H027",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 1117,
+          "fires": 1054,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -2559,29 +2154,8 @@
           ]
         },
         "malicious": {
-          "fires": 25,
+          "fires": 27,
           "strata": []
-        },
-        "warm": {
-          "fires": 16,
-          "strata": [
-            "appimage_repack",
-            "autotools",
-            "bin_repack",
-            "data_fonts",
-            "dependency_heavy",
-            "dkms_kernel",
-            "lang_deep",
-            "lang_ecosystem",
-            "large_electron",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "signed_sources",
-            "source_patched",
-            "vcs_git",
-            "vcs_other"
-          ]
         }
       },
       "state": "measured",
@@ -2634,14 +2208,14 @@
     },
     "H030": {
       "expected_strata": [],
-      "fires": 230,
+      "fires": 219,
       "id": "H030",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 213,
+          "fires": 216,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -2664,25 +2238,6 @@
         "malicious": {
           "fires": 3,
           "strata": []
-        },
-        "warm": {
-          "fires": 14,
-          "strata": [
-            "appimage_repack",
-            "autotools",
-            "bin_repack",
-            "dependency_heavy",
-            "lang_deep",
-            "lang_ecosystem",
-            "large_electron",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "signed_sources",
-            "source_patched",
-            "vcs_git",
-            "vcs_other"
-          ]
         }
       },
       "state": "measured",
@@ -2708,7 +2263,7 @@
     },
     "H031": {
       "expected_strata": [],
-      "fires": 33,
+      "fires": 31,
       "id": "H031",
       "pseudo": false,
       "reason": "",
@@ -2716,13 +2271,6 @@
       "sources": {
         "cold": {
           "fires": 31,
-          "strata": [
-            "data_fonts",
-            "multi_client_fetch"
-          ]
-        },
-        "warm": {
-          "fires": 2,
           "strata": [
             "data_fonts",
             "multi_client_fetch"
@@ -2742,19 +2290,24 @@
         "large_electron",
         "persist_surface"
       ],
-      "fires": 0,
+      "fires": 1,
       "id": "H032",
       "pseudo": false,
-      "reason": "no benign shape in the locked corpus; expected from appimage_repack, large_electron, persist_surface",
+      "reason": "",
       "series": "H",
-      "sources": {},
-      "state": "zero_fire",
+      "sources": {
+        "malicious": {
+          "fires": 1,
+          "strata": []
+        }
+      },
+      "state": "measured",
       "strata": [],
       "uid": "TS-0088"
     },
     "H033": {
       "expected_strata": [],
-      "fires": 29,
+      "fires": 20,
       "id": "H033",
       "pseudo": false,
       "reason": "",
@@ -2777,20 +2330,6 @@
         "malicious": {
           "fires": 1,
           "strata": []
-        },
-        "warm": {
-          "fires": 9,
-          "strata": [
-            "appimage_repack",
-            "data_fonts",
-            "dependency_heavy",
-            "large_electron",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "signed_sources",
-            "source_patched"
-          ]
         }
       },
       "state": "measured",
@@ -2809,7 +2348,7 @@
     },
     "H034": {
       "expected_strata": [],
-      "fires": 9,
+      "fires": 7,
       "id": "H034",
       "pseudo": false,
       "reason": "",
@@ -2817,13 +2356,6 @@
       "sources": {
         "cold": {
           "fires": 7,
-          "strata": [
-            "bin_repack",
-            "source_patched"
-          ]
-        },
-        "warm": {
-          "fires": 2,
           "strata": [
             "bin_repack",
             "source_patched"
@@ -2860,7 +2392,7 @@
     },
     "H036": {
       "expected_strata": [],
-      "fires": 4,
+      "fires": 3,
       "id": "H036",
       "pseudo": false,
       "reason": "",
@@ -2875,12 +2407,6 @@
         "malicious": {
           "fires": 1,
           "strata": []
-        },
-        "warm": {
-          "fires": 1,
-          "strata": [
-            "appimage_repack"
-          ]
         }
       },
       "state": "measured",
@@ -2905,14 +2431,14 @@
     },
     "H038": {
       "expected_strata": [],
-      "fires": 2,
+      "fires": 3,
       "id": "H038",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "malicious": {
-          "fires": 2,
+          "fires": 3,
           "strata": []
         }
       },
@@ -2943,14 +2469,31 @@
     },
     "H040": {
       "expected_strata": [],
-      "fires": 0,
+      "fires": 8,
       "id": "H040",
       "pseudo": false,
-      "reason": "no benign shape in the locked corpus yet; add a shape stratum, never a rule-targeted sample",
+      "reason": "",
       "series": "H",
-      "sources": {},
-      "state": "zero_fire",
-      "strata": [],
+      "sources": {
+        "cold": {
+          "fires": 7,
+          "strata": [
+            "bin_repack",
+            "dkms_kernel",
+            "signed_sources"
+          ]
+        },
+        "malicious": {
+          "fires": 1,
+          "strata": []
+        }
+      },
+      "state": "measured",
+      "strata": [
+        "bin_repack",
+        "dkms_kernel",
+        "signed_sources"
+      ],
       "uid": "TS-0096"
     },
     "H041": {
@@ -2974,64 +2517,43 @@
     },
     "H042": {
       "expected_strata": [],
-      "fires": 5,
+      "fires": 0,
       "id": "H042",
       "pseudo": false,
-      "reason": "",
+      "reason": "no benign shape in the locked corpus yet; add a shape stratum, never a rule-targeted sample",
       "series": "H",
-      "sources": {
-        "cold": {
-          "fires": 3,
-          "strata": [
-            "dependency_heavy",
-            "lang_deep"
-          ]
-        },
-        "warm": {
-          "fires": 2,
-          "strata": [
-            "dependency_heavy",
-            "lang_deep"
-          ]
-        }
-      },
-      "state": "measured",
-      "strata": [
-        "dependency_heavy",
-        "lang_deep"
-      ],
+      "sources": {},
+      "state": "zero_fire",
+      "strata": [],
       "uid": "TS-0098"
     },
     "H043": {
       "expected_strata": [],
-      "fires": 10,
+      "fires": 15,
       "id": "H043",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 3,
+          "fires": 7,
           "strata": [
+            "bin_repack",
             "lang_deep",
+            "source_patched",
             "vcs_git"
           ]
         },
         "malicious": {
-          "fires": 5,
+          "fires": 8,
           "strata": []
-        },
-        "warm": {
-          "fires": 2,
-          "strata": [
-            "lang_deep",
-            "vcs_git"
-          ]
         }
       },
       "state": "measured",
       "strata": [
+        "bin_repack",
         "lang_deep",
+        "source_patched",
         "vcs_git"
       ],
       "uid": "TS-0099"
@@ -3363,37 +2885,25 @@
     },
     "H062": {
       "expected_strata": [],
-      "fires": 24,
+      "fires": 16,
       "id": "H062",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 16,
+          "fires": 14,
           "strata": [
             "appimage_repack",
             "bin_repack",
             "dependency_heavy",
             "lang_deep",
-            "source_patched",
             "vcs_git"
           ]
         },
         "malicious": {
           "fires": 2,
           "strata": []
-        },
-        "warm": {
-          "fires": 6,
-          "strata": [
-            "appimage_repack",
-            "bin_repack",
-            "dependency_heavy",
-            "lang_deep",
-            "source_patched",
-            "vcs_git"
-          ]
         }
       },
       "state": "measured",
@@ -3402,14 +2912,13 @@
         "bin_repack",
         "dependency_heavy",
         "lang_deep",
-        "source_patched",
         "vcs_git"
       ],
       "uid": "TS-0118"
     },
     "H063": {
       "expected_strata": [],
-      "fires": 27,
+      "fires": 19,
       "id": "H063",
       "pseudo": false,
       "reason": "",
@@ -3417,19 +2926,6 @@
       "sources": {
         "cold": {
           "fires": 19,
-          "strata": [
-            "bin_repack",
-            "data_fonts",
-            "dependency_heavy",
-            "dkms_kernel",
-            "lang_ecosystem",
-            "maintainer_churn",
-            "source_patched",
-            "vcs_git"
-          ]
-        },
-        "warm": {
-          "fires": 8,
           "strata": [
             "bin_repack",
             "data_fonts",
@@ -3471,23 +2967,20 @@
     },
     "H065": {
       "expected_strata": [],
-      "fires": 73,
+      "fires": 32,
       "id": "H065",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 57,
+          "fires": 28,
           "strata": [
-            "autotools",
             "bin_repack",
             "data_fonts",
             "dkms_kernel",
             "lang_deep",
-            "lang_ecosystem",
             "large_electron",
-            "maintainer_churn",
             "persist_surface",
             "source_patched",
             "vcs_git",
@@ -3497,35 +2990,15 @@
         "malicious": {
           "fires": 4,
           "strata": []
-        },
-        "warm": {
-          "fires": 12,
-          "strata": [
-            "autotools",
-            "bin_repack",
-            "data_fonts",
-            "dkms_kernel",
-            "lang_deep",
-            "lang_ecosystem",
-            "large_electron",
-            "maintainer_churn",
-            "persist_surface",
-            "source_patched",
-            "vcs_git",
-            "vcs_other"
-          ]
         }
       },
       "state": "measured",
       "strata": [
-        "autotools",
         "bin_repack",
         "data_fonts",
         "dkms_kernel",
         "lang_deep",
-        "lang_ecosystem",
         "large_electron",
-        "maintainer_churn",
         "persist_surface",
         "source_patched",
         "vcs_git",
@@ -3547,7 +3020,7 @@
     },
     "H067": {
       "expected_strata": [],
-      "fires": 6,
+      "fires": 4,
       "id": "H067",
       "pseudo": false,
       "reason": "",
@@ -3563,13 +3036,6 @@
         "malicious": {
           "fires": 2,
           "strata": []
-        },
-        "warm": {
-          "fires": 2,
-          "strata": [
-            "multi_client_fetch",
-            "source_patched"
-          ]
         }
       },
       "state": "measured",
@@ -3602,7 +3068,7 @@
       "expected_strata": [
         "multi_client_fetch"
       ],
-      "fires": 4,
+      "fires": 3,
       "id": "H069",
       "pseudo": false,
       "reason": "",
@@ -3611,23 +3077,17 @@
         "cold": {
           "fires": 1,
           "strata": [
-            "lang_deep"
+            "vcs_git"
           ]
         },
         "malicious": {
           "fires": 2,
           "strata": []
-        },
-        "warm": {
-          "fires": 1,
-          "strata": [
-            "lang_deep"
-          ]
         }
       },
       "state": "measured",
       "strata": [
-        "lang_deep"
+        "vcs_git"
       ],
       "uid": "TS-0125"
     },
@@ -3743,96 +3203,65 @@
       "expected_strata": [
         "appimage_repack"
       ],
-      "fires": 13,
+      "fires": 9,
       "id": "H076",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 4,
+          "fires": 3,
           "strata": [
             "appimage_repack",
-            "lang_deep",
-            "persist_surface",
+            "dkms_kernel",
             "signed_sources"
           ]
         },
         "malicious": {
-          "fires": 5,
+          "fires": 6,
           "strata": []
-        },
-        "warm": {
-          "fires": 4,
-          "strata": [
-            "appimage_repack",
-            "lang_deep",
-            "persist_surface",
-            "signed_sources"
-          ]
         }
       },
       "state": "measured",
       "strata": [
         "appimage_repack",
-        "lang_deep",
-        "persist_surface",
+        "dkms_kernel",
         "signed_sources"
       ],
       "uid": "TS-0132"
     },
     "H077": {
       "expected_strata": [],
-      "fires": 23,
+      "fires": 12,
       "id": "H077",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 11,
+          "fires": 5,
           "strata": [
             "data_fonts",
-            "lang_deep",
             "lang_ecosystem",
-            "large_electron",
-            "multi_client_fetch",
-            "persist_surface",
             "vcs_git"
           ]
         },
         "malicious": {
-          "fires": 5,
-          "strata": []
-        },
-        "warm": {
           "fires": 7,
-          "strata": [
-            "data_fonts",
-            "lang_deep",
-            "lang_ecosystem",
-            "large_electron",
-            "multi_client_fetch",
-            "persist_surface",
-            "vcs_git"
-          ]
+          "strata": []
         }
       },
       "state": "measured",
       "strata": [
         "data_fonts",
-        "lang_deep",
         "lang_ecosystem",
-        "large_electron",
-        "multi_client_fetch",
-        "persist_surface",
         "vcs_git"
       ],
       "uid": "TS-0133"
     },
     "H078": {
       "expected_strata": [],
-      "fires": 30,
+      "fires": 24,
       "id": "H078",
       "pseudo": false,
       "reason": "",
@@ -3852,17 +3281,6 @@
         "malicious": {
           "fires": 2,
           "strata": []
-        },
-        "warm": {
-          "fires": 6,
-          "strata": [
-            "appimage_repack",
-            "autotools",
-            "maintainer_churn",
-            "persist_surface",
-            "signed_sources",
-            "source_patched"
-          ]
         }
       },
       "state": "measured",
@@ -3878,7 +3296,7 @@
     },
     "H079": {
       "expected_strata": [],
-      "fires": 5,
+      "fires": 4,
       "id": "H079",
       "pseudo": false,
       "reason": "",
@@ -3893,12 +3311,6 @@
         "malicious": {
           "fires": 1,
           "strata": []
-        },
-        "warm": {
-          "fires": 1,
-          "strata": [
-            "source_patched"
-          ]
         }
       },
       "state": "measured",
@@ -3909,50 +3321,30 @@
     },
     "H080": {
       "expected_strata": [],
-      "fires": 7,
+      "fires": 4,
       "id": "H080",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
-        "cold": {
-          "fires": 2,
-          "strata": [
-            "appimage_repack"
-          ]
-        },
         "malicious": {
           "fires": 4,
           "strata": []
-        },
-        "warm": {
-          "fires": 1,
-          "strata": [
-            "appimage_repack"
-          ]
         }
       },
       "state": "measured",
-      "strata": [
-        "appimage_repack"
-      ],
+      "strata": [],
       "uid": "TS-0136"
     },
     "H081": {
       "expected_strata": [],
-      "fires": 2,
+      "fires": 1,
       "id": "H081",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 1,
-          "strata": [
-            "vcs_git"
-          ]
-        },
-        "warm": {
           "fires": 1,
           "strata": [
             "vcs_git"
@@ -3969,43 +3361,22 @@
       "expected_strata": [
         "multi_client_fetch"
       ],
-      "fires": 14,
+      "fires": 1,
       "id": "H082",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 8,
+          "fires": 1,
           "strata": [
-            "bin_repack",
-            "lang_deep",
-            "lang_ecosystem",
-            "multi_client_fetch",
-            "persist_surface",
-            "vcs_git"
-          ]
-        },
-        "warm": {
-          "fires": 6,
-          "strata": [
-            "bin_repack",
-            "lang_deep",
-            "lang_ecosystem",
-            "multi_client_fetch",
-            "persist_surface",
-            "vcs_git"
+            "persist_surface"
           ]
         }
       },
       "state": "measured",
       "strata": [
-        "bin_repack",
-        "lang_deep",
-        "lang_ecosystem",
-        "multi_client_fetch",
-        "persist_surface",
-        "vcs_git"
+        "persist_surface"
       ],
       "uid": "TS-0138"
     },
@@ -4016,32 +3387,32 @@
         "vcs_git",
         "vcs_other"
       ],
-      "fires": 5,
+      "fires": 8,
       "id": "H083",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 1,
+          "fires": 4,
           "strata": [
-            "multi_client_fetch"
+            "appimage_repack",
+            "multi_client_fetch",
+            "signed_sources",
+            "vcs_git"
           ]
         },
         "malicious": {
-          "fires": 3,
+          "fires": 4,
           "strata": []
-        },
-        "warm": {
-          "fires": 1,
-          "strata": [
-            "multi_client_fetch"
-          ]
         }
       },
       "state": "measured",
       "strata": [
-        "multi_client_fetch"
+        "appimage_repack",
+        "multi_client_fetch",
+        "signed_sources",
+        "vcs_git"
       ],
       "uid": "TS-0139"
     },
@@ -4074,20 +3445,16 @@
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 1,
+          "fires": 2,
           "strata": [
-            "large_electron"
-          ]
-        },
-        "warm": {
-          "fires": 1,
-          "strata": [
+            "lang_deep",
             "large_electron"
           ]
         }
       },
       "state": "measured",
       "strata": [
+        "lang_deep",
         "large_electron"
       ],
       "uid": "TS-0141"
@@ -4108,7 +3475,7 @@
     },
     "H087": {
       "expected_strata": [],
-      "fires": 153,
+      "fires": 137,
       "id": "H087",
       "pseudo": false,
       "reason": "",
@@ -4138,27 +3505,6 @@
         "malicious": {
           "fires": 1,
           "strata": []
-        },
-        "warm": {
-          "fires": 16,
-          "strata": [
-            "appimage_repack",
-            "autotools",
-            "bin_repack",
-            "data_fonts",
-            "dependency_heavy",
-            "dkms_kernel",
-            "lang_deep",
-            "lang_ecosystem",
-            "large_electron",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "signed_sources",
-            "source_patched",
-            "vcs_git",
-            "vcs_other"
-          ]
         }
       },
       "state": "measured",
@@ -4200,21 +3546,13 @@
       "expected_strata": [
         "persist_surface"
       ],
-      "fires": 6,
+      "fires": 3,
       "id": "H089",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 3,
-          "strata": [
-            "appimage_repack",
-            "multi_client_fetch",
-            "source_patched"
-          ]
-        },
-        "warm": {
           "fires": 3,
           "strata": [
             "appimage_repack",
@@ -4318,7 +3656,7 @@
     },
     "H096": {
       "expected_strata": [],
-      "fires": 7,
+      "fires": 4,
       "id": "H096",
       "pseudo": false,
       "reason": "",
@@ -4326,14 +3664,6 @@
       "sources": {
         "cold": {
           "fires": 4,
-          "strata": [
-            "autotools",
-            "dkms_kernel",
-            "lang_deep"
-          ]
-        },
-        "warm": {
-          "fires": 3,
           "strata": [
             "autotools",
             "dkms_kernel",
@@ -4351,20 +3681,13 @@
     },
     "H097": {
       "expected_strata": [],
-      "fires": 4,
+      "fires": 2,
       "id": "H097",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 2,
-          "strata": [
-            "dkms_kernel",
-            "large_electron"
-          ]
-        },
-        "warm": {
           "fires": 2,
           "strata": [
             "dkms_kernel",
@@ -4393,7 +3716,7 @@
     },
     "H099": {
       "expected_strata": [],
-      "fires": 13,
+      "fires": 7,
       "id": "H099",
       "pseudo": false,
       "reason": "",
@@ -4413,17 +3736,6 @@
         "malicious": {
           "fires": 1,
           "strata": []
-        },
-        "warm": {
-          "fires": 6,
-          "strata": [
-            "appimage_repack",
-            "bin_repack",
-            "dkms_kernel",
-            "persist_surface",
-            "signed_sources",
-            "source_patched"
-          ]
         }
       },
       "state": "measured",
@@ -4439,14 +3751,14 @@
     },
     "H100": {
       "expected_strata": [],
-      "fires": 60,
+      "fires": 48,
       "id": "H100",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 37,
+          "fires": 38,
           "strata": [
             "autotools",
             "bin_repack",
@@ -4466,24 +3778,6 @@
         "malicious": {
           "fires": 10,
           "strata": []
-        },
-        "warm": {
-          "fires": 13,
-          "strata": [
-            "autotools",
-            "bin_repack",
-            "data_fonts",
-            "dependency_heavy",
-            "dkms_kernel",
-            "lang_deep",
-            "large_electron",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "signed_sources",
-            "source_patched",
-            "vcs_git"
-          ]
         }
       },
       "state": "measured",
@@ -4506,53 +3800,28 @@
     },
     "H101": {
       "expected_strata": [],
-      "fires": 46,
+      "fires": 15,
       "id": "H101",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 31,
+          "fires": 13,
           "strata": [
             "appimage_repack",
             "autotools",
             "data_fonts",
             "dependency_heavy",
-            "dkms_kernel",
-            "lang_deep",
-            "lang_ecosystem",
-            "maintainer_churn",
             "multi_client_fetch",
-            "persist_surface",
             "signed_sources",
             "source_patched",
-            "vcs_git",
-            "vcs_other"
+            "vcs_git"
           ]
         },
         "malicious": {
-          "fires": 1,
+          "fires": 2,
           "strata": []
-        },
-        "warm": {
-          "fires": 14,
-          "strata": [
-            "appimage_repack",
-            "autotools",
-            "data_fonts",
-            "dependency_heavy",
-            "dkms_kernel",
-            "lang_deep",
-            "lang_ecosystem",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "signed_sources",
-            "source_patched",
-            "vcs_git",
-            "vcs_other"
-          ]
         }
       },
       "state": "measured",
@@ -4561,16 +3830,10 @@
         "autotools",
         "data_fonts",
         "dependency_heavy",
-        "dkms_kernel",
-        "lang_deep",
-        "lang_ecosystem",
-        "maintainer_churn",
         "multi_client_fetch",
-        "persist_surface",
         "signed_sources",
         "source_patched",
-        "vcs_git",
-        "vcs_other"
+        "vcs_git"
       ],
       "uid": "TS-0157"
     },
@@ -4673,45 +3936,31 @@
     },
     "M001": {
       "expected_strata": [],
-      "fires": 3,
+      "fires": 1,
       "id": "M001",
       "pseudo": false,
       "reason": "",
       "series": "M",
       "sources": {
-        "cold": {
-          "fires": 1,
-          "strata": [
-            "dkms_kernel"
-          ]
-        },
         "malicious": {
           "fires": 1,
           "strata": []
-        },
-        "warm": {
-          "fires": 1,
-          "strata": [
-            "dkms_kernel"
-          ]
         }
       },
       "state": "measured",
-      "strata": [
-        "dkms_kernel"
-      ],
+      "strata": [],
       "uid": "TS-0160"
     },
     "M002": {
       "expected_strata": [],
-      "fires": 496,
+      "fires": 539,
       "id": "M002",
       "pseudo": false,
       "reason": "",
       "series": "M",
       "sources": {
         "cold": {
-          "fires": 479,
+          "fires": 537,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -4732,29 +3981,8 @@
           ]
         },
         "malicious": {
-          "fires": 1,
+          "fires": 2,
           "strata": []
-        },
-        "warm": {
-          "fires": 16,
-          "strata": [
-            "appimage_repack",
-            "autotools",
-            "bin_repack",
-            "data_fonts",
-            "dependency_heavy",
-            "dkms_kernel",
-            "lang_deep",
-            "lang_ecosystem",
-            "large_electron",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "signed_sources",
-            "source_patched",
-            "vcs_git",
-            "vcs_other"
-          ]
         }
       },
       "state": "measured",
@@ -4780,14 +4008,14 @@
     },
     "M003": {
       "expected_strata": [],
-      "fires": 306,
+      "fires": 304,
       "id": "M003",
       "pseudo": false,
       "reason": "",
       "series": "M",
       "sources": {
         "cold": {
-          "fires": 261,
+          "fires": 273,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -4808,29 +4036,8 @@
           ]
         },
         "malicious": {
-          "fires": 29,
+          "fires": 31,
           "strata": []
-        },
-        "warm": {
-          "fires": 16,
-          "strata": [
-            "appimage_repack",
-            "autotools",
-            "bin_repack",
-            "data_fonts",
-            "dependency_heavy",
-            "dkms_kernel",
-            "lang_deep",
-            "lang_ecosystem",
-            "large_electron",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "signed_sources",
-            "source_patched",
-            "vcs_git",
-            "vcs_other"
-          ]
         }
       },
       "state": "measured",
@@ -4904,14 +4111,14 @@
     },
     "P001": {
       "expected_strata": [],
-      "fires": 7153,
+      "fires": 7228,
       "id": "P001",
       "pseudo": true,
       "reason": "",
       "series": "P",
       "sources": {
         "cold": {
-          "fires": 7097,
+          "fires": 7186,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -4932,29 +4139,8 @@
           ]
         },
         "malicious": {
-          "fires": 40,
+          "fires": 42,
           "strata": []
-        },
-        "warm": {
-          "fires": 16,
-          "strata": [
-            "appimage_repack",
-            "autotools",
-            "bin_repack",
-            "data_fonts",
-            "dependency_heavy",
-            "dkms_kernel",
-            "lang_deep",
-            "lang_ecosystem",
-            "large_electron",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "signed_sources",
-            "source_patched",
-            "vcs_git",
-            "vcs_other"
-          ]
         }
       },
       "state": "measured",
@@ -4980,7 +4166,7 @@
     },
     "P002": {
       "expected_strata": [],
-      "fires": 682,
+      "fires": 674,
       "id": "P002",
       "pseudo": true,
       "reason": "",
@@ -5000,19 +4186,9 @@
             "source_patched"
           ]
         },
-        "warm": {
-          "fires": 9,
-          "strata": [
-            "appimage_repack",
-            "autotools",
-            "bin_repack",
-            "dependency_heavy",
-            "dkms_kernel",
-            "maintainer_churn",
-            "persist_surface",
-            "signed_sources",
-            "source_patched"
-          ]
+        "malicious": {
+          "fires": 1,
+          "strata": []
         }
       },
       "state": "measured",
@@ -5043,31 +4219,14 @@
     },
     "P005": {
       "expected_strata": [],
-      "fires": 233,
+      "fires": 214,
       "id": "P005",
       "pseudo": true,
       "reason": "",
       "series": "P",
       "sources": {
         "cold": {
-          "fires": 221,
-          "strata": [
-            "data_fonts",
-            "dependency_heavy",
-            "dkms_kernel",
-            "lang_deep",
-            "lang_ecosystem",
-            "large_electron",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "signed_sources",
-            "source_patched",
-            "vcs_git"
-          ]
-        },
-        "warm": {
-          "fires": 12,
+          "fires": 214,
           "strata": [
             "data_fonts",
             "dependency_heavy",
@@ -5103,14 +4262,14 @@
     },
     "P006": {
       "expected_strata": [],
-      "fires": 968,
+      "fires": 939,
       "id": "P006",
       "pseudo": true,
       "reason": "",
       "series": "P",
       "sources": {
         "cold": {
-          "fires": 952,
+          "fires": 938,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -5132,26 +4291,6 @@
         "malicious": {
           "fires": 1,
           "strata": []
-        },
-        "warm": {
-          "fires": 15,
-          "strata": [
-            "appimage_repack",
-            "autotools",
-            "bin_repack",
-            "data_fonts",
-            "dependency_heavy",
-            "dkms_kernel",
-            "lang_deep",
-            "lang_ecosystem",
-            "large_electron",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "signed_sources",
-            "source_patched",
-            "vcs_git"
-          ]
         }
       },
       "state": "measured",
@@ -5176,14 +4315,14 @@
     },
     "P007": {
       "expected_strata": [],
-      "fires": 3975,
+      "fires": 3733,
       "id": "P007",
       "pseudo": true,
       "reason": "",
       "series": "P",
       "sources": {
         "cold": {
-          "fires": 3952,
+          "fires": 3725,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -5204,29 +4343,8 @@
           ]
         },
         "malicious": {
-          "fires": 7,
+          "fires": 8,
           "strata": []
-        },
-        "warm": {
-          "fires": 16,
-          "strata": [
-            "appimage_repack",
-            "autotools",
-            "bin_repack",
-            "data_fonts",
-            "dependency_heavy",
-            "dkms_kernel",
-            "lang_deep",
-            "lang_ecosystem",
-            "large_electron",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "signed_sources",
-            "source_patched",
-            "vcs_git",
-            "vcs_other"
-          ]
         }
       },
       "state": "measured",
@@ -5252,7 +4370,7 @@
     },
     "P008": {
       "expected_strata": [],
-      "fires": 1204,
+      "fires": 1191,
       "id": "P008",
       "pseudo": true,
       "reason": "",
@@ -5278,27 +4396,8 @@
           ]
         },
         "malicious": {
-          "fires": 3,
+          "fires": 4,
           "strata": []
-        },
-        "warm": {
-          "fires": 14,
-          "strata": [
-            "appimage_repack",
-            "autotools",
-            "bin_repack",
-            "dependency_heavy",
-            "dkms_kernel",
-            "lang_deep",
-            "lang_ecosystem",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "signed_sources",
-            "source_patched",
-            "vcs_git",
-            "vcs_other"
-          ]
         }
       },
       "state": "measured",
@@ -5385,14 +4484,14 @@
     },
     "R007": {
       "expected_strata": [],
-      "fires": 188,
+      "fires": 140,
       "id": "R007",
       "pseudo": false,
       "reason": "",
       "series": "R",
       "sources": {
         "cold": {
-          "fires": 161,
+          "fires": 127,
           "strata": [
             "autotools",
             "bin_repack",
@@ -5413,25 +4512,6 @@
         "malicious": {
           "fires": 13,
           "strata": []
-        },
-        "warm": {
-          "fires": 14,
-          "strata": [
-            "autotools",
-            "bin_repack",
-            "data_fonts",
-            "dependency_heavy",
-            "dkms_kernel",
-            "lang_deep",
-            "large_electron",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "signed_sources",
-            "source_patched",
-            "vcs_git",
-            "vcs_other"
-          ]
         }
       },
       "state": "measured",
@@ -5472,7 +4552,7 @@
     },
     "R010": {
       "expected_strata": [],
-      "fires": 97,
+      "fires": 89,
       "id": "R010",
       "pseudo": false,
       "reason": "",
@@ -5494,19 +4574,6 @@
         "malicious": {
           "fires": 4,
           "strata": []
-        },
-        "warm": {
-          "fires": 8,
-          "strata": [
-            "bin_repack",
-            "data_fonts",
-            "lang_ecosystem",
-            "large_electron",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "source_patched",
-            "vcs_git"
-          ]
         }
       },
       "state": "measured",
@@ -5524,7 +4591,7 @@
     },
     "R011": {
       "expected_strata": [],
-      "fires": 17,
+      "fires": 13,
       "id": "R011",
       "pseudo": false,
       "reason": "",
@@ -5532,15 +4599,6 @@
       "sources": {
         "cold": {
           "fires": 13,
-          "strata": [
-            "data_fonts",
-            "dkms_kernel",
-            "maintainer_churn",
-            "source_patched"
-          ]
-        },
-        "warm": {
-          "fires": 4,
           "strata": [
             "data_fonts",
             "dkms_kernel",
@@ -5560,7 +4618,7 @@
     },
     "R012": {
       "expected_strata": [],
-      "fires": 34,
+      "fires": 31,
       "id": "R012",
       "pseudo": false,
       "reason": "",
@@ -5577,14 +4635,6 @@
         "malicious": {
           "fires": 21,
           "strata": []
-        },
-        "warm": {
-          "fires": 3,
-          "strata": [
-            "lang_deep",
-            "large_electron",
-            "maintainer_churn"
-          ]
         }
       },
       "state": "measured",
@@ -5628,14 +4678,14 @@
     },
     "R039": {
       "expected_strata": [],
-      "fires": 24,
+      "fires": 18,
       "id": "R039",
       "pseudo": false,
       "reason": "",
       "series": "R",
       "sources": {
         "cold": {
-          "fires": 18,
+          "fires": 17,
           "strata": [
             "appimage_repack",
             "data_fonts",
@@ -5647,16 +4697,6 @@
         "malicious": {
           "fires": 1,
           "strata": []
-        },
-        "warm": {
-          "fires": 5,
-          "strata": [
-            "appimage_repack",
-            "data_fonts",
-            "multi_client_fetch",
-            "source_patched",
-            "vcs_git"
-          ]
         }
       },
       "state": "measured",
@@ -5768,19 +4808,13 @@
       "expected_strata": [
         "multi_client_fetch"
       ],
-      "fires": 2,
+      "fires": 1,
       "id": "R047",
       "pseudo": false,
       "reason": "",
       "series": "R",
       "sources": {
         "cold": {
-          "fires": 1,
-          "strata": [
-            "persist_surface"
-          ]
-        },
-        "warm": {
           "fires": 1,
           "strata": [
             "persist_surface"
@@ -5839,7 +4873,7 @@
       "expected_strata": [
         "multi_client_fetch"
       ],
-      "fires": 7,
+      "fires": 4,
       "id": "R051",
       "pseudo": false,
       "reason": "",
@@ -5847,14 +4881,6 @@
       "sources": {
         "cold": {
           "fires": 4,
-          "strata": [
-            "data_fonts",
-            "dkms_kernel",
-            "source_patched"
-          ]
-        },
-        "warm": {
-          "fires": 3,
           "strata": [
             "data_fonts",
             "dkms_kernel",
@@ -5875,7 +4901,7 @@
         "multi_client_fetch",
         "persist_surface"
       ],
-      "fires": 3,
+      "fires": 2,
       "id": "R052",
       "pseudo": false,
       "reason": "",
@@ -5890,12 +4916,6 @@
         "malicious": {
           "fires": 1,
           "strata": []
-        },
-        "warm": {
-          "fires": 1,
-          "strata": [
-            "signed_sources"
-          ]
         }
       },
       "state": "measured",
@@ -5908,7 +4928,7 @@
       "expected_strata": [
         "multi_client_fetch"
       ],
-      "fires": 13,
+      "fires": 9,
       "id": "R053",
       "pseudo": false,
       "reason": "",
@@ -5926,15 +4946,6 @@
         "malicious": {
           "fires": 2,
           "strata": []
-        },
-        "warm": {
-          "fires": 4,
-          "strata": [
-            "appimage_repack",
-            "bin_repack",
-            "large_electron",
-            "maintainer_churn"
-          ]
         }
       },
       "state": "measured",
@@ -5951,7 +4962,7 @@
         "multi_client_fetch",
         "persist_surface"
       ],
-      "fires": 3,
+      "fires": 2,
       "id": "R054",
       "pseudo": false,
       "reason": "",
@@ -5966,12 +4977,6 @@
         "malicious": {
           "fires": 1,
           "strata": []
-        },
-        "warm": {
-          "fires": 1,
-          "strata": [
-            "bin_repack"
-          ]
         }
       },
       "state": "measured",
@@ -6024,7 +5029,7 @@
     },
     "R058": {
       "expected_strata": [],
-      "fires": 3,
+      "fires": 2,
       "id": "R058",
       "pseudo": false,
       "reason": "",
@@ -6039,12 +5044,6 @@
         "malicious": {
           "fires": 1,
           "strata": []
-        },
-        "warm": {
-          "fires": 1,
-          "strata": [
-            "dkms_kernel"
-          ]
         }
       },
       "state": "measured",
@@ -6096,7 +5095,7 @@
     },
     "R099": {
       "expected_strata": [],
-      "fires": 13,
+      "fires": 10,
       "id": "R099",
       "pseudo": false,
       "reason": "",
@@ -6104,14 +5103,6 @@
       "sources": {
         "cold": {
           "fires": 10,
-          "strata": [
-            "data_fonts",
-            "dkms_kernel",
-            "persist_surface"
-          ]
-        },
-        "warm": {
-          "fires": 3,
           "strata": [
             "data_fonts",
             "dkms_kernel",
@@ -6153,40 +5144,29 @@
     },
     "R152": {
       "expected_strata": [],
-      "fires": 12,
+      "fires": 5,
       "id": "R152",
       "pseudo": false,
       "reason": "",
       "series": "R",
       "sources": {
         "cold": {
-          "fires": 7,
+          "fires": 4,
           "strata": [
             "dkms_kernel",
             "lang_deep",
-            "lang_ecosystem",
             "maintainer_churn"
           ]
         },
         "malicious": {
           "fires": 1,
           "strata": []
-        },
-        "warm": {
-          "fires": 4,
-          "strata": [
-            "dkms_kernel",
-            "lang_deep",
-            "lang_ecosystem",
-            "maintainer_churn"
-          ]
         }
       },
       "state": "measured",
       "strata": [
         "dkms_kernel",
         "lang_deep",
-        "lang_ecosystem",
         "maintainer_churn"
       ],
       "uid": "TS-0202"
@@ -6329,14 +5309,14 @@
     },
     "SOURCE_BUCKET": {
       "expected_strata": [],
-      "fires": 1731,
+      "fires": 1345,
       "id": "SOURCE_BUCKET",
       "pseudo": true,
       "reason": "",
       "series": "S",
       "sources": {
         "cold": {
-          "fires": 1668,
+          "fires": 1282,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -6449,6 +5429,60 @@
       ],
       "uid": "TS-0213"
     },
+    "T004": {
+      "expected_strata": [
+        "signed_sources"
+      ],
+      "fires": 2,
+      "id": "T004",
+      "pseudo": false,
+      "reason": "",
+      "series": "T",
+      "sources": {
+        "cold": {
+          "fires": 1,
+          "strata": [
+            "maintainer_churn"
+          ]
+        },
+        "malicious": {
+          "fires": 1,
+          "strata": []
+        }
+      },
+      "state": "measured",
+      "strata": [
+        "maintainer_churn"
+      ],
+      "uid": "TS-0287"
+    },
+    "T005": {
+      "expected_strata": [
+        "source_patched"
+      ],
+      "fires": 2,
+      "id": "T005",
+      "pseudo": false,
+      "reason": "",
+      "series": "T",
+      "sources": {
+        "cold": {
+          "fires": 1,
+          "strata": [
+            "lang_ecosystem"
+          ]
+        },
+        "malicious": {
+          "fires": 1,
+          "strata": []
+        }
+      },
+      "state": "measured",
+      "strata": [
+        "lang_ecosystem"
+      ],
+      "uid": "TS-0288"
+    },
     "T006": {
       "expected_strata": [],
       "fires": 0,
@@ -6472,6 +5506,18 @@
       "state": "cold_only",
       "strata": [],
       "uid": "TS-0215"
+    },
+    "TAG_CONVERGENCE": {
+      "expected_strata": [],
+      "fires": 0,
+      "id": "TAG_CONVERGENCE",
+      "pseudo": true,
+      "reason": "no benign shape in the locked corpus yet; add a shape stratum, never a rule-targeted sample",
+      "series": "T",
+      "sources": {},
+      "state": "zero_fire",
+      "strata": [],
+      "uid": null
     },
     "U001": {
       "expected_strata": [],
@@ -6614,31 +5660,22 @@
     },
     "U010": {
       "expected_strata": [],
-      "fires": 4,
+      "fires": 1,
       "id": "U010",
       "pseudo": false,
       "reason": "",
       "series": "U",
       "sources": {
         "cold": {
-          "fires": 2,
+          "fires": 1,
           "strata": [
-            "dependency_heavy",
-            "lang_deep"
-          ]
-        },
-        "warm": {
-          "fires": 2,
-          "strata": [
-            "dependency_heavy",
-            "lang_deep"
+            "dependency_heavy"
           ]
         }
       },
       "state": "measured",
       "strata": [
-        "dependency_heavy",
-        "lang_deep"
+        "dependency_heavy"
       ],
       "uid": "TS-0270"
     },
@@ -6647,10 +5684,10 @@
       "fires": 0,
       "id": "U011",
       "pseudo": false,
-      "reason": "adversarial-only origin transitions; benign versions must not move origins",
+      "reason": "no benign shape in the locked corpus yet; add a shape stratum, never a rule-targeted sample",
       "series": "U",
       "sources": {},
-      "state": "adversarial_only",
+      "state": "zero_fire",
       "strata": [],
       "uid": "TS-0278"
     },
@@ -6659,23 +5696,23 @@
       "fires": 0,
       "id": "U012",
       "pseudo": false,
-      "reason": "adversarial-only lock-integrity weakening; hash replacement is not a downgrade",
+      "reason": "no benign shape in the locked corpus yet; add a shape stratum, never a rule-targeted sample",
       "series": "U",
       "sources": {},
-      "state": "adversarial_only",
+      "state": "zero_fire",
       "strata": [],
       "uid": "TS-0279"
     },
     "W001": {
       "expected_strata": [],
-      "fires": 35,
+      "fires": 28,
       "id": "W001",
       "pseudo": false,
       "reason": "",
       "series": "W",
       "sources": {
         "cold": {
-          "fires": 27,
+          "fires": 26,
           "strata": [
             "dependency_heavy",
             "lang_deep",
@@ -6687,20 +5724,8 @@
           ]
         },
         "malicious": {
-          "fires": 1,
+          "fires": 2,
           "strata": []
-        },
-        "warm": {
-          "fires": 7,
-          "strata": [
-            "dependency_heavy",
-            "lang_deep",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "source_patched",
-            "vcs_git"
-          ]
         }
       },
       "state": "measured",
@@ -6717,14 +5742,14 @@
     },
     "W002": {
       "expected_strata": [],
-      "fires": 60,
+      "fires": 57,
       "id": "W002",
       "pseudo": false,
       "reason": "",
       "series": "W",
       "sources": {
         "cold": {
-          "fires": 49,
+          "fires": 56,
           "strata": [
             "autotools",
             "bin_repack",
@@ -6741,21 +5766,6 @@
         "malicious": {
           "fires": 1,
           "strata": []
-        },
-        "warm": {
-          "fires": 10,
-          "strata": [
-            "autotools",
-            "bin_repack",
-            "dependency_heavy",
-            "lang_deep",
-            "lang_ecosystem",
-            "large_electron",
-            "multi_client_fetch",
-            "persist_surface",
-            "source_patched",
-            "vcs_git"
-          ]
         }
       },
       "state": "measured",
@@ -6775,34 +5785,14 @@
     },
     "W003": {
       "expected_strata": [],
-      "fires": 223,
+      "fires": 211,
       "id": "W003",
       "pseudo": false,
       "reason": "",
       "series": "W",
       "sources": {
         "cold": {
-          "fires": 208,
-          "strata": [
-            "autotools",
-            "bin_repack",
-            "data_fonts",
-            "dependency_heavy",
-            "dkms_kernel",
-            "lang_deep",
-            "lang_ecosystem",
-            "large_electron",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "signed_sources",
-            "source_patched",
-            "vcs_git",
-            "vcs_other"
-          ]
-        },
-        "warm": {
-          "fires": 15,
+          "fires": 211,
           "strata": [
             "autotools",
             "bin_repack",
@@ -6856,37 +5846,26 @@
     },
     "W005": {
       "expected_strata": [],
-      "fires": 32,
+      "fires": 26,
       "id": "W005",
       "pseudo": false,
       "reason": "",
       "series": "W",
       "sources": {
         "cold": {
-          "fires": 23,
+          "fires": 26,
           "strata": [
             "appimage_repack",
+            "autotools",
             "data_fonts",
             "dependency_heavy",
             "dkms_kernel",
             "lang_ecosystem",
             "maintainer_churn",
             "multi_client_fetch",
+            "persist_surface",
             "signed_sources",
-            "vcs_git"
-          ]
-        },
-        "warm": {
-          "fires": 9,
-          "strata": [
-            "appimage_repack",
-            "data_fonts",
-            "dependency_heavy",
-            "dkms_kernel",
-            "lang_ecosystem",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "signed_sources",
+            "source_patched",
             "vcs_git"
           ]
         }
@@ -6894,20 +5873,23 @@
       "state": "measured",
       "strata": [
         "appimage_repack",
+        "autotools",
         "data_fonts",
         "dependency_heavy",
         "dkms_kernel",
         "lang_ecosystem",
         "maintainer_churn",
         "multi_client_fetch",
+        "persist_surface",
         "signed_sources",
+        "source_patched",
         "vcs_git"
       ],
       "uid": "TS-0226"
     },
     "W006": {
       "expected_strata": [],
-      "fires": 3,
+      "fires": 2,
       "id": "W006",
       "pseudo": false,
       "reason": "",
@@ -6915,12 +5897,6 @@
       "sources": {
         "cold": {
           "fires": 2,
-          "strata": [
-            "large_electron"
-          ]
-        },
-        "warm": {
-          "fires": 1,
           "strata": [
             "large_electron"
           ]
@@ -6934,14 +5910,14 @@
     },
     "W007": {
       "expected_strata": [],
-      "fires": 922,
+      "fires": 923,
       "id": "W007",
       "pseudo": false,
       "reason": "",
       "series": "W",
       "sources": {
         "cold": {
-          "fires": 915,
+          "fires": 916,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -6989,14 +5965,14 @@
     },
     "W008": {
       "expected_strata": [],
-      "fires": 478,
+      "fires": 416,
       "id": "W008",
       "pseudo": false,
       "reason": "",
       "series": "W",
       "sources": {
         "cold": {
-          "fires": 461,
+          "fires": 415,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -7019,27 +5995,6 @@
         "malicious": {
           "fires": 1,
           "strata": []
-        },
-        "warm": {
-          "fires": 16,
-          "strata": [
-            "appimage_repack",
-            "autotools",
-            "bin_repack",
-            "data_fonts",
-            "dependency_heavy",
-            "dkms_kernel",
-            "lang_deep",
-            "lang_ecosystem",
-            "large_electron",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "signed_sources",
-            "source_patched",
-            "vcs_git",
-            "vcs_other"
-          ]
         }
       },
       "state": "measured",
@@ -7089,7 +6044,7 @@
     },
     "W011": {
       "expected_strata": [],
-      "fires": 4177,
+      "fires": 4161,
       "id": "W011",
       "pseudo": false,
       "reason": "",
@@ -7119,27 +6074,6 @@
         "malicious": {
           "fires": 4,
           "strata": []
-        },
-        "warm": {
-          "fires": 16,
-          "strata": [
-            "appimage_repack",
-            "autotools",
-            "bin_repack",
-            "data_fonts",
-            "dependency_heavy",
-            "dkms_kernel",
-            "lang_deep",
-            "lang_ecosystem",
-            "large_electron",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "signed_sources",
-            "source_patched",
-            "vcs_git",
-            "vcs_other"
-          ]
         }
       },
       "state": "measured",
@@ -7165,7 +6099,7 @@
     },
     "W012": {
       "expected_strata": [],
-      "fires": 4177,
+      "fires": 4161,
       "id": "W012",
       "pseudo": false,
       "reason": "",
@@ -7195,27 +6129,6 @@
         "malicious": {
           "fires": 4,
           "strata": []
-        },
-        "warm": {
-          "fires": 16,
-          "strata": [
-            "appimage_repack",
-            "autotools",
-            "bin_repack",
-            "data_fonts",
-            "dependency_heavy",
-            "dkms_kernel",
-            "lang_deep",
-            "lang_ecosystem",
-            "large_electron",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "signed_sources",
-            "source_patched",
-            "vcs_git",
-            "vcs_other"
-          ]
         }
       },
       "state": "measured",
@@ -7239,6 +6152,18 @@
       ],
       "uid": "TS-0272"
     },
+    "W013": {
+      "expected_strata": [],
+      "fires": 0,
+      "id": "W013",
+      "pseudo": false,
+      "reason": "no benign shape in the locked corpus yet; add a shape stratum, never a rule-targeted sample",
+      "series": "W",
+      "sources": {},
+      "state": "zero_fire",
+      "strata": [],
+      "uid": "TS-0289"
+    },
     "X001": {
       "expected_strata": [],
       "fires": 1,
@@ -7258,40 +6183,33 @@
     },
     "X002": {
       "expected_strata": [],
-      "fires": 20,
+      "fires": 16,
       "id": "X002",
       "pseudo": false,
       "reason": "",
       "series": "X",
       "sources": {
         "cold": {
-          "fires": 4,
+          "fires": 5,
           "strata": [
             "bin_repack",
-            "lang_deep",
+            "dkms_kernel",
             "persist_surface",
+            "vcs_git",
             "vcs_other"
           ]
         },
         "malicious": {
-          "fires": 12,
+          "fires": 11,
           "strata": []
-        },
-        "warm": {
-          "fires": 4,
-          "strata": [
-            "bin_repack",
-            "lang_deep",
-            "persist_surface",
-            "vcs_other"
-          ]
         }
       },
       "state": "measured",
       "strata": [
         "bin_repack",
-        "lang_deep",
+        "dkms_kernel",
         "persist_surface",
+        "vcs_git",
         "vcs_other"
       ],
       "uid": "TS-0233"
@@ -7310,7 +6228,7 @@
     },
     "X004": {
       "expected_strata": [],
-      "fires": 6,
+      "fires": 4,
       "id": "X004",
       "pseudo": false,
       "reason": "",
@@ -7326,13 +6244,6 @@
         "malicious": {
           "fires": 1,
           "strata": []
-        },
-        "warm": {
-          "fires": 2,
-          "strata": [
-            "lang_deep",
-            "maintainer_churn"
-          ]
         }
       },
       "state": "measured",
@@ -7378,7 +6289,7 @@
     },
     "X007": {
       "expected_strata": [],
-      "fires": 15,
+      "fires": 12,
       "id": "X007",
       "pseudo": false,
       "reason": "",
@@ -7395,14 +6306,6 @@
         "malicious": {
           "fires": 8,
           "strata": []
-        },
-        "warm": {
-          "fires": 3,
-          "strata": [
-            "lang_deep",
-            "large_electron",
-            "multi_client_fetch"
-          ]
         }
       },
       "state": "measured",
@@ -7456,35 +6359,27 @@
     },
     "X011": {
       "expected_strata": [],
-      "fires": 15,
+      "fires": 13,
       "id": "X011",
       "pseudo": false,
       "reason": "",
       "series": "X",
       "sources": {
         "cold": {
-          "fires": 8,
+          "fires": 10,
           "strata": [
             "autotools",
             "lang_deep",
             "lang_ecosystem",
             "large_electron",
-            "persist_surface"
+            "persist_surface",
+            "source_patched",
+            "vcs_git"
           ]
         },
         "malicious": {
-          "fires": 2,
+          "fires": 3,
           "strata": []
-        },
-        "warm": {
-          "fires": 5,
-          "strata": [
-            "autotools",
-            "lang_deep",
-            "lang_ecosystem",
-            "large_electron",
-            "persist_surface"
-          ]
         }
       },
       "state": "measured",
@@ -7493,13 +6388,15 @@
         "lang_deep",
         "lang_ecosystem",
         "large_electron",
-        "persist_surface"
+        "persist_surface",
+        "source_patched",
+        "vcs_git"
       ],
       "uid": "TS-0242"
     },
     "X012": {
       "expected_strata": [],
-      "fires": 5,
+      "fires": 3,
       "id": "X012",
       "pseudo": false,
       "reason": "",
@@ -7507,13 +6404,6 @@
       "sources": {
         "cold": {
           "fires": 3,
-          "strata": [
-            "multi_client_fetch",
-            "persist_surface"
-          ]
-        },
-        "warm": {
-          "fires": 2,
           "strata": [
             "multi_client_fetch",
             "persist_surface"
@@ -7529,7 +6419,7 @@
     },
     "X013": {
       "expected_strata": [],
-      "fires": 3,
+      "fires": 2,
       "id": "X013",
       "pseudo": false,
       "reason": "",
@@ -7537,12 +6427,6 @@
       "sources": {
         "cold": {
           "fires": 2,
-          "strata": [
-            "dkms_kernel"
-          ]
-        },
-        "warm": {
-          "fires": 1,
           "strata": [
             "dkms_kernel"
           ]
@@ -7568,7 +6452,7 @@
     },
     "X015": {
       "expected_strata": [],
-      "fires": 3,
+      "fires": 2,
       "id": "X015",
       "pseudo": false,
       "reason": "",
@@ -7576,12 +6460,6 @@
       "sources": {
         "cold": {
           "fires": 2,
-          "strata": [
-            "bin_repack"
-          ]
-        },
-        "warm": {
-          "fires": 1,
           "strata": [
             "bin_repack"
           ]
@@ -7660,20 +6538,13 @@
     },
     "X021": {
       "expected_strata": [],
-      "fires": 4,
+      "fires": 2,
       "id": "X021",
       "pseudo": false,
       "reason": "",
       "series": "X",
       "sources": {
         "cold": {
-          "fires": 2,
-          "strata": [
-            "dependency_heavy",
-            "multi_client_fetch"
-          ]
-        },
-        "warm": {
           "fires": 2,
           "strata": [
             "dependency_heavy",
@@ -7702,7 +6573,7 @@
     },
     "X023": {
       "expected_strata": [],
-      "fires": 12,
+      "fires": 11,
       "id": "X023",
       "pseudo": false,
       "reason": "",
@@ -7717,12 +6588,6 @@
         "malicious": {
           "fires": 10,
           "strata": []
-        },
-        "warm": {
-          "fires": 1,
-          "strata": [
-            "vcs_other"
-          ]
         }
       },
       "state": "measured",
@@ -7733,40 +6598,19 @@
     },
     "X024": {
       "expected_strata": [],
-      "fires": 43,
+      "fires": 18,
       "id": "X024",
       "pseudo": false,
       "reason": "",
       "series": "X",
       "sources": {
         "cold": {
-          "fires": 32,
+          "fires": 18,
           "strata": [
             "autotools",
-            "bin_repack",
-            "data_fonts",
-            "dkms_kernel",
             "lang_deep",
-            "lang_ecosystem",
             "large_electron",
             "multi_client_fetch",
-            "persist_surface",
-            "source_patched",
-            "vcs_git"
-          ]
-        },
-        "warm": {
-          "fires": 11,
-          "strata": [
-            "autotools",
-            "bin_repack",
-            "data_fonts",
-            "dkms_kernel",
-            "lang_deep",
-            "lang_ecosystem",
-            "large_electron",
-            "multi_client_fetch",
-            "persist_surface",
             "source_patched",
             "vcs_git"
           ]
@@ -7775,14 +6619,9 @@
       "state": "measured",
       "strata": [
         "autotools",
-        "bin_repack",
-        "data_fonts",
-        "dkms_kernel",
         "lang_deep",
-        "lang_ecosystem",
         "large_electron",
         "multi_client_fetch",
-        "persist_surface",
         "source_patched",
         "vcs_git"
       ],
@@ -7802,118 +6641,53 @@
     },
     "X026": {
       "expected_strata": [],
-      "fires": 173,
+      "fires": 26,
       "id": "X026",
       "pseudo": false,
       "reason": "",
       "series": "X",
       "sources": {
         "cold": {
-          "fires": 159,
+          "fires": 26,
           "strata": [
-            "autotools",
-            "bin_repack",
             "data_fonts",
-            "dependency_heavy",
             "dkms_kernel",
             "lang_deep",
             "lang_ecosystem",
             "large_electron",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "source_patched",
-            "vcs_git",
-            "vcs_other"
-          ]
-        },
-        "warm": {
-          "fires": 14,
-          "strata": [
-            "autotools",
-            "bin_repack",
-            "data_fonts",
-            "dependency_heavy",
-            "dkms_kernel",
-            "lang_deep",
-            "lang_ecosystem",
-            "large_electron",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "source_patched",
-            "vcs_git",
-            "vcs_other"
+            "source_patched"
           ]
         }
       },
       "state": "measured",
       "strata": [
-        "autotools",
-        "bin_repack",
         "data_fonts",
-        "dependency_heavy",
         "dkms_kernel",
         "lang_deep",
         "lang_ecosystem",
         "large_electron",
-        "maintainer_churn",
-        "multi_client_fetch",
-        "persist_surface",
-        "source_patched",
-        "vcs_git",
-        "vcs_other"
+        "source_patched"
       ],
       "uid": "TS-0257"
     },
     "X027": {
       "expected_strata": [],
-      "fires": 76,
+      "fires": 4,
       "id": "X027",
       "pseudo": false,
       "reason": "",
       "series": "X",
       "sources": {
         "cold": {
-          "fires": 67,
+          "fires": 4,
           "strata": [
-            "autotools",
-            "data_fonts",
-            "dependency_heavy",
-            "lang_deep",
-            "large_electron",
-            "multi_client_fetch",
-            "persist_surface",
-            "source_patched",
-            "vcs_git"
-          ]
-        },
-        "warm": {
-          "fires": 9,
-          "strata": [
-            "autotools",
-            "data_fonts",
-            "dependency_heavy",
-            "lang_deep",
-            "large_electron",
-            "multi_client_fetch",
-            "persist_surface",
-            "source_patched",
-            "vcs_git"
+            "source_patched"
           ]
         }
       },
       "state": "measured",
       "strata": [
-        "autotools",
-        "data_fonts",
-        "dependency_heavy",
-        "lang_deep",
-        "large_electron",
-        "multi_client_fetch",
-        "persist_surface",
-        "source_patched",
-        "vcs_git"
+        "source_patched"
       ],
       "uid": "TS-0258"
     },
@@ -7984,26 +6758,17 @@
     },
     "X033": {
       "expected_strata": [],
-      "fires": 10,
+      "fires": 4,
       "id": "X033",
       "pseudo": false,
       "reason": "",
       "series": "X",
       "sources": {
         "cold": {
-          "fires": 6,
-          "strata": [
-            "appimage_repack",
-            "autotools",
-            "lang_ecosystem",
-            "persist_surface"
-          ]
-        },
-        "warm": {
           "fires": 4,
           "strata": [
             "appimage_repack",
-            "autotools",
+            "dkms_kernel",
             "lang_ecosystem",
             "persist_surface"
           ]
@@ -8012,7 +6777,7 @@
       "state": "measured",
       "strata": [
         "appimage_repack",
-        "autotools",
+        "dkms_kernel",
         "lang_ecosystem",
         "persist_surface"
       ],

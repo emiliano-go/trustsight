@@ -7,7 +7,7 @@ from ...config import (
 from ...db import (
     get_last_analysis,
 )
-from ...diffdoc import parse_diff_lines
+from ...diffdoc import as_added_diff, parse_diff_lines
 from ...differ import (
     map_diff_lines,
     truncate_diff,
@@ -26,12 +26,15 @@ from ...rules import (
     get_raw_diff_lines_indexed,
 )
 from ...coverage import (
+    CoverageSignals,
     cut_hunk_details,
     gaps_from,
     note_stage_failure,
     stage_failures,
     oversized_lines,
+    parse_time_substitution_lines,
     unresolved_assignment_rows,
+    unresolved_source_lines,
 )
 from ...scoring import calculate_score
 from ...schema import (
@@ -48,6 +51,7 @@ from ..structural import (
     recipe_checksum_parity_finding,
 )
 from ..structural_rules import apply_structural_rules
+from ..buildfetch import has_unpinned_build_deps
 from ..version import (
     compare_installed_to_aur,
     is_vcs_package,
@@ -88,8 +92,9 @@ def _present_before_findings(diff_text: str, config: dict) -> list[dict]:
 
 
 def _campaign_corroboration(
-    score: int, breakdown, pkg_name: str, added_urls
-) -> tuple[int, list]:
+    score: int, breakdown, pkg_name: str, added_urls,
+    coverage_gaps=None,
+) -> tuple[int, list, dict]:
     """Attach a weight-0, attributed G007 entry when a run stands in a
     campaign's scope.
 
@@ -108,11 +113,16 @@ def _campaign_corroboration(
     Impersonated targets are deliberately **not** matched: a campaign targets
     ``yay``, and reviewing ``yay`` is not corroboration of anything.
     """
-    from ...db import active_campaigns
+    from ...db import active_campaigns, campaign_state_available
 
     campaigns = active_campaigns()
     if not campaigns:
-        return score, breakdown
+        return score, breakdown, {
+            "campaign_hold": False,
+            "campaign_id": "",
+            "campaign_state": ("none" if campaign_state_available()
+                               else "unavailable"),
+        }
 
     from urllib.parse import urlsplit
 
@@ -145,10 +155,19 @@ def _campaign_corroboration(
         scope = campaign.get("scope", {}) or {}
         if not isinstance(scope, dict):
             continue
-        names = {str(n) for n in scope.get("package_names", ()) or ()}
-        scoped_hosts = {str(h) for h in scope.get("hosts", ()) or ()}
-        scoped_signals = {str(s) for s in scope.get("signals", ()) or ()}
-        scoped_urls = {str(u) for u in scope.get("urls", ()) or ()}
+        def _set(key: str) -> set[str]:
+            try:
+                from itertools import islice
+
+                values = list(islice(scope.get(key, ()) or (), 10_000))
+            except (TypeError, ValueError):
+                return set()
+            return {str(value) for value in values if value}
+
+        names = _set("package_names")
+        scoped_hosts = _set("hosts")
+        scoped_signals = _set("signals")
+        scoped_urls = _set("urls")
         if (pkg_name not in names
                 and not (hosts & scoped_hosts)
                 and not (fired & scoped_signals)
@@ -163,8 +182,31 @@ def _campaign_corroboration(
                     f"{campaign['campaign_id']} (corroboration, weight 0)"),
             evidence={"campaign_id": campaign["campaign_id"]},
         ))
-        return score, enriched
-    return score, breakdown
+        # Sickness behavior: under campaign context, a standing boundary
+        # note is promoted from silent to visible.  Escalation-only; the
+        # entry is weight 0, so the score cannot move.
+        boundary_ids = sorted({
+            str(getattr(entry, "rule_id", "")) for entry in breakdown or ()
+            if str(getattr(entry, "rule_id", "")).startswith("W")
+        } | {str(gap) for gap in (coverage_gaps or ()) if gap})[:64]
+        if boundary_ids:
+            enriched.append(ScoreEntry(
+                rule_id="W013", severity="INFO", weight=0,
+                reason=("campaign perimeter boundary visible: "
+                        + ", ".join(boundary_ids)),
+                evidence={"campaign_id": campaign["campaign_id"],
+                          "boundaries": boundary_ids},
+            ))
+        return score, enriched, {
+            "campaign_hold": True,
+            "campaign_id": campaign["campaign_id"],
+            "campaign_state": "active",
+        }
+    return score, breakdown, {
+        "campaign_hold": False,
+        "campaign_id": "",
+        "campaign_state": "none",
+    }
 
 
 def _assemble_diff(project, old_commit: str, head_commit: str, config: dict,
@@ -332,7 +374,12 @@ def _make_fresh_analysis(
     # was false whenever there was no commit to read a tree from: a first
     # analysis of an empty repository examined nothing and reported a bare
     # "Low".  It is the same coverage accounting as every other producer.
-    gaps = gaps_from(
+    # A first analysis has no diff, but the recipe is still what the build
+    # runs.  Present it as an addition so the coverage readers can answer:
+    # a new package with a build-time registry install or an unresolved
+    # source must not read as fully covered.
+    recipe_diff = as_added_diff(head_pkgbuild or "")
+    gaps = gaps_from(CoverageSignals(
         # There is no diff on this path, so the recipe itself is what
         # names the scriptlet.
         tree_analyzed=(bool(tree_manifest) and tree_complete
@@ -342,7 +389,13 @@ def _make_fresh_analysis(
         degraded_stages=stage_failures(),
         unresolved_assignments=bool(unresolved_assignments),
         noextract_present=_has_noextract(head_pkgbuild or ""),
-    )
+        unresolved_sources=unresolved_source_lines(recipe_diff),
+        long_lines=oversized_lines(recipe_diff.split("\n")),
+        parse_time_substitutions=parse_time_substitution_lines(
+            recipe_diff, head_pkgbuild or ""),
+        unpinned_build_deps=has_unpinned_build_deps(
+            recipe_diff, head_pkgbuild or ""),
+    ))
     # The same scorer the incremental path uses, on the findings this path
     # actually made.  Novelty is empty and stays empty - "first seen" means
     # the novelty tier has nothing to say, not that the rules did not fire -

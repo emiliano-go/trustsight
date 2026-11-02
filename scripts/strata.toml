@@ -17,7 +17,7 @@ description = "Real prepare() with patches. Exercises tokenizer and R001 scope."
 target = 40
 selection = "PKGBUILD contains 'patch' or pkgname ends in '-patched'"
 source = "grep"
-expected_rules = ["H001", "H002", "H015", "H023"]
+expected_rules = ["C033", "H001", "H002", "H015", "H023", "T005"]
 
 [strata.dkms_kernel]
 description = "Kernel modules. .install runs depmod/dkms as root."
@@ -70,7 +70,7 @@ target = 25
 selection = "PKGBUILD has validpgpkeys or an .asc/.sig source"
 source = "grep"
 requires_tree = true
-expected_rules = ["H001", "H002", "H083", "H085", "T001", "T003"]
+expected_rules = ["H001", "H002", "H083", "H085", "T001", "T003", "T004"]
 
 [strata.multi_client_fetch]
 description = "Build functions fetch through aria2/axel/lftp/wget2/wget/curl/git/python requests."
@@ -86,7 +86,7 @@ target = 20
 selection = "git log over the package branch names >= 3 distinct author emails"
 source = "grep"
 requires_tree = true
-expected_rules = ["C006", "H026", "H037", "H044", "H049", "H050", "H051", "H054", "H058", "H074", "H086", "H088"]
+expected_rules = ["C006", "C034", "H026", "H037", "H044", "H049", "H050", "H051", "H054", "H058", "H074", "H086", "H088"]
 
 [strata.dependency_heavy]
 description = "Wide depends/makedepends/checkdepends/optdepends/provides/conflicts/replaces surfaces."

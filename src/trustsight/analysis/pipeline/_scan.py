@@ -37,6 +37,7 @@ from ..adoption import adoption_findings
 from ..buildfetch import has_unpinned_build_deps
 from ...changes import change_delta
 from ...coverage import (
+    CoverageSignals,
     begin_stage_tracking,
     cut_hunk_details,
     gaps_from,
@@ -93,6 +94,9 @@ def scan_diff(
     structural_rules: list[dict] | None = None,
 ) -> PackageFact:
     begin_stage_tracking()
+    from ..delivery._buildtree import normalise_tree_manifest
+
+    tree_manifest = normalise_tree_manifest(tree_manifest)
     if config is None:
         config = load_config()
 
@@ -246,7 +250,7 @@ def scan_diff(
         extra_lines=[*unresolved_sources, *parse_time_subs],
     )
     partial_files = partial_install_files(diff_text)
-    gaps = gaps_from(
+    gaps = gaps_from(CoverageSignals(
         diff_truncated=diff_truncated,
         scan_truncated=scan_truncated,
         tree_analyzed=(bool(tree_manifest) and tree_complete
@@ -267,7 +271,7 @@ def scan_diff(
         noextract_present=_has_noextract(current_text or diff_text),
         partial_hunks=len(cut_hunks),
         partial_files=partial_files,
-    )
+    ))
 
     # M-series predicates over the completed finding set
     # (after the ownership resolver), before scoring.
@@ -351,6 +355,9 @@ def analyze_package_text(
     tree_manifest: list[tuple[str, bytes]] | None = None,
 ) -> PackageFact:
     begin_stage_tracking()
+    from ..delivery._buildtree import normalise_tree_manifest
+
+    tree_manifest = normalise_tree_manifest(tree_manifest)
     if config is None:
         config = load_config()
 

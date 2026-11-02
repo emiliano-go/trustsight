@@ -1,6 +1,7 @@
 """Extracted from differ.py: _common."""
 
 import re
+from ..buckets import _SOURCE_ARRAY_START_RE
 from ..diffdoc import parse_diff_lines
 from ..tokenizer import split_lines
 
@@ -31,10 +32,6 @@ def _clean_url(token: str) -> str:
         end -= 1
     token = token[:end]
     return token
-
-_SOURCE_ARRAY_START_RE = re.compile(
-    r"^\s*source(?:_[a-z0-9_]+)?\s*\+?=\s*\("
-)
 
 _SOURCE_ARRAY_START_RE_TEXT = re.compile(_SOURCE_ARRAY_START_RE.pattern, re.MULTILINE)
 

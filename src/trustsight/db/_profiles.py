@@ -5,6 +5,8 @@ import sqlite3
 from typing import Optional
 from ._common import log
 from ._connection import get_connection
+from ._metadata import observation_seq
+from ..safe_text import clean
 from ._packages import _RESERVED_NAMES
 
 __all__ = ['alert_history', 'brand_new_packages_since', 'checkpoint_wal', 'forget_package', 'forget_prune', 'get_package_profile', 'introduction_rate_history', 'latest_cycle_time', 'maintainer_activity_history', 'record_alerts', 'record_cycle_events', 'save_package_profile']
@@ -289,8 +291,11 @@ def forget_prune(
             removed[r["name"]] = forget_package(r["name"])
     return removed
 
-def record_alerts(pairs: list[tuple[str, str]], now: str | None = None) -> list[tuple[str, str]]:
-    """Record ``(package, rule)`` alerts and return the ones not seen before.
+def record_alerts(
+    pairs: list[tuple], now: str | None = None,
+    audit: list[dict] | None = None,
+) -> list[tuple[str, str]]:
+    """Record ``(package, rule[, campaign])`` alerts, returning new pairs.
 
     ``full-aur --watch`` runs the same corpus cycle repeatedly, and a
     finding that has already been reported is not news: a maintainer who
@@ -299,13 +304,72 @@ def record_alerts(pairs: list[tuple[str, str]], now: str | None = None) -> list[
     arrives it is returned (and stored); afterwards only its counter and
     ``last_sent`` move, so the operator sees each finding once and the
     history still records how persistent it was.
+
+    A third element names the campaign cell.  For a campaign pair the
+    refractory table enforces **one alert per (rule, campaign) per window**,
+    with the window taken from the campaign's observation TTL.  The audit
+    list, when supplied, receives one deterministic row per campaign pair so
+    the cycle record can say what was emitted and what was debounced.
     """
     if not pairs:
         return []
     stamp = now or datetime.now(timezone.utc).isoformat()
     fresh: list[tuple[str, str]] = []
+    audited: set[tuple[str, str, int]] = set()
+    seq = observation_seq()
     with get_connection() as conn:
-        for package_name, rule_id in pairs:
+        for pair in pairs:
+            try:
+                raw_package, raw_rule = pair[0], pair[1]
+                if not isinstance(raw_package, str) or not isinstance(raw_rule, str):
+                    continue
+                package_name = clean(raw_package, limit=200).strip()
+                rule_id = clean(raw_rule, limit=200).strip()
+                campaign_id = clean(
+                    (pair[2] if len(pair) > 2 else "") or "", limit=200).strip()
+            except (IndexError, TypeError, KeyError):
+                continue
+            if not package_name or not rule_id:
+                continue
+            emitted = True
+            if campaign_id:
+                window_start = 0
+                campaign = conn.execute(
+                    "SELECT activated_at_obs, ttl_obs FROM campaign_alerts"
+                    " WHERE campaign_id = ?", (campaign_id,)).fetchone()
+                if campaign is not None:
+                    window_start = int(campaign["activated_at_obs"])
+                    expiry = window_start + int(campaign["ttl_obs"])
+                    if seq >= expiry:
+                        window_start = seq
+                key = (rule_id, campaign_id, window_start)
+                seen = conn.execute(
+                    "SELECT 1 FROM alert_refractory WHERE rule_id = ?"
+                    " AND campaign_id = ? AND window_start_obs = ?",
+                    key).fetchone()
+                if seen is not None:
+                    emitted = False
+                    conn.execute(
+                        "UPDATE alert_refractory SET last_observed_obs = ?"
+                        " WHERE rule_id = ? AND campaign_id = ?"
+                        " AND window_start_obs = ?",
+                        (seq, *key))
+                else:
+                    conn.execute(
+                        "INSERT INTO alert_refractory (rule_id, campaign_id,"
+                        " window_start_obs, first_emitted_obs, last_observed_obs)"
+                        " VALUES (?, ?, ?, ?, ?)",
+                        (rule_id, campaign_id, window_start, seq, seq))
+                audit_key = (rule_id, campaign_id, window_start)
+                if (audit is not None and len(audit) < 10_000
+                        and audit_key not in audited):
+                    audited.add(audit_key)
+                    audit.append({
+                        "rule_id": rule_id,
+                        "campaign_id": campaign_id,
+                        "window_start_obs": window_start,
+                        "emitted": emitted,
+                    })
             row = conn.execute(
                 "SELECT count FROM alert_state WHERE package_name = ? AND rule_id = ?",
                 (package_name, rule_id),
@@ -316,7 +380,8 @@ def record_alerts(pairs: list[tuple[str, str]], now: str | None = None) -> list[
                     "last_sent, count) VALUES (?, ?, ?, ?, 1)",
                     (package_name, rule_id, stamp, stamp),
                 )
-                fresh.append((package_name, rule_id))
+                if emitted:
+                    fresh.append((package_name, rule_id))
             else:
                 conn.execute(
                     "UPDATE alert_state SET last_sent = ?, count = count + 1 "

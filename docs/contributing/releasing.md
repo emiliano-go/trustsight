@@ -208,3 +208,22 @@ Two exclusions carry the weight here, and both are required:
   a `makepkg` build the tree is owned by a different user than the one
   building, so git refuses with `detected dubious ownership`, which says
   nothing about what the test was asking.
+
+## Pinning the harness and the feed after a detection release
+
+A detection release changes the instrument a sibling repository measures. Two
+pins move only after the TrustSight tag exists:
+
+- **Harness.** Update `.github/trustsight-commit` and
+  `defaults/environment.yml` to the release commit/version, then add the
+  campaign cells for any new rule and run `python -m harness coverage` and
+  `python -m harness regression --jobs auto`. A rule that is not in the pinned
+  core cannot be targeted: `test_coverage` fails with
+  `unknown_expected_rules`, which is the intended stop.
+- **Feed.** Regenerate `src/rule-catalog.generated.json` with
+  `TRUSTSIGHT_SRC=<checkout> python scripts/build_rule_catalog.py`, then run
+  `--check`. The contract artifact is the source of the id set; a catalog that
+  is short means the feed cannot explain a rule the tool can emit.
+
+Neither pin belongs in the TrustSight release commit: both name the commit they
+follow, and a pin to an unpublished revision is not reproducible.

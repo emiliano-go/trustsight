@@ -1,0 +1,16 @@
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,13 +1,3 @@
+ # kept
+-# old prose line 0
+-# old prose line 1
+-# old prose line 2
+-# old prose line 3
+-# old prose line 4
+-# old prose line 5
+-# old prose line 6
+-# old prose line 7
+-# old prose line 8
+-# old prose line 9
+ pkgname=demo
+ pkgver=1.0

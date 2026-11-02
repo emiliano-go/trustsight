@@ -302,7 +302,7 @@ def refusal_findings(diff_text: str, config, add, current_text=None,
 
             post = parse_recipe(current_text, file="PKGBUILD")
         except Exception:
-            pass
+            note_stage_failure("recipe-current-text-parse")
 
     # --- X026 / X027: refusals in executable positions -------------------
     names = _unresolved_names(post)

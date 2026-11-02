@@ -19,6 +19,7 @@ from ..build import (
     _function_shadow_findings,
     _reconstruction_findings,
 )
+from ..delivery._buildtree import normalise_tree_manifest
 from ..delivery import (
     _delivery_findings,
     install_hook_notice_only,
@@ -45,6 +46,7 @@ from ._checksums import _is_checksum_array, _package_fetch_client, addendum4_fin
 from ._common import _BINARY_ARTIFACT_RE, _TRUSTED_BUCKETS
 from ._hooks import install_script_findings
 from ._hygiene import _build_hygiene_findings, _splicing_findings, capability_in_diff, diff_structure_findings
+from ._missing_self import missing_self_findings, srcinfo_version_findings
 from ._provenance import _PREBUILT_SUFFIX, _declared_upstream_url, _fork_source_divergence, _head_upstream_host, _head_upstream_text, _prebuilt_host_divergence, _registered_domain, _source_divergence_allow, _upstream_domain_typosquat
 from ._signing import _signing_key_findings, _unread_carrier_findings
 
@@ -122,6 +124,7 @@ def _structural_findings(
     delta=None,
 ) -> list[dict]:
     source_buckets = source_buckets or {}
+    tree_manifest = normalise_tree_manifest(tree_manifest)
     findings: list[dict] = []
     # Every code-emitted finding names its location as a 1-based index into
     # the diff stream (`find_line_in_diff`, `_epoch_findings`, the IOC
@@ -268,6 +271,13 @@ def _structural_findings(
                if delta.gained or delta.lost else " (SKIP position moved)"),
             span=span, array=name,
             gained=", ".join(delta.gained), lost=", ".join(delta.lost))
+
+    # The missing-self axis: pure-diff removal/downgrade/prose predicates.
+    # They run after the aggregate owners above so a change that H024/H091/
+    # H001/C004/H019 already names is not repeated.
+    missing_self_findings(
+        diff_text, scope_doc, scope_pre, scope_post, add, config)
+    srcinfo_version_findings(current_text, tree_manifest, add)
 
     # Mildest shape: an isolated checksum insertion whose index does
     # not match the index at which the corresponding source entry appeared, so

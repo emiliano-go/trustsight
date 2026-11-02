@@ -114,7 +114,7 @@ and the `p95`/`zero` values with the ruleset, so the numbers here are an example
 from an earlier corpus snapshot rather than a fixed expectation:
 
 ```
-  source_patched: 554 diffs, p95=15, zero=86.6%
+  source_patched: 554 diffs, p95=15, zero=86.8%
   bin_repack: 1034 diffs, p95=20, zero=89.6%
   data_fonts: 185 diffs, p95=20, zero=74.6%
 ```

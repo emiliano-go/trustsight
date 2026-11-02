@@ -22,6 +22,7 @@ import urllib.request
 from pathlib import Path
 
 from .bounded_io import read_capped_with_deadline, read_file_capped
+from .safe_text import clean
 
 log = logging.getLogger(__name__)
 
@@ -55,6 +56,9 @@ _MAX_RESPONSE_BYTES = 64 * 1024
 #: package is the signal a reader acts on, and "Campaign across 50 packages
 #: (G010)" on a routine bulk refresh trains the reader to ignore the title.
 _CONTEXT_CLUSTER_RULES = frozenset({"G006", "G010"})
+
+#: A cluster is a membership list, not a data structure for hostile values.
+MAX_CLUSTER_MEMBERS = 1_000
 
 #: Reads `[notify] webhook` and `[notify] feed` from config.toml.
 _CONFIG_SECTION = "notify"
@@ -101,7 +105,9 @@ def _member_list(finding, key: str) -> list:
     if isinstance(value, str):
         return [value]
     try:
-        return list(value)
+        from itertools import islice
+
+        return list(islice(value, MAX_CLUSTER_MEMBERS + 1))
     except TypeError:
         return []
 
@@ -392,7 +398,14 @@ def alert_payload(cycle) -> dict:
         if not isinstance(finding, dict):
             continue
         rule_id = str(finding.get("rule_id", ""))
-        members = _member_list(finding, "members")
+        raw_members = _member_list(finding, "members")
+        # A malformed finding can carry a dict/list member; sorting a set of
+        # unhashables used to raise and abort the whole payload.  Keep only
+        # string member names, de-duplicate, bound and sort.
+        members = sorted({
+            clean(value, limit=200) for value in raw_members
+            if isinstance(value, str) and value
+        })[:MAX_CLUSTER_MEMBERS]
         # Only a G-series correlation cluster with at least two members is a
         # campaign.  A one-member "cluster" is a single-package signal, not a
         # coordinated set: the sweep emits H061 dependency hubs one member each,
@@ -456,6 +469,9 @@ def alert_payload(cycle) -> dict:
             "changed": cycle.changed,
             "removed": cycle.removed,
             "processed": cycle.processed,
+            # Refractory state is part of the cycle audit: what the emission
+            # layer emitted, and what it debounced for this window.
+            "refractory": list(getattr(cycle, "refractory", ()) or ()),
         },
         "alerts": _alert_entries(cycle),
         "over_threshold": over,

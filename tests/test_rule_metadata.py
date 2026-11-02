@@ -245,7 +245,7 @@ def test_every_live_rule_has_executable_wiring():
     """No live registry row is unwired, including computed-id dispatch."""
     live = {rule.id for rule in REGISTRY.all() if rule.status == "live"}
     anchors = {rule.id for rule in REGISTRY.all() if rule.status == "anchor"}
-    assert len(live) == 273
+    assert len(live) == 278
     assert len(anchors) == 11
     assert not live & anchors
     missing = sorted(live - _wired())

@@ -74,6 +74,10 @@ def pseudo_rule_ids() -> list[str]:
         scoring.P_TRUSTED_FORGE,
         scoring.P_NO_COMMIT_PIN,
         scoring.P_PREBUILT,
+        # Emitted by the report tag panel when N distinct weight-0 tag kinds
+        # converge on one diff.  It is a ledger entry, not a published rule,
+        # so consumers need an explanation without a docs heading.
+        "TAG_CONVERGENCE",
     })
 
 
@@ -218,7 +222,7 @@ def sample_ingest() -> dict:
 def contract() -> dict:
     """The whole contract document."""
     return {
-        "version": 1,
+        "version": 2,
         "rule_ids": rule_ids(),
         "pseudo_rule_ids": pseudo_rule_ids(),
         "severities": severities(),

@@ -154,6 +154,18 @@ def evaluate_fact(fact) -> dict[str, Any]:
     if coverage_note:
         verdict = f"{coverage_note} {verdict}"
 
+    from .tags import (
+        tag_convergence,
+        tag_events_from_breakdown,
+        tag_panel,
+    )
+
+    contacts = contact_panel(fact)
+    tag_events = tag_events_from_breakdown(
+        fact.score_breakdown,
+        contacts.get("records") if isinstance(contacts, dict) else (),
+    )
+
     raw = fact_to_dict(fact)
     policy = review_policy()
     raw.update({
@@ -216,6 +228,10 @@ def evaluate_fact(fact) -> dict[str, Any]:
         "diff_truncated": fact.diff_truncated,
         "scan_truncated": fact.scan_truncated,
         "version_comparison": fact.version_comparison,
+        "campaign_hold": bool(getattr(fact, "campaign_hold", False)),
+        "campaign_id": getattr(fact, "campaign_id", "") or "",
+        "campaign_state": getattr(fact, "campaign_state", "") or "unavailable",
+        "tender_point": _tender_point(fact),
         "is_trivial": is_trivial(fact, findings),
         "ioc_matches": list(fact.ioc_matches),
         # the indicator tier, promoted. Same facts as
@@ -226,7 +242,10 @@ def evaluate_fact(fact) -> dict[str, Any]:
         # The Contact Ledger panel: weight-0 first contacts, warm-only.  A
         # dict so a cold replay carries the standing
         # `contact_ledger_unavailable` note rather than a silent empty list.
-        "contacts": contact_panel(fact),
+        "contacts": contacts,
+        "tag_panel": tag_panel(tag_events),
+        "tag_convergence": tag_convergence(tag_events, _tag_threshold()),
+        "self_state": _self_state_safe(fact, raw),
         # Served from the recorded analysis rather than freshly computed
         # (#20); both False/"" on a fresh run. 
         "cached": bool(getattr(fact, "cached", False)),
@@ -289,6 +308,12 @@ REPORT_KEYS = (
     "cached",
     "cached_at",
     "contacts",
+    "tag_panel",
+    "self_state",
+    "campaign_hold",
+    "campaign_id",
+    "campaign_state",
+    "tender_point",
 )
 
 #: The aggregate verdict numbers.  Withheld unless the caller asks, because
@@ -326,6 +351,148 @@ def _ioc_row(match) -> dict:
     }
 
 
+def _tender_point(fact) -> dict:
+    """Unresolved verdicts over the configured window, or ``unavailable``."""
+    from .db import tender_point
+
+    months, floor = 6, 3
+    try:
+        from .config import load_config, load_thresholds
+
+        table = ((load_config().get("thresholds") or {}).get("tender") or {})
+        if not table:
+            table = (load_thresholds().get("tender") or {})
+        months = int(table.get("window_months", months))
+        floor = int(table.get("min_unresolved", floor))
+    except Exception:  # noqa: BLE001 - shipped defaults
+        pass
+    try:
+        return tender_point(getattr(fact, "package_name", ""), months, floor)
+    except Exception:  # noqa: BLE001 - a blind store is not a verdict
+        return {"state": "unavailable", "unresolved": 0, "months": months}
+
+
+def _self_state_safe(fact, raw: dict | None = None) -> dict:
+    """A self-state that never takes the report down with it."""
+    try:
+        return _self_state(fact, raw)
+    except Exception:  # noqa: BLE001 - blindness is reportable, not fatal
+        return {
+            "mode": "unavailable",
+            "blind": ["self_state_unavailable"],
+        }
+
+
+def _self_state(fact, raw: dict | None = None) -> dict:
+    """The instrument's own state: what this run could and could not see.
+
+    Deterministic by construction: observation counts and channel tags, no
+    wall-clock age.  A blind channel is named, never rendered as an empty
+    clean panel.
+    """
+    from .safe_text import clean
+    from .channel_state import BASELINE, IOC, WATCHLIST, pulled
+    from .config import (
+        SHIPPED_RULESET_VERSION,
+        local_ruleset_version,
+        ruleset_age_drift,
+    )
+    from .db import (
+        contact_ledger_available,
+        effective_observation_count,
+        observation_seq,
+        seed_observation_count,
+    )
+    from .scoring import maturity
+
+    try:
+        effective = int(effective_observation_count())
+    except Exception:  # noqa: BLE001 - a cold DB has no count
+        effective = 0
+    seq = 0
+    try:
+        seq = int(observation_seq())
+    except Exception:  # noqa: BLE001 - a cold DB has no clock
+        seq = 0
+    blind: list[str] = []
+    channels: dict[str, dict] = {}
+    for kind in (BASELINE, IOC, WATCHLIST):
+        try:
+            entry = pulled(kind) or {}
+        except Exception:  # noqa: BLE001
+            entry = {}
+        tag = clean(str(entry.get("tag") or ""), limit=200) or None
+        obs = entry.get("obs")
+        age = None
+        if isinstance(obs, int) and seq >= obs:
+            age = seq - obs
+        channels[kind] = {
+            "tag": tag,
+            "channel": clean(str(entry.get("channel") or ""), limit=200),
+            "age_observations": age,
+        }
+        if not tag:
+            blind.append(f"{kind}_never_pulled")
+    try:
+        from .ioc_baseline import has_upstream_repo_entries
+
+        federation = bool(has_upstream_repo_entries())
+    except Exception:  # noqa: BLE001 - an absent channel is blind
+        federation = False
+    if not federation:
+        blind.append("federation_unavailable")
+    try:
+        contacts_available = bool(contact_ledger_available())
+    except Exception:  # noqa: BLE001
+        contacts_available = False
+    if not contacts_available:
+        blind.append("contact_ledger_unavailable")
+    try:
+        seed_observations = int(seed_observation_count())
+    except Exception:  # noqa: BLE001
+        seed_observations = 0
+    try:
+        local_version = local_ruleset_version()
+        drift = bool(ruleset_age_drift())
+    except Exception:  # noqa: BLE001 - an unreadable rules.toml is blind
+        local_version, drift = 0, True
+        blind.append("ruleset_unreadable")
+    return {
+        "mode": "warm" if maturity(effective) >= 1.0 else "cold",
+        "observation_seq": seq,
+        "effective_observations": effective,
+        "seed_observations": seed_observations,
+        "ruleset": {
+            "shipped_version": SHIPPED_RULESET_VERSION,
+            "local_version": local_version,
+            "age_drift": drift,
+        },
+        "instrument": {
+            "config_fingerprint": clean(
+                str((raw or {}).get("config_fingerprint", "")), limit=200),
+        },
+        "channels": dict(sorted(channels.items())),
+        "federation_available": federation,
+        "contacts_available": contacts_available,
+        "campaign_state": str(getattr(fact, "campaign_state", "") or "unavailable"),
+        "tender_point_state": _tender_point(fact).get("state", "unavailable"),
+        "blind": sorted(blind),
+    }
+
+
+def _tag_threshold() -> int:
+    """The configured convergence floor, tolerant of a missing table."""
+    try:
+        from .config import load_config, load_thresholds
+
+        table = ((load_config().get("thresholds") or {}).get("tags") or {})
+        if not table:
+            table = (load_thresholds().get("tags") or {})
+        return int(table.get("convergence_kinds", 4))
+    except Exception:  # noqa: BLE001 - the shipped default is the floor
+        return 4
+
+
 def report_body(
     evaluated: dict[str, Any],
     *,
@@ -359,6 +526,20 @@ def report_body(
         }
         for finding in evaluated.get("findings", ())
     ]
+    convergence = evaluated.get("tag_convergence")
+    if isinstance(convergence, dict) and convergence.get("kinds"):
+        kinds = [str(kind) for kind in convergence.get("kinds")][:16]
+        findings.append({
+            "rule_id": "TAG_CONVERGENCE",
+            "rule_uid": None,
+            "file": "",
+            "line": None,
+            "description": "tag convergence: " + ", ".join(kinds),
+            "template": "{match}",
+            "evidence": dict(convergence),
+            "severity": "INFO",
+            "techniques": [],
+        })
     body = {
         "package": evaluated.get("package", ""),
         "old_version": evaluated.get("old_version", ""),
@@ -366,6 +547,10 @@ def report_body(
         "old_commit": evaluated.get("old_commit", ""),
         "new_commit": evaluated.get("new_commit", ""),
         "version_comparison": evaluated.get("version_comparison", ""),
+        "campaign_hold": bool(evaluated.get("campaign_hold", False)),
+        "campaign_id": str(evaluated.get("campaign_id", "") or ""),
+        "campaign_state": str(evaluated.get("campaign_state", "") or "unavailable"),
+        "tender_point": dict(evaluated.get("tender_point", {}) or {}),
         "verdict": evaluated.get("verdict", ""),
         "findings": findings,
         # the layer profile, additive.
@@ -451,6 +636,10 @@ def report_body(
         # carries the standing cold-replay note, so an empty panel is never
         # read as a panel that found nothing.
         "contacts": dict(evaluated.get("contacts", {}) or {}),
+        "tag_panel": list(evaluated.get("tag_panel", ()) or ()
+                          if isinstance(evaluated.get("tag_panel"), (list, tuple))
+                          else ()),
+        "self_state": dict(evaluated.get("self_state", {}) or {}),
     }
     if include_score:
         body["score"] = evaluated.get("score", 0)

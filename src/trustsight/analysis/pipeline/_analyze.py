@@ -59,6 +59,7 @@ from ..adoption import adoption_findings, credential_egress_finding, source_take
 from ..buildfetch import has_unpinned_build_deps
 from ...changes import change_delta
 from ...coverage import (
+    CoverageSignals,
     begin_stage_tracking,
     gaps_from,
     note_stage_failure,
@@ -605,7 +606,7 @@ def analyze_package(
         added_names=added_names,
     )
 
-    gaps = gaps_from(
+    gaps = gaps_from(CoverageSignals(
         diff_truncated=diff_truncated,
         scan_truncated=scan_truncated,
         tree_analyzed=(bool(tree_manifest) and tree_complete
@@ -635,7 +636,7 @@ def analyze_package(
         noextract_present=_has_noextract(head_pkgbuild or diff_text),
         partial_hunks=len(cut_hunks),
         partial_files=partial_files,
-    )
+    ))
 
     # T-series temporal novelty. Cold index declines
     # (the rule is silent until the ecosystem ledger has observations).
@@ -702,8 +703,8 @@ def analyze_package(
         diff_text, pkg_name, current_text=head_pkgbuild
     )
 
-    score, breakdown = _campaign_corroboration(
-        score, breakdown, pkg_name, source_changes.added_urls)
+    score, breakdown, campaign_context = _campaign_corroboration(
+        score, breakdown, pkg_name, source_changes.added_urls, gaps)
 
     # Companion content the recorded baseline already held: reported, never
     # scored.  Appended after the campaign pass so it cannot corroborate a
@@ -788,6 +789,9 @@ def analyze_package(
         score_breakdown=breakdown,
         final_score=score,
         ioc_matches=ioc_matches,
+        campaign_hold=bool(campaign_context.get("campaign_hold")),
+        campaign_id=str(campaign_context.get("campaign_id") or ""),
+        campaign_state=str(campaign_context.get("campaign_state") or "unavailable"),
     )
     # An override marked `requires_clear_indicators` is visible-only when an
     # indicator matched this run: the finding renders (with the override and

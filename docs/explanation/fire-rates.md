@@ -66,7 +66,7 @@ Per-rule rates are below. The aggregate figures the security model cites are:
 | benign corpus size | 8,393 diffs |
 | benign median | 0 |
 | benign 95th percentile | 30 |
-| benign diffs scoring 0 | 74.5% |
+| benign diffs scoring 0 | 74.8% |
 | benign diffs above the 20-point threshold | 6.8% |
 | percentile at which 20 sits | 93.2th |
 | malicious 5th percentile | 40 |

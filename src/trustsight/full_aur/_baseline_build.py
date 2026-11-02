@@ -462,38 +462,11 @@ def _run_baseline_build(
         }
         return "ok"
 
-    # A direct AUR dependency missing from the corpus makes the root's walk
-    # fail closed as deps_not_scanned.  The watcher analyses only changed
-    # packages, so an unchanged dependency that predates the corpus would
-    # otherwise stay unread indefinitely.  Baseline those dependencies here,
-    # before the roots, with depth 0 so this cannot recurse.  Anything in the
-    # current delta is excluded: its own turn as a root must record the diff.
-    missing_deps, prefill_capped = _missing_direct_dependencies(
-        new_meta, pending, set(to_process), MAX_DEPTH_NODES)
-    if missing_deps:
-        _log(
-            f"Prefilling {len(missing_deps)} missing AUR "
-            f"dependenc{'y' if len(missing_deps) == 1 else 'ies'} "
-            "so this cycle's walks can read them"
-        )
-        prefetched = 0
-        for dep_name, fetched in _iter_prefetched(
-                missing_deps, _fetch_one, _fetch_workers()):
-            status, _fact = _analyse_and_store(dep_name, fetched, 0)
-            if status == "ok":
-                prefetched += 1
-            else:
-                log.warning(
-                    "dependency prefill for %s did not complete (%s); the "
-                    "dependent may report deps_not_scanned", dep_name, status)
-        _log(f"Prefilled {prefetched}/{len(missing_deps)} dependencies")
-    if prefill_capped:
-        _log(
-            f"Dependency prefill stopped at its bound "
-            f"({MAX_DEPTH_NODES} fetches / {_MAX_PREFILL_CANDIDATES} "
-            "candidates); more may remain for a later cycle"
-        )
-
+    _prefill_missing_dependencies(
+        new_meta, pending, to_process, MAX_DEPTH_NODES,
+        _missing_direct_dependencies, _log, _iter_prefetched, _fetch_one,
+        _fetch_workers, _analyse_and_store, log, _MAX_PREFILL_CANDIDATES,
+    )
     fetch_failures = 0
     not_vetted = 0
     stopped = False
@@ -549,6 +522,79 @@ def _run_baseline_build(
         result.stopped = True
         _log("Stop requested; progress saved for the next cycle")
 
+    _finish_cycle(
+        result=result, scores=scores, over_threshold=over_threshold,
+        ioc_hits=ioc_hits, refusals=refusals, detail=detail, partial=partial,
+        pending=pending, pending_all=pending_all, processed=processed,
+        backfill_day_end=backfill_day_end, now=locals().get("now", 0),
+        new_meta=new_meta,
+        old_meta=old_meta, added=added, changed=changed, removed=removed,
+        popular=popular, _run_corpus_sweep=_run_corpus_sweep,
+        _report_expired_campaigns=_report_expired_campaigns,
+        _record_cycle_feed=_record_cycle_feed,
+        _persist_metadata=_persist_metadata,
+        clear_resume_state=clear_resume_state,
+        _set_since_cursor=_set_since_cursor, _log=_log,
+        record_alerts=record_alerts,
+        _NON_ALERTING_CLUSTER_RULES=_NON_ALERTING_CLUSTER_RULES,
+        _IMPERSONATION_GATED_RULES=_IMPERSONATION_GATED_RULES,
+        _FLAGGED_SCORE=_FLAGGED_SCORE,
+        _FLAGGED_REPORT_LIMIT=_FLAGGED_REPORT_LIMIT,
+        batch_start=batch_start, export_path=export_path, sign_key=sign_key,
+        time=time,
+    )
+    return result
+
+def _prefill_missing_dependencies(
+    new_meta, pending, to_process, MAX_DEPTH_NODES,
+    _missing_direct_dependencies, _log, _iter_prefetched, _fetch_one,
+    _fetch_workers, _analyse_and_store, log, _MAX_PREFILL_CANDIDATES,
+) -> None:
+    """Baseline direct dependencies the roots need before the roots run."""
+    # A direct AUR dependency missing from the corpus makes the root's walk
+    # fail closed as deps_not_scanned.  The watcher analyses only changed
+    # packages, so an unchanged dependency that predates the corpus would
+    # otherwise stay unread indefinitely.  Baseline those dependencies here,
+    # before the roots, with depth 0 so this cannot recurse.  Anything in the
+    # current delta is excluded: its own turn as a root must record the diff.
+    missing_deps, prefill_capped = _missing_direct_dependencies(
+        new_meta, pending, set(to_process), MAX_DEPTH_NODES)
+    if missing_deps:
+        _log(
+            f"Prefilling {len(missing_deps)} missing AUR "
+            f"dependenc{'y' if len(missing_deps) == 1 else 'ies'} "
+            "so this cycle's walks can read them"
+        )
+        prefetched = 0
+        for dep_name, fetched in _iter_prefetched(
+                missing_deps, _fetch_one, _fetch_workers()):
+            status, _fact = _analyse_and_store(dep_name, fetched, 0)
+            if status == "ok":
+                prefetched += 1
+            else:
+                log.warning(
+                    "dependency prefill for %s did not complete (%s); the "
+                    "dependent may report deps_not_scanned", dep_name, status)
+        _log(f"Prefilled {prefetched}/{len(missing_deps)} dependencies")
+    if prefill_capped:
+        _log(
+            f"Dependency prefill stopped at its bound "
+            f"({MAX_DEPTH_NODES} fetches / {_MAX_PREFILL_CANDIDATES} "
+            "candidates); more may remain for a later cycle"
+        )
+
+
+
+def _finish_cycle(
+    *, result, scores, over_threshold, ioc_hits, refusals, detail, partial,
+    pending, pending_all, processed, backfill_day_end, now, new_meta, old_meta,
+    added, changed, removed, popular, _run_corpus_sweep,
+    _report_expired_campaigns, _record_cycle_feed, _persist_metadata,
+    clear_resume_state, _set_since_cursor, _log, record_alerts,
+    _NON_ALERTING_CLUSTER_RULES, _IMPERSONATION_GATED_RULES, _FLAGGED_SCORE,
+    _FLAGGED_REPORT_LIMIT, batch_start, export_path, sign_key, time,
+) -> None:
+    """Scores, partial/backfill exits, sweep, alerts and the closing report."""
     # Per-cycle scores become the cycle's report and its alerts on EVERY
     # path: a capped chunk used to return without them, which dropped the
     # over_threshold list for every chunk but the last - the worst findings

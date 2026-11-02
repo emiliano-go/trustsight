@@ -17,3 +17,8 @@ data
 *.whl
 Dockerfile
 .dockerignore
+
+# Local deployment files and secrets must not enter an image layer.
+deploy/
+.env
+.env.*

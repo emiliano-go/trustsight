@@ -25,6 +25,7 @@ import json
 import logging
 import os
 import re
+import threading
 import urllib.request
 from urllib.parse import urlsplit
 from collections.abc import Callable
@@ -435,6 +436,7 @@ def _newest_semver_tag(releases) -> str | None:
 
 _LATEST_TAG_CACHE: str | None = None
 _LATEST_TAG_RESOLVED = False
+_LATEST_TAG_LOCK = threading.Lock()
 
 
 def latest_release_tag() -> str | None:
@@ -444,31 +446,42 @@ def latest_release_tag() -> str | None:
     highest semver tag once per process.  Returns ``None`` when offline, on
     any network or parse failure, or when no versioned release exists - the
     caller treats that as "cannot tell", never as "up to date".
+
+    Only a *definitive* answer is cached.  A timeout, truncated body or
+    parse failure is transient, and a long-lived watcher or library process
+    must try again on the next call rather than pinning ``None`` for its
+    lifetime.
     """
     global _LATEST_TAG_CACHE, _LATEST_TAG_RESOLVED
     if _LATEST_TAG_RESOLVED:
         return _LATEST_TAG_CACHE
-    _LATEST_TAG_RESOLVED = True
-    if offline():
-        return None
-    try:
-        url = f"{GITHUB_API_URL}/repos/emiliano-go/trustsight/releases?per_page=30"
-        req = urllib.request.Request(
-            url,
-            headers={
-                "Accept": "application/vnd.github+json",
-                "User-Agent": _USER_AGENT,
-            },
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            body = _read_releases_json(resp)
-        # A truncated or timed-out body must not be parsed as if complete.
-        if body is None:
+    with _LATEST_TAG_LOCK:
+        if _LATEST_TAG_RESOLVED:
+            return _LATEST_TAG_CACHE
+        if offline():
+            # Offline is a current condition, not an answer about the newest
+            # tag; a later call once the network is back must still ask.
             return None
-        _LATEST_TAG_CACHE = _newest_semver_tag(json.loads(body))
-    except Exception:
-        log.debug("failed to resolve the latest release tag", exc_info=True)
-    return _LATEST_TAG_CACHE
+        try:
+            url = f"{GITHUB_API_URL}/repos/emiliano-go/trustsight/releases?per_page=30"
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "Accept": "application/vnd.github+json",
+                    "User-Agent": _USER_AGENT,
+                },
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                body = _read_releases_json(resp)
+            # A truncated or timed-out body must not be parsed as if complete.
+            if body is None:
+                return None
+            _LATEST_TAG_CACHE = _newest_semver_tag(json.loads(body))
+        except Exception:
+            log.debug("failed to resolve the latest release tag", exc_info=True)
+            return None
+        _LATEST_TAG_RESOLVED = True
+        return _LATEST_TAG_CACHE
 
 
 def asset_url(asset_name: str, tag: str | None = None,

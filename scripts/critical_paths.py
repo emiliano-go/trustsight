@@ -109,5 +109,4 @@ CRITICAL_PATHS = frozenset({
     "scripts/commit_signing_key.asc",
     "packaging/aur/PKGBUILD",
     "docs/reference/baseline-keys.md",
-    "src/trustsight/full_aur/baseline_pubkey.pem",
 })

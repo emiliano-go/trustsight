@@ -2,14 +2,11 @@
 
 import json
 import time
-from ...buckets import classify_urls
 from ...config import (
-    drifted_shipped_rules,
     load_config,
     load_rules,
 )
 from ...db import (
-    effective_observation_count,
     get_last_analysis,
     get_package,
     get_package_id,
@@ -21,13 +18,8 @@ from ...db import (
     update_package_version,
     upsert_package,
 )
-from ...diffdoc import diff_shape_fp
 from ...differ import (
-    detect_gpg_verification_removed,
-    detect_verification_evidence,
     extract_urls_from_diff,
-    map_diff_lines,
-    resolved_source_urls,
 )
 from ...fetcher import (
     clone_or_fetch,
@@ -38,67 +30,36 @@ from ...fetcher import (
     get_srcinfo_at_commit,
 )
 from ...findings import stamp
+from ...novelty import build_novelty_context  # noqa: F401 - patched via the facade
 from ...sandbox.git_client import GitOpError, GitSandboxUnavailable
-from ...novelty import (
-    build_novelty_context,
-)
 from ...deps import extract_dependency_changes
 from ...override import (
-    acknowledged_url_rows,
     filter_triggered_rules,
     match_url_acks,
     suppress_acknowledged_url_findings,
 )
 from ...rules import (
-    apply_rules,
     clamp_diff_lines,
-    clamp_text,
-    get_raw_diff_lines_indexed,
 )
-from ..adoption import adoption_findings, credential_egress_finding, source_takeover_finding
-from ..buildfetch import has_unpinned_build_deps
-from ...changes import change_delta
+from ..adoption import adoption_findings
 from ...coverage import (
     CoverageSignals,
     begin_stage_tracking,
-    gaps_from,
     note_stage_failure,
-    stage_failures,
-    parse_time_substitution_lines,
     resolution_coverage,
-    unresolved_assignment_rows,
-    unresolved_source_lines,
 )
-from ...scoring import ScoreEntry, calculate_score
+from ...scoring import ScoreEntry
 from ...schema import (
     with_changes,
-    ExecutionChanges,
     PackageFact,
     fact_to_dict,
 )
-from ...tokenizer import tokenize_and_resolve_indexed
 from ..base import (
-    _aggregate_pinning,
     _ensure_init,
     _get_installed_version,
-    _has_install_hook,
     _without_notice_only_install_modifications,
 )
-from ..composition import (
-    _meta_annotations,
-    maintainer_keyring_composition,
-    naming_cluster_annotation,
-    naming_typosquat_finding,
-)
-from ..ioc_match import ioc_baseline_matches
-from ..maintainer import _check_untrusted_maintainer_takeover
 from ..placeholder import placeholder_finding
-from ..structural import (
-    _structural_findings,
-    partial_install_files,
-    unchanged_upstream_host,
-)
-from ..structural_rules import apply_structural_rules
 from ..version import (
     any_version_scalar_moved,
     compare_installed_to_aur,
@@ -108,7 +69,8 @@ from ..version import (
 )
 from ..temporal import _package_is_new, _recent_update, _stale_revival
 from ._common import log
-from ._tree import _added_dependency_names, _binary_metadata_finding, _cached_analysis, _deps_not_scanned, _has_noextract, _scriptlet_files_unread
+from ._core import FactIdentity, ScanInput, finalise_fact, scan_recipe
+from ._tree import _added_dependency_names, _binary_metadata_finding, _cached_analysis
 
 __all__ = ['_make_fresh_analysis', '_walk_dependencies', 'analyze_package', 'apply_diff_caps', 'scored_source_urls']
 
@@ -263,7 +225,6 @@ def analyze_package(
         project, old_commit, head_commit, config, pkg_name, parent_baseline,
         diff_text, diff_summary, generated_truncated)
 
-    source_changes = extract_urls_from_diff(diff_text)
     pkgver_changed, _pkgver_old, _pkgver_new = pkgver_move_in_diff(
         diff_text, head_pkgbuild
     )
@@ -271,12 +232,10 @@ def analyze_package(
 
     old_maintainer = get_maintainer_from_commit(project, old_commit) or ""
     new_maintainer = get_maintainer_from_commit(project, head_commit) or ""
-
     if not old_maintainer:
         pkg_row = get_package(pkg_name)
         if pkg_row and pkg_row.get("current_maintainer"):
             old_maintainer = pkg_row["current_maintainer"]
-
     from ..maintainer import maintainer_identity
 
     maintainer_changed = bool(
@@ -284,56 +243,15 @@ def analyze_package(
         and maintainer_identity(old_maintainer) != maintainer_identity(new_maintainer)
     )
 
-    # An acknowledged URL is known to the operator for this package, so it
-    # contributes no novelty and no bucket prior.  The structural rules
-    # keep the full URL list and bucket map: an ack is about the generic
-    # provenance score, not about switching off a concrete finding.
-    declared = set(source_changes.declared_urls)
-    source_urls = [u for u in source_changes.added_urls if u not in declared]
-    url_acks = match_url_acks(pkg_name, source_urls)
-    scored_urls = [u for u in source_urls if u not in url_acks]
+    tree_manifest, tree_complete = (
+        project.tree_files(head_commit) if head_commit else ([], False))
 
-    from ...recipedoc import parse_recipe as _parse_recipe
-
-    _post_source = (
-        _parse_recipe(head_pkgbuild, file="PKGBUILD").arrays.get("source", ())
-        if head_pkgbuild else ()
-    )
-    source_buckets = classify_urls(
-        source_urls,
-        upstream_host=unchanged_upstream_host(diff_text, head_pkgbuild),
-    )
-
-    novelty = build_novelty_context(
-        scored_urls,
-        package_id,
-        maintainer=new_maintainer,
-        record=record,
-        package_name=pkg_name,
-        source_array=_post_source,
-        source_buckets=source_buckets,
-    )
-
-    resolved_strings, unresolved_strings, resolved_indices = (
-        tokenize_and_resolve_indexed(diff_text)
-    )
-    raw_lines, raw_indices = get_raw_diff_lines_indexed(diff_text)
-    line_map = map_diff_lines(diff_text)
-
-    triggered_rules = apply_rules(
-        resolved_strings, raw_lines,
-        include_experimental=config.get("rules", {}).get("experimental", False),
-        line_map=line_map,
-        resolved_indices=resolved_indices,
-        raw_indices=raw_indices,
-    )
-    tree_manifest, tree_complete = project.tree_files(head_commit) if head_commit else ([], False)
-    # A committed binary changing produces an *empty* diff - git emits no
-    # body for it - so nothing downstream can see the change. The blob id
-    # is a content hash and both trees are already open.
+    # Git-only findings that must sit before the structural pass, exactly
+    # where they were appended before the merge.
+    pre_structural: list[dict] = []
     swapped = project.opaque_changed(old_commit, head_commit)
     if swapped:
-        triggered_rules.append(stamp({
+        pre_structural.append(stamp({
             "rule_id": "C009" if version_moved else "C008",
             "name": ("Unread Content Moved With The Version" if version_moved
                      else "Unread Content Moved Under A Stable Version"),
@@ -348,22 +266,14 @@ def analyze_package(
             "params": {"carrier": "committed-binary",
                        "members": ", ".join(swapped[:5])},
         }))
-    # A binary metadata file is a separate blind spot from a committed
-    # binary: git emits no body for it either, but unlike an opaque member
-    # the analysis claims to read it, and a binary PKGBUILD is never
-    # legitimate.  The HIGH finding plus the gap is what stops it reading
-    # clean.
     binary_meta = project.binary_meta(old_commit, head_commit)
     if binary_meta:
-        triggered_rules.append(_binary_metadata_finding(binary_meta))
-    # H092 on the review path: the generated metadata and the recipe must
-    # describe the same package.  Host-level, the comparison measured
-    # FP-free on the corpus path, where it has always run.
-    from ...full_aur.properties import metadata_divergence
+        pre_structural.append(_binary_metadata_finding(binary_meta))
 
+    from ...full_aur.properties import metadata_divergence
     srcinfo_text = get_srcinfo_at_commit(project, head_commit)
     for host in metadata_divergence(head_pkgbuild, srcinfo_text):
-        triggered_rules.append(stamp({
+        pre_structural.append(stamp({
             "rule_id": "H092",
             "name": "Metadata Names A Source The Recipe Does Not",
             "severity": "HIGH", "category": "integrity",
@@ -374,7 +284,7 @@ def analyze_package(
 
     divergent = metadata_recipe_divergence(head_pkgbuild, srcinfo_text)
     if divergent:
-        triggered_rules.append(stamp({
+        pre_structural.append(stamp({
             "rule_id": "H103",
             "name": "Metadata And Recipe Disagree",
             "severity": "HIGH", "category": "integrity",
@@ -382,15 +292,11 @@ def analyze_package(
                       + ", ".join(divergent)),
             "params": {"fields": ", ".join(divergent)},
         }))
-    # G8, directional: a source the PKGBUILD fetches that the
-    # committed .SRCINFO never names is the executable/metadata split
-    # (HIGH); the reverse is stale metadata (INFO).  Both cite the two
-    # documents so the reader can compare them directly.
     from ..crossfile import line_of, source_divergence
 
     pkgbuild_only, srcinfo_only = source_divergence(head_pkgbuild, srcinfo_text)
     if pkgbuild_only:
-        triggered_rules.append(stamp({
+        pre_structural.append(stamp({
             "rule_id": "H103",
             "name": "Metadata And Recipe Disagree",
             "severity": "HIGH", "category": "integrity",
@@ -403,7 +309,7 @@ def analyze_package(
                        "metadata_file": ".SRCINFO"},
         }))
     elif srcinfo_only:
-        triggered_rules.append(stamp({
+        pre_structural.append(stamp({
             "rule_id": "H103",
             "name": "Metadata And Recipe Disagree",
             "severity": "INFO", "category": "integrity",
@@ -415,8 +321,7 @@ def analyze_package(
                        "sources": ", ".join(srcinfo_only),
                        "recipe_file": "PKGBUILD"},
         }))
-    # only the immediately preceding recorded review of this
-    # package composes; a gap in history degrades to no-firing.
+
     previous_diff = ""
     if last is not None:
         try:
@@ -424,83 +329,12 @@ def analyze_package(
                 previous_diff = str(last.get("raw_diff") or "")
         except AttributeError:
             previous_diff = ""
-    # /: one change-as-data construction, shared
-    # by the structural rules and the stored `change` object.
-    change_delta_obj = change_delta(clamp_text(diff_text), pkg_name,
-                                current_text=head_pkgbuild)
-    triggered_rules.extend(
-        _structural_findings(
-            clamp_text(diff_text), source_changes, source_buckets,
-            maintainer_changed=maintainer_changed,
-            package_name=pkg_name, config=config,
-            current_text=clamp_text(head_pkgbuild),
-            tree_manifest=tree_manifest,
-            whole_recipe=full_recipe,
-            previous_diff=previous_diff,
-            previous_commit=old_commit,
-            current_commit=head_commit,
-            delta=change_delta_obj,
-        )
-    )
-    triggered_rules.extend(
-        apply_structural_rules(
-            clamp_text(diff_text),
-            current_text=clamp_text(head_pkgbuild),
-            package_name=pkg_name,
-        )
-    )
-    if tree_manifest:
-        from ..delivery import scan_tree_manifest
-        triggered_rules.extend(
-            scan_tree_manifest(tree_manifest, source_changes.added_urls, pkg_name)
-        )
-    triggered_rules = _without_notice_only_install_modifications(
-        triggered_rules, diff_text)
-    triggered_rules = suppress_acknowledged_url_findings(
-        triggered_rules, pkg_name, url_acks)
-    from ..persistence import stand_down_committed_staging
-    triggered_rules = stand_down_committed_staging(triggered_rules, tree_manifest)
-    expired_overrides: list[str] = []
-    triggered_rules, suppressed_rules = filter_triggered_rules(
-        triggered_rules, package=pkg_name, expired_out=expired_overrides
-    )
-    recent = _recent_update(project, head_commit)
-    if recent:
-        triggered_rules.append(recent)
-    new_pkg = _package_is_new(project, head_commit, pkg_name)
-    if new_pkg:
-        triggered_rules.append(new_pkg)
-    revived = _stale_revival(project, old_commit, head_commit)
-    if revived:
-        triggered_rules.append(revived)
 
-    if not any(r["rule_id"] == "R007" for r in triggered_rules):
-        if _has_install_hook(diff_text):
-            triggered_rules.append(stamp({
-                "rule_id": "H023", "name": "Install Hook Present",
-                "severity": "INFO", "category": "context",
-                "match": "PKGBUILD declares an install hook",
-            }))
-
-    if detect_gpg_verification_removed(diff_text):
-        triggered_rules.append(stamp({
-            "rule_id": "H024", "name": "GPG Verification Removed",
-            "severity": "HIGH", "category": "integrity",
-            "match": "validpgpkeys was populated and is now empty or removed",
-        }))
-
-    # H086 compares the *previous* recorded AUR state against the current
-    # one, so the read has to happen before update_aur_orphan_state below.
+    # H086 compares the previous recorded AUR state before the persistence
+    # write below updates it.
     was_orphaned = get_aur_orphan_state(pkg_name)
-
-    takeover = _check_untrusted_maintainer_takeover(
-        maintainer_changed, new_maintainer
-    )
-    if takeover:
-        triggered_rules.append(takeover)
-
-    # H086/H087/H088.  Emitted before the meta annotations so H088 is in the
-    # breakdown any composition or coverage logic downstream reads.
+    adopted = was_orphaned == 1 and (bool(new_maintainer) or aur_orphaned is False)
+    late_extra: list[dict] = []
     adoption_findings(
         diff_text,
         package_name=pkg_name,
@@ -509,65 +343,33 @@ def analyze_package(
         pkgver_moved=pkgver_changed,
         current_text=head_pkgbuild,
         add=lambda rid, name, severity, category, match, **params: (
-            triggered_rules.append(stamp({
+            late_extra.append(stamp({
                 "rule_id": rid, "name": name, "severity": severity,
                 "category": category, "match": match, "params": params,
             }))
         ),
     )
-
     placeholder = placeholder_finding(head_pkgbuild)
     if placeholder:
-        triggered_rules.append(placeholder)
+        late_extra.append(placeholder)
 
-    h105 = source_takeover_finding(
-        package_name=pkg_name,
-        findings=triggered_rules,
-        adopted=was_orphaned == 1 and (bool(new_maintainer) or aur_orphaned is False),
-        maintainer_changed=maintainer_changed,
-        added_urls=source_changes.added_urls,
-        removed_urls=source_changes.removed_urls,
-        current_text=head_pkgbuild,
-    )
-    if h105:
-        triggered_rules.append(h105)
-
-    h107 = credential_egress_finding(
-        package_name=pkg_name,
-        findings=triggered_rules,
-        diff_text=diff_text,
-    )
-    if h107:
-        triggered_rules.append(h107)
-
-    triggered_rules.extend(_meta_annotations(triggered_rules, config))
-
-    if effective_observation_count() > 0:
-        typosquat = naming_typosquat_finding(pkg_name)
-        if typosquat:
-            triggered_rules.append(typosquat)
-        # After H029, so the cluster can see it; H027/H043 above are not
-        # recomputed, so their counts are unchanged.
-        cluster = naming_cluster_annotation(triggered_rules, config)
-        if cluster:
-            triggered_rules.append(cluster)
-    # H102 composes on H078 (emitted inside _structural_findings above),
-    # so it runs here regardless of the observation-count gate.
-    keyring = maintainer_keyring_composition(triggered_rules, maintainer_changed)
-    if keyring:
-        triggered_rules.append(keyring)
-
-    rule_ids = [r["rule_id"] for r in triggered_rules]
+    post_filter_findings: list[dict] = []
+    recent = _recent_update(project, head_commit)
+    if recent:
+        post_filter_findings.append(recent)
+    new_pkg = _package_is_new(project, head_commit, pkg_name)
+    if new_pkg:
+        post_filter_findings.append(new_pkg)
+    revived = _stale_revival(project, old_commit, head_commit)
+    if revived:
+        post_filter_findings.append(revived)
 
     recent_commit_burst = False
     if head_commit:
         try:
             count_24h = 0
-            # Bounded because history is attacker-authored, and free to
-            # bound because the walk is newest-first: a burst inside 24h
-            # lives in the newest commits or it is not a burst.
-            for c in project.walk(head_commit):
-                if (time.time() - c.commit_time) / 3600 <= 24:
+            for commit in project.walk(head_commit):
+                if (time.time() - commit.commit_time) / 3600 <= 24:
                     count_24h += 1
                 if count_24h >= 3:
                     recent_commit_burst = True
@@ -575,141 +377,86 @@ def analyze_package(
         except (GitSandboxUnavailable, GitOpError):
             note_stage_failure("commit-burst")
 
-    aggregate_pinning = _aggregate_pinning(
-        diff_text, source_changes.added_urls, source_changes.checksum_behavior,
-        declared_urls=resolved_source_urls(head_pkgbuild),
+    scan_result = scan_recipe(
+        ScanInput(
+            package=pkg_name,
+            diff_text=diff_text,
+            recipe_text=head_pkgbuild,
+            maintainer=new_maintainer,
+            package_id=package_id,
+            record=record,
+            maintainer_changed=maintainer_changed,
+            tree_manifest=tree_manifest,
+            tree_complete=tree_complete,
+            whole_recipe=full_recipe,
+            previous_diff=previous_diff,
+            previous_commit=old_commit,
+            current_commit=head_commit,
+            pre_structural=tuple(pre_structural),
+            transform_after_tree=lambda rules: (
+                _without_notice_only_install_modifications(rules, diff_text)),
+            append_after_filter=tuple(post_filter_findings),
+            late_extra=tuple(late_extra),
+            adopted=adopted,
+        ),
+        config,
     )
-    verification_evidence = detect_verification_evidence(
-        diff_text, source_changes.checksum_behavior
-    )
+    resolved_strings = scan_result.resolved_strings
+    unresolved_strings = scan_result.unresolved_strings
+    triggered_rules = scan_result.triggered_rules
 
-    unresolved_sources = unresolved_source_lines(diff_text)
-    # the one change-as-data construction site, shared by the
-    # prose summary and the JSON `change` object.  Clamped like every other
-    # reader: a pathological line costs the tokenizer per parse, and the
-    # run already declares the clamp as a coverage gap.
-    change = change_delta_obj.to_dict()
-    # name every assignment the tokenizer refused on the
-    # analysed surface (the full post-state PKGBUILD here), plus the
-    # refusals the coverage layer knows independently.
-    parse_time_subs = parse_time_substitution_lines(diff_text, head_pkgbuild)
-    unresolved_assignments = unresolved_assignment_rows(
-        clamp_text(head_pkgbuild) or "", file="PKGBUILD",
-        extra_lines=[*unresolved_sources, *parse_time_subs])
-    partial_files = partial_install_files(diff_text)
-    # Before scoring, because a truncated walk has to reach `gaps_from`:
-    # the band downgrade is decided once inside calculate_score and carried
-    # on the fact, so a gap appended afterwards would never fail closed.
     added_names = _added_dependency_names(diff_text)
     depth_result = _walk_dependencies(
         pkg_name, depth, config, _depth_seen, record=record,
         added_names=added_names,
     )
 
-    gaps = gaps_from(CoverageSignals(
-        diff_truncated=diff_truncated,
-        scan_truncated=scan_truncated,
-        tree_analyzed=(bool(tree_manifest) and tree_complete
-                       and not _scriptlet_files_unread(
-                           diff_text, tree_manifest)),
-        companion_truncated=companion_truncated,
-        binary_metadata=bool(binary_meta),
-        unresolved_sources=unresolved_sources,
-        long_lines=long_lines,
-        parse_time_substitutions=parse_time_subs,
-        unpinned_build_deps=has_unpinned_build_deps(diff_text, head_pkgbuild),
-        # A dependency this diff *adds* and this run did not analyse is
-        # unread code the package now pulls in. Dependency findings never
-        # move the parent's score (B1: the score is this package's own
-        # evidence), which is right - but it left a clean parent with an
-        # attacker-controlled new `depends=` reporting a complete analysis
-        # of a change it had only half read. The score stays where it was;
-        # what changes is that the report stops claiming completeness.
-        # A non-AUR name is not unread code: the walk asked the same
-        # provider the rest of the run uses, and --depth 0 is the
-        # operator's own complete answer.
-        deps_not_scanned=_deps_not_scanned(depth_result, added_names),
-        parent_baseline=parent_baseline,
-        ruleset_drifted=bool(drifted_shipped_rules()),
-        degraded_stages=stage_failures(),
-        unresolved_assignments=bool(unresolved_assignments),
-        noextract_present=_has_noextract(head_pkgbuild or diff_text),
-        partial_hunks=len(cut_hunks),
-        partial_files=partial_files,
-    ))
-
-    # T-series temporal novelty. Cold index declines
-    # (the rule is silent until the ecosystem ledger has observations).
-    from ..temporal import (
-        t_domain_findings,
-        t_key_findings,
-        t_key_rotation,
-        t_metadata_git_divergence,
-        t_packager_not_in_history,
+    version_comparison = compare_installed_to_aur(
+        installed_version, head_version,
+        is_vcs=is_vcs_package(pkg_name, head_pkgbuild),
     )
-
-    triggered_rules.extend(t_key_findings(change, config))
-    triggered_rules.extend(t_key_rotation(change))
-    triggered_rules.extend(t_domain_findings(new_maintainer, config))
-    triggered_rules.extend(t_metadata_git_divergence(
-        project, head_commit, upstream_mtime or 0, config))
-    triggered_rules.extend(t_packager_not_in_history(
-        project, head_commit, new_maintainer, config))
-    if record:
-        from ...db import (
-            record_added_literals,
-            record_observed_domain,
-            record_observed_key,
-        )
-        from ...maintainer_email import maintainer_domain
-
-        pgp = (change or {}).get("pgp_keys", {}) or {}
-        for key in (*pgp.get("gained", ()), *pgp.get("lost", ())):
-            record_observed_key(key)
-        domain = maintainer_domain(new_maintainer)
-        if domain:
-            record_observed_domain(domain)
-        # keep the added encoded literals so G002 can join
-        # across packages from the corpus index.
-        from ..entropy import added_literals, added_text
-
-        record_added_literals(pkg_name, added_literals(added_text(diff_text)))
-
-    # M-series predicates over the completed finding set
-    # (after the ownership resolver), before scoring.
-    from ..meta import alert_volume_finding, m_series_findings, m_tool_health
-    from ...scoring import declared_claims, prebuilt_declared
-
-    prebuilt = prebuilt_declared(head_pkgbuild)
-    triggered_rules.extend(m_series_findings(
-        triggered_rules, config,
-        claims=declared_claims(
-            verification_evidence, aggregate_pinning, source_buckets,
-            prebuilt=prebuilt)))
-    _volume = alert_volume_finding(triggered_rules, config)
-    if _volume:
-        triggered_rules.append(_volume)
-    score, breakdown, risk = calculate_score(
-        triggered_rules,
-        {u: b for u, b in source_buckets.items() if u not in url_acks},
-        novelty, config,
-        verification_evidence=verification_evidence,
-        pinning_level=aggregate_pinning,
-        coverage_gaps=gaps,
-        prebuilt=prebuilt,
+    fact, triggered_rules, campaign_context = finalise_fact(
+        scan_result,
+        CoverageSignals(
+            diff_truncated=diff_truncated,
+            scan_truncated=scan_truncated,
+            companion_truncated=companion_truncated,
+            binary_metadata=bool(binary_meta),
+            parent_baseline=parent_baseline,
+        ),
+        FactIdentity(
+            package=pkg_name,
+            old_version=installed_version,
+            new_version=head_version,
+            diff_summary=diff_summary,
+            old_commit=old_commit,
+            new_commit=head_commit,
+            maintainer_changed=maintainer_changed,
+            previous_maintainer=old_maintainer,
+            current_maintainer=new_maintainer,
+            comparison_base=comparison_base,
+            temporal_source="git_commit",
+            depth=resolved_depth,
+            depth_result=depth_result,
+            added_names=added_names,
+            pkgver_changed=pkgver_changed,
+            version_moved=version_moved,
+            pkgver_old=_pkgver_old or "",
+            pkgver_new=_pkgver_new or "",
+            version_comparison=version_comparison,
+            recent_commit_burst=recent_commit_burst,
+            partial_hunk_details=partial_hunk_details,
+        ),
+        config,
     )
-
-    ioc_matches = ioc_baseline_matches(
-        diff_text, pkg_name, current_text=head_pkgbuild
-    )
-
-    score, breakdown, campaign_context = _campaign_corroboration(
-        score, breakdown, pkg_name, source_changes.added_urls, gaps)
+    score = fact.final_score
+    suppressed_rules = scan_result.suppressed_rules
+    expired_overrides = scan_result.expired_overrides
+    url_acks = scan_result.url_acks
 
     # Companion content the recorded baseline already held: reported, never
     # scored.  Appended after the campaign pass so it cannot corroborate a
-    # chain or move a number; the (present before, unchanged) name carries
-    # the provenance into both the terminal and the JSON finding rows.
+    # chain or move a number.
     present_rules = suppress_acknowledged_url_findings(
         _present_before_findings(present_before, config), pkg_name, url_acks)
     if present_rules:
@@ -717,7 +464,7 @@ def analyze_package(
             present_rules, package=pkg_name, expired_out=expired_overrides)
         suppressed_rules.extend(present_suppressed)
         for finding in present_rules:
-            breakdown.append(ScoreEntry(
+            fact.score_breakdown.append(ScoreEntry(
                 rule_id=finding["rule_id"],
                 severity=finding["severity"],
                 weight=0,
@@ -729,78 +476,7 @@ def analyze_package(
                 line=finding.get("line"),
                 techniques=tuple(finding.get("techniques") or ()),
             ))
-
-    # The installed version is a full [epoch:]pkgver-pkgrel built locally;
-    # head_version is the bare pkgver the AUR PKGBUILD declares.  For a VCS
-    # package the latter is a placeholder the build replaces, so the two are
-    # not comparable and the result says so rather than drawing an arrow.
-    version_comparison = compare_installed_to_aur(
-        installed_version, head_version,
-        is_vcs=is_vcs_package(pkg_name, head_pkgbuild),
-    )
-
-    fact = PackageFact(
-        package_name=pkg_name,
-        old_version=installed_version,
-        new_version=head_version,
-        version_comparison=version_comparison,
-        old_commit=old_commit,
-        new_commit=head_commit,
-        maintainer_changed=maintainer_changed,
-        previous_maintainer=old_maintainer,
-        current_maintainer=new_maintainer,
-        pkgver_changed=pkgver_changed,
-        version_moved=version_moved,
-        pkgver_old=_pkgver_old or "",
-        pkgver_new=_pkgver_new or "",
-        dependencies=list(depth_result.reports),
-        depth_truncated=depth_result.truncated,
-        depth_note=depth_result.reason,
-        depth=resolved_depth,
-        diff_summary=diff_summary,
-        diff_shape_fp=diff_shape_fp(diff_text),
-        source_changes=source_changes,
-        source_buckets=source_buckets,
-        execution_changes=ExecutionChanges(
-            resolved_commands=resolved_strings,
-            suspicious_patterns_detected=rule_ids,
-            unresolved_patterns=unresolved_strings,
-        ),
-        novelty_context=novelty,
-        suppressed_rules=suppressed_rules,
-        cofire_health=m_tool_health(triggered_rules, load_rules()),
-        overrides_expired=expired_overrides,
-        acknowledged_urls=acknowledged_url_rows(url_acks),
-        recent_commit_burst=recent_commit_burst,
-        diff_truncated=diff_truncated,
-        scan_truncated=scan_truncated,
-        comparison_base=comparison_base,
-        tree_analyzed=(bool(tree_manifest) and tree_complete
-                       and not _scriptlet_files_unread(
-                           diff_text, tree_manifest)),
-        coverage_gaps=gaps,
-        unresolved_sources=unresolved_sources,
-        unresolved_assignments=unresolved_assignments,
-        partial_hunks=partial_hunk_details,
-        partial_files=partial_files,
-        change=change,
-        risk=risk,
-        temporal_source="git_commit",
-        score_breakdown=breakdown,
-        final_score=score,
-        ioc_matches=ioc_matches,
-        campaign_hold=bool(campaign_context.get("campaign_hold")),
-        campaign_id=str(campaign_context.get("campaign_id") or ""),
-        campaign_state=str(campaign_context.get("campaign_state") or "unavailable"),
-    )
-    # An override marked `requires_clear_indicators` is visible-only when an
-    # indicator matched this run: the finding renders (with the override and
-    # the corroboration noted) rather than being hidden.  Applied here
-    # because the indicator match is only known after the filter ran.
-    from ...override import apply_indicator_cross_check
-
-    fact.suppressed_rules = apply_indicator_cross_check(
-        fact.suppressed_rules, bool(fact.ioc_matches))
+    fact.suppressed_rules = suppressed_rules
 
     # Dependency changes are part of the fact and of the change summary, so
     # they are settled before the history write: the stored fact_json is

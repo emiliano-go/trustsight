@@ -60,7 +60,7 @@ def _adopt_then_modify_findings(snapshot: HistorySnapshot) -> list[dict]:
     transitions, now = snapshot.transitions, snapshot.now
     window_s = _threshold("h074", "window_days", 14) * 86400
     by_maintainer: dict[str, list[str]] = {}
-    for name, (old_m, new_m) in transitions.items():
+    for name, (_old_m, new_m) in transitions.items():
         if not new_m:
             continue
         old_v = (old_meta.get(name) or {}).get("Version")

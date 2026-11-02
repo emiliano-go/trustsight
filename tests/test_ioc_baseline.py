@@ -818,6 +818,23 @@ def test_a_broken_ioc_store_is_a_stage_failure(monkeypatch):
     assert "ioc-store" in stage_failures()
 
 
+def test_batch_matching_equals_single_lookup(baseline_dir, isolated_db):
+    from trustsight.ioc_baseline import (
+        match_domains,
+        match_hashes,
+        match_many,
+        match_packages,
+    )
+
+    import_baseline(baseline_dir, source_name="test-feed", allow_unsigned=True)
+    assert match_many("package", ["evil-pkg", "absent-pkg"])["evil-pkg"] == \
+        match_package("evil-pkg")
+    assert match_packages({"evil-pkg"})["evil-pkg"] == match_package("evil-pkg")
+    host = "cdn.malware.example"
+    assert match_domains([host])[host] == match_domain(host)
+    digest = "a" * 64
+    assert match_hashes([digest])[digest] == match_hash(digest)
+
 def test_expired_only_domain_is_still_reported_by_the_match_path(
         baseline_dir, isolated_db):
     """An expired-only source must produce an expired match, not silence.

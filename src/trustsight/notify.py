@@ -17,6 +17,7 @@ import hashlib
 import json
 import logging
 import os
+import stat
 import time
 import urllib.request
 from urllib.parse import urlsplit
@@ -668,9 +669,19 @@ def _feed_key() -> tuple[str, str]:
     if not key:
         path = os.environ.get(_FEED_KEY_FILE_ENV, "").strip()
         if path:
+            key_path = Path(path)
+            try:
+                mode = stat.S_IMODE(key_path.stat().st_mode)
+            except OSError:
+                mode = None
+            if mode is not None and mode & 0o077:
+                log.warning(
+                    "feed key file %s is readable by group or others; "
+                    "restrict it to 0600", key_path,
+                )
             try:
                 key = read_file_capped(
-                    Path(path), 4096, "feed key"
+                    key_path, 4096, "feed key"
                 ).decode("ascii").strip()
             except (OSError, UnicodeDecodeError):
                 key = ""

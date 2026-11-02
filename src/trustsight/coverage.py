@@ -469,7 +469,7 @@ class CoverageSignals:
     """
     diff_truncated: bool = False
     scan_truncated: bool = False
-    tree_analyzed: bool = True
+    tree_analyzed: bool = False
     companion_truncated: bool = False
     binary_metadata: bool = False
     unresolved_sources: list[str] | None = None

@@ -14,6 +14,7 @@ and ``DiffDoc`` projections, never a fresh text walk.
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 
 from ..coverage import note_stage_failure
 
@@ -22,6 +23,7 @@ from ..coverage import note_stage_failure
 _EXECUTABLE_FUNCTIONS = ("build", "prepare", "check", "package")
 
 #: A ``$name`` / ``${name}`` reference, including a subscript.
+@lru_cache(maxsize=256)
 def _references(name: str) -> re.Pattern:
     return re.compile(r"\$\{?" + re.escape(name) + r"(?:\}|\b|\[)")
 

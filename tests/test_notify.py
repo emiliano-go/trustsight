@@ -731,3 +731,33 @@ def test_one_campaign_cluster_names_all_members_deterministically():
     assert payload["campaign_cluster"] == [
         {"rule_id": "G001", "members": ["a", "b", "c"], "count": 3},
     ]
+
+
+def test_a_failed_webhook_does_not_log_the_topic(monkeypatch, caplog):
+    """The ntfy topic is the bearer credential; only the host may be logged."""
+    import logging
+
+    import trustsight.notify as notify
+
+    def _boom(url, payload):
+        raise OSError(f"post failed for {url}")
+
+    monkeypatch.setattr(notify, "post_webhook", _boom)
+    with caplog.at_level(logging.WARNING):
+        notify._deliver_sinks({}, "https://ntfy.sh/secret-topic", skip_feed=True)
+    assert "secret-topic" not in caplog.text
+
+
+def test_a_loose_feed_key_file_warns(monkeypatch, caplog, tmp_path):
+    import logging
+
+    import trustsight.notify as notify
+
+    key_file = tmp_path / "feed.key"
+    key_file.write_text("c2VjcmV0")
+    key_file.chmod(0o644)
+    monkeypatch.delenv(notify._FEED_KEY_ENV, raising=False)
+    monkeypatch.setenv(notify._FEED_KEY_FILE_ENV, str(key_file))
+    with caplog.at_level(logging.WARNING):
+        notify._feed_key()
+    assert "readable by group or others" in caplog.text

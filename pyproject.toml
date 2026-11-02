@@ -87,6 +87,45 @@ packages = ["src/trustsight"]
 line-length = 100
 target-version = "py311"
 
+[tool.ruff.lint]
+# A curated security/bug subset on top of the default E/F rules.  The
+# project already runs Bandit-style checks in review; these are the ones
+# that must not regress silently in the core.
+extend-select = ["B", "S", "ASYNC", "DTZ"]
+ignore = [
+    # Typer.Option/Argument defaults are the framework idiom, not a call at
+    # import time with hidden state.
+    "B008",
+    # Reviewed closures: each is invoked inside the same loop iteration.
+    "B023",
+    # Exception chaining is style here; callers match on the exception type.
+    "B904",
+    # zip() truncation is deliberate where the two sides can differ.
+    "B905",
+    # Asserts are the test/calibration harness, never runtime validation in src.
+    "S101",
+    # exec only in the release script that evaluates its own tagged sources.
+    "S102",
+    # Bind-all-interfaces is a gate fixture, not a listener in the product.
+    "S104",
+    # "/tmpfiles.d/" is a path string, not a temp-file creation.
+    "S108",
+    # Cleanup-only catches and retry loops that skip one item, reviewed.
+    "S110",
+    "S112",
+    # urlopen targets are fixed AUR/GitHub hosts or operator-pinned feeds.
+    "S310",
+    # random is retry jitter, never a security decision.
+    "S311",
+    # Manifest XML refuses entity declarations and bounds input/depth.
+    "S314",
+    # subprocess runs without a shell and with parameterised argv.
+    "S603",
+    # The CLI intentionally resolves git/pacman through PATH.
+    "S607",
+    # SQL identifiers are internal constants; values are bound parameters.
+    "S608",
+]
 [tool.ruff.lint.per-file-ignores]
 # E402 is deliberate where a module must build or patch state before importing
 # its dependencies: the CLI app registers command modules after constructing
@@ -100,6 +139,8 @@ target-version = "py311"
 "tests/test_api.py" = ["E402"]
 "tests/test_inspect_history.py" = ["E402"]
 "tests/test_pack_calibration_corpus.py" = ["E402"]
+# Tests assert on pytest.raises(Exception) for a broad failure boundary.
+"tests/**" = ["B017", "S105", "S106", "S107"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

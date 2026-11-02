@@ -11,7 +11,7 @@ from ...deps import _strip_comment
 from ...line_lex import _printed_heredoc_body_indices
 from ...rules import _PRINTER_LINE_RE, _blank_quoted, _printer_quote_body_indices
 
-__all__ = ['_FLOATING_PATH_RE', '_SOURCE_ARRAY_NAME_RE', '_URL_HOST_RE', '_pinning_of', '_recipe_states', '_registered_domain_of', '_source_urls_by_local_name', 'install_hook_notice_only', 'install_hook_transition', 'pinning_lost', 'source_name_host_swaps']
+__all__ = ['_FLOATING_PATH_RE', '_SOURCE_ARRAY_NAME_RE', '_URL_HOST_RE', '_pinning_of', '_recipe_states', '_registered_domain_of', '_source_urls_by_local_name', 'install_hook_is_first_submission', 'install_hook_notice_only', 'install_hook_transition', 'pinning_lost', 'source_name_host_swaps']
 
 _HOOK_PATH_RE = re.compile(r"^[A-Za-z0-9@._+/-]{1,255}$")
 
@@ -179,6 +179,23 @@ def install_hook_notice_only(diff_text: str, hook_name: str = "") -> bool:
             return False
         return saw_printer
     return False
+
+
+def install_hook_is_first_submission(diff_text: str) -> bool:
+    """True when this diff adds a PKGBUILD that had no pre-image.
+
+    H100 reports a hook that *appears or is retargeted*.  On a first
+    submission every declaration is an addition, so the transition says
+    nothing: the whole recipe is new and the hook's behaviour is H017's
+    and the package's novelty is H021's.  Reading the file status rather
+    than the recipe state keeps a diff fragment with only added lines
+    from masquerading as a new package.
+    """
+    doc = parse_diff_lines(split_lines(diff_text))
+    return any(
+        f.path.rstrip("/") == "PKGBUILD" and f.status == "added"
+        for f in doc.files
+    )
 
 
 def install_hook_transition(

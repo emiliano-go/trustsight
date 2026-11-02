@@ -23,6 +23,7 @@ from ..build import (
 from ..delivery._buildtree import normalise_tree_manifest
 from ..delivery import (
     _delivery_findings,
+    install_hook_is_first_submission,
     install_hook_notice_only,
     install_hook_transition,
     pinning_lost,
@@ -452,7 +453,8 @@ def _structural_findings_from_request(request: ScanRequest) -> list[dict]:
     # hook script itself ships in the same diff, MEDIUM when the
     # declaration alone moves (the script may predate it).
     old_hook, new_hook, hook_in_diff, hook_span = install_hook_transition(diff_text)
-    if new_hook and old_hook != new_hook:
+    if (new_hook and old_hook != new_hook
+            and not install_hook_is_first_submission(diff_text)):
         notice_only = install_hook_notice_only(diff_text, new_hook)
         add("H100", "Install Hook Added Or Retargeted",
             "INFO" if notice_only else ("HIGH" if hook_in_diff else "MEDIUM"),

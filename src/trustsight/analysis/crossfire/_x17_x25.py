@@ -8,7 +8,7 @@ from ...config import (
 )
 from ._common import _EXEC_WRAPPER
 
-__all__ = ['_x024_is_benign_path_suffix', '_x024_is_trusted_path_append', 'X017_RE', 'X021_RE', 'X024_RE', '_BUILD_MANIFEST_RE', '_CONTENT_WRITE_VERB_RE', '_FUNC_CONTINUATION_BODY_RE', '_FUNC_CONTINUATION_RE', '_HEREDOC_OPEN_RE', '_INDIRECT_VALUE_RE', '_MANIFEST_ARG_RE', '_MANIFEST_COMMAND_RE', '_SENSITIVE_VAR_RE', '_X017_FIND_RE', '_X017_SCRIPT_DANGER_RE', '_X021_RUN_POSITIONAL_RE', '_X021_SET_GLOB_RE', '_X022_CONFIG_FLAG_RE', '_X022_PAYLOAD_RE', '_X022_WRITE_RE', '_X024_VALUE_VAR_RE', '_multiline_function_shadow_lines', '_normalise_dest', '_redirect_target', '_x017_find_runs_a_script', '_x024_is_passthrough', '_x024_is_test_pythonpath', '_x024_is_git_provenance']
+__all__ = ['_x024_is_benign_path_suffix', '_x024_is_trusted_path_append', 'X017_RE', 'X021_RE', 'X024_RE', '_BUILD_MANIFEST_RE', '_CONTENT_WRITE_VERB_RE', '_FUNC_CONTINUATION_BODY_RE', '_FUNC_CONTINUATION_RE', '_HEREDOC_OPEN_RE', '_INDIRECT_VALUE_RE', '_MANIFEST_ARG_RE', '_MANIFEST_COMMAND_RE', '_SENSITIVE_VAR_RE', '_X017_FIND_RE', '_X017_SCRIPT_DANGER_RE', '_X021_RUN_POSITIONAL_RE', '_X021_SET_GLOB_RE', '_X022_CONFIG_FLAG_RE', '_X022_PAYLOAD_RE', '_X022_WRITE_RE', '_X024_VALUE_VAR_RE', '_multiline_function_shadow_lines', '_normalise_dest', '_redirect_target', '_x017_find_runs_a_script', '_x024_is_passthrough', '_x024_is_test_pythonpath', '_x024_is_trusted_loader_append', '_x024_is_git_provenance']
 
 _X017_FIND_RE = re.compile(
     r"\bfind\b[^\n;&|]{0,200}?-(?:exec|ok)(?:dir)?\s+"
@@ -173,7 +173,7 @@ X024_RE = re.compile(
     # but `unix:path=$runtime` inside a DBus address value is the string
     # 'path=', not the PATH assignment this rule hunts - the previous
     # boundary-less form fired on every `env unix:path=$x` payload.
-    r"(?<![a-z0-9:])"
+    r"(?<![a-z0-9:-])"
     r"(?:" + _SENSITIVE_VAR_RE.pattern + r")"
     r"(?:\s*[\"'\(]*\s*)"  # optional quotes/parens between = and value
     r"(?:" + _INDIRECT_VALUE_RE.pattern + r")",
@@ -336,6 +336,43 @@ def _x024_is_trusted_path_append(
         return False
     for name in _X024_PATH_VAR_RE.findall(value):
         if name.upper() == "PATH":
+            continue
+        if name.upper() in _X024_TRUSTED_PATH_ROOTS:
+            continue
+        if not _x024_path_variable_is_trusted(lines, index, name):
+            return False
+    return True
+
+
+_X024_LOADER_SELF_RE = re.compile(r"\$\{?LD_LIBRARY_PATH\b", re.IGNORECASE)
+_X024_RUNTIME_LITERAL_RE = re.compile(
+    r"(?:^|[\"'=:\s])(?:/tmp|/var/tmp|/dev/shm|/run)(?:/|\b)",
+    re.IGNORECASE,
+)
+
+
+def _x024_is_trusted_loader_append(
+    body: str, match: re.Match, lines: list[str], index: int,
+) -> bool:
+    """True for ``LD_LIBRARY_PATH`` extended with a local/trusted path.
+
+    A launcher that puts the package's own ``/usr/lib`` ahead of the
+    existing loader path (``LD_LIBRARY_PATH="${_APPDIR}/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"``)
+    names where its libraries live; it does not hide the loader root.  A
+    runtime-writable literal, a command substitution, or an undefined
+    variable keeps the finding.
+    """
+    if match.groupdict().get("x024var", "").upper() != "LD_LIBRARY_PATH":
+        return False
+    value = body[match.start():].split("\n", 1)[0]
+    if "$(" in value or "`" in value:
+        return False
+    if not _X024_LOADER_SELF_RE.search(value):
+        return False
+    if _X024_RUNTIME_LITERAL_RE.search(value):
+        return False
+    for name in _X024_PATH_VAR_RE.findall(value):
+        if name.upper() == "LD_LIBRARY_PATH":
             continue
         if name.upper() in _X024_TRUSTED_PATH_ROOTS:
             continue

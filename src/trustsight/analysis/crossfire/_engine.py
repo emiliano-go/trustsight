@@ -175,6 +175,7 @@ class _CrossfireContext:
     scalar_values: dict
     resolved_lines: list[str]
     carried: set[int]
+    array_data: set[int]
     dependency_data: set[int]
     printed_heredoc: set[int]
     data_heredoc: set[int]
@@ -247,6 +248,7 @@ def _crossfire_context(diff_text: str, current_text: str | None) -> _CrossfireCo
         scalar_values=scalar_values,
         resolved_lines=resolved_lines,
         carried=carried,
+        array_data=array_data,
         dependency_data=dependency_data,
         printed_heredoc=printed_heredoc,
         data_heredoc=data_heredoc,
@@ -281,6 +283,7 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
     scalar_values = ctx.scalar_values
     resolved_lines = ctx.resolved_lines
     carried = ctx.carried
+    array_data = ctx.array_data
     dependency_data = ctx.dependency_data
     printed_heredoc = ctx.printed_heredoc
     data_heredoc = ctx.data_heredoc

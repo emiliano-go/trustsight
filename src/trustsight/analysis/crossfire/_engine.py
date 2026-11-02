@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 import re
+from dataclasses import dataclass
 from ...buckets import url_host_is_non_routable, url_line_is_inert
 from ...coverage import note_stage_failure
 from ...deps import _strip_comment, unquote_shell_words
@@ -163,13 +164,25 @@ def _non_shell_heredoc_body_indices(lines: list[str]) -> set[int]:
     return bodies
 
 
-def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dict[str, list[tuple[int, str, str]]]:
-    """``{rule_id: [(line, shape, quoted), ...]}`` for every technique found.
+@dataclass(frozen=True)
+class _CrossfireContext:
+    clamped: str
+    raw_lines: list[str]
+    lines: list[str]
+    enclosing: dict
+    files: dict
+    resolvable: frozenset[str]
+    scalar_values: dict
+    resolved_lines: list[str]
+    carried: set[int]
+    dependency_data: set[int]
+    printed_heredoc: set[int]
+    data_heredoc: set[int]
+    dead_hooks: set[str]
 
-    Returned as data rather than findings so X007 can count techniques
-    without re-deriving them, and so a caller can ask "what evasion is in
-    this diff" without going through the scorer.
-    """
+
+def _crossfire_context(diff_text: str, current_text: str | None) -> _CrossfireContext:
+    """Prepare the lexical facts the ordered per-line scan reads."""
     clamped = clamp_text(diff_text) or ""
     raw_lines = split_lines(clamped)
     lines = join_line_continuations(raw_lines)
@@ -220,6 +233,54 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
     #: declared file, from the complete recipe when the caller has it.
     from ..edges import _dead_hook_files, _declared_install_basename
     dead_hooks = _dead_hook_files(files, _declared_install_basename(diff_text, current_text))
+    return _CrossfireContext(
+        clamped=clamped,
+        raw_lines=raw_lines,
+        lines=lines,
+        enclosing=enclosing,
+        files=files,
+        resolvable=resolvable,
+        scalar_values=scalar_values,
+        resolved_lines=resolved_lines,
+        carried=carried,
+        dependency_data=dependency_data,
+        printed_heredoc=printed_heredoc,
+        data_heredoc=data_heredoc,
+        dead_hooks=dead_hooks,
+    )
+
+
+def _post_loop_techniques(raw_lines, record) -> None:
+    """Multi-line techniques that must run on raw lines, in order."""
+    # X025: multi-line function shadow.  H097 catches `msg() {` on one
+    # line; this catches the continuation variant where the brace is on
+    # the next line.  Must run on raw lines before joining continuations.
+    for shadow_line in _multiline_function_shadow_lines(raw_lines):
+        record("X025", shadow_line,
+               "function shadow defined across multiple lines",
+               raw_lines[shadow_line - 1].strip())
+
+
+def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dict[str, list[tuple[int, str, str]]]:
+    """``{rule_id: [(line, shape, quoted), ...]}`` for every technique found.
+
+    Returned as data rather than findings so X007 can count techniques
+    without re-deriving them, and so a caller can ask "what evasion is in
+    this diff" without going through the scorer.
+    """
+    ctx = _crossfire_context(diff_text, current_text)
+    raw_lines = ctx.raw_lines
+    lines = ctx.lines
+    enclosing = ctx.enclosing
+    files = ctx.files
+    resolvable = ctx.resolvable
+    scalar_values = ctx.scalar_values
+    resolved_lines = ctx.resolved_lines
+    carried = ctx.carried
+    dependency_data = ctx.dependency_data
+    printed_heredoc = ctx.printed_heredoc
+    data_heredoc = ctx.data_heredoc
+    dead_hooks = ctx.dead_hooks
     found: dict[str, list[tuple[int, str, str]]] = {}
     #: X012 is the one rule here that spans two lines: an override is inert
     #: until a build step reads it.
@@ -562,14 +623,7 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
                    f"{override.group('var')} points into the source tree",
                    body.strip())
 
-    # X025: multi-line function shadow.  H097 catches `msg() {` on one
-    # line; this catches the continuation variant where the brace is on
-    # the next line.  Must run on raw lines before joining continuations.
-    for shadow_line in _multiline_function_shadow_lines(raw_lines):
-        record("X025", shadow_line,
-               "function shadow defined across multiple lines",
-               raw_lines[shadow_line - 1].strip())
-
+    _post_loop_techniques(raw_lines, record)
     return _resolved_records(found)
 
 

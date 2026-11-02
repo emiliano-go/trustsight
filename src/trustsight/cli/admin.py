@@ -169,7 +169,15 @@ def register_commands(app: typer.Typer):
     _register_baseline(app)
 
     admin_app = typer.Typer(help="Operator state that is not a package command.")
+    _register_anergic(admin_app)
+    _register_seed(app)
+    _register_lint_rules(app)
+    _register_status(app)
+    _register_full_aur(app)
+    app.add_typer(admin_app, name="admin")
 
+
+def _register_anergic(admin_app: typer.Typer) -> None:
     @admin_app.command("anergic")
     def anergic(
         json_output: bool = typer.Option(False, "--json", help="Output JSON"),
@@ -227,8 +235,10 @@ def register_commands(app: typer.Typer):
             print(f"{label}\n  status: {row['status']}\n  signal: {row['signal']}"
                   f"\n  since: {row['since']}\n  promotion: {row['promotion']}")
 
-    app.add_typer(admin_app, name="admin")
 
+
+
+def _register_seed(app: typer.Typer) -> None:
     @app.command()
     def seed_db(
         do_import: bool = typer.Option(False, "--import", help="Import the seed (default action)"),
@@ -315,6 +325,9 @@ def register_commands(app: typer.Typer):
             print(f"  maintainers       : {stats['maintainers']}")
             print(f"  observations      : {stats['observations']}")
 
+
+
+def _register_lint_rules(app: typer.Typer) -> None:
     @app.command("lint-rules")
     def lint_rules_cmd(
         file: str | None = typer.Option(None, "--file", help="Lint a specific rules TOML file instead of the user config"),
@@ -430,6 +443,9 @@ def register_commands(app: typer.Typer):
         if errors:
             raise typer.Exit(code=2)
 
+
+
+def _register_status(app: typer.Typer) -> None:
     @app.command("status")
     def status_cmd(
         json_output: bool = typer.Option(False, "--json", help="Output JSON"),
@@ -531,6 +547,9 @@ def register_commands(app: typer.Typer):
                 )
                 set_metadata("ruleset_age_prompted", str(SHIPPED_RULESET_VERSION))
 
+
+
+def _register_full_aur(app: typer.Typer) -> None:
     full_aur_app = typer.Typer(
         help="Bootstrap or update the full-AUR baseline corpus.",
         invoke_without_command=True, no_args_is_help=False,

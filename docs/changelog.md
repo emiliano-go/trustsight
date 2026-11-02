@@ -16,6 +16,15 @@
 - **Tender points record review verdicts.** `trustsight verdict` stores a human disposition, and the report header counts unresolved verdicts over the configured window without claiming damage.
 - **The immune-inspired design is documented**, including the rejected runtime gain-control mechanism.
 
+### Security
+
+- **Release trust anchor is independent of the released tree.** `verify_release.py` requires the pinned signing fingerprint from the default-branch workflow; `publishing.yml` also refuses a target that is not an ancestor of master, and `release-pkgbuild.yml` checks the fingerprint rather than accepting any imported key.
+- **Critical-path signing now covers the gate bodies and trust modules.** `scripts/gates/*` and the release, signature, IOC, watchlist, reporting, verdict, coverage, schema and API/CLI render modules need a signed commit and CODEOWNERS review.
+- **Expired IOC indicators stay visible.** The match path now queries expired entries too, so an expired-only source produces an `expired=True` match instead of silence.
+- **Signed-data bounds tightened.** IOC lines/entries, watchlist release size/entries and seed directory JSONL lines are capped; directory seeds reject symlinks; v2 maintainer rows cannot add a second count under one `name_hash`.
+- **Operator inputs are fingerprinted.** URL acknowledgements, patterns, hosts, naming and IOC tables now participate in `config_fingerprint`.
+- **Local state hardened.** Doc-cache files are owner-only and atomically written with `mkstemp`; webhook/feed URLs are redacted from diagnostics; child processes use a fixed trusted `PATH`; existing database files are chmodded `0600`; fallback release tags are validated; federation requires HTTPS outside loopback; seed/watchlist terminal renders are inert.
+
 ### Fixed
 
 - **One lexical command position, and the detection fixes behind it.** Every rule family now reads `shell_words` for command position, so wrappers, grouping, reserved words and `case` arms agree instead of drifting apart. X002 treats a file-writing launcher heredoc as packaged content even when the diff interleaves an older heredoc around it (tape16-bin), and C007 only matches architecture-keyed `source_<arch>=(...)` arrays, not a `source_version` scalar (pivra). Each correction keeps its malicious positive control.

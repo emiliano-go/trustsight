@@ -753,3 +753,38 @@ def test_an_older_seed_is_refused_unless_downgrade_is_allowed(
         dbmod.import_seed(seed_path)
     stats = dbmod.import_seed(seed_path, allow_downgrade=True)
     assert stats["maintainers"] == 2
+
+
+def test_a_transient_release_lookup_is_retried(monkeypatch):
+    """A timeout must not pin ``None`` for the process lifetime."""
+    import trustsight.release as release
+
+    class _Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(release, "_LATEST_TAG_RESOLVED", False)
+    monkeypatch.setattr(release, "_LATEST_TAG_CACHE", None)
+    monkeypatch.setattr(release, "offline", lambda: False)
+
+    calls = []
+
+    def _urlopen(*_args, **_kwargs):
+        calls.append(1)
+        if len(calls) == 1:
+            raise OSError("network down")
+        return _Response()
+
+    monkeypatch.setattr(release.urllib.request, "urlopen", _urlopen)
+    monkeypatch.setattr(
+        release, "_read_releases_json",
+        lambda _resp: b'[{"tag_name": "v1.2.3", "draft": false, "prerelease": false}]',
+    )
+
+    assert release.latest_release_tag() is None
+    assert release._LATEST_TAG_RESOLVED is False
+    assert release.latest_release_tag() == "v1.2.3"
+    assert release._LATEST_TAG_RESOLVED is True

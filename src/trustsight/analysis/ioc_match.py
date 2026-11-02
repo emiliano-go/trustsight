@@ -16,10 +16,10 @@ from ..ioc_baseline import (
     IocMatch,
     active_iocs,
     active_patterns,
-    match_domain,
-    match_file_path,
-    match_hash,
-    match_package,
+    match_domains,
+    match_file_paths,
+    match_hashes,
+    match_packages,
 )
 from .ioc_paths import touched_paths
 from .buildfetch import registry_install_names
@@ -57,22 +57,28 @@ def _match_body(body: str, diff_text: str, want_domains: bool,
                 pattern_hits, source_allowed, add) -> None:
     """Emit baseline matches for one added body."""
     if want_domains:
+        hosts: dict[str, str] = {}
         for host, origin in _hosts_in(body):
-            for m in match_domain(host):
+            hosts.setdefault(host, origin)
+        for host, found in match_domains(hosts).items():
+            origin = hosts[host]
+            for m in found:
                 if source_allowed(m.source):
                     surface = "source_host" if origin == "url" else "referenced_host"
                     add(m, surface, _line_of(diff_text, host))
 
     checksum_digests = {d.lower() for d in _checksum_digests(body)}
-    for digest in checksum_digests:
-        for m in match_hash(digest):
+    for digest, found in match_hashes(checksum_digests).items():
+        for m in found:
             if source_allowed(m.source):
                 add(m, "checksum_array", _line_of(diff_text, digest))
 
-    for digest in _digests_in(body):
-        if digest.lower() in checksum_digests:
-            continue
-        for m in match_hash(digest):
+    other_digests = {
+        digest for digest in _digests_in(body)
+        if digest.lower() not in checksum_digests
+    }
+    for digest, found in match_hashes(other_digests).items():
+        for m in found:
             if source_allowed(m.source):
                 add(m, "artifact_hash", _line_of(diff_text, digest))
 
@@ -134,33 +140,30 @@ def ioc_baseline_matches(
     def source_allowed(source: str) -> bool:
         return not configured_sources or source in configured_sources
 
-    active = active_iocs(source=None, expired=False)
+    # Include expired entries so a match that has aged out is still reported
+    # with expired=True.  Filtering here made an expired-only source invisible:
+    # no want_* flag was set, so no match query ran at all.
+    active = active_iocs(source=None, expired=True)
     if configured_sources:
         active = [e for e in active if e.source in configured_sources]
     want_packages = any(e.type == "package" for e in active)
     want_domains = any(e.type == "domain" for e in active)
     want_paths = any(e.type == "file_path" for e in active)
 
-    # Package name and pkgbase.
+    # Package name, pkgbase, dependency arrays and build-time installs: one
+    # batched lookup for every name this analysis asks about.
+    package_requests: list[tuple[str, str, int | None]] = []
     if package_name:
-        for m in match_package(package_name):
-            if source_allowed(m.source):
-                add(m, "package_name", None)
-
+        package_requests.append(("package_name", package_name, None))
     if current_text:
         pkgbase_match = re.search(r"^\s*pkgbase\s*=\s*['\"]?([^'\"\s]+)", current_text, re.MULTILINE)
         if pkgbase_match:
-            for m in match_package(pkgbase_match.group(1)):
-                if source_allowed(m.source):
-                    add(m, "pkgbase", None)
+            package_requests.append(("pkgbase", pkgbase_match.group(1), None))
 
-    # Dependency arrays.
     declared = extract_dependency_changes(scan_text, package_name)
     for field in _DEP_FIELDS:
         for name in declared.get(field, ()):
-            for m in match_package(name):
-                if source_allowed(m.source):
-                    add(m, field, _line_of(diff_text, name))
+            package_requests.append((field, name, _line_of(diff_text, name)))
 
     # Names a build step installs from a registry.  A `package` indicator
     # otherwise reaches only the AUR package name, pkgbase and the
@@ -169,10 +172,10 @@ def ioc_baseline_matches(
     # `npm install` inside prepare(), so a curator's list naming it would
     # have matched nothing at all.
     for _fn, command, name in registry_install_names(scan_text):
-        for m in match_package(name):
-            if source_allowed(m.source):
-                add(m, "build_install", _line_of(diff_text, name) or
-                    _line_of(diff_text, command[:40]))
+        package_requests.append((
+            "build_install", name,
+            _line_of(diff_text, name) or _line_of(diff_text, command[:40]),
+        ))
 
     # The same surface over the *resolved* lines.  `registry_install_names`
     # reads the raw text, and the wave-3 campaign spelled `bun add` and the
@@ -184,21 +187,30 @@ def ioc_baseline_matches(
         resolved = "\n".join("+" + body for body in _added_bodies(scan_text))
         if resolved:
             for _fn, command, name in registry_install_names(resolved):
-                for m in match_package(name):
-                    if source_allowed(m.source):
-                        add(m, "build_install", _line_of(diff_text, name) or
-                            _line_of(diff_text, command[:40]))
+                package_requests.append((
+                    "build_install", name,
+                    _line_of(diff_text, name) or _line_of(diff_text, command[:40]),
+                ))
+
+    package_hits = match_packages(
+        {name for _surface, name, _line in package_requests})
+    for surface, name, line in package_requests:
+        for m in package_hits.get(name, ()):
+            if source_allowed(m.source):
+                add(m, surface, line)
 
     # Domains, hashes, paths and patterns from visible text.
     if want_paths:
-        for path, _status in touched_paths(diff_text, current_text):
-            for m in match_file_path(path):
+        touched = list(touched_paths(diff_text, current_text))
+        path_hits = match_file_paths({path for path, _status in touched})
+        for path, _status in touched:
+            for m in path_hits.get(path, ()):
                 if source_allowed(m.source):
                     add(m, "file_path", _line_of(diff_text, path))
 
     pattern_hits = [
         (entry, compiled)
-        for entry, compiled in active_patterns()
+        for entry, compiled in active_patterns(expired=True)
         if source_allowed(entry.source)
     ] if any(e.type == "pkgbuild_pattern" for e in active) else []
 

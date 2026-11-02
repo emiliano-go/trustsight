@@ -49,7 +49,7 @@ def _cuts(diff_text):
 
 def test_a_cut_hunk_is_a_coverage_gap():
     assert _cuts(_CUT) == 1
-    gaps = gaps_from(CoverageSignals(partial_hunks=_cuts(_CUT)))
+    gaps = gaps_from(CoverageSignals(tree_analyzed=True, partial_hunks=_cuts(_CUT)))
     assert gaps == [PARTIAL_HUNK]
     assert "cut mid-hunk" in describe(gaps)
 
@@ -57,13 +57,13 @@ def test_a_cut_hunk_is_a_coverage_gap():
 def test_the_byte_and_line_caps_own_their_own_gap():
     # When a declared bound did the cutting, its gap already fails closed;
     # partial_hunk would only repeat it.
-    assert gaps_from(CoverageSignals(diff_truncated=True, partial_hunks=1)) == ["diff_truncated"]
-    assert gaps_from(CoverageSignals(scan_truncated=True, partial_hunks=1)) == ["scan_truncated"]
+    assert gaps_from(CoverageSignals(tree_analyzed=True, diff_truncated=True, partial_hunks=1)) == ["diff_truncated"]
+    assert gaps_from(CoverageSignals(tree_analyzed=True, scan_truncated=True, partial_hunks=1)) == ["scan_truncated"]
 
 
 def test_an_intact_diff_has_no_partial_hunk():
     assert _cuts(_INTACT) == 0
-    assert PARTIAL_HUNK not in gaps_from(CoverageSignals(partial_hunks=0))
+    assert PARTIAL_HUNK not in gaps_from(CoverageSignals(tree_analyzed=True, partial_hunks=0))
 
 
 def test_scan_diff_fails_closed_on_a_silently_cut_diff():

@@ -84,7 +84,10 @@ def _new_connection(db_path: Path) -> sqlite3.Connection:
     # a fresh tmpdir).  Create it owner-only rather than let SQLite fail with
     # a path-dependent "unable to open database file".
     db_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    existed = db_path.exists()
+    try:
+        os.chmod(db_path.parent, 0o700)
+    except OSError:
+        pass
     # `timeout` is the busy handler: a writer waits this long for a lock
     # instead of raising "database is locked".  Set here rather than with
     # `PRAGMA busy_timeout` so no value ever reaches SQL text.
@@ -92,13 +95,13 @@ def _new_connection(db_path: Path) -> sqlite3.Connection:
         str(db_path), timeout=_busy_timeout_ms() / 1000,
         factory=_BatchConnection,
     )
-    if not existed:
-        # SQLite creates the file 0666 & ~umask; the database holds package
-        # names, maintainers and analysis history, so pin it to the owner.
-        try:
-            os.chmod(db_path, 0o600)
-        except OSError:
-            pass
+    # SQLite creates the file 0666 & ~umask; the database holds package
+    # names, maintainers and analysis history, so pin it to the owner even
+    # for a file created by an older release with a permissive umask.
+    try:
+        os.chmod(db_path, 0o600)
+    except OSError:
+        pass
     conn.row_factory = sqlite3.Row
     # journal_mode is a persistent property of the file, so this only does
     # real work the first time a database is created; foreign_keys and

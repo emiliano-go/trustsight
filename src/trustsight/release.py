@@ -25,7 +25,9 @@ import json
 import logging
 import os
 import re
+import threading
 import urllib.request
+from urllib.parse import urlsplit
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -434,6 +436,7 @@ def _newest_semver_tag(releases) -> str | None:
 
 _LATEST_TAG_CACHE: str | None = None
 _LATEST_TAG_RESOLVED = False
+_LATEST_TAG_LOCK = threading.Lock()
 
 
 def latest_release_tag() -> str | None:
@@ -443,31 +446,42 @@ def latest_release_tag() -> str | None:
     highest semver tag once per process.  Returns ``None`` when offline, on
     any network or parse failure, or when no versioned release exists - the
     caller treats that as "cannot tell", never as "up to date".
+
+    Only a *definitive* answer is cached.  A timeout, truncated body or
+    parse failure is transient, and a long-lived watcher or library process
+    must try again on the next call rather than pinning ``None`` for its
+    lifetime.
     """
     global _LATEST_TAG_CACHE, _LATEST_TAG_RESOLVED
     if _LATEST_TAG_RESOLVED:
         return _LATEST_TAG_CACHE
-    _LATEST_TAG_RESOLVED = True
-    if offline():
-        return None
-    try:
-        url = f"{GITHUB_API_URL}/repos/emiliano-go/trustsight/releases?per_page=30"
-        req = urllib.request.Request(
-            url,
-            headers={
-                "Accept": "application/vnd.github+json",
-                "User-Agent": _USER_AGENT,
-            },
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            body = _read_releases_json(resp)
-        # A truncated or timed-out body must not be parsed as if complete.
-        if body is None:
+    with _LATEST_TAG_LOCK:
+        if _LATEST_TAG_RESOLVED:
+            return _LATEST_TAG_CACHE
+        if offline():
+            # Offline is a current condition, not an answer about the newest
+            # tag; a later call once the network is back must still ask.
             return None
-        _LATEST_TAG_CACHE = _newest_semver_tag(json.loads(body))
-    except Exception:
-        log.debug("failed to resolve the latest release tag", exc_info=True)
-    return _LATEST_TAG_CACHE
+        try:
+            url = f"{GITHUB_API_URL}/repos/emiliano-go/trustsight/releases?per_page=30"
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "Accept": "application/vnd.github+json",
+                    "User-Agent": _USER_AGENT,
+                },
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                body = _read_releases_json(resp)
+            # A truncated or timed-out body must not be parsed as if complete.
+            if body is None:
+                return None
+            _LATEST_TAG_CACHE = _newest_semver_tag(json.loads(body))
+        except Exception:
+            log.debug("failed to resolve the latest release tag", exc_info=True)
+            return None
+        _LATEST_TAG_RESOLVED = True
+        return _LATEST_TAG_CACHE
 
 
 def asset_url(asset_name: str, tag: str | None = None,
@@ -490,19 +504,23 @@ def asset_url(asset_name: str, tag: str | None = None,
     its tag must come from discovery or an explicit *tag*.
     """
     channel = channel or official_channel()
-    if tag:
-        if not _TAG_RE.match(tag):
+
+    def _checked(candidate: str | None) -> str:
+        value = str(candidate or "")
+        if not _TAG_RE.match(value):
             raise ReleaseFetchError(
-                f"refusing release tag {tag!r}: a tag is a URL path segment "
-                "([A-Za-z0-9][A-Za-z0-9._-]*)"
-            )
-        return f"{channel.base_url}/download/{tag}/{asset_name}"
+                f"refusing release tag {value!r}: a tag is a URL path segment "
+                "([A-Za-z0-9][A-Za-z0-9._-]*)")
+        return value
+
+    if tag:
+        return f"{channel.base_url}/download/{_checked(tag)}/{asset_name}"
     fallback_ioc = _configured_ioc_tag() if channel.official else None
     fallback_baseline = _configured_baseline_tag() if channel.official else None
     if asset_name.startswith("baseline-ioc-"):
         ioc_tag = _resolve_ioc_tag(channel) or fallback_ioc
         if ioc_tag:
-            return f"{channel.base_url}/download/{ioc_tag}/{asset_name}"
+            return f"{channel.base_url}/download/{_checked(ioc_tag)}/{asset_name}"
         # The pairs live only on the ioc-* channel; there is no baseline copy
         # to fall back to, so a missing channel is a refusal.
         raise ReleaseFetchError(
@@ -513,7 +531,7 @@ def asset_url(asset_name: str, tag: str | None = None,
     if asset_name.startswith("baseline-"):
         baseline_tag = _resolve_baseline_tag(channel) or fallback_baseline
         if baseline_tag:
-            return f"{channel.base_url}/download/{baseline_tag}/{asset_name}"
+            return f"{channel.base_url}/download/{_checked(baseline_tag)}/{asset_name}"
         raise ReleaseFetchError(
             f"no {asset_name} is reachable: the release API is unavailable "
             "and no fallback baseline tag is configured; pass --tag "
@@ -524,7 +542,7 @@ def asset_url(asset_name: str, tag: str | None = None,
             _configured_watchlist_tag() if channel.official else None
         )
         if watchlist_tag:
-            return f"{channel.base_url}/download/{watchlist_tag}/{asset_name}"
+            return f"{channel.base_url}/download/{_checked(watchlist_tag)}/{asset_name}"
         raise ReleaseFetchError(
             f"no {asset_name} is reachable: the release API is unavailable "
             "and no fallback watchlist tag is configured; pass --tag "
@@ -772,7 +790,8 @@ def _download_url(url: str, max_bytes: int = _MAX_RELEASE_BYTES) -> bytes:
     except (ReleaseTooLargeError, ReleaseFetchError):
         raise
     except Exception as exc:
-        raise ReleaseFetchError(f"could not download {url}: {exc}") from exc
+        raise ReleaseFetchError(
+            f"could not download from {urlsplit(url).netloc or 'release host'}: {exc}") from exc
 
 
 def fetch_verified_url(

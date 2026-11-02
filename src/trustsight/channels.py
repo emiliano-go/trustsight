@@ -23,6 +23,7 @@ import tempfile
 from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from . import channel_state, release
 
@@ -235,16 +236,20 @@ def _emit_warning(channel: release.Channel) -> None:
 def _verified_download(asset_name: str, *, tag: str | None,
                        channel: release.Channel,
                        progress: ProgressFactory | None,
-                       pubkey_path: Path | None = None) -> bytes:
+                       pubkey_path: Path | None = None,
+                       max_bytes: int | None = None) -> bytes:
+    kwargs = {"pubkey_path": pubkey_path}
+    if max_bytes is not None:
+        kwargs["max_bytes"] = max_bytes
     if progress is None:
         return release.fetch_verified_asset(
-            asset_name, tag=tag, channel=channel, pubkey_path=pubkey_path
+            asset_name, tag=tag, channel=channel, **kwargs
         )
     ctx = progress(f"Downloading {asset_name}...")
     with ctx as on_download:
         return release.fetch_verified_asset(
             asset_name, tag=tag, channel=channel, on_progress=on_download,
-            pubkey_path=pubkey_path,
+            **kwargs,
         )
 
 
@@ -319,9 +324,11 @@ def pull_watchlist(
     # pull_baseline_seed for the reasoning.
     release._channel_pubkey(channel, pubkey_path)
     _emit_warning(channel)
+    from .watchlist import MAX_WATCHLIST_BYTES
+
     data = _verified_download(
         WATCHLIST_ASSET_NAME, tag=tag, channel=channel, progress=progress,
-        pubkey_path=pubkey_path,
+        pubkey_path=pubkey_path, max_bytes=MAX_WATCHLIST_BYTES,
     )
     try:
         document = json.loads(data.decode("utf-8"))
@@ -461,6 +468,14 @@ def pull_ioc_feed(feed: dict, progress: ProgressFactory | None = None) -> dict:
                     "error": f"invalid asset prefix {prefix!r}; use [a-z0-9.-]"}
         result = _release_channel_feed(feed, prefix, progress)
     elif url.startswith("https://") or url.startswith("http://"):
+        parts = urlsplit(url)
+        host = (parts.hostname or "").lower()
+        loopback = host in ("localhost", "127.0.0.1", "::1")
+        if parts.scheme != "https" and not loopback:
+            return {
+                "status": "error",
+                "error": "federation feeds must use https (http only for loopback)",
+            }
         result = _federation_feed(feed, url, progress)
     else:
         result = {

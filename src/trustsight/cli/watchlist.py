@@ -15,6 +15,7 @@ import typer
 
 from ..config import ensure_default_configs
 from ..db import init_db
+from ..safe_text import clean
 from .display import (
     _print_colored,
     download_progress,
@@ -152,13 +153,13 @@ def watchlist_list(
         typer.echo(f"Packages ({len(packages)}):")
         for name in sorted(packages):
             origin = "imported" if name in imported_packages else "local"
-            typer.echo(f"  {name}  [{origin}]")
+            typer.echo(f"  {clean(name)}  [{origin}]")
     if local_hashes:
         typer.echo(f"Maintainer hashes ({len(local_hashes)}):")
         for value, label in sorted(local_hashes.items()):
             origin = "imported" if value in imported_hashes else "local"
             suffix = f"  ({label})" if label else ""
-            typer.echo(f"  {value[:16]}…  [{origin}]{suffix}")
+            typer.echo(f"  {clean(value[:16])}…  [{origin}]{clean(suffix)}")
 
 
 def register_commands(app: typer.Typer):

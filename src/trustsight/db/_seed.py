@@ -12,8 +12,12 @@ from typing import Optional
 from ..bounded_io import read_capped, read_file_capped
 from ._common import log
 from ._connection import DEFAULT_HASH_ALGORITHM, MAX_SEED_BYTES, MAX_SEED_MEMBERS, MAX_SEED_MEMBER_BYTES, SEED_META_HASH_ALGORITHM_KEY, SEED_META_SALT_KEY, _ensure_salt, _generate_salt, _get_salt, _hash_maintainer_rows, _hash_maintainer_value, _new_connection, get_db_path, init_db
+
 from ._metadata import SEED_DIGEST_KEY, SEED_OBSERVATION_KEY, SEED_ORIGIN_KEY, SEED_OWNED_KEYS, SEED_VERSION_KEY, seed_observation_count
 from ._packages import count_observations
+
+MAX_SEED_LINES = 5_000_000
+MAX_SEED_LINE_BYTES = 64 * 1024
 
 __all__ = ['_decompress_sqlite_seed', '_digest_seed_dir', '_extract_v2_archive', '_import_seed_from_release', '_import_sqlite_seed', '_import_v2_dependency_names', '_import_v2_maintainers', '_import_v2_seed', '_import_v2_source_urls', '_seed_file_digest', 'bundled_seed_path', 'import_seed', 'maybe_auto_import_seed']
 
@@ -84,11 +88,31 @@ def _seed_file_digest(path: Path) -> str:
         read_file_capped(path, MAX_SEED_BYTES, f"seed file {path.name}")
     ).hexdigest()
 
+def _iter_jsonl(path: Path):
+    """Yield ``(lineno, line)`` with both the line and total counts bounded."""
+    text = read_file_capped(
+        path, MAX_SEED_MEMBER_BYTES, f"seed file {path.name}")
+    from io import StringIO
+
+    for lineno, line in enumerate(StringIO(text.decode("utf-8", "replace")), 1):
+        if lineno > MAX_SEED_LINES:
+            raise ValueError(f"{path.name}: exceeds {MAX_SEED_LINES} lines")
+        if len(line) > MAX_SEED_LINE_BYTES:
+            raise ValueError(f"{path.name}:{lineno}: line exceeds the cap")
+        yield lineno, line
+
+
 def _digest_seed_dir(seed_dir: Path) -> str:
     """Return a deterministic digest of a v2 seed directory's contents."""
     h = hashlib.sha256()
+    root = seed_dir.resolve()
     for item in sorted(seed_dir.rglob("*")):
+        if item.is_symlink():
+            raise ValueError(f"seed directory contains a symlink: {item.name}")
         if item.is_file():
+            resolved = item.resolve()
+            if resolved != root and root not in resolved.parents:
+                raise ValueError(f"seed file escapes the seed directory: {item}")
             h.update(item.relative_to(seed_dir).as_posix().encode("utf-8"))
             h.update(b"\x00")
             h.update(
@@ -220,8 +244,8 @@ def _import_v2_seed(seed_dir: Path, digest: str, origin: str, *, allow_downgrade
     meta_path = seed_dir / "seed_meta.json"
     if not meta_path.exists():
         raise ValueError(f"v2 seed missing seed_meta.json: {seed_dir}")
-    with open(meta_path, "r", encoding="utf-8") as fh:
-        meta = json.load(fh)
+    meta = json.loads(read_file_capped(
+        meta_path, MAX_SEED_MEMBER_BYTES, "seed_meta.json"))
 
     salt = meta.get("salt") or _generate_salt()
     hash_algorithm = meta.get("hash_algorithm", DEFAULT_HASH_ALGORITHM)
@@ -357,8 +381,7 @@ def _import_v2_seed(seed_dir: Path, digest: str, origin: str, *, allow_downgrade
 def _import_v2_source_urls(conn: sqlite3.Connection, path: Path) -> None:
     """Read source_urls.jsonl and insert into the local table."""
     rows = []
-    with open(path, "r", encoding="utf-8") as fh:
-        for lineno, line in enumerate(fh, 1):
+    for lineno, line in _iter_jsonl(path):
             line = line.strip()
             if not line:
                 continue
@@ -393,8 +416,7 @@ def _import_v2_dependency_names(conn: sqlite3.Connection, path: Path) -> None:
     own contribution is subtracted first and the local remainder is kept.
     """
     rows = []
-    with open(path, "r", encoding="utf-8") as fh:
-        for lineno, line in enumerate(fh, 1):
+    for lineno, line in _iter_jsonl(path):
             line = line.strip()
             if not line:
                 continue
@@ -429,8 +451,7 @@ def _import_v2_dependency_names(conn: sqlite3.Connection, path: Path) -> None:
 def _import_v2_maintainers(conn: sqlite3.Connection, path: Path) -> None:
     """Read maintainers.jsonl and insert hashed rows."""
     rows = []
-    with open(path, "r", encoding="utf-8") as fh:
-        for lineno, line in enumerate(fh, 1):
+    for lineno, line in _iter_jsonl(path):
             line = line.strip()
             if not line:
                 continue
@@ -459,9 +480,9 @@ def _import_v2_maintainers(conn: sqlite3.Connection, path: Path) -> None:
                SELECT ?, ?, ?, ?, ?, ?
                WHERE NOT EXISTS (
                    SELECT 1 FROM maintainers_hashed
-                   WHERE name_hash = ? AND email_hash IS ?
+                   WHERE name_hash = ?
                )""",
-            [row + (row[0], row[1]) for row in rows],
+            [row + (row[0],) for row in rows],
         )
 
 def _import_sqlite_seed(path: Path, origin: str, digest: str) -> dict:

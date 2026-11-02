@@ -712,23 +712,39 @@ def gate_every_producer_accounts_for_coverage() -> Gate:
     gap_calls = 0
     for path in _python_files():
         tree = ast.parse(path.read_text(encoding="utf-8"))
+        signal_defs = {}
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Assign):
+                continue
+            value = node.value
+            if not (isinstance(value, ast.Call)
+                    and _call_name(value).split(".")[-1] == "CoverageSignals"):
+                continue
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    signal_defs[target.id] = value
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
             name = _call_name(node).split(".")[-1]
             if name == "gaps_from":
                 gap_calls += 1
-                # The signal set is built as CoverageSignals(...); read the
-                # keywords from that construction so the check follows the
-                # call shape instead of pinning the old keyword bag.
+                # The signal set is built as CoverageSignals(...), possibly
+                # through a local name; resolve either form before reading
+                # the keywords so the check follows the call shape instead
+                # of pinning the old keyword bag.
                 signal = next(
                     (arg for arg in node.args
                      if isinstance(arg, ast.Call)
                      and _call_name(arg).split(".")[-1] == "CoverageSignals"),
                     None,
                 )
+                if signal is None and node.args:
+                    first = node.args[0]
+                    if isinstance(first, ast.Name):
+                        signal = signal_defs.get(first.id)
                 kwargs = {kw.arg for kw in (signal or node).keywords}
-                for required in ("unresolved_assignments", "noextract_present"):
+                for required in ("tree_analyzed", "unresolved_assignments", "noextract_present"):
                     if required not in kwargs:
                         hits.append(f"{_rel(path)}:{node.lineno} no {required}=")
                 continue

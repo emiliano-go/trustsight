@@ -14,30 +14,21 @@ from ._helpers import (
     _walk_corpus_dependencies,
 )
 
-from ...analysis.base import _aggregate_pinning, _has_install_hook
-from ...analysis.adoption import credential_egress_finding, source_takeover_finding
 from ...analysis.buildfetch import has_unpinned_build_deps
-from ...analysis.composition import _meta_annotations, maintainer_keyring_composition, naming_cluster_annotation, naming_typosquat_finding
+from ...analysis.composition import _meta_annotations, naming_cluster_annotation, naming_typosquat_finding
 from ...analysis.crossfile import metadata_recipe_divergence
 from ...analysis.longitudinal import longitudinal_findings
 from ...analysis.ioc_match import ioc_baseline_matches
 from ...analysis.dependencies import name_shadow_findings
-from ...analysis.maintainer import _check_untrusted_maintainer_takeover
 from ...analysis.meta import alert_volume_finding, m_series_findings
 from ...analysis.placeholder import placeholder_finding
 from ...analysis.structural import (
-    _structural_findings,
-    partial_install_files,
     recipe_checksum_parity_finding,
-    unchanged_upstream_host,
 )
 from ...analysis.version import any_version_scalar_moved, pkgver_move_in_diff
-from ...buckets import classify_urls
-from ...changes import change_delta
 from ...config import (
     drifted_shipped_rules,
     load_config,
-    load_rules,
     load_thresholds,
 )
 from ...db import (
@@ -53,10 +44,6 @@ from ...db import (
 )
 from ...deps import extract_dependency_changes
 from ...differ import (
-    detect_gpg_verification_removed,
-    detect_verification_evidence,
-    extract_urls_from_diff,
-    map_diff_lines,
     resolved_source_urls,
     truncate_diff,
 )
@@ -65,46 +52,38 @@ from ...novelty import build_novelty_context
 from ...override import (
     acknowledged_url_rows,
     filter_triggered_rules,
-    match_url_acks,
 )
 from ...analysis.structural_rules import apply_structural_rules
 from ...rules import (
-    apply_rules,
     bound_tokenizer_lines,
     clamp_diff_lines,
     clamp_text,
-    get_raw_diff_lines_indexed,
 )
 from ...coverage import (
     CoverageSignals,
     begin_stage_tracking,
-    cut_hunk_details,
     gaps_from,
     note_stage_failure,
     oversized_lines,
     parse_time_substitution_lines,
-    resolution_coverage,
     stage_failures,
     unresolved_assignment_rows,
     unresolved_source_lines,
 )
-from ...diffdoc import diff_shape_fp, parse_diff_lines
 from ...scoring import calculate_score, declared_claims, prebuilt_declared
 from ...schema import (
     with_changes,
-    ExecutionChanges,
     PackageFact,
     TemporalContext,
     fact_to_dict,
 )
+from ...analysis.pipeline._core import FactIdentity, ScanInput, finalise_fact, scan_recipe
 from ...analysis.pipeline._tree import (
     _added_dependency_names,
     _deps_not_scanned,
     _scriptlet_files_unread,
 )
-from ...tokenizer import tokenize_and_resolve_indexed
 from ..properties import extract_properties, metadata_divergence, update_properties
-from ...tokenizer import split_lines
 
 log = logging.getLogger(__name__)
 def analyze_package_text(
@@ -470,15 +449,6 @@ def analyze_package_text(
     long_lines = oversized_lines(diff_text.split("\n"))
     diff_text = bound_tokenizer_lines(diff_text)
 
-    source_changes = extract_urls_from_diff(diff_text)
-    declared = set(source_changes.declared_urls)
-    source_urls = [u for u in source_changes.added_urls if u not in declared]
-    url_acks = match_url_acks(pkg_name, source_urls)
-    scored_urls = [u for u in source_urls if u not in url_acks]
-    source_buckets = classify_urls(
-        source_urls,
-        upstream_host=unchanged_upstream_host(diff_text, new_pkgbuild),
-    )
     pkgver_changed, _pkgver_old, _pkgver_new = pkgver_move_in_diff(
         diff_text, new_pkgbuild
     )
@@ -494,269 +464,87 @@ def analyze_package_text(
         and maintainer_identity(old_maintainer) != maintainer_identity(maintainer)
     )
 
-    from ...recipedoc import parse_recipe as _parse_recipe
-
-    novelty = build_novelty_context(
-        scored_urls,
-        package_id,
-        maintainer=maintainer,
-        record=record,
-        package_name=pkg_name,
-        source_array=_parse_recipe(new_pkgbuild, file="PKGBUILD").arrays.get("source", ()),
-        source_buckets=source_buckets,
-    )
-
-    resolved_strings, unresolved_strings, resolved_indices = (
-        tokenize_and_resolve_indexed(diff_text)
-    )
-    raw_lines, raw_indices = get_raw_diff_lines_indexed(diff_text)
-    line_map = map_diff_lines(diff_text)
-
-    triggered_rules = apply_rules(
-        resolved_strings, raw_lines,
-        include_experimental=config.get("rules", {}).get("experimental", False),
-        line_map=line_map,
-        resolved_indices=resolved_indices,
-        raw_indices=raw_indices,
-    )
-    triggered_rules.extend(metadata_findings)
-    change_delta_obj = change_delta(clamp_text(diff_text), pkg_name,
-                                current_text=new_pkgbuild)
-    if manifest_deltas or workflow_deltas:
+    def _apply_deltas(delta):
+        if not (manifest_deltas or workflow_deltas):
+            return delta
         from dataclasses import replace
 
-        change_delta_obj = replace(
-            change_delta_obj,
-            files=change_delta_obj.files + tuple(workflow_deltas),
-            manifests=change_delta_obj.manifests + tuple(manifest_deltas),
-            hosts_gained=change_delta_obj.hosts_gained | frozenset({
+        return replace(
+            delta,
+            files=delta.files + tuple(workflow_deltas),
+            manifests=delta.manifests + tuple(manifest_deltas),
+            hosts_gained=delta.hosts_gained | frozenset({
                 host for manifest in manifest_deltas
                 for host in manifest.remote_added
             }),
         )
-    triggered_rules.extend(
-        _structural_findings(
-            clamp_text(diff_text), source_changes, source_buckets,
-            maintainer_changed=maintainer_changed,
-            package_name=pkg_name, config=config,
-            current_text=clamp_text(new_pkgbuild),
-            tree_manifest=tree_manifest,
-            delta=change_delta_obj,
-        )
-    )
-    triggered_rules.extend(
-        apply_structural_rules(
-            clamp_text(diff_text),
-            current_text=clamp_text(new_pkgbuild),
-            package_name=pkg_name,
-        )
-    )
-    if tree_manifest:
-        from ...analysis.delivery import scan_tree_manifest
-        triggered_rules.extend(
-            scan_tree_manifest(
-                tree_manifest, resolved_source_urls(new_pkgbuild), pkg_name)
-        )
-    from ...override import suppress_acknowledged_url_findings
 
-    triggered_rules = suppress_acknowledged_url_findings(
-        triggered_rules, pkg_name, url_acks)
-    from ...analysis.persistence import stand_down_committed_staging
-    triggered_rules = stand_down_committed_staging(triggered_rules, tree_manifest)
+    pre_filter_findings: list[dict] = []
     if archive_trailer_finding:
-        triggered_rules.append(archive_trailer_finding)
-    expired_overrides: list[str] = []
-    triggered_rules, suppressed_rules = filter_triggered_rules(
-        triggered_rules, package=pkg_name, expired_out=expired_overrides
-    )
-
-    triggered_rules.extend(
-        _temporal_findings(temporal, pkg_name, False)
-    )
-
-    triggered_rules.extend(
-        longitudinal_findings(
-            diff_text, pkg_name, breaks, config,
-            current_text=new_pkgbuild,
-        )
-    )
-
-    if not any(r["rule_id"] == "R007" for r in triggered_rules):
-        if _has_install_hook(diff_text):
-            triggered_rules.append(stamp({
-                "rule_id": "H023", "name": "Install Hook Present",
-                "severity": "INFO", "category": "context",
-                "match": "PKGBUILD declares an install hook",
-            }))
-
-    if detect_gpg_verification_removed(diff_text):
-        triggered_rules.append(stamp({
-            "rule_id": "H024", "name": "GPG Verification Removed",
-            "severity": "HIGH", "category": "integrity",
-            "match": "validpgpkeys was populated and is now empty or removed",
-        }))
-
-    takeover = _check_untrusted_maintainer_takeover(
-        maintainer_changed, maintainer
-    )
-    if takeover:
-        triggered_rules.append(takeover)
-
-    h105 = source_takeover_finding(
-        package_name=pkg_name,
-        findings=triggered_rules,
-        adopted=False,
-        maintainer_changed=maintainer_changed,
-        added_urls=source_changes.added_urls,
-        removed_urls=source_changes.removed_urls,
+        pre_filter_findings.append(archive_trailer_finding)
+    post_filter_findings = list(_temporal_findings(temporal, pkg_name, False))
+    post_filter_findings.extend(longitudinal_findings(
+        diff_text, pkg_name, breaks, config,
         current_text=new_pkgbuild,
-    )
-    if h105:
-        triggered_rules.append(h105)
-
-    h107 = credential_egress_finding(
-        package_name=pkg_name,
-        findings=triggered_rules,
-        diff_text=diff_text,
-    )
-    if h107:
-        triggered_rules.append(h107)
-
-    triggered_rules.extend(_meta_annotations(triggered_rules, config))
-
-    if effective_observation_count() > 0:
-        typosquat = naming_typosquat_finding(
-            pkg_name,
-            candidates=popular_candidates,
-            self_popularity=package_popularity,
-        )
-        if typosquat:
-            triggered_rules.append(typosquat)
-        cluster = naming_cluster_annotation(triggered_rules, config)
-        if cluster:
-            triggered_rules.append(cluster)
-
-    keyring = maintainer_keyring_composition(triggered_rules, maintainer_changed)
-    if keyring:
-        triggered_rules.append(keyring)
-
-    rule_ids = [r["rule_id"] for r in triggered_rules]
-
-    aggregate_pinning = _aggregate_pinning(
-        diff_text, source_changes.added_urls, source_changes.checksum_behavior,
-        declared_urls=resolved_source_urls(new_pkgbuild),
-    )
-    verification_evidence = detect_verification_evidence(
-        diff_text, source_changes.checksum_behavior
-    )
-
-    unresolved_sources = unresolved_source_lines(diff_text)
-    parse_time_subs = parse_time_substitution_lines(diff_text, new_pkgbuild)
-    unresolved_assignments = unresolved_assignment_rows(
-        clamp_text(new_pkgbuild) or "", file="PKGBUILD",
-        extra_lines=[*unresolved_sources, *parse_time_subs])
-    cut_hunks = parse_diff_lines(split_lines(diff_text)).cut_hunks()
-    partial_files = partial_install_files(diff_text)
-    from ...analysis.pipeline._tree import _has_noextract
-
-    prebuilt = prebuilt_declared(new_pkgbuild)
-    triggered_rules.extend(m_series_findings(
-        triggered_rules, config,
-        claims=declared_claims(
-            verification_evidence, aggregate_pinning, source_buckets,
-            prebuilt=prebuilt),
-    ))
-    volume = alert_volume_finding(triggered_rules, config)
-    if volume:
-        triggered_rules.append(volume)
-    tree_analyzed = bool(tree_manifest) and not _scriptlet_files_unread(
-        recipe_diff, tree_manifest)
-    gaps = gaps_from(CoverageSignals(
-        diff_truncated=diff_truncated,
-        scan_truncated=scan_truncated,
-        partial_hunks=len(cut_hunks),
-        partial_files=partial_files,
-        tree_analyzed=tree_analyzed,
-        unresolved_sources=unresolved_sources,
-        long_lines=long_lines,
-        parse_time_substitutions=parse_time_subs,
-        snapshot_refused=snapshot_refused,
-        upstream_manifest_incomplete=upstream_manifest_incomplete,
-        unpinned_build_deps=has_unpinned_build_deps(diff_text, new_pkgbuild),
-        deps_not_scanned=_deps_not_scanned(depth_result, added_names),
-        ruleset_drifted=bool(drifted_shipped_rules()),
-        degraded_stages=stage_failures(),
-        unresolved_assignments=bool(unresolved_assignments),
-        noextract_present=_has_noextract(new_pkgbuild),
     ))
 
-    score, breakdown, risk = calculate_score(
-        triggered_rules,
-        {u: b for u, b in source_buckets.items() if u not in url_acks},
-        novelty, config,
-        verification_evidence=verification_evidence,
-        pinning_level=aggregate_pinning,
-        coverage_gaps=gaps,
-        prebuilt=prebuilt,
-    )
-    from ...analysis.pipeline._analyze_helpers import _campaign_corroboration
-
-    score, breakdown, campaign_context = _campaign_corroboration(
-        score, breakdown, pkg_name, source_changes.added_urls, gaps)
-
-    fact = PackageFact(
-        package_name=pkg_name,
-        old_version=old_version,
-        new_version=new_version,
-        maintainer_changed=maintainer_changed,
-        previous_maintainer=old_maintainer,
-        current_maintainer=maintainer,
-        pkgver_changed=pkgver_changed,
-        version_moved=version_moved,
-        pkgver_old=_pkgver_old or "",
-        pkgver_new=_pkgver_new or "",
-        diff_summary=_diff_summary(diff_text),
-        diff_shape_fp=diff_shape_fp(diff_text),
-        source_changes=source_changes,
-        source_buckets=source_buckets,
-        execution_changes=ExecutionChanges(
-            resolved_commands=resolved_strings,
-            suspicious_patterns_detected=rule_ids,
-            unresolved_patterns=unresolved_strings,
+    scan_result = scan_recipe(
+        ScanInput(
+            package=pkg_name,
+            diff_text=diff_text,
+            recipe_text=new_pkgbuild,
+            maintainer=maintainer,
+            package_id=package_id,
+            record=record,
+            maintainer_changed=maintainer_changed,
+            tree_manifest=tree_manifest,
+            tree_complete=True,
+            tree_manifest_urls=tuple(resolved_source_urls(new_pkgbuild)),
+            tree_analysis_text=recipe_diff,
+            delta_transform=_apply_deltas,
+            pre_structural=tuple(metadata_findings),
+            append_before_filter=tuple(pre_filter_findings),
+            append_after_filter=tuple(post_filter_findings),
+            typosquat_kwargs={
+                "candidates": popular_candidates,
+                "self_popularity": package_popularity,
+            },
         ),
-        novelty_context=novelty,
-        suppressed_rules=suppressed_rules,
-        overrides_expired=expired_overrides,
-        acknowledged_urls=acknowledged_url_rows(url_acks),
-        diff_truncated=diff_truncated,
-        scan_truncated=scan_truncated,
-        # /: the corpus cycle runs the
-        # collective G-series correlation, so L8 was exercised for this
-        # package's corpus result.
-        correlation_ran=True,
-        comparison_base="recorded",
-        tree_analyzed=tree_analyzed,
-        coverage_gaps=gaps,
-        dependencies=list(depth_result.reports),
-        depth_truncated=depth_result.truncated,
-        depth_note=depth_result.reason,
-        unresolved_sources=unresolved_sources,
-        unresolved_assignments=unresolved_assignments,
-        partial_hunks=cut_hunk_details(cut_hunks),
-        partial_files=partial_files,
-        change=change_delta_obj.to_dict(),
-        risk=risk,
-        temporal_source=temporal.source,
-        score_breakdown=breakdown,
-        final_score=score,
-        ioc_matches=ioc_baseline_matches(diff_text, pkg_name, current_text=new_pkgbuild),
-        campaign_hold=bool(campaign_context.get("campaign_hold")),
-        campaign_id=str(campaign_context.get("campaign_id") or ""),
-        campaign_state=str(campaign_context.get("campaign_state") or "unavailable"),
+        config,
     )
+    triggered_rules = scan_result.triggered_rules
 
-    fact.resolution_coverage = resolution_coverage(
-        resolved_strings, unresolved_strings, triggered_rules, load_rules())
+    fact, triggered_rules, campaign_context = finalise_fact(
+        scan_result,
+        CoverageSignals(
+            diff_truncated=diff_truncated,
+            scan_truncated=scan_truncated,
+            long_lines=long_lines,
+            snapshot_refused=snapshot_refused,
+            upstream_manifest_incomplete=upstream_manifest_incomplete,
+        ),
+        FactIdentity(
+            package=pkg_name,
+            old_version=old_version,
+            new_version=new_version,
+            diff_summary=_diff_summary(diff_text),
+            maintainer_changed=maintainer_changed,
+            previous_maintainer=old_maintainer,
+            current_maintainer=maintainer,
+            comparison_base="recorded",
+            temporal_source=temporal.source,
+            depth_result=depth_result,
+            added_names=added_names,
+            pkgver_changed=pkgver_changed,
+            version_moved=version_moved,
+            pkgver_old=_pkgver_old or "",
+            pkgver_new=_pkgver_new or "",
+            correlation_ran=True,
+            cofire_health=[],
+        ),
+        config,
+    )
+    score = fact.final_score
     with_changes(fact, diff_text)
     if record:
         insert_analysis(

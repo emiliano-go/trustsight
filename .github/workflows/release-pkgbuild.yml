@@ -16,6 +16,9 @@ on:
 permissions:
   contents: read
 
+env:
+  TRUSTSIGHT_RELEASE_FINGERPRINT: F759D6D49B0A395AB922414A5CC3B4C50D37E793
+
 concurrency:
   group: release-verify
   cancel-in-progress: false
@@ -144,8 +147,13 @@ jobs:
           base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${{ needs.classify.outputs.tag }}"
           curl -fsSL "${base}/trustsight-${version}.tar.gz.sig" -o /tmp/asset.tar.gz.sig
           gpg --batch --import scripts/commit_signing_key.asc
-          gpg --batch --verify /tmp/asset.tar.gz.sig /tmp/asset.tar.gz
-          echo "Published signature verifies against the pinned key"
+          status=$(gpg --batch --status-fd 1 --verify /tmp/asset.tar.gz.sig /tmp/asset.tar.gz 2>/dev/null || true)
+          signed=$(printf '%s\n' "$status" | awk '/VALIDSIG/ {print $3; exit}')
+          if [ "$(printf '%s' "$signed" | tr '[:lower:]' '[:upper:]')" != "$TRUSTSIGHT_RELEASE_FINGERPRINT" ]; then
+            echo "::error::published signature is by ${signed:-unknown}, not the pinned release fingerprint"
+            exit 1
+          fi
+          echo "Published signature verifies against the pinned fingerprint"
 
       - name: Build and install from the published tarball
         run: |

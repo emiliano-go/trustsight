@@ -42,6 +42,13 @@ def _validate_name(value: str, *, name: str = "package") -> None:
     _validate_text(value, name=name, maximum=MAX_API_NAME_BYTES)
     if not value:
         raise ValueError(f"{name} must not be empty")
+    # The same rule the cache and clone path enforce.  Downstream validates
+    # again, but the API boundary should not accept a name it will refuse
+    # later: `..` and absolute/path-shaped values are not package names.
+    from ..fetcher import _RESERVED_PKG_NAMES, _VALID_PKG_NAME
+
+    if not _VALID_PKG_NAME.match(value) or value in _RESERVED_PKG_NAMES:
+        raise ValueError(f"{name} contains characters a package name cannot")
 
 def _validate_names(value: Sequence[str], *, name: str, maximum: int) -> None:
     if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):

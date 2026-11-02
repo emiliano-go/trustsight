@@ -44,3 +44,8 @@ packaging/local/*.pkg.tar.*
 
 # Release workflow scratch directory
 release/
+
+# Local deployment files never belong in the repository.
+deploy/
+.env
+.env.*

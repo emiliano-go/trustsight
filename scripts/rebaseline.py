@@ -14,7 +14,7 @@ import hashlib
 import json
 import sys
 from collections import Counter, defaultdict
-from datetime import date
+from datetime import datetime, timezone
 from pathlib import Path
 
 from trustsight.analysis import scan_diff
@@ -220,7 +220,7 @@ def main():
                         warm_per_stratum[stratum]["rules"][key] += 1
 
     baseline = {
-        "generated": date.today().isoformat(),
+        "generated": datetime.now(timezone.utc).date().isoformat(),
         "corpus_content_sha256": _corpus_content_hash(args.corpus),
         "pipeline_version": _pipeline_version(),
         "corpus_version": corpus_version,

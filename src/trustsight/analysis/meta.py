@@ -28,6 +28,8 @@ M never changes a finding's evidence; it names the inputs that composed.
 
 from __future__ import annotations
 
+from ..coverage import note_stage_failure
+
 __all__ = [
     "m_series_findings",
     "claim_contradictions",
@@ -156,6 +158,7 @@ def _cofire_pairs() -> list[tuple[str, str]]:
 
         raw = load_thresholds().get("cofire_pairs", [])
     except Exception:  # noqa: BLE001 - an unreadable threshold set is no pairs
+        note_stage_failure("thresholds-unreadable")
         raw = []
     pairs: list[tuple[str, str]] = []
     for entry in raw or ():

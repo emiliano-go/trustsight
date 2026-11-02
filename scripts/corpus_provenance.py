@@ -32,7 +32,6 @@ sys.path.insert(0, str(ROOT / "src"))
 from trustsight.iocs import compile_ioc_pattern, normalize as normalize_ioc  # noqa: E402
 
 DATA = ROOT / "data"
-HEX_RE = re.compile(r"(?<![0-9a-fA-F])([0-9a-fA-F]{32,128})(?![0-9a-fA-F])")
 URL_RE = re.compile(r"https?://[^\s'\"<>)\]]+", re.I)
 
 

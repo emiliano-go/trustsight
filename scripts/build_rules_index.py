@@ -49,9 +49,6 @@ TABLE_START = "<!-- generated: catalog -->"
 TABLE_END = "<!-- /generated: catalog -->"
 PAGE_START = "<!-- generated: page-index -->"
 PAGE_END = "<!-- /generated: page-index -->"
-PAGE_INDEX_RE = re.compile(
-    rf"{re.escape(PAGE_START)}\n.*?\n{re.escape(PAGE_END)}", re.S
-)
 NATURE_START = "<!-- generated: nature-rules -->"
 NATURE_END = "<!-- /generated: nature-rules -->"
 NATURE_RE = re.compile(

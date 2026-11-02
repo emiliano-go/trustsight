@@ -633,6 +633,13 @@ def _heredoc_capture_names(content: str) -> tuple[str, ...]:
     return (match.group("name"),) if match is not None else ()
 
 
+@lru_cache(maxsize=32)
+def _capture_ref(names: tuple[str, ...]) -> re.Pattern[str]:
+    return re.compile(
+        r"\$(?:\{)?(?:" + "|".join(map(re.escape, names)) + r")(?![A-Za-z0-9_])"
+    )
+
+
 def _capture_is_printed(lines: tuple[str, ...], names: tuple[str, ...]) -> bool:
     """True when every use of *names* is on an output-only line.
 
@@ -642,9 +649,7 @@ def _capture_is_printed(lines: tuple[str, ...], names: tuple[str, ...]) -> bool:
     """
     if not names:
         return False
-    ref = re.compile(
-        r"\$(?:\{)?(?:" + "|".join(map(re.escape, names)) + r")(?![A-Za-z0-9_])"
-    )
+    ref = _capture_ref(names)
     for line in lines:
         text = line[1:] if line[:1] in ("+", "-") else line
         if not ref.search(text):

@@ -1,6 +1,7 @@
 """Extracted from structural.py: _engine."""
 
 import re
+from dataclasses import dataclass, field
 from ...coverage import note_stage_failure
 from ...differ import (
     _touched_checksum_arrays,
@@ -109,6 +110,25 @@ def _scope_findings(scope_doc, diff_text, current_text, add) -> list[dict]:
     return findings
 
 
+@dataclass(frozen=True)
+class ScanRequest:
+    """The inputs of one structural scan, so the call site is typed."""
+
+    diff_text: str
+    source_changes: object
+    source_buckets: dict[str, str] = field(default_factory=dict)
+    maintainer_changed: bool = False
+    package_name: str = ""
+    config: dict | None = None
+    current_text: str | None = None
+    tree_manifest: list | None = None
+    whole_recipe: bool = False
+    previous_diff: str = ""
+    previous_commit: str = ""
+    current_commit: str = ""
+    delta: object = None
+
+
 def _structural_findings(
     diff_text: str,
     source_changes,
@@ -124,6 +144,37 @@ def _structural_findings(
     current_commit: str = "",
     delta=None,
 ) -> list[dict]:
+    return _structural_findings_from_request(ScanRequest(
+        diff_text=diff_text,
+        source_changes=source_changes,
+        source_buckets=source_buckets or {},
+        maintainer_changed=maintainer_changed,
+        package_name=package_name,
+        config=config,
+        current_text=current_text,
+        tree_manifest=tree_manifest,
+        whole_recipe=whole_recipe,
+        previous_diff=previous_diff,
+        previous_commit=previous_commit,
+        current_commit=current_commit,
+        delta=delta,
+    ))
+
+
+def _structural_findings_from_request(request: ScanRequest) -> list[dict]:
+    diff_text = request.diff_text
+    source_changes = request.source_changes
+    source_buckets = request.source_buckets
+    maintainer_changed = request.maintainer_changed
+    package_name = request.package_name
+    config = request.config
+    current_text = request.current_text
+    tree_manifest = request.tree_manifest
+    whole_recipe = request.whole_recipe
+    previous_diff = request.previous_diff
+    previous_commit = request.previous_commit
+    current_commit = request.current_commit
+    delta = request.delta
     source_buckets = source_buckets or {}
     tree_manifest = normalise_tree_manifest(tree_manifest)
     findings: list[dict] = []
@@ -137,7 +188,7 @@ def _structural_findings(
     line_map = map_diff_lines(diff_text)
     # the resolved pipeline facts, computed once and
     # shared by the edge-engine predicates dispatched below.
-    from ..edges import build_context, run_edge_instances
+    from ..edges import build_context
 
     ctx = build_context(diff_text, config or {}, current_text=current_text,
                         tree_manifest=tree_manifest, whole_recipe=whole_recipe)
@@ -449,6 +500,33 @@ def _structural_findings(
     # post-recipe checksum set is required.  Without it, a misclassified
     # `checksum_entry_removed` on a bump whose source lines are context
     # became C004 whenever the added/removed URL sets were both empty.
+    _checksum_removal_findings(
+        diff_text, current_text, cdelta, added, removed, cs_behavior, add)
+
+    # The declared upstream host serves C005 and C011 alike: a binary
+    # artifact, or a prebuilt package's source, on the project's own host (or
+    # a host the operator allow-listed as its distribution CDN) is not a
+    # third-party fetch.  Computed once here so the two rules cannot disagree
+    # about what "the upstream" is.
+    _provenance_findings(
+        diff_text, current_text, added, provenance_added, removed, source_buckets,
+        maintainer_changed, package_name, config, add)
+
+    if source_array_has_command_substitution(diff_text):
+        add("C007", "Command Substitution In Source Array", "CRITICAL", "execution",
+            "source=() contains $( ) or backtick substitution",
+            line=find_line_in_diff(diff_text, r"\$\(|`"))
+
+    _dispatch_families(
+        diff_text, config, add, ctx, urlctx, package_name, current_text,
+        tree_manifest, source_changes, cdelta, previous_diff,
+        previous_commit, current_commit, whole_recipe)
+    return findings
+
+
+def _checksum_removal_findings(diff_text, current_text, cdelta, added, removed,
+                               cs_behavior, add):
+    """C004: verification weakened while the source set stayed put."""
     checksums_shrank = (
         cdelta is not None
         and len(cdelta.checksums.gained) < len(cdelta.checksums.lost)
@@ -514,11 +592,12 @@ def _structural_findings(
                 "checksum entry removed while source URLs stayed the same",
                 line=find_line_in_diff(diff_text, r"sha256sums", prefix=r"\-"))
 
-    # The declared upstream host serves C005 and C011 alike: a binary
-    # artifact, or a prebuilt package's source, on the project's own host (or
-    # a host the operator allow-listed as its distribution CDN) is not a
-    # third-party fetch.  Computed once here so the two rules cannot disagree
-    # about what "the upstream" is.
+
+
+def _provenance_findings(diff_text, current_text, added, provenance_added,
+                         removed, source_buckets, maintainer_changed,
+                         package_name, config, add):
+    """C005/C006/C011/C012/C013: where the source really comes from."""
     upstream_host = _head_upstream_host(diff_text, current_text) if added else ""
     upstream_reg = _registered_domain(upstream_host) if upstream_host else ""
     divergence_allow = _source_divergence_allow(config)
@@ -614,10 +693,15 @@ def _structural_findings(
                     url=url, forge=forge, source_owner=src_owner,
                     repo=repo, upstream_owner=up_owner)
 
-    if source_array_has_command_substitution(diff_text):
-        add("C007", "Command Substitution In Source Array", "CRITICAL", "execution",
-            "source=() contains $( ) or backtick substitution",
-            line=find_line_in_diff(diff_text, r"\$\(|`"))
+
+
+def _dispatch_families(diff_text, config, add, ctx, urlctx, package_name,
+                       current_text, tree_manifest, source_changes, cdelta,
+                       previous_diff, previous_commit, current_commit,
+                       whole_recipe):
+    """Run the rule families that share the prepared structural context."""
+    from ..edges import run_edge_instances
+    from ..url_engine import run_url_instances
 
     _crossfire_findings(diff_text, config or {}, add,
                         previous_diff=previous_diff,
@@ -679,4 +763,4 @@ def _structural_findings(
     _ioc_findings(diff_text, package_name, config or {}, add,
                   current_text=current_text)
 
-    return findings
+

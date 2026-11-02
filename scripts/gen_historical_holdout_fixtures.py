@@ -6,7 +6,6 @@ from pathlib import Path
 
 HISTORICAL_DIR = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "malicious" / "historical"
 HOLDOUT_DIR = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "malicious" / "holdout"
-SYNTHETIC_DIR = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "malicious" / "synthetic"
 
 
 # ── Historical (reconstructed from real-world AUR attacks) ────────────────────

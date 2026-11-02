@@ -15,7 +15,7 @@ the same sequence, so a ``fact_to_dict`` comparison is byte-identical.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from ...buckets import classify_urls

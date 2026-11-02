@@ -30,7 +30,7 @@ from ...fetcher import (
     get_srcinfo_at_commit,
 )
 from ...findings import stamp
-from ...novelty import build_novelty_context
+from ...novelty import build_novelty_context  # noqa: F401 - patched via the facade
 from ...sandbox.git_client import GitOpError, GitSandboxUnavailable
 from ...deps import extract_dependency_changes
 from ...override import (

@@ -73,3 +73,27 @@
 /src/trustsight/coverage.py @emiliano-go
 /src/trustsight/schema.py @emiliano-go
 /src/trustsight/notify.py @emiliano-go
+
+# Detection and calibration: changing a rule body or a gate is a policy change.
+/src/trustsight/analysis/ @emiliano-go
+/src/trustsight/anergy.py @emiliano-go
+/src/trustsight/anergy.json @emiliano-go
+/scripts/calibration/ @emiliano-go
+/scripts/calibration_gates.py @emiliano-go
+/scripts/rebaseline.py @emiliano-go
+/scripts/pack_calibration_corpus.py @emiliano-go
+/scripts/gen_* @emiliano-go
+/scripts/corpus_* @emiliano-go
+/tests/regressions/ @emiliano-go
+/tests/fixtures/malicious/ @emiliano-go
+/scripts/build_legacy_shipped_patterns.py @emiliano-go
+/scripts/corpus_provenance.py @emiliano-go
+/scripts/corpus_select.py @emiliano-go
+/scripts/corpus_shape_drift.py @emiliano-go
+/src/trustsight/config/_legacy_shipped_patterns.py @emiliano-go
+/src/trustsight/config/_rule_sync.py @emiliano-go
+/tests/test_calibration_gates.py @emiliano-go
+/tests/test_published_figures.py @emiliano-go
+/tests/test_release_workflow.py @emiliano-go
+/tests/test_rule_assurance.py @emiliano-go
+/tests/test_security_model.py @emiliano-go

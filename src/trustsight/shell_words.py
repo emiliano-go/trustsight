@@ -173,6 +173,13 @@ def _split_case_arms(part: str) -> list[str]:
     return pieces
 
 
+#: `f() {` and `function f {` open a command list on the same line.  The
+#: parser split on `;` but still saw the function token as the command word,
+#: so a one-line body `f() { "$X"; }` hid the indirect command.
+_FUNCTION_PREFIX_RE = re.compile(
+    r"^(?:function\s+)?[A-Za-z_][A-Za-z0-9_]*(?:\s*\(\))?\s*\{")
+
+
 def _first_command_start(part: str) -> tuple[str, str] | None:
     """The command word of *part* after prefixes, or None.
 
@@ -181,6 +188,10 @@ def _first_command_start(part: str) -> tuple[str, str] | None:
     (``python -m pip``) or read its arguments.
     """
     stripped = part.lstrip()
+    prefix = _FUNCTION_PREFIX_RE.match(stripped)
+    if prefix:
+        stripped = stripped[prefix.end():].lstrip()
+        part = stripped
     if not stripped or _EVALUATION_RE.match(stripped):
         return None
     seen_wrapper = False

@@ -163,22 +163,68 @@ def _drop_rotated_source_replacements(
 #: a licence file as a raw-hosting source and made a documentation addition
 #: look like a source-host move.
 _DOC_SOURCE_RE = re.compile(
-    r"(?:^|[-_.])(?:licen[cs]e|copying|readme|changelog|authors|notice|patent)"
-    r"(?:[-_.]|$)",
+    r"(?:licen[cs]e|copying|readme|changelog|authors|notice|patent)"
+    r"(?:[-_.](?:txt|md|rst|html|lesser|mit|apache|gpl|lgpl|agpl|bsd|mpl|isc"
+    r"|[0-9][0-9a-z.-]*))?",
     re.IGNORECASE,
 )
 
+#: Hosts where a documentation-named source is still documentation rather
+#: than a payload.  A source on the declared upstream or a sibling source
+#: host is covered by the caller; these are the public forges whose raw
+#: file endpoints legitimately serve LICENSE/README files.
+_DOC_HOSTS = frozenset({
+    "raw.githubusercontent.com",
+    "gist.githubusercontent.com",
+})
 
-def _is_documentation_source(token: str) -> bool:
-    """True when a ``name::url`` source is documentation, not a build input."""
+
+def _canonical_doc_name(token: str) -> bool:
     local, sep, url = token.partition("::")
     if not sep:
         local, url = "", local
-    if local and _DOC_SOURCE_RE.search(local):
+    candidate = local
+    if not candidate:
+        path = url.split("?", 1)[0].split("#", 1)[0].rstrip("/")
+        candidate = path.rsplit("/", 1)[-1]
+    return bool(candidate and _DOC_SOURCE_RE.fullmatch(candidate))
+
+
+def _source_host(token: str) -> str:
+    _local, _sep, url = token.partition("::") if "::" in token else ("", "", token)
+    if "://" not in url:
+        return ""
+    from ..buckets import canonical_host
+    from urllib.parse import urlsplit
+
+    try:
+        return canonical_host(urlsplit(url).hostname or "")
+    except (TypeError, ValueError):
+        return ""
+
+
+def _is_documentation_source(
+    token: str, *, upstream_host: str = "",
+    source_hosts: frozenset[str] = frozenset(),
+) -> bool:
+    """True when a ``name::url`` source is documentation, not a build input.
+
+    The name is only half the claim.  A file named ``LICENSE`` on an unknown
+    host is exactly where an attacker puts a payload while the provenance
+    rules stand down; it is documentation only when the host is the declared
+    upstream, a sibling source host, a trusted forge/official host, or a
+    public forge's raw-file endpoint.
+    """
+    if not _canonical_doc_name(token):
+        return False
+    host = _source_host(token)
+    if not host:
+        return True  # a bare local file has no fetched host to charge
+    if host == upstream_host or host in source_hosts or host in _DOC_HOSTS:
         return True
-    path = url.split("?", 1)[0].split("#", 1)[0].rstrip("/")
-    basename = path.rsplit("/", 1)[-1]
-    return bool(basename and _DOC_SOURCE_RE.search(basename))
+    from ..buckets import classify_url
+    bucket, _ = classify_url(f"https://{host}")
+    return bucket in {"trusted_forge", "official"}
 
 
 #: A scalar ``url=``/``*_url=`` declaration.  This is the package's declared
@@ -216,6 +262,7 @@ def extract_urls_from_diff(diff_text: str) -> SourceChanges:
     # (`bash <<EOF`, `cat <<EOF | sh`) stay eligible.
     heredoc_bodies = _heredoc_body_indices(split_lines(diff_text))
     quote = ""
+    upstream_host = ""
     for line in doc.lines:
         raw = line.raw
         if raw.startswith("+++ "):
@@ -272,10 +319,23 @@ def extract_urls_from_diff(diff_text: str) -> SourceChanges:
             # a `source=()` entry, and charging it SOURCE_BUCKET/NOVELTY read
             # as a provenance change on an ordinary release.  It stays in
             # `target` so the install-hook rules still see it.
-            if is_declaration or _is_install_hook_path(line.file) or (
-                prefix == "+" and _is_documentation_source(cleaned)
-            ):
+            if is_declaration or _is_install_hook_path(line.file):
                 declared_urls.add(cleaned)
+                if is_declaration:
+                    upstream_host = _source_host(cleaned) or upstream_host
+
+    # Documentation sources are excluded from provenance only when the host
+    # is already part of the recipe (declared upstream, sibling source host)
+    # or a trusted forge/official/raw-file host.  The name alone is attacker
+    # controlled: `https://evil.test/LICENSE` is a payload.
+    source_hosts = frozenset(
+        _source_host(u) for u in (added_urls | removed_urls)
+        if _source_host(u) and not _canonical_doc_name(u)
+    )
+    for url in added_urls:
+        if _is_documentation_source(
+                url, upstream_host=upstream_host, source_hosts=source_hosts):
+            declared_urls.add(url)
 
     checksum_behavior = detect_checksum_changes(diff_text)
     # A declaration deleted with no replacement is also a checksum change,

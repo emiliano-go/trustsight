@@ -10,8 +10,28 @@ ARCHIVE_EXCLUDED_PATHS = frozenset({
     "packaging/aur/PKGBUILD",
 })
 
+#: Directory prefixes whose every file decides what the instrument detects
+#: or how it is calibrated.  A rule body, a calibration gate or a malicious
+#: fixture can be weakened in one file; naming the prefix closes the gap a
+#: hand-maintained file list keeps reopening.
+CRITICAL_PREFIXES = (
+    "src/trustsight/analysis/",
+    "scripts/calibration/",
+    "scripts/corpus_",
+    "scripts/gen_",
+    "tests/fixtures/malicious/",
+    "tests/regressions/",
+)
+
 CRITICAL_PATHS = frozenset({
     "scripts/security_gates.py",
+    "scripts/calibration_gates.py",
+    "scripts/rebaseline.py",
+    "scripts/pack_calibration_corpus.py",
+    "scripts/build_legacy_shipped_patterns.py",
+    "scripts/corpus_select.py",
+    "scripts/corpus_provenance.py",
+    "scripts/corpus_shape_drift.py",
     # The gate bodies are the enforcement; changing one must be signed just
     # like changing the dispatcher that imports it.
     "scripts/gates/__init__.py",
@@ -25,6 +45,12 @@ CRITICAL_PATHS = frozenset({
     "scripts/gates/_reporting.py",
     # Trust, release, signature and rendering modules decide what a result
     # claims and what a release contains.
+    # The anergy ledger decides which rules may score; changing it is a
+    # detection-policy change, not a cosmetic edit.
+    "src/trustsight/anergy.py",
+    "src/trustsight/anergy.json",
+    "src/trustsight/config/_rule_sync.py",
+    "src/trustsight/config/_legacy_shipped_patterns.py",
     "src/trustsight/release.py",
     "src/trustsight/channels.py",
     "src/trustsight/channel_state.py",
@@ -109,4 +135,9 @@ CRITICAL_PATHS = frozenset({
     "scripts/commit_signing_key.asc",
     "packaging/aur/PKGBUILD",
     "docs/reference/baseline-keys.md",
+    "tests/test_calibration_gates.py",
+    "tests/test_published_figures.py",
+    "tests/test_security_model.py",
+    "tests/test_release_workflow.py",
+    "tests/test_rule_assurance.py",
 })

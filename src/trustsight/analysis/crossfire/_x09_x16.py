@@ -11,7 +11,7 @@ from ...config import (
 from ...deps import _strip_comment
 from ._common import _DATA_CONSUMER, _EXEC_WRAPPER, _SHELL
 
-__all__ = ['_x013_is_trusted_registry', 'X009_RE', 'X010_RE', 'X011_WORD_RE', 'X011_STANDDOWN_RE', 'X012_CONSUMER_RE', 'X012_RE', 'X013_RE', 'X013_STANDDOWN_RE', 'X014_RE', 'X014_STANDDOWN_RE', 'X015_RE', 'X018_RE', 'X019_RE', '_DISTRO_INSTALL_RE', '_X009_CLIENT_RE', '_X016_CONSUMER_RE', '_X016_FETCH_RE', '_X016_KNOWN_EXECUTOR_RE', '_consumer_after_override', '_consumer_at']
+__all__ = ['_x013_is_trusted_populate', '_x013_is_trusted_registry', 'X009_RE', 'X010_RE', 'X011_WORD_RE', 'X011_STANDDOWN_RE', 'X012_CONSUMER_RE', 'X012_RE', 'X013_RE', 'X013_STANDDOWN_RE', 'X014_RE', 'X014_STANDDOWN_RE', 'X015_RE', 'X018_RE', 'X019_RE', '_DISTRO_INSTALL_RE', '_X009_CLIENT_RE', '_X016_CONSUMER_RE', '_X016_FETCH_RE', '_X016_KNOWN_EXECUTOR_RE', '_consumer_after_override', '_consumer_at']
 
 X009_RE = re.compile(
     r"\b(?:" + _OTHER_FETCH_CLIENT + r")\b[^\n|;&]*+"
@@ -160,12 +160,10 @@ X013_RE = re.compile(
     # switched on so it reads as diligence.  `--verify` is untouched: that
     # is the check, not the trust.
     r"|\bgpg2?\b[^\n;&|]*?--(?:import\b|recv-keys|keyserver|import-ownertrust)"
-    # `--populate <name>` installs the keyring this package ships in
-    # /usr/share/pacman/keyrings; the trust decision is the package
-    # install itself, not a substitution.  Adding a key (`--add`,
-    # `--recv-keys`, `--lsign-key`) is the shape that changes the trust
-    # root, so those stay.
-    r"|\bpacman-key\b[^\n;&|]*?--(?:add|recv-keys|lsign-key)"
+    # `--populate <name>` is quiet only when the recipe ships that keyring
+    # in `source=()` (a keyring package) or names a distribution keyring.
+    # The name checker lives in the engine; an unshipped populate still fires.
+    r"|\bpacman-key\b[^\n;&|]*?--(?:add|recv-keys|lsign-key|populate)"
     r"|\bapt-key\s+add|\brpm\s+--import"
     r"|\bpip\s+config\s+set\b[^\n;&|]*?index-url",
     re.IGNORECASE,
@@ -180,6 +178,35 @@ _X013_TRUSTED_REGISTRY_HOSTS = frozenset({
     "files.pythonhosted.org",
 })
 _X013_URL_RE = re.compile(r"https?://([^/\s\"'})]+)", re.IGNORECASE)
+
+
+_SYSTEM_KEYRINGS = frozenset({
+    "archlinux", "archlinuxarm", "archlinux32", "endeavouros", "cachyos",
+    "manjaro", "parabola", "artix", "garuda", "arcolinux",
+})
+
+_POPULATE_NAME_RE = re.compile(r"[ \t]{1,64}([A-Za-z0-9_.@+-]{1,255})")
+
+
+def _x013_is_trusted_populate(
+    body: str, match: re.Match, shipped: frozenset[str]
+) -> bool:
+    """True when `pacman-key --populate <name>` names a shipped keyring.
+
+    The trust substitution this rule claims is populating a keyring the
+    recipe did not stage and checksum: an attacker adds a new keyring file
+    and announces it as its own trust root.  A keyring package that ships
+    ``<name>.gpg`` is ordinary packaging; a distribution keyring is already
+    trusted.  An unknown name keeps the finding.
+    """
+    if "--populate" not in match.group(0).lower():
+        return False
+    tail = body[match.end():]
+    name_match = _POPULATE_NAME_RE.match(tail)
+    if not name_match:
+        return False
+    name = name_match.group(1).strip().lower()
+    return name in shipped or name in _SYSTEM_KEYRINGS
 
 
 def _x013_is_trusted_registry(body: str, match: re.Match) -> bool:

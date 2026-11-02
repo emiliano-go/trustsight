@@ -169,6 +169,33 @@ def _normalise(raw: bytes) -> bytes:
     return buffer.getvalue()
 
 
+_SAFE_ENV_NAMES = frozenset({".env.example", ".env.sample", ".env.template"})
+
+
+def _refuse_secret_members(raw: bytes) -> None:
+    """Fail closed on local deployment state in a committed revision.
+
+    ``export-ignore`` in ``.gitattributes`` is the first line of defence, but
+    ignore rules protect untracked files, not a path that was force-added or
+    committed before the rule existed.  A tracked ``.env`` or ``deploy/``
+    must never silently enter a release archive that a checksum describes.
+    """
+    with tarfile.open(fileobj=io.BytesIO(raw)) as source:
+        for info in source.getmembers():
+            parts = info.name.split("/")
+            if parts and parts[0].startswith("trustsight-"):
+                parts = parts[1:]
+            if not parts:
+                continue
+            for part in parts:
+                if (part == ".env" or part.startswith(".env.")) and part not in _SAFE_ENV_NAMES:
+                    raise SystemExit(
+                        f"refusing release tarball: it contains local env file {info.name!r}")
+            if parts[0] == "deploy":
+                raise SystemExit(
+                    f"refusing release tarball: it contains local deployment path {info.name!r}")
+
+
 def build(rev: str = "WORKTREE", pkgver: str | None = None) -> tuple[bytes, str]:
     """Return the tarball bytes and their sha256.
 
@@ -180,6 +207,7 @@ def build(rev: str = "WORKTREE", pkgver: str | None = None) -> tuple[bytes, str]
     if rev == "WORKTREE":
         rev = _worktree_tree()
     tar = _normalise(_git_archive(rev, f"trustsight-{pkgver}/"))
+    _refuse_secret_members(tar)
     buffer = io.BytesIO()
     # mtime=0 and no embedded filename: the gzip header must not carry a
     # build timestamp, which is the default.

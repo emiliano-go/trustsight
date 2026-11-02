@@ -3,3 +3,8 @@
 # a checksum inside a tarball can never match the tarball it is inside,
 # so shipping it in the archive only ever produces stale-looking hashes.
 packaging/ export-ignore
+
+# Local deployment state and secrets never belong in a release tarball.
+.env export-ignore
+.env.* export-ignore
+deploy/ export-ignore

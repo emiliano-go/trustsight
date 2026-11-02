@@ -12,7 +12,7 @@ from ...rules import _PRINTER_LINE_RE, _blank_quoted, clamp_text
 from ._common import _DECEPTIVE_SPACE_RE, _FENCE_RE, _array_body_lines, _command_starts, _command_words, _continuation_lines, _dependency_array_lines, _executes, _home_alias_hit, _loop_variable_names, _path_lookup_names, _pipeline_sink, _resolved_records, log
 from ._x01_x08 import (X001_RE, X002_SHAPES, X003_SHAPES, X004_SHAPES, X006_SHAPES,
                        X034_ARCHIVE_RE, X034_EXECUTOR_RE)
-from ._x09_x16 import X009_RE, X010_RE, X011_WORD_RE, X011_STANDDOWN_RE, X012_RE, X013_RE, X013_STANDDOWN_RE, X014_RE, X014_STANDDOWN_RE, X015_RE, X018_RE, X019_RE, _DISTRO_INSTALL_RE, _X009_CLIENT_RE, _X016_CONSUMER_RE, _X016_FETCH_RE, _X016_KNOWN_EXECUTOR_RE, _consumer_after_override, _consumer_at, _x013_is_trusted_registry
+from ._x09_x16 import X009_RE, X010_RE, X011_WORD_RE, X011_STANDDOWN_RE, X012_RE, X013_RE, X013_STANDDOWN_RE, X014_RE, X014_STANDDOWN_RE, X015_RE, X018_RE, X019_RE, _DISTRO_INSTALL_RE, _X009_CLIENT_RE, _X016_CONSUMER_RE, _X016_FETCH_RE, _X016_KNOWN_EXECUTOR_RE, _consumer_after_override, _consumer_at, _x013_is_trusted_populate, _x013_is_trusted_registry
 from ._x17_x25 import X017_RE, X021_RE, X024_RE, _BUILD_MANIFEST_RE, _CONTENT_WRITE_VERB_RE, _HEREDOC_OPEN_RE, _MANIFEST_COMMAND_RE, _X017_FIND_RE, _X021_RUN_POSITIONAL_RE, _X021_SET_GLOB_RE, _X022_CONFIG_FLAG_RE, _X022_PAYLOAD_RE, _X022_WRITE_RE, _multiline_function_shadow_lines, _normalise_dest, _redirect_target, _x017_find_runs_a_script, _x024_is_benign_build_path, _x024_is_git_provenance, _x024_is_passthrough, _x024_is_test_pythonpath, _x024_is_trusted_loader_append, _x024_is_trusted_path_append, _x024_is_benign_path_suffix
 
 __all__ = ['crossfire_techniques']
@@ -180,6 +180,35 @@ class _CrossfireContext:
     printed_heredoc: set[int]
     data_heredoc: set[int]
     dead_hooks: set[str]
+    shipped_keyrings: frozenset[str]
+
+
+def _shipped_keyrings(readable: list[str], current_text: str | None) -> frozenset[str]:
+    """Keyring names the recipe declares in its source arrays.
+
+    `pacman-key --populate <name>` stands down only when `<name>.gpg` (or a
+    source with that local name) is part of the recipe; an attacker adding a
+    keyring to the diff is then visible as a new source.  The diff text is a
+    fallback for callers with no complete recipe.
+    """
+    names: set[str] = set()
+    if current_text:
+        try:
+            from ...recipedoc import parse_recipe
+            recipe = parse_recipe(current_text, file="PKGBUILD")
+            for array, entries in recipe.arrays.items():
+                if array != "source" and not array.startswith("source_"):
+                    continue
+                for entry in entries:
+                    base = str(entry).split("::")[-1].rstrip("/").rsplit("/", 1)[-1]
+                    if base.endswith(".gpg"):
+                        names.add(base[:-4].lower())
+        except Exception:  # noqa: BLE001 - an unparsable recipe is no evidence
+            pass
+    for line in readable:
+        for match in re.finditer(r"(?<![A-Za-z0-9_.@+-])([A-Za-z0-9_.@+-]{1,128})\.gpg\b", line):
+            names.add(match.group(1).lower())
+    return frozenset(names)
 
 
 def _crossfire_context(diff_text: str, current_text: str | None) -> _CrossfireContext:
@@ -253,6 +282,7 @@ def _crossfire_context(diff_text: str, current_text: str | None) -> _CrossfireCo
         printed_heredoc=printed_heredoc,
         data_heredoc=data_heredoc,
         dead_hooks=dead_hooks,
+        shipped_keyrings=_shipped_keyrings(readable, current_text),
     )
 
 
@@ -288,6 +318,7 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
     printed_heredoc = ctx.printed_heredoc
     data_heredoc = ctx.data_heredoc
     dead_hooks = ctx.dead_hooks
+    shipped_keyrings = ctx.shipped_keyrings
     found: dict[str, list[tuple[int, str, str]]] = {}
     #: X012 is the one rule here that spans two lines: an override is inert
     #: until a build step reads it.
@@ -314,11 +345,12 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
 
         stripped = raw.strip()
         if _CASE_OPEN_RE.match(stripped):
+            # Do not skip the line: a one-line `case x in x) "$X";; esac`
+            # carries the arm body on the same line, and skipping it made
+            # X002 blind to an indirect command there.
             case_depth += 1
-            continue
         if _CASE_CLOSE_RE.match(stripped):
             case_depth = max(0, case_depth - 1)
-            continue
         if case_depth > 0 and _is_case_label(raw):
             continue
         if manifest_delims and stripped == manifest_delims[-1]:
@@ -572,7 +604,9 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
 
         x013 = X013_RE.search(body)
         if (x013 and not X013_STANDDOWN_RE.search(body)
-                and not _x013_is_trusted_registry(body, x013)):
+                and not _x013_is_trusted_registry(body, x013)
+                and not _x013_is_trusted_populate(
+                    body, x013, shipped_keyrings)):
             record("X013", line_no, "fetch redirected or trust replaced",
                    body.strip())
 

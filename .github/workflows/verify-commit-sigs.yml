@@ -36,7 +36,7 @@ jobs:
           import sys
           import tempfile
 
-          from scripts.critical_paths import CRITICAL_PATHS
+          from scripts.critical_paths import CRITICAL_PATHS, CRITICAL_PREFIXES
 
           # The commit-signing trust anchor.  Both halves are in the
           # critical-path set, so changing the key or this fingerprint is
@@ -86,8 +86,8 @@ jobs:
                       return PINNED_FINGERPRINT in (signing, primary)
               return False
 
-          def critical_paths_at(rev):
-              """The canonical list as of *rev*, not as of the change.
+          def literal_at(rev, name):
+              """One module constant as of *rev*, not as of the change.
 
               Reading it from the checked-out tree let a pull request delete a
               path from the list and then modify that path without a
@@ -103,22 +103,27 @@ jobs:
               for node in ast.parse(source).body:
                   if isinstance(node, ast.Assign) and any(
                       isinstance(target, ast.Name)
-                      and target.id == "CRITICAL_PATHS"
+                      and target.id == name
                       for target in node.targets
                   ):
                       value = node.value
                       if (
                           isinstance(value, ast.Call)
-                          and getattr(value.func, "id", "") == "frozenset"
+                          and getattr(value.func, "id", "") in ("frozenset", "tuple")
                       ):
                           value = value.args[0]
                       return set(ast.literal_eval(value))
               return set()
 
           critical_paths = (
-              critical_paths_at(base_sha)
-              | critical_paths_at(head_sha)
+              literal_at(base_sha, "CRITICAL_PATHS")
+              | literal_at(head_sha, "CRITICAL_PATHS")
               | set(CRITICAL_PATHS)
+          )
+          critical_prefixes = (
+              literal_at(base_sha, "CRITICAL_PREFIXES")
+              | literal_at(head_sha, "CRITICAL_PREFIXES")
+              | set(CRITICAL_PREFIXES)
           )
 
           try:
@@ -137,7 +142,8 @@ jobs:
                   ["git", "diff", "--name-only", f"{base_sha}...{head_sha}"],
                   text=True,
               ).splitlines()
-          touched = sorted(path for path in diff if path in critical_paths)
+          touched = sorted(path for path in diff
+                           if path in critical_paths or path.startswith(tuple(critical_prefixes)))
           if not touched:
               print("No critical paths touched; signature check skipped.")
               raise SystemExit(0)

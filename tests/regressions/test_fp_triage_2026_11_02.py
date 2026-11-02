@@ -114,6 +114,7 @@ def test_x024_an_undefined_loader_path_variable_still_fires():
 _KEYRING_DIFF = (
     "--- /dev/null\n+++ b/PKGBUILD\n@@ -0,0 +1,3 @@\n"
     "+pkgname=p\n+pkgver=1\n+install=p.install\n"
+    "+source=(\"p.gpg\")\n+sha256sums=(\"0\" * 64)\n"
     "--- /dev/null\n+++ b/p.install\n@@ -0,0 +1,3 @@\n"
     "+post_install() {\n"
     "+  pacman-key --populate p\n"

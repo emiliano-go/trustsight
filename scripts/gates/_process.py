@@ -16,6 +16,7 @@ import tomllib
 from scripts.gates._core import ROOT, Gate
 
 __all__ = [
+    "gate_anergic_entries_are_changelogged",
     "gate_anergic_promotions_are_changelogged",
     "gate_anergic_rules_never_score",
 ]
@@ -28,6 +29,47 @@ def _changelog_section(text: str, version: str) -> str:
         return ""
     nxt = text.find("\n## [", start + len(marker))
     return text[start:] if nxt < 0 else text[start:nxt]
+
+
+def gate_anergic_entries_are_changelogged() -> Gate:
+    """An anergic entry is a declared, changelogged decision, not a quiet mute.
+
+    The existing promotion gate checks the other direction (a rule that
+    starts scoring).  Adding a rule to the ledger is the cheap way to silence
+    a detector, so it must name the release section and the rule in it; the
+    ledger and this gate are critical-path files, which makes the change
+    signed as well.
+    """
+    name = "anergic entries are changelogged"
+    try:
+        from trustsight.anergy import ANERGIC, entries
+
+        path = ROOT / "docs" / "changelog.md"
+        text = path.read_text(encoding="utf-8") if path.exists() else ""
+        ledger = entries()
+    except Exception as exc:  # noqa: BLE001 - a broken ledger is a failed gate
+        return Gate(name, False, 0, f"could not read the ledger: {exc}")
+    checked = 0
+    problems: list[str] = []
+    for rule_id, row in ledger.items():
+        if row.status != ANERGIC:
+            continue
+        checked += 1
+        if not row.since:
+            problems.append(f"{rule_id}: anergic without since")
+        if not row.changelog:
+            problems.append(f"{rule_id}: anergic without a changelog anchor")
+        if not row.promoted_in:
+            problems.append(f"{rule_id}: anergic without a release section")
+            continue
+        section = _changelog_section(text, row.promoted_in)
+        if not section:
+            problems.append(
+                f"{rule_id}: no changelog section for {row.promoted_in}")
+        elif rule_id not in section:
+            problems.append(
+                f"{rule_id}: absent from the {row.promoted_in} changelog section")
+    return Gate(name, not problems, {"anergic": checked}, "; ".join(problems))
 
 
 def gate_anergic_rules_never_score() -> Gate:

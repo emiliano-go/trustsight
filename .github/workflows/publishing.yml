@@ -64,7 +64,10 @@ jobs:
 
       - name: Release target must be an ancestor of master
         run: |
-          git fetch origin master --depth=1
+          # Full history: a shallow origin/master is a root commit, so
+          # merge-base cannot prove that an older target tag is an ancestor
+          # and a valid patch release would be refused.
+          git fetch origin master --no-tags
           git merge-base --is-ancestor HEAD origin/master || {
             echo "::error::release target ${{ inputs.target }} is not an ancestor of master"
             exit 1

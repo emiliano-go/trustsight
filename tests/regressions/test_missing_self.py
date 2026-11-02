@@ -28,16 +28,18 @@ def test_t004_partial_key_removal_is_anergic():
     assert _rules(fact, ("T004",)) == [("T004", 15)]
 
 
-def test_t004_stands_down_for_whole_array_and_rotation():
+def test_t004_stands_down_for_whole_array_but_not_a_decoy_rotation():
     whole = _pkgbuild_diff(
         "validpgpkeys=('KEYA' 'KEYB')", "validpgpkeys=()")
     fact = scan_diff(whole, package_name="demo")
     assert not [r for r, _ in _rules(fact, ("T004",))]
 
+    # A one-for-one "rotation" is the shape a decoy addition uses to hide a
+    # removal; T004 cannot tell the two apart offline, so it reports both.
     rotation = _pkgbuild_diff(
         "validpgpkeys=('KEYA' 'KEYB')", "validpgpkeys=('KEYA' 'KEYC')")
     fact = scan_diff(rotation, package_name="demo")
-    assert not [r for r, _ in _rules(fact, ("T004",))]
+    assert [r for r, _ in _rules(fact, ("T004",))] == ["T004"]
 
 
 def test_t005_path_changed_downgrade_is_anergic():

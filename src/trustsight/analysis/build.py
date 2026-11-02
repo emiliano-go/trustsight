@@ -190,7 +190,9 @@ _SERVICE_ENABLE_RE = re.compile(
     # A relative path is not a command: `rm /etc/sudoers.d/x-crontab`
     # matched the bare word and read as scheduling work.
     r"|(?<![\w/.-])crontab\b(?!\s+-l\b)"
-    r"|\bat\s+(?!-l\b)"
+    # `at` is a scheduler only when it carries a time or a job file;
+    # `run wxlauncher at least once` is prose, not a cron job.
+    r"|\bat\s+(?:-f\b|now\b|noon\b|midnight\b|today\b|tomorrow\b|\d)"
     r"|\bsystemd-run\s+--unit\b"
     r"|\bupdate-rc\.d\b"
     r"|\bchkconfig\b",
@@ -228,6 +230,11 @@ def _service_enable_findings(ctx, add) -> None:
             continue
         body = _strip_comment(line[1:])
         if _PRINTER_LINE_RE.match(body):
+            # A printer that does not substitute or pipe to a shell only
+            # prints.  Blanking quoted text kept an unquoted notice
+            # ("... at least once") readable as a service command.
+            if not re.search(r"\$\(|`|\|\s*(?:sudo\s+)?(?:ba|z|da|k|)sh\b", body):
+                continue
             body = _blank_quoted(body)
         if _SERVICE_ENABLE_RE.search(body):
             add("H108", "Service Or Cron Enable Command", "HIGH", "persistence",

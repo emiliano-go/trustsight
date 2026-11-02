@@ -680,18 +680,21 @@ domains = [
     "repo.yandex.ru",
     "nebula.gg",
     "downloads.sejda-cdn.com",
-    # Discord's own desktop-client CDN.  The package declares discord.com
-    # and every artifact comes from dl.discordapp.net or
-    # stable.dl2.discordapp.net; the registered domain differs, so the
-    # declared-upstream comparison cannot recover it and each release
-    # charged SOURCE_BUCKET and NOVELTY on the vendor's own host.
-    "discordapp.net",
-    # Izoone's project release host (automation.izoone.com), used by
-    # bootrecov, sway-session, sway-title-animator and emqutiti.  The
-    # package's own `url=` points at this host; the move away from the
-    # previous forge is reported by H049 and novelty, so charging the
-    # bucket again double-counts the same provenance change.
-    "izoone.com",
+]
+
+[official_hosts]
+# Exact hosts only.  A project-owned release host belongs here when trusting
+# its whole registered domain would trust user content or a takeover on a
+# sibling subdomain, while the specific host is the build's own origin.
+domains = [
+    # Discord's desktop-client CDN.  The package declares discord.com and
+    # every artifact comes from these two hosts; the registered domain also
+    # carries unrelated asset/user subdomains, so it is not trusted whole.
+    "dl.discordapp.net",
+    "stable.dl2.discordapp.net",
+    # Izoone's project release host, used by its own packages.  A sibling
+    # subdomain is not the vendor's release surface.
+    "automation.izoone.com",
 ]
 
 [raw_hosting]

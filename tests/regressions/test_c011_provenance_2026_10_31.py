@@ -42,14 +42,30 @@ pkgver=1
 pkgrel=1
 url="https://github.com/vendor/snishaper"
 source=("snishaper.tar.gz::https://github.com/vendor/snishaper/releases/download/v1/snishaper.tar.gz"
+        "LICENSE::https://github.com/vendor/snishaper/raw/v1/LICENSE")
+sha256sums=('{_IDS}' '{_IDS}')
+""")
+
+
+def test_a_declared_documentation_source_on_the_upstream_is_quiet():
+    """A LICENSE on the declared upstream is documentation, not an artifact."""
+    assert "C011" not in _ids(_DOC_SOURCE, "snishaper-bin")
+
+
+_UNKNOWN_DOC_SOURCE = _new_file(f"""
+pkgname=snishaper-bin
+pkgver=1
+pkgrel=1
+url="https://github.com/vendor/snishaper"
+source=("snishaper.tar.gz::https://github.com/vendor/snishaper/releases/download/v1/snishaper.tar.gz"
         "LICENSE::https://docs.unknown.example/LICENSE")
 sha256sums=('{_IDS}' '{_IDS}')
 """)
 
 
-def test_a_declared_documentation_source_is_not_a_c011_divergence():
-    """The LICENSE URL is declared; it cannot supply the prebuilt host."""
-    assert "C011" not in _ids(_DOC_SOURCE, "snishaper-bin")
+def test_a_doc_named_source_on_an_unknown_host_is_a_divergence():
+    """The filename is attacker-controlled; only the host makes it a doc."""
+    assert "C011" in _ids(_UNKNOWN_DOC_SOURCE, "snishaper-bin")
 
 
 _DIVERGENT_SOURCE = _new_file(f"""

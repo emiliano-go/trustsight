@@ -27,6 +27,7 @@ import os
 import re
 import threading
 import urllib.request
+from urllib.parse import urlsplit
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -503,19 +504,23 @@ def asset_url(asset_name: str, tag: str | None = None,
     its tag must come from discovery or an explicit *tag*.
     """
     channel = channel or official_channel()
-    if tag:
-        if not _TAG_RE.match(tag):
+
+    def _checked(candidate: str | None) -> str:
+        value = str(candidate or "")
+        if not _TAG_RE.match(value):
             raise ReleaseFetchError(
-                f"refusing release tag {tag!r}: a tag is a URL path segment "
-                "([A-Za-z0-9][A-Za-z0-9._-]*)"
-            )
-        return f"{channel.base_url}/download/{tag}/{asset_name}"
+                f"refusing release tag {value!r}: a tag is a URL path segment "
+                "([A-Za-z0-9][A-Za-z0-9._-]*)")
+        return value
+
+    if tag:
+        return f"{channel.base_url}/download/{_checked(tag)}/{asset_name}"
     fallback_ioc = _configured_ioc_tag() if channel.official else None
     fallback_baseline = _configured_baseline_tag() if channel.official else None
     if asset_name.startswith("baseline-ioc-"):
         ioc_tag = _resolve_ioc_tag(channel) or fallback_ioc
         if ioc_tag:
-            return f"{channel.base_url}/download/{ioc_tag}/{asset_name}"
+            return f"{channel.base_url}/download/{_checked(ioc_tag)}/{asset_name}"
         # The pairs live only on the ioc-* channel; there is no baseline copy
         # to fall back to, so a missing channel is a refusal.
         raise ReleaseFetchError(
@@ -526,7 +531,7 @@ def asset_url(asset_name: str, tag: str | None = None,
     if asset_name.startswith("baseline-"):
         baseline_tag = _resolve_baseline_tag(channel) or fallback_baseline
         if baseline_tag:
-            return f"{channel.base_url}/download/{baseline_tag}/{asset_name}"
+            return f"{channel.base_url}/download/{_checked(baseline_tag)}/{asset_name}"
         raise ReleaseFetchError(
             f"no {asset_name} is reachable: the release API is unavailable "
             "and no fallback baseline tag is configured; pass --tag "
@@ -537,7 +542,7 @@ def asset_url(asset_name: str, tag: str | None = None,
             _configured_watchlist_tag() if channel.official else None
         )
         if watchlist_tag:
-            return f"{channel.base_url}/download/{watchlist_tag}/{asset_name}"
+            return f"{channel.base_url}/download/{_checked(watchlist_tag)}/{asset_name}"
         raise ReleaseFetchError(
             f"no {asset_name} is reachable: the release API is unavailable "
             "and no fallback watchlist tag is configured; pass --tag "
@@ -785,7 +790,8 @@ def _download_url(url: str, max_bytes: int = _MAX_RELEASE_BYTES) -> bytes:
     except (ReleaseTooLargeError, ReleaseFetchError):
         raise
     except Exception as exc:
-        raise ReleaseFetchError(f"could not download {url}: {exc}") from exc
+        raise ReleaseFetchError(
+            f"could not download from {urlsplit(url).netloc or 'release host'}: {exc}") from exc
 
 
 def fetch_verified_url(

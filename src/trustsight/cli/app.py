@@ -173,5 +173,5 @@ def main() -> None:
         print("Interrupted.", file=sys.stderr)
         raise typer.Exit(code=130)
     except Exception as exc:
-        print(f"trustsight: error: {exc}", file=sys.stderr)
+        print(f"trustsight: error: {clean_log(str(exc))[:2000]}", file=sys.stderr)
         raise typer.Exit(code=2)

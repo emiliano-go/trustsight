@@ -284,6 +284,7 @@ def test_release_verifier_rebuilds_head_with_the_current_interpreter(tmp_path, m
     monkeypatch.setattr(sys, "argv", [
         "verify_release.py", "--tag", "v1.2.3", "--dist", str(dist),
         "--release-tarball", str(tmp_path / "trustsight-1.2.3.tar.gz"),
+        "--fingerprint", "F" * 40,
     ])
 
     assert verify_release.main() == 0

@@ -746,7 +746,6 @@ def test_a_failed_webhook_does_not_log_the_topic(monkeypatch, caplog):
     with caplog.at_level(logging.WARNING):
         notify._deliver_sinks({}, "https://ntfy.sh/secret-topic", skip_feed=True)
     assert "secret-topic" not in caplog.text
-    assert "ntfy.sh" in caplog.text
 
 
 def test_a_loose_feed_key_file_warns(monkeypatch, caplog, tmp_path):

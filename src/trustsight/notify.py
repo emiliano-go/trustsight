@@ -20,6 +20,7 @@ import os
 import stat
 import time
 import urllib.request
+from urllib.parse import urlsplit
 from pathlib import Path
 
 from .bounded_io import read_capped_with_deadline, read_file_capped
@@ -608,46 +609,6 @@ _PRIORITY_HEADERS = {
 }
 
 
-def _redact_url(text: str) -> str:
-    """Strip userinfo, path, query and fragment from URLs in *text*.
-
-    A webhook or feed endpoint is a bearer secret: the ntfy topic and the
-    ingest path are what grant write access.  ``urllib`` errors and
-    ``read_capped_with_deadline`` messages can quote the full URL, so a
-    warning that logs the exception must not log the credential too.
-
-    A linear scan rather than a regex: the regex engine retried a
-    scheme/host alternation at every position of a hostile exception string
-    (the adversarial regex audit caught it).
-    """
-    out: list[str] = []
-    index = 0
-    while True:
-        marker = text.find("://", index)
-        if marker == -1:
-            out.append(text[index:])
-            break
-        start = marker
-        while start > 0 and (text[start - 1].isalnum() or text[start - 1] in "+.-"):
-            start -= 1
-        end = marker + 3
-        while end < len(text) and text[end] not in "/ \t\r\n?#":
-            end += 1
-        authority = text[marker + 3:end]
-        if start == marker or not authority:
-            out.append(text[index:marker + 3])
-            index = marker + 3
-            continue
-        out.append(text[index:start])
-        out.append(text[start:marker + 3])
-        out.append(authority.rsplit("@", 1)[-1])
-        out.append("/...")
-        index = end
-        while index < len(text) and not text[index].isspace():
-            index += 1
-    return "".join(out)
-
-
 def post_webhook(url: str, payload: dict, timeout: float = _TIMEOUT_S) -> None:
     """POST *payload* as JSON to *url*.  Raises on any failure.
 
@@ -669,7 +630,9 @@ def post_webhook(url: str, payload: dict, timeout: float = _TIMEOUT_S) -> None:
         # Drain the body under a byte cap and the same deadline: an
         # unbounded read here would let a slow-drip receiver stall the
         # watcher past the timeout.
-        read_capped_with_deadline(resp, _MAX_RESPONSE_BYTES, url, timeout)
+        read_capped_with_deadline(
+            resp, _MAX_RESPONSE_BYTES,
+            urlsplit(url).netloc or "webhook response", timeout)
 
 
 def notify_url(config: dict | None = None) -> str:
@@ -762,7 +725,9 @@ def post_feed(url: str, payload: dict, key_b64: str, key_id: str,
     ))
     req = urllib.request.Request(url, data=body, headers=headers, method="POST")
     with urllib.request.urlopen(req, timeout=timeout) as resp:
-        read_capped_with_deadline(resp, _MAX_RESPONSE_BYTES, url, timeout)
+        read_capped_with_deadline(
+            resp, _MAX_RESPONSE_BYTES,
+            urlsplit(url).netloc or "feed response", timeout)
 
 
 def _deliver_sinks(
@@ -784,7 +749,7 @@ def _deliver_sinks(
             ntfy_ok = True
         except Exception as exc:  # noqa: BLE001 - a notification never kills the loop
             ntfy_ok = False
-            log.warning("alert webhook failed: %s", _redact_url(str(exc)))
+            log.warning("alert webhook failed: %s", type(exc).__name__)
     if feed is None:
         feed = feed_url()
     if not key:
@@ -800,7 +765,7 @@ def _deliver_sinks(
             feed_ok = True
         except Exception as exc:  # noqa: BLE001
             feed_ok = False
-            log.warning("feed webhook failed: %s", _redact_url(str(exc)))
+            log.warning("feed webhook failed: %s", type(exc).__name__)
     return ntfy_ok, feed_ok, ntfy_configured, feed_configured
 
 

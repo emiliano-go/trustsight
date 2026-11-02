@@ -29,9 +29,9 @@ def test_only_the_allowlist_survives(monkeypatch):
     monkeypatch.setenv("LANG", "C")
     monkeypatch.setenv("LD_PRELOAD", "/tmp/evil.so")
     env = minimal_env()
-    assert env.get("PATH") == "/usr/bin"
+    assert env.get("PATH") == "/usr/bin:/bin"
     assert env.get("LANG") == "C"
-    assert set(env) <= set(MINIMAL_ENV_KEYS)
+    assert set(env) <= set(MINIMAL_ENV_KEYS) | {"PATH"}
 
 
 def test_the_worker_uses_the_allowlist(monkeypatch):

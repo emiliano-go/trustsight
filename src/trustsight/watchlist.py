@@ -42,6 +42,8 @@ __all__ = ["add_entry", "add_package", "default_path", "import_release",
 #: decide how much memory the sweep spends (A4/A14).  Exceeding it is an
 #: unreadable watchlist, which is already the documented empty case.
 MAX_WATCHLIST_BYTES = 1024 * 1024
+MAX_WATCHLIST_ENTRIES = 100_000
+MAX_WATCHLIST_LABEL_CHARS = 500
 
 
 def default_path() -> Path:
@@ -255,6 +257,8 @@ def import_release(data: dict, source: str = "") -> dict:
     maintainers = data.get("maintainers")
     packages = packages if isinstance(packages, dict) else {}
     maintainers = maintainers if isinstance(maintainers, dict) else {}
+    if len(packages) > MAX_WATCHLIST_ENTRIES or len(maintainers) > MAX_WATCHLIST_ENTRIES:
+        raise ValueError("watchlist release exceeds the entry cap")
     release_salt = str(data.get("salt") or "").strip()
     source = str(source or data.get("source") or "").strip() or "official"
 
@@ -263,12 +267,14 @@ def import_release(data: dict, source: str = "") -> dict:
 
     init_db()
     new_packages = {
-        str(name).strip(): str(label or "")
+        str(name)[:MAX_WATCHLIST_LABEL_CHARS].strip():
+            str(label or "")[:MAX_WATCHLIST_LABEL_CHARS]
         for name, label in packages.items()
         if str(name).strip()
     }
     new_maintainers = {
-        str(name_hash).strip(): str(label or "")
+        str(name_hash)[:MAX_WATCHLIST_LABEL_CHARS].strip():
+            str(label or "")[:MAX_WATCHLIST_LABEL_CHARS]
         for name_hash, label in maintainers.items()
         if str(name_hash).strip()
     }

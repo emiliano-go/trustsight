@@ -265,7 +265,20 @@ def config_fingerprint() -> str:
         "thresholds": cfg_mod.load_thresholds(),
         "limits": config.get("limits", {}),
         "diff": config.get("diff", {}),
+        # These operator inputs can change a finding or its score even when
+        # the rule tables are identical.
+        "patterns": cfg_mod.load_patterns(),
+        "hosts": cfg_mod.load_hosts(),
+        "naming": cfg_mod.load_naming(),
+        "iocs": cfg_mod.load_iocs(),
     }
+    try:
+        from ..override import load_url_acks
+
+        material["url_acks"] = sorted(
+            (ack.package, ack.url) for ack in load_url_acks())
+    except Exception:  # noqa: BLE001 - an unreadable file is an empty set
+        material["url_acks"] = []
     try:
         from ..override import load_overrides
 

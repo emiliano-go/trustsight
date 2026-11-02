@@ -61,11 +61,8 @@ from ..ioc_match import ioc_baseline_matches
 from ..maintainer import _check_untrusted_maintainer_takeover
 from ..meta import alert_volume_finding, m_series_findings, m_tool_health
 from ..persistence import stand_down_committed_staging
-from ..structural import (
-    _structural_findings,
-    partial_install_files,  # noqa: F401
-    unchanged_upstream_host,
-)
+from ..structural import partial_install_files, unchanged_upstream_host  # noqa: F401
+from ..structural._engine import ScanRequest, _structural_findings_from_request
 from ..structural_rules import apply_structural_rules
 from ._analyze_helpers import _campaign_corroboration
 from ._evidence import Evidence, collect_evidence
@@ -226,10 +223,10 @@ def scan_recipe(scan: ScanInput, config: dict) -> ScanResult:
         change_delta_obj = scan.delta_transform(change_delta_obj)
 
     triggered_rules.extend(
-        _structural_findings(
-            clamp_text(diff_text),
-            source_changes,
-            source_buckets,
+        _structural_findings_from_request(ScanRequest(
+            diff_text=clamp_text(diff_text),
+            source_changes=source_changes,
+            source_buckets=source_buckets,
             maintainer_changed=scan.maintainer_changed,
             package_name=scan.package,
             config=config,
@@ -240,7 +237,7 @@ def scan_recipe(scan: ScanInput, config: dict) -> ScanResult:
             previous_commit=scan.previous_commit,
             current_commit=scan.current_commit,
             delta=change_delta_obj,
-        )
+        ))
     )
     triggered_rules.extend(
         apply_structural_rules(

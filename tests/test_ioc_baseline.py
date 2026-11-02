@@ -816,3 +816,33 @@ def test_a_broken_ioc_store_is_a_stage_failure(monkeypatch):
     begin_stage_tracking()
     assert baseline.match_ioc("package", "demo") == []
     assert "ioc-store" in stage_failures()
+
+
+def test_expired_only_domain_is_still_reported_by_the_match_path(
+        baseline_dir, isolated_db):
+    """An expired-only source must produce an expired match, not silence.
+
+    The match path used to derive its enabled types from non-expired entries,
+    so if every indicator for a type had expired no query ran and the report
+    looked clean.
+    """
+    from trustsight.analysis.pipeline import scan_diff
+    from trustsight.config import load_config
+
+    manifest = json.loads((baseline_dir / "manifest.json").read_text())
+    manifest["source"] = "expired-only"
+    (baseline_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    (baseline_dir / "iocs.jsonl").write_text(json.dumps({
+        "type": "domain", "value": "expired.example",
+        "source": "expired-only", "expires_at": yesterday,
+    }), encoding="utf-8")
+    import_baseline(baseline_dir, allow_unsigned=True)
+
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,2 @@\n"
+            "-source=('https://example.org/x.tar.gz')\n"
+            "+source=('https://expired.example/x.tar.gz')\n")
+    fact = scan_diff(diff, rules=[], config=load_config(), package_name="demo")
+    assert len(fact.ioc_matches) == 1
+    assert fact.ioc_matches[0].value == "expired.example"
+    assert fact.ioc_matches[0].expired is True

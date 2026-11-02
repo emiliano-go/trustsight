@@ -134,7 +134,10 @@ def ioc_baseline_matches(
     def source_allowed(source: str) -> bool:
         return not configured_sources or source in configured_sources
 
-    active = active_iocs(source=None, expired=False)
+    # Include expired entries so a match that has aged out is still reported
+    # with expired=True.  Filtering here made an expired-only source invisible:
+    # no want_* flag was set, so no match query ran at all.
+    active = active_iocs(source=None, expired=True)
     if configured_sources:
         active = [e for e in active if e.source in configured_sources]
     want_packages = any(e.type == "package" for e in active)
@@ -198,7 +201,7 @@ def ioc_baseline_matches(
 
     pattern_hits = [
         (entry, compiled)
-        for entry, compiled in active_patterns()
+        for entry, compiled in active_patterns(expired=True)
         if source_allowed(entry.source)
     ] if any(e.type == "pkgbuild_pattern" for e in active) else []
 

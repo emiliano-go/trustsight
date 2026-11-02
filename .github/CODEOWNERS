@@ -55,3 +55,21 @@
 /packaging/aur/PKGBUILD @emiliano-go
 /docs/reference/baseline-keys.md @emiliano-go
 /src/trustsight/full_aur/baseline_pubkey.pem @emiliano-go
+# Security-critical subtrees: gate bodies, trust/signature/release modules,
+# API/CLI render surfaces.  A wildcard here makes the critical-path check
+# fail closed when a new file is added under one of them.
+/scripts/gates/ @emiliano-go
+/src/trustsight/api/ @emiliano-go
+/src/trustsight/cli/ @emiliano-go
+/src/trustsight/release.py @emiliano-go
+/src/trustsight/channels.py @emiliano-go
+/src/trustsight/channel_state.py @emiliano-go
+/src/trustsight/ioc_baseline.py @emiliano-go
+/src/trustsight/watchlist.py @emiliano-go
+/src/trustsight/override.py @emiliano-go
+/src/trustsight/full_aur/export.py @emiliano-go
+/src/trustsight/reporting.py @emiliano-go
+/src/trustsight/verdict.py @emiliano-go
+/src/trustsight/coverage.py @emiliano-go
+/src/trustsight/schema.py @emiliano-go
+/src/trustsight/notify.py @emiliano-go

@@ -687,12 +687,16 @@ def gate_critical_paths_are_synchronised() -> Gate:
     from_archive = not (ROOT / "packaging").exists()
 
     owned = {
-        line.split()[0].lstrip("/")
+        line.split()[0].lstrip("/").rstrip("/")
         for line in codeowners.read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.lstrip().startswith("#") and len(line.split()) >= 2
     }
     workflow_text = workflow.read_text(encoding="utf-8")
-    missing_owners = sorted(path for path in CRITICAL_PATHS if path not in owned)
+    missing_owners = sorted(
+        path for path in CRITICAL_PATHS
+        if path not in owned
+        and not any(path.startswith(owner + "/") for owner in owned)
+    )
     missing_workflow = [] if "scripts.critical_paths import CRITICAL_PATHS" in workflow_text else sorted(CRITICAL_PATHS)
     missing_files = sorted(
         path for path in CRITICAL_PATHS

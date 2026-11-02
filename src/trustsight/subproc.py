@@ -27,7 +27,12 @@ __all__ = ["MINIMAL_ENV_KEYS", "minimal_env"]
 #: The variables a child may legitimately need: how to find its binary, and
 #: the locale its output is parsed under.  Everything else is dropped -
 #: including every startup-hook and loader-injection variable.
-MINIMAL_ENV_KEYS: tuple[str, ...] = ("PATH", "LANG", "LC_ALL", "LC_CTYPE")
+MINIMAL_ENV_KEYS: tuple[str, ...] = ("LANG", "LC_ALL", "LC_CTYPE")
+
+#: A fixed, trusted search path.  Inheriting ``PATH`` let a caller's
+#: ``PATH=.`` select an attacker's ``pacman`` or ``vercmp``.  Arch's tools
+#: live in /usr/bin; /bin is kept for compatibility.
+TRUSTED_PATH = "/usr/bin:/bin"
 
 
 def minimal_env() -> dict:
@@ -38,4 +43,6 @@ def minimal_env() -> dict:
     reach the child.
     """
     parent = os.environ.copy()
-    return {key: parent[key] for key in MINIMAL_ENV_KEYS if key in parent}
+    env = {key: parent[key] for key in MINIMAL_ENV_KEYS if key in parent}
+    env["PATH"] = TRUSTED_PATH
+    return env

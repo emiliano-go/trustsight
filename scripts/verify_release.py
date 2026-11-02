@@ -96,6 +96,12 @@ def main() -> int:
     parser.add_argument("--dist", type=Path, required=True)
     parser.add_argument("--release-tarball", type=Path, required=True)
     parser.add_argument("--write-checksums", type=Path)
+    parser.add_argument(
+        "--fingerprint",
+        default=os.environ.get("TRUSTSIGHT_RELEASE_FINGERPRINT", ""),
+        help="Pinned release signer fingerprint.  CI must supply this from "
+             "the default-branch workflow, not from the tree being released.",
+    )
     args = parser.parse_args()
 
     if not re.fullmatch(r"v\d+\.\d+\.\d+", args.tag):
@@ -133,7 +139,13 @@ def main() -> int:
     # The tarball is signed offline; the key is pinned and never available to
     # CI, so an account, token or workflow compromise is not enough to forge
     # an artifact.
-    fingerprint = _version_from(r"^validpgpkeys=\('([0-9A-Fa-f]{40})'", pkgbuild)
+    if not re.fullmatch(r"[0-9A-Fa-f]{40}", args.fingerprint or ""):
+        raise SystemExit(
+            "--fingerprint (or TRUSTSIGHT_RELEASE_FINGERPRINT) must carry the "
+            "40-hex pinned signing fingerprint; it is deliberately not read "
+            "from the tree being released"
+        )
+    fingerprint = args.fingerprint
     signature = ROOT / "packaging/aur" / f"{expected_tarball}.sig"
     _verify_signature(signature, args.release_tarball, fingerprint)
 

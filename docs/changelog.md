@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [0.27.0] - 2026-11-03
 
 ### Added
 
@@ -33,9 +33,10 @@
 
 ### Fixed
 
-- **The unreleased-surface hardening audit.** Unknown-host documentation sources are charged again (the name is attacker-controlled); X013 reports `pacman-key --populate` unless the package ships and checksums the keyring; T004 reports a decoy replacement, T005 pairs sources by host and catches a fragment-only downgrade; X002 sees a one-line function or case body; H108 ignores unquoted printer prose; C033 counts inline comments; C034 reads `.SRCINFO` from the diff; SOURCE_BUCKET trusts the exact vendor hosts, not the registered domain. The locked benign corpus re-measures at a 74.3% zero-rate and a 30.0% ruleset trigger rate; benign p95 stays 30 against malicious p5 40.
+- **Trusted toolchain paths and large-vendor hosts.** X024 and H025 no longer report a `PATH`/`LD_LIBRARY_PATH` append assembled from a trusted build root or a default-expanded toolchain (`local cuda_root="${CUDAToolkit_ROOT:-${CUDA_PATH:-/opt/cuda}}"`); untrusted variables, command substitutions, runtime prefixes and `LD_PRELOAD` still fire. The exact-host allow-list now carries Anomaly (`anoma.ly`, also retained in `[source_host_divergence]`), Tencent (`qqdl.gtimg.cn`), Microsoft/NuGet (`api.nuget.org`), SUSE/openSUSE (`download.opensuse.org`) and KDE (`invent.kde.org`); Discord was already listed, while Wyrd, Septabee, Izoone, Yarn and `api.ip.sb` remain reported. The locked benign corpus re-measures at a 74.7% zero-rate, a 6.6% flag rate above the 20-point threshold, a 93.4th percentile for 20 and a 29.6% ruleset trigger rate; benign p95 stays 30 against malicious p5 40.
+- **The unreleased-surface hardening audit.** Unknown-host documentation sources are charged again (the name is attacker-controlled); X013 reports `pacman-key --populate` unless the package ships and checksums the keyring; T004 reports a decoy replacement, T005 pairs sources by host and catches a fragment-only downgrade; X002 sees a one-line function or case body; H108 ignores unquoted printer prose; C033 counts inline comments; C034 reads `.SRCINFO` from the diff; SOURCE_BUCKET trusts the exact vendor hosts, not the registered domain. The locked benign corpus re-measures at a 74.7% zero-rate and a 29.6% ruleset trigger rate; benign p95 stays 30 against malicious p5 40.
 - **One lexical command position, and the detection fixes behind it.** Every rule family now reads `shell_words` for command position, so wrappers, grouping, reserved words and `case` arms agree instead of drifting apart. X002 treats a file-writing launcher heredoc as packaged content even when the diff interleaves an older heredoc around it (tape16-bin), and C007 only matches architecture-keyed `source_<arch>=(...)` arrays, not a `source_version` scalar (pivra). Each correction keeps its malicious positive control.
-- **C011 ignores declared documentation sources and exempts one vendor host.** A URL declared as a documentation source (`LICENSE`, `README`, `COPYING`) is not the prebuilt artifact and can no longer supply C011's divergent host (snishaper-bin). Anomaly's `anoma.ly` is added to `[source_host_divergence] allow` as a C011-only exemption; it is deliberately not in `[official_projects]`, so SOURCE_BUCKET and novelty still report it (hex-bin). Wyrd Company's `repo.wyrd.foo` remains reported: a new, zero-vote vendor host does not meet the official-domain trust bar (wyrwood-bin, toha-bin). The locked benign corpus re-measures at a 74.8% zero-rate and a 29.5% ruleset trigger rate; benign p95 stays 30 against malicious p5 40.
+- **C011 ignores declared documentation sources and exempts one vendor host.** A URL declared as a documentation source (`LICENSE`, `README`, `COPYING`) is not the prebuilt artifact and can no longer supply C011's divergent host (snishaper-bin). Anomaly's `anoma.ly` is added to `[source_host_divergence] allow` as a C011 exemption and also to the exact-host allow-list (`[official_hosts]`) as a large-vendor distribution host, so C011, SOURCE_BUCKET and novelty are quiet for it (hex-bin); the `[source_host_divergence]` entry is retained. Wyrd Company's `repo.wyrd.foo` remains reported: a new, zero-vote vendor host does not meet the official-domain trust bar (wyrwood-bin, toha-bin). The locked benign corpus re-measures at a 74.7% zero-rate and a 29.6% ruleset trigger rate; benign p95 stays 30 against malicious p5 40.
 
 ## [0.26.0] - 2026-10-30
 
@@ -5550,7 +5551,9 @@ separate reconciliation.
 - SQLite novelty tracking
 - LLM verdict integration
 - Basic CLI (review, inspect, history, config)
-[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.24.1...HEAD
+[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.27.0...HEAD
+[0.27.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.27.0
+[0.26.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.26.0
 [0.1.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.1.0
 [0.2.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.2.0
 [0.2.2]: https://github.com/emiliano-go/trustsight/releases/tag/v0.2.2

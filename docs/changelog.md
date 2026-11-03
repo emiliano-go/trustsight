@@ -28,7 +28,6 @@
 - **Signed-data bounds tightened.** IOC lines/entries, watchlist release size/entries and seed directory JSONL lines are capped; directory seeds reject symlinks; v2 maintainer rows cannot add a second count under one `name_hash`.
 - **Operator inputs are fingerprinted.** URL acknowledgements, patterns, hosts, naming and IOC tables now participate in `config_fingerprint`.
 - **Detection and calibration are signed-critical.** `anergy.py` and `anergy.json`, the calibration gate bodies and scripts, the fixture generators and the analysis engines/regressions now share the critical-path policy (prefixes plus exact files), so a rule or gate cannot be weakened by an unsigned commit. A new anergic entry must name its release section and the rule in the changelog; the previous gate checked only promotions.
-- **Release and local-state leaks closed.** `.env` and `deploy/` are `export-ignore`d and hard-refused by the tarball builder, `.dockerignore` covers nested paths, the release ancestry check fetches full history, and a first run no longer warns that a missing config is being ignored.
 - **Local state hardened.** Doc-cache files are owner-only and atomically written with `mkstemp`; webhook/feed URLs are redacted from diagnostics; child processes use a fixed trusted `PATH`; existing database files are chmodded `0600`; fallback release tags are validated; federation requires HTTPS outside loopback; seed/watchlist terminal renders are inert.
 
 ### Fixed

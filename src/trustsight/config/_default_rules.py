@@ -695,6 +695,13 @@ domains = [
     # Izoone's project release host, used by its own packages.  A sibling
     # subdomain is not the vendor's release surface.
     "automation.izoone.com",
+    # Large vendors' own distribution hosts.  Exact hosts, not registered
+    # domains: the parent carries unrelated user or asset subdomains.
+    "anoma.ly",                 # Anomaly Innovations (opencode, SST)
+    "qqdl.gtimg.cn",            # Tencent's QQ download CDN
+    "api.nuget.org",            # Microsoft's NuGet v3 API
+    "download.opensuse.org",    # SUSE / openSUSE distribution mirror
+    "invent.kde.org",           # KDE's own GitLab
 ]
 
 [raw_hosting]

@@ -5,7 +5,7 @@ are welcome and taken seriously.
 
 ## Reporting a vulnerability
 
-**Contact:** `emiliano.gandini [at] protonmail [dot] com`; PGP `F759D6D49B0A395AB922414A5CC3B4C50D37E793`
+**Contact:** `e [at] emiliano-go [dot] com`; PGP `F759D6D49B0A395AB922414A5CC3B4C50D37E793`
 
 Do **not** open a public issue before a patch exists. Provide steps to
 reproduce, the affected version (`trustsight --version`), and what an attacker

@@ -34,7 +34,7 @@ jobs:
           git clone --depth 1 https://github.com/emiliano-go/trustsight-feed.git ../trustsight-feed
           git init ../trustsight-harness
           git -C ../trustsight-harness remote add origin https://github.com/emiliano-go/trustsight-harness.git
-          git -C ../trustsight-harness fetch --depth 1 origin 91364be89031f29256e990ff01ff9e43abc9d6b9
+          git -C ../trustsight-harness fetch --depth 1 origin 95feed67565201efe27f81c134a8b87ab602a4c7
           git -C ../trustsight-harness checkout --detach FETCH_HEAD
 
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2

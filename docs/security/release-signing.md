@@ -27,6 +27,11 @@ signs the `baseline-*` channel assets and its private half is the
 `BASELINE_SIGNING_KEY` Actions secret, while this one signs the software
 release tarball and never enters CI.
 
+The key also carries a retired secondary UID, `Emiliano Gandini Outeda
+<emiliano.gandini@protonmail.com>`, kept until 2027-02-03 so existing
+references to the old address keep resolving. The fingerprint is unchanged;
+the UID is removed after that date.
+
 ## What is signed
 
 Each software release carries a detached signature over the deterministic

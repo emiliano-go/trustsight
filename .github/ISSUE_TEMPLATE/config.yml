@@ -7,7 +7,7 @@ contact_links:
     about: >
       Code execution, an unexpected network host, terminal-escape injection, a
       resource-exhaustion crash, or an integrity breach. Do NOT open a public
-      issue. Email emiliano.gandini@protonmail.com (PGP F759D6D49B0A395AB922414A5CC3B4C50D37E793).
+      issue. Email e@emiliano-go.com (PGP F759D6D49B0A395AB922414A5CC3B4C50D37E793).
   - name: What TrustSight cannot see
     url: https://github.com/emiliano-go/trustsight/blob/master/docs/explanation/what-trustsight-cannot-see.md
     about: >

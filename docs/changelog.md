@@ -16,6 +16,10 @@
 - **Tender points record review verdicts.** `trustsight verdict` stores a human disposition, and the report header counts unresolved verdicts over the configured window without claiming damage.
 - **The immune-inspired design is documented**, including the rejected runtime gain-control mechanism.
 
+### Changed
+
+- **The commit-signing key carries the new contact address.** `scripts/commit_signing_key.asc` is refreshed with `e@emiliano-go.com` as the primary UID; the retired protonmail UID is retained as a secondary identity until 2027-02-03. The fingerprint is unchanged, so `validpgpkeys` and the workflow pin stay as they are.
+
 ### Security
 
 - **Release trust anchor is independent of the released tree.** `verify_release.py` requires the pinned signing fingerprint from the default-branch workflow; `publishing.yml` also refuses a target that is not an ancestor of master, and `release-pkgbuild.yml` checks the fingerprint rather than accepting any imported key.

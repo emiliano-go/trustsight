@@ -5,7 +5,7 @@ description = "CLI-based AUR package update vetting tool"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [
-    { name = "Emiliano Gandini Outeda", email = "emiliano.gandini@protonmail.com" }
+    { name = "Emiliano Gandini Outeda", email = "e@emiliano-go.com" }
 ]
 license = "MIT"
 keywords = ["aur", "arch-linux", "security", "vetting", "pkgbuild"]

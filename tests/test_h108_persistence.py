@@ -40,3 +40,7 @@ def test_h108_stays_quiet_when_the_command_is_printed():
 def test_h108_quiet_on_read_only_cron_and_at_queries():
     assert "H108" not in ids(_hook("crontab -l"))
     assert "H108" not in ids(_hook("at -l"))
+
+
+def test_h108_quiet_on_a_filename_containing_crontab():
+    assert "H108" not in ids(_hook("rm -f /etc/sudoers.d/dokku-crontab"))

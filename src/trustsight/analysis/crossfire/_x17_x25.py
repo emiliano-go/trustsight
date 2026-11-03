@@ -7,6 +7,10 @@ from ...config import (
     SCRIPT_EXECUTOR,
 )
 from ._common import _EXEC_WRAPPER
+from .._path_trust import (
+    is_trusted_path_append as _is_trusted_path_append,
+    path_variable_is_trusted as _path_variable_is_trusted,
+)
 
 __all__ = ['_x024_is_benign_path_suffix', '_x024_is_trusted_path_append', 'X017_RE', 'X021_RE', 'X024_RE', '_BUILD_MANIFEST_RE', '_CONTENT_WRITE_VERB_RE', '_FUNC_CONTINUATION_BODY_RE', '_FUNC_CONTINUATION_RE', '_HEREDOC_OPEN_RE', '_INDIRECT_VALUE_RE', '_MANIFEST_ARG_RE', '_MANIFEST_COMMAND_RE', '_SENSITIVE_VAR_RE', '_X017_FIND_RE', '_X017_SCRIPT_DANGER_RE', '_X021_RUN_POSITIONAL_RE', '_X021_SET_GLOB_RE', '_X022_CONFIG_FLAG_RE', '_X022_PAYLOAD_RE', '_X022_WRITE_RE', '_X024_VALUE_VAR_RE', '_multiline_function_shadow_lines', '_normalise_dest', '_redirect_target', '_x017_find_runs_a_script', '_x024_is_passthrough', '_x024_is_test_pythonpath', '_x024_is_trusted_loader_append', '_x024_is_git_provenance']
 
@@ -270,17 +274,10 @@ def _x024_is_benign_path_suffix(body: str, match: re.Match) -> bool:
     return name != "PATH" and name.endswith("_PATH")
 
 
-_X024_PATH_APPEND_RE = re.compile(
-    r"\bPATH\s*=\s*[\"']?[^\n\"']*:\s*\$\{?PATH\}?",
-    re.IGNORECASE,
-)
 _X024_PATH_VAR_RE = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)")
 _X024_TRUSTED_PATH_ROOTS = frozenset({
     "HOME", "SRCDIR", "STARTDIR", "PKGDIR", "PWD",
 })
-_X024_RUNTIME_PATH_PREFIX_RE = re.compile(
-    r"^[\"']?(?:/tmp|/var/tmp|/dev/shm|/run)(?:/|$)"
-)
 
 
 def _x024_path_variable_is_trusted(
@@ -290,25 +287,11 @@ def _x024_path_variable_is_trusted(
 
     The yarn/Electron helper builds `_yarnhome="${HOME}/.yarn/install"` and
     then prepends `${_yarnhome}/bin` to PATH.  That is a local toolchain
-    path, not a value hidden from the reviewer.  Look back a bounded window
-    for the assignment; an undefined variable keeps the finding.
+    path, not a value hidden from the reviewer.  The shared resolver follows
+    default expansions such as `${CUDA_PATH:-/opt/cuda}`; an undefined
+    variable keeps the finding.
     """
-    assign = re.compile(
-        rf"^\s*(?:local\s+|export\s+|declare\s+-\w+\s+)?"
-        rf"{re.escape(name)}\s*=\s*(.+)$"
-    )
-    for previous in range(index - 1, max(-1, index - 50), -1):
-        text = lines[previous]
-        text = text[1:] if text[:1] in "+-" else text
-        match = assign.match(text)
-        if not match:
-            continue
-        value = match.group(1).strip().strip("\"'")
-        return bool(re.search(
-            r"\$\{?(?:HOME|srcdir|startdir|pkgdir|PWD)\}?|^~|^/(?:usr|opt)/",
-            value,
-        ))
-    return False
+    return _path_variable_is_trusted(lines, index, name)
 
 
 def _x024_is_trusted_path_append(
@@ -322,26 +305,10 @@ def _x024_is_trusted_path_append(
     substitution, a runtime-writable literal prefix, or an undefined
     variable keeps X024's finding.
     """
-    if match.groupdict().get("x024var", "").upper() != "PATH":
+    variable = match.groupdict().get("x024var", "")
+    if variable.upper() != "PATH":
         return False
-    value_match = _X024_PATH_APPEND_RE.search(body)
-    if value_match is None:
-        return False
-    value = value_match.group(0)
-    if "$(" in value or "`" in value:
-        return False
-    prefix = value.split(":", 1)[0]
-    prefix = prefix.split("=", 1)[-1].strip().strip("\"'")
-    if prefix and not prefix.startswith("$") and _X024_RUNTIME_PATH_PREFIX_RE.match(prefix):
-        return False
-    for name in _X024_PATH_VAR_RE.findall(value):
-        if name.upper() == "PATH":
-            continue
-        if name.upper() in _X024_TRUSTED_PATH_ROOTS:
-            continue
-        if not _x024_path_variable_is_trusted(lines, index, name):
-            return False
-    return True
+    return _is_trusted_path_append(body, variable, lines, index)
 
 
 _X024_LOADER_SELF_RE = re.compile(r"\$\{?LD_LIBRARY_PATH\b", re.IGNORECASE)

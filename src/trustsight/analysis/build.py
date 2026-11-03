@@ -5,6 +5,7 @@ from ._build_flags import (
     _HARDENING_OFF_RE,
     _build_flag_findings,
 )
+from ._path_trust import is_trusted_path_append
 from ._build_reconstruction import (
     _OBFUSCATION_MARKER_RE,
     _REVEALED_RUN_RE,
@@ -299,6 +300,10 @@ def _obfuscation_density_threshold(config) -> int:
 
 _ENV_SUBVERSION_HIGH_RE = re.compile(
     r"\b(?:LD_PRELOAD|LD_LIBRARY_PATH)\s*(?:\+?=)",
+)
+_LD_PRELOAD_RE = re.compile(r"\bLD_PRELOAD\s*(?:\+?=)")
+_OTHER_BUILD_FLAG_RE = re.compile(
+    r"(?<!:)\b(?:CFLAGS|LDFLAGS|MAKEFLAGS)\s*(?:\+?=)",
 )
 #: The variable must be the one being assigned, not a suffix of a cmake cache
 #: type.  ``-DCMAKE_INSTALL_PREFIX:PATH=/usr`` and ``:FILEPATH=`` are type
@@ -685,9 +690,22 @@ def _build_findings(diff_text, config, add, current_text=None, ctx=None) -> None
             continue
         body = _strip_comment(line)
         if _ENV_SUBVERSION_HIGH_RE.search(body):
-            high_found = True
+            # A loader path extended from the staged tree (or /usr, /opt) is
+            # ordinary toolchain plumbing; only an unmatched LD_PRELOAD or an
+            # untrusted prefix is the subversion this rule claims.
+            trusted_loader = (
+                _LD_PRELOAD_RE.search(body) is None
+                and is_trusted_path_append(body, "LD_LIBRARY_PATH", lines, i)
+            )
+            if not trusted_loader:
+                high_found = True
         if _ENV_SUBVERSION_MED_RE.search(body):
-            med_found = True
+            trusted_path = (
+                _OTHER_BUILD_FLAG_RE.search(body) is None
+                and is_trusted_path_append(body, "PATH", lines, i)
+            )
+            if not trusted_path:
+                med_found = True
     if high_found:
         add("H025", "Build Environment Subversion", "HIGH", "build",
             "LD_PRELOAD or LD_LIBRARY_PATH set inside a build function",

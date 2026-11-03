@@ -282,8 +282,8 @@ def has_homograph(domain: str, confusable_domains=None) -> bool:
     return False
 
 
-def _prepare(domain_config: dict) -> tuple[frozenset, frozenset, frozenset]:
-    """Return ``(raw_hosting, trusted_forges, official)`` as frozensets.
+def _prepare(domain_config: dict) -> tuple[frozenset, frozenset, frozenset, frozenset]:
+    """Return ``(raw_hosting, trusted_forges, official, official_hosts)``.
 
     Membership tests replace the linear scan the classifier used to run
     over each of the three lists for every URL.  Building these is cheap
@@ -294,6 +294,10 @@ def _prepare(domain_config: dict) -> tuple[frozenset, frozenset, frozenset]:
         frozenset(domain_config.get("raw_hosting", {}).get("domains", [])),
         frozenset(domain_config.get("trusted_forges", {}).get("domains", [])),
         frozenset(domain_config.get("official_projects", {}).get("domains", [])),
+        # Exact hosts only.  A project-owned release host belongs here when
+        # trusting its whole registered domain would trust user content or a
+        # takeover on a sibling subdomain.
+        frozenset(domain_config.get("official_hosts", {}).get("domains", [])),
     )
 
 
@@ -351,7 +355,7 @@ def classify_url(url: str, domain_config: dict | None = None) -> tuple[str, str]
 
 
 def _classify_prepared(
-    url: str, prepared: tuple[frozenset, frozenset, frozenset]
+    url: str, prepared: tuple[frozenset, frozenset, frozenset, frozenset]
 ) -> tuple[str, str]:
     """Classify *url* against already-prepared domain sets."""
     try:
@@ -368,10 +372,13 @@ def _classify_prepared(
     if has_homograph(domain):
         return "homograph_attack", domain
 
-    raw_hosting, trusted_forges, official = prepared
+    raw_hosting, trusted_forges, official, official_hosts = prepared
 
     if domain in raw_hosting:
         return "raw_hosting", domain
+
+    if domain in official_hosts:
+        return "official", domain
 
     # The registered domain is only needed for the forge comparison, and
     # computing it is the expensive part of this function.

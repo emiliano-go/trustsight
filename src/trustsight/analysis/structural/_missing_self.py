@@ -15,11 +15,15 @@ complementary rather than a second score for the same change.
 
 from __future__ import annotations
 
+import re
 from itertools import islice
 from urllib.parse import urlsplit
 
 from ...buckets import canonical_host, host_is_non_routable
+from ...deps import _strip_comment
+from ...diffdoc import parse_diff_lines
 from ...rules import find_line_in_diff
+from ...tokenizer import split_lines
 
 #: Bound every list read from a parsed recipe.  The tokenizer already caps
 #: input, but these helpers are also called directly by tests and callers.
@@ -35,10 +39,13 @@ __all__ = [
     "vouch_surface_findings",
 ]
 
-#: A comment line in a recipe: the whole line is prose, not code with a
-#: trailing comment.  Inline comments are not "prose a reviewer reads".
+#: A comment in a recipe, whole-line or trailing.  Inline prose is what a
+#: reviewer reads beside the code, so deleting it is the same loss C033
+#: claims; only a `#` inside quotes is data.
 def _is_comment(line: str) -> bool:
-    return isinstance(line, str) and line.lstrip().startswith("#")
+    if not isinstance(line, str) or not line.strip():
+        return False
+    return _strip_comment(line).rstrip() != line.rstrip()
 
 
 def _array_values(values) -> list[str]:
@@ -89,15 +96,19 @@ def vouch_surface_findings(diff_text: str, scope_pre, scope_post, add,
     if not before:
         return  # missing from birth is not decay
     lost = before - after
-    gained = after - before
     try:
         floor = int(_threshold(config, "t004", "min_removed_keys", 1))
     except (TypeError, ValueError):
         floor = 1
     if len(lost) < max(1, floor):
         return
-    if gained or not after:
-        return  # rotation, widening, or whole-array removal (H024)
+    # A whole-array removal is H024's; a widening (more keys than before) is
+    # not a loss.  A one-for-one "rotation" is deliberately *not* excused:
+    # adding a decoy fingerprint alongside a real one is the cheap way to
+    # hide a vouch-surface removal, and T004 cannot tell a real rotation from
+    # a decoy offline.  Rotation still reports; the reviewer sees the keys.
+    if not after or len(after) > len(before):
+        return
     add(
         "T004", "Vouch Surface Removed", "MEDIUM", "temporal",
         f"validpgpkeys lost {len(lost)} key(s) with no replacement; "
@@ -141,44 +152,49 @@ def scheme_downgrade_findings(scope_pre, scope_post, add) -> None:
     """
     pre = _source_arrays(scope_pre)
     post = _source_arrays(scope_post)
-    seen: set[tuple[str, str]] = set()
-    for name in sorted(set(pre) & set(post)):
-        for before_raw, after_raw in zip(pre[name], post[name]):
-            before, after = _url_of(before_raw), _url_of(after_raw)
-            if not before or not after:
-                continue
-            if not before.lower().startswith("https://"):
-                continue
-            if not after.lower().startswith("http://"):
-                continue
-            if after == before.replace("https://", "http://", 1):
-                continue  # H019 owns the exact downgrade
-            try:
-                old = urlsplit(before)
-                new = urlsplit(after)
-            except ValueError:
+
+    def by_host(values: list[str], scheme: str) -> dict[str, list[str]]:
+        """HTTPS/HTTP URLs grouped by canonical host, in array order.
+
+        Pairing by position across the whole array let an inserted decoy
+        shift every later entry and hide a downgrade.  Grouping by the host
+        the downgrade keeps is stable under an insertion on another host.
+        """
+        out: dict[str, list[str]] = {}
+        for raw in values:
+            url = _url_of(raw)
+            if not url or not url.lower().startswith(scheme):
                 continue
             try:
-                old_host = canonical_host(old.hostname or "")
-                new_host = canonical_host(new.hostname or "")
+                host = canonical_host(urlsplit(url).hostname or "")
             except (TypeError, ValueError):
                 continue
-            if not old_host or old_host != new_host:
+            if not host or host_is_non_routable(host):
                 continue
-            if host_is_non_routable(old_host):
-                continue
-            if (old.path, old.query) == (new.path, new.query):
-                continue
-            key = (name, old_host)
-            if key in seen:
-                continue
-            seen.add(key)
-            add(
-                "T005", "Scheme Downgrade", "MEDIUM", "temporal",
-                f"{name} moved from https to http on {old_host} while the "
-                "path changed; the old URL was never plain http",
-                host=old_host, array=name, before=before[:80], after=after[:80],
-            )
+            out.setdefault(host, []).append(url)
+        return out
+
+    seen: set[tuple[str, str]] = set()
+    for name in sorted(set(pre) & set(post)):
+        before_hosts = by_host(pre[name], "https://")
+        after_hosts = by_host(post[name], "http://")
+        for host in sorted(set(before_hosts) & set(after_hosts)):
+            for before, after in zip(before_hosts[host], after_hosts[host]):
+                if after == before.replace("https://", "http://", 1):
+                    continue  # H019 owns the exact downgrade
+                # No path/query equality escape: a fragment-only edit is
+                # still a TLS downgrade, and H019 does not claim it because
+                # the URL is not identical.
+                key = (name, host)
+                if key in seen:
+                    continue
+                seen.add(key)
+                add(
+                    "T005", "Scheme Downgrade", "MEDIUM", "temporal",
+                    f"{name} moved from https to http on {host} while the "
+                    "URL changed; the old URL was never plain http",
+                    host=host, array=name, before=before[:80], after=after[:80],
+                )
 
 
 def comment_deletion_findings(diff_doc, add, config=None) -> None:
@@ -188,6 +204,11 @@ def comment_deletion_findings(diff_doc, add, config=None) -> None:
     shrinks what a reviewer reads without touching the payload.  The ratio
     and the absolute floor are config-pinned and corpus-adjudicated; a
     one-line comment deletion is never a finding.
+
+    The rule is pure-diff and deliberately does not read history, so a
+    deletion split across several diffs can stay under the absolute floor.
+    That is a documented threshold limit, not a claim that the recipe was
+    not gutted; the ratio still reports every diff that crosses the floor.
     """
     if diff_doc is None:
         return
@@ -244,7 +265,29 @@ def _srcinfo_from_manifest(manifest) -> str:
     return ""
 
 
-def srcinfo_version_findings(current_text, tree_manifest, add) -> None:
+def _srcinfo_from_diff(diff_text: str) -> str:
+    """The post-image version fields from an added/changed .SRCINFO.
+
+    The tree manifest is unavailable on the diff-only (watcher) path.  A
+    diff that touches .SRCINFO still carries the new version line, which is
+    enough for the INFO drift comparison; an unchanged .SRCINFO cannot
+    introduce drift, so its absence is not a blind spot for this rule.
+    """
+    fields: dict[str, str] = {}
+    for line in parse_diff_lines(split_lines(str(diff_text or ""))).lines:
+        if line.side != "add" or not str(line.file).endswith(".SRCINFO"):
+            continue
+        match = re.match(
+            r"\s*(pkgver|pkgrel|epoch)\s*=\s*(\S+)", line.content)
+        if match:
+            fields[match.group(1)] = match.group(2).strip("\"'")
+    if not fields:
+        return ""
+    return "pkgbase = demo\n" + "".join(
+        f"\t{key} = {value}\n" for key, value in fields.items())
+
+
+def srcinfo_version_findings(current_text, tree_manifest, add, diff_text="") -> None:
     """C034: committed ``.SRCINFO`` disagrees with the recipe's version fields.
 
     H103 compares the fields that change what a build does and deliberately
@@ -252,9 +295,9 @@ def srcinfo_version_findings(current_text, tree_manifest, add) -> None:
     This reports that ordinary shape as INFO, feed-tier, so a consumer can
     see the metadata drift without calling it suspicious.
     """
-    if not current_text or not tree_manifest:
+    if not current_text or (not tree_manifest and not diff_text):
         return
-    srcinfo = _srcinfo_from_manifest(tree_manifest)
+    srcinfo = _srcinfo_from_manifest(tree_manifest) or _srcinfo_from_diff(diff_text)
     if not srcinfo:
         return
     from ..crossfile import version_metadata_divergence

@@ -28,6 +28,12 @@ def _warn_unparsable_config(exc: Exception) -> None:
     ``[release] key`` and fall back to the official channel without a word, so
     say so - once per process.
     """
+    # An absent file is a fresh install, not an unparsable one: the CLI
+    # creates the defaults immediately after this lookup, and warning that
+    # "any release channel or key set there is being ignored" before there
+    # is a file to hold them only teaches the operator to ignore the warning.
+    if isinstance(exc, FileNotFoundError):
+        return
     if str(_config_dir()) in _PARSE_WARNED:
         return
     _PARSE_WARNED.add(str(_config_dir()))

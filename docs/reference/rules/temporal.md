@@ -127,13 +127,16 @@ rotation of trust inside one commit is its own fact - so it fires cold.
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `temporal`
 
-- **Condition:** A `validpgpkeys` entry is removed and no key is added, while
-  at least one key remains declared.
+- **Condition:** A `validpgpkeys` entry is removed while at least one key
+  remains declared. A widening (more keys than before) is not a loss; a
+  one-for-one replacement reports, because a decoy addition is
+  indistinguishable from a real rotation offline.
 
 The missing-self shape: the recipe used to prove something about its signer
-and now proves less. Whole-array removal is H024; a rotation is T003/H078;
-checksum loss is H091/H001/C004. This rule owns only the partial-key gap, so
-the same change is never scored twice by two different names. The locked benign corpus adjudicates it; the measured rate is recorded in the changelog.
+and now proves less. Whole-array removal is H024; T003/H078 still describe a real rotation, but
+T004 reports it too rather than giving a decoy a free pass. Checksum loss is
+H091/H001/C004. This rule owns only the partial-key gap, so the same change is
+never scored twice by two different names. The locked benign corpus adjudicates it; the measured rate is recorded in the changelog.
 
 ### T005: Scheme Downgrade {#t005}
 
@@ -141,13 +144,13 @@ the same change is never scored twice by two different names. The locked benign 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `temporal`
 
-- **Condition:** A source entry at the same array position moves from
-  `https://` to `http://` on the same host while its path or query also
-  changes.
+- **Condition:** A source URL moves from `https://` to `http://` on the same
+  host and is not the exact H019 swap. Sources are paired by host, not array
+  position, and a fragment-only change still reports.
 
 H019 owns the exact `https://x` -> `http://x` swap. This covers the quieter
-version of the same move, where a new filename or version hides the scheme
-fall. The host must be routable, the origin must have been TLS, and a host
+version of the same move, where a new filename, version or fragment hides the
+scheme fall. The host must be routable, the origin must have been TLS, and a host
 change is not this shape. The locked benign corpus adjudicates it; the measured rate is recorded in the changelog.
 
 ### T006: Metadata-Git Divergence {#t006}

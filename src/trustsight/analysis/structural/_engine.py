@@ -329,7 +329,7 @@ def _structural_findings_from_request(request: ScanRequest) -> list[dict]:
     # H001/C004/H019 already names is not repeated.
     missing_self_findings(
         diff_text, scope_doc, scope_pre, scope_post, add, config)
-    srcinfo_version_findings(current_text, tree_manifest, add)
+    srcinfo_version_findings(current_text, tree_manifest, add, diff_text)
 
     # Mildest shape: an isolated checksum insertion whose index does
     # not match the index at which the corresponding source entry appeared, so

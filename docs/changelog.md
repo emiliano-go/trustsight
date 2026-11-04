@@ -2,6 +2,14 @@
 
 # Changelog
 
+## [0.27.1] - 2026-11-04
+
+### Fixed
+
+- **Observed identity ledgers record again, and existing databases are backfilled.** The 0.27.0 pipeline merge dropped the T-series signing-key and maintainer-domain writers on both the git and corpus analysis paths; they are restored, along with added-literal recording on the git path. One-shot migrations seed domains from stored package maintainers and signing keys from stored analysis history, using the earliest available timestamp and placing no-history domains outside the 30-day novelty window, so an identity the database has already seen is no longer reported as novel after upgrading. Read-only analyses still write neither ledger.
+- **T007 matches the split maintainer identity.** A `Name <mail>` maintainer is split into display name and address, and each part is matched case-insensitively against the corresponding commit identity fields and the message. Name-only maintainers still match an email local part, and a genuinely absent identity remains reportable.
+- **`sync-rules --update --json` reports the remaining drift.** `drifted_shipped_rules()` is recomputed after the sync, so JSON consumers see the post-sync state rather than the pre-sync view the wizard needs. `--full` still returns an empty drift list.
+
 ## [0.27.0] - 2026-11-03
 
 ### Added
@@ -5550,7 +5558,8 @@ separate reconciliation.
 - SQLite novelty tracking
 - LLM verdict integration
 - Basic CLI (review, inspect, history, config)
-[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.27.0...HEAD
+[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.27.1...HEAD
+[0.27.1]: https://github.com/emiliano-go/trustsight/releases/tag/v0.27.1
 [0.27.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.27.0
 [0.26.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.26.0
 [0.1.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.1.0

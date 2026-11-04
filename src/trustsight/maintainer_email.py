@@ -3,7 +3,7 @@
 import re
 from email.utils import parseaddr
 
-__all__ = ["maintainer_domain", "normalize_domain"]
+__all__ = ["maintainer_domain", "normalize_domain", "split_maintainer"]
 
 _ANGLE_EMAIL_RE = re.compile(r"<([^<>]+)>")
 _EDGE_CHARS = "<>()[],;:"
@@ -43,3 +43,27 @@ def maintainer_domain(value: str) -> str:
     if "@" not in address:
         return ""
     return normalize_domain(address.rsplit("@", 1)[1])
+
+
+def split_maintainer(value: str) -> tuple[str, str]:
+    """Return ``(display_name, address)`` from an AUR maintainer string.
+
+    AUR writes ``Name <user@domain>``, but older rows can be a bare name or a
+    bare address.  T007 matches the two parts against different commit
+    fields, so it needs the same parsing the domain extractor uses without
+    throwing away the name.
+    """
+    text = str(value or "").strip()
+    if not text:
+        return "", ""
+    match = _ANGLE_EMAIL_RE.search(text)
+    if match:
+        return text[:match.start()].strip(), match.group(1).strip()
+    name, address = parseaddr(text)
+    if address and "@" in address:
+        return name.strip(), address.strip()
+    for token in text.split():
+        candidate = token.strip(_EDGE_CHARS)
+        if "@" in candidate:
+            return "", candidate
+    return text, ""

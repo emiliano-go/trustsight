@@ -197,3 +197,49 @@ def test_t002_matches_a_recorded_bare_domain(db):
     record_observed_domain("lini.de", observed_at="2020-01-01 00:00:00")
     assert t_domain_findings(
         "Stephan Springer <buzo+arch@Lini.de>", None) == []
+
+
+def test_t007_matches_a_full_name_and_address_identity():
+    project = _Project(messages=["import package"])
+    project.walk = lambda head, limit=None: [
+        _Commit(message="import package", author_name="Caleb Maclennan",
+                author_email="caleb@alerque.com")
+    ]
+    assert t_packager_not_in_history(
+        project, "abc123", "Caleb Maclennan <caleb@alerque.com>", None) == []
+
+
+def test_t007_matches_the_address_when_the_name_differs():
+    project = _Project(messages=["import package"])
+    project.walk = lambda head, limit=None: [
+        _Commit(message="import package", committer_name="C. Maclennan",
+                committer_email="caleb@alerque.com")
+    ]
+    assert t_packager_not_in_history(
+        project, "abc123", "Caleb Maclennan <caleb@alerque.com>", None) == []
+
+
+def test_t007_matches_case_insensitively():
+    project = _Project(messages=["import package"])
+    project.walk = lambda head, limit=None: [
+        _Commit(message="bump", author_name="CALEB MACLENNAN",
+                author_email="CALEB@ALERQUE.COM")
+    ]
+    assert t_packager_not_in_history(
+        project, "abc123", "caleb maclennan <caleb@alerque.com>", None) == []
+
+
+def test_t007_still_fires_for_an_absent_full_identity():
+    project = _Project(messages=["import package by someone else"])
+    got = t_packager_not_in_history(
+        project, "abc123", "Caleb Maclennan <caleb@alerque.com>", None)
+    assert [f["rule_id"] for f in got] == ["T007"]
+
+
+def test_split_maintainer_keeps_the_display_name():
+    from trustsight.maintainer_email import split_maintainer
+
+    assert split_maintainer("Caleb Maclennan <caleb@alerque.com>") == (
+        "Caleb Maclennan", "caleb@alerque.com")
+    assert split_maintainer("tippfehlr") == ("tippfehlr", "")
+    assert split_maintainer("caleb@alerque.com") == ("", "caleb@alerque.com")

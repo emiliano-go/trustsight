@@ -3,6 +3,7 @@ import time
 from ..coverage import note_stage_failure
 from ..db import get_package
 from ..findings import stamp
+from ..maintainer_email import split_maintainer
 from ..sandbox.git_client import GitOpError, GitSandboxUnavailable
 
 
@@ -151,17 +152,33 @@ def t_packager_not_in_history(project, head_commit, maintainer,
     """
     if not maintainer or not head_commit:
         return []
+    name, address = split_maintainer(maintainer)
+
+    def normalise(value: str) -> str:
+        return " ".join(str(value or "").casefold().split())
+
+    name_lower = normalise(name)
+    address_lower = normalise(address)
+    if not name_lower and not address_lower:
+        return []
     try:
-        name_lower = maintainer.lower()
         for commit in project.walk(head_commit, 200):
-            identities = [
-                getattr(commit, "message", "") or "",
-                getattr(commit, "author_name", "") or "",
-                getattr(commit, "author_email", "") or "",
-                getattr(commit, "committer_name", "") or "",
-                getattr(commit, "committer_email", "") or "",
+            message = normalise(getattr(commit, "message", ""))
+            names = [
+                normalise(getattr(commit, "author_name", "")),
+                normalise(getattr(commit, "committer_name", "")),
             ]
-            if any(name_lower in identity.lower() for identity in identities):
+            emails = [
+                normalise(getattr(commit, "author_email", "")),
+                normalise(getattr(commit, "committer_email", "")),
+            ]
+            if name_lower and (
+                    any(name_lower in identity for identity in names + emails)
+                    or name_lower in message):
+                return []
+            if address_lower and (
+                    any(address_lower in identity for identity in emails)
+                    or address_lower in message):
                 return []
         return [stamp({
             "rule_id": "T007",

@@ -1224,3 +1224,44 @@ def test_config_fingerprint_covers_the_effective_trust_table(tmp_path, monkeypat
     config_module._toml_cache.pop("trusted_domains.toml", None)
     config_module._DOMAIN_TABLE_CACHE = None
     assert config_module.config_fingerprint() != before
+
+
+def test_sync_rules_update_json_reports_post_sync_drift(tmp_path, monkeypatch):
+    """A JSON consumer must not be told about drift the command just fixed."""
+    import json
+
+    from typer.testing import CliRunner
+
+    import trustsight.cli.config as cli_config
+    import trustsight.config as cfg
+    from trustsight.cli.app import app
+
+    monkeypatch.setattr(cfg, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(cfg, "CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr(cfg, "CACHE_DIR", tmp_path / ".cache")
+    monkeypatch.setattr(cli_config, "CONFIG_DIR", tmp_path / ".config")
+    cfg.ensure_default_configs()
+
+    rules_path = tmp_path / ".config" / "rules.toml"
+    text = rules_path.read_text()
+    drifted = text.replace(
+        'match_target = "resolved"', 'match_target = "raw_line"', 1)
+    assert drifted != text
+    rules_path.write_text(drifted)
+
+    result = CliRunner().invoke(
+        app, ["config", "sync-rules", "--update", "--json"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["drift"] == []
+
+    from trustsight.config import _rule_blocks
+
+    assert 'match_target = "raw_line"' not in _rule_blocks(
+        rules_path.read_text())["R001"]
+
+    again = CliRunner().invoke(
+        app, ["config", "sync-rules", "--update", "--json"])
+    assert again.exit_code == 0, again.output
+    assert json.loads(again.output)["drift"] == []

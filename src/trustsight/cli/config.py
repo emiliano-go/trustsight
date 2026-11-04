@@ -141,6 +141,9 @@ def config_sync_rules(
             added, updated, drift = [], [], []
         else:
             added, updated = sync_rules(update_outdated=update)
+            # `drift` above is the pre-sync view the wizard needs; JSON
+            # consumers asked what remains after this command ran.
+            drift = drifted_shipped_rules()
         typer.echo(json.dumps({
             "target": str(target),
             "added": added,

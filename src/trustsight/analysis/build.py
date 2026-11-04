@@ -5,6 +5,7 @@ from ._build_flags import (
     _HARDENING_OFF_RE,
     _build_flag_findings,
 )
+from ._dependency_arrays import dependency_array_indices
 from ._path_trust import is_trusted_path_append
 from ._build_reconstruction import (
     _OBFUSCATION_MARKER_RE,
@@ -557,6 +558,40 @@ _COMMAND_WRAPPER_WORDS = frozenset(
 )
 
 
+def _mask_test_expressions(body: str) -> str:
+    """Blank ``[[ ... ]]`` and command-position ``[ ... ]`` tests.
+
+    ``||`` inside a test is the shell's logical OR between operands, not a
+    pipeline separator. Splitting the line there made the second operand
+    look like a command word, so an ordinary bash indirection test such as
+    ``[[ "${!_v}" == auto ]]`` read as an indirect command. A linear scan
+    keeps this off the regex audit while still masking every closed span.
+    """
+    out = list(body)
+    i = 0
+    n = len(body)
+    while i < n:
+        if body.startswith("[[", i):
+            end = body.find("]]", i + 2)
+            if end < 0:
+                break
+            for k in range(i, end + 2):
+                out[k] = " "
+            i = end + 2
+            continue
+        if (body[i] == "[" and i + 1 < n and body[i + 1] in " \t"
+                and (i == 0 or body[i - 1] in ";&| \t")):
+            end = body.find("]", i + 1)
+            if end < 0:
+                break
+            for k in range(i, end + 1):
+                out[k] = " "
+            i = end + 1
+            continue
+        i += 1
+    return "".join(out)
+
+
 def _indirect_in_command_position(body: str) -> bool:
     """True when a ``${!name}`` expands to the *command word* of a segment.
 
@@ -597,8 +632,9 @@ def edge_indirect_expansion(ctx, add) -> None:
         if line.side != "add" or line.raw.startswith("+++"):
             continue
         body = _strip_comment(line.content)
-        m = _INDIRECT_EXPANSION_RE.search(body)
-        if not m or not _indirect_in_command_position(body):
+        masked = _mask_test_expressions(body)
+        m = _INDIRECT_EXPANSION_RE.search(masked)
+        if not m or not _indirect_in_command_position(masked):
             continue
         add("H080", "Indirect Command Expansion", "CRITICAL", "obfuscation",
             f"a command or shell is named through indirect expansion "
@@ -607,6 +643,21 @@ def edge_indirect_expansion(ctx, add) -> None:
             body=body.strip()[:80],
             detail=f"indirect expansion {m.group(0)} hides the command it runs")
         return
+
+
+def dependency_entry_texts(current_text: str | None) -> frozenset[str]:
+    """Stripped dependency-array entries from the complete recipe.
+
+    A hunk can add entries to an array whose opener is outside the hunk, so
+    the diff alone cannot tell data from a command. The complete recipe can.
+    """
+    if not current_text:
+        return frozenset()
+    lines = _recipe_lines(current_text)
+    indices = dependency_array_indices(lines)
+    return frozenset(
+        _strip_comment(lines[i][1:]).strip().strip("\"',") for i in indices
+    )
 
 
 def edge_hidden_fetch(ctx, add) -> None:
@@ -621,7 +672,13 @@ def edge_hidden_fetch(ctx, add) -> None:
 
     declared = ctx.declared_urls_full
     declared_hosts = ctx.declared_hosts
+    dependency_data = dependency_array_indices(ctx.lines)
+    dependency_entries = dependency_entry_texts(ctx.current_text)
     for i, line in enumerate(ctx.lines):
+        if i in dependency_data:
+            continue
+        if _strip_comment(line[1:]).strip().strip("\"',") in dependency_entries:
+            continue
         if not line.startswith("+") or not ctx.scopes.within(i, _CRITICAL_FUNCTIONS):
             continue
         body = _strip_comment(line[1:])

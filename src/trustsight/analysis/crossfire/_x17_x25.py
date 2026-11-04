@@ -10,9 +10,10 @@ from ._common import _EXEC_WRAPPER
 from .._path_trust import (
     is_trusted_path_append as _is_trusted_path_append,
     path_variable_is_trusted as _path_variable_is_trusted,
+    value_is_trusted as _value_is_trusted,
 )
 
-__all__ = ['_x024_is_benign_path_suffix', '_x024_is_trusted_path_append', 'X017_RE', 'X021_RE', 'X024_RE', '_BUILD_MANIFEST_RE', '_CONTENT_WRITE_VERB_RE', '_FUNC_CONTINUATION_BODY_RE', '_FUNC_CONTINUATION_RE', '_HEREDOC_OPEN_RE', '_INDIRECT_VALUE_RE', '_MANIFEST_ARG_RE', '_MANIFEST_COMMAND_RE', '_SENSITIVE_VAR_RE', '_X017_FIND_RE', '_X017_SCRIPT_DANGER_RE', '_X021_RUN_POSITIONAL_RE', '_X021_SET_GLOB_RE', '_X022_CONFIG_FLAG_RE', '_X022_PAYLOAD_RE', '_X022_WRITE_RE', '_X024_VALUE_VAR_RE', '_multiline_function_shadow_lines', '_normalise_dest', '_redirect_target', '_x017_find_runs_a_script', '_x024_is_passthrough', '_x024_is_test_pythonpath', '_x024_is_trusted_loader_append', '_x024_is_git_provenance']
+__all__ = ['_x024_is_benign_path_suffix', '_x024_is_trusted_path_append', 'X017_RE', 'X021_RE', 'X024_RE', '_BUILD_MANIFEST_RE', '_CONTENT_WRITE_VERB_RE', '_FUNC_CONTINUATION_BODY_RE', '_FUNC_CONTINUATION_RE', '_HEREDOC_OPEN_RE', '_INDIRECT_VALUE_RE', '_MANIFEST_ARG_RE', '_MANIFEST_COMMAND_RE', '_SENSITIVE_VAR_RE', '_X017_FIND_RE', '_X017_SCRIPT_DANGER_RE', '_X021_RUN_POSITIONAL_RE', '_X021_SET_GLOB_RE', '_X022_CONFIG_FLAG_RE', '_X022_PAYLOAD_RE', '_X022_WRITE_RE', '_X024_VALUE_VAR_RE', '_multiline_function_shadow_lines', '_normalise_dest', '_redirect_target', '_x017_find_runs_a_script', '_x024_is_passthrough', '_x024_is_test_pythonpath', '_x024_is_trusted_build_value', '_x024_is_flag_filter', '_x024_is_trusted_loader_append', '_x024_is_git_provenance']
 
 _X017_FIND_RE = re.compile(
     r"\bfind\b[^\n;&|]{0,200}?-(?:exec|ok)(?:dir)?\s+"
@@ -208,6 +209,70 @@ def _x024_is_test_pythonpath(body: str, match: re.Match,
         ("pytest", "py.test", "tox", "nox", "nose", "unittest"))
 
 
+def _x024_assignment_value(body: str, match: re.Match) -> str:
+    """The right-hand side of the assignment the match starts in."""
+    eq = body.find("=", match.start())
+    if eq < 0:
+        return ""
+    rest = body[eq + 1:].lstrip(" \t\"'")
+    return rest.split("\n", 1)[0].strip()
+
+
+def _x024_is_trusted_build_value(body: str, match: re.Match,
+                                 lines: list[str], index: int,
+                                 scalar_values: dict | None = None) -> bool:
+    """True for PATH/PYTHONPATH pointing into the recipe's own build tree.
+
+    A staged test venv or an unpacked source tree is where the package's own
+    code lives; naming it is ordinary packaging. An undefined variable or a
+    command substitution keeps the finding. Values assigned outside the hunk
+    are resolved from the complete recipe's scalar table.
+    """
+    var = match.groupdict().get("x024var", "").upper()
+    if var not in {"PATH", "PYTHONPATH"}:
+        return False
+    value = _x024_assignment_value(body, match)
+    if not value or "$(" in value or "`" in value:
+        return False
+    if _X024_RUNTIME_LITERAL_RE.search(value):
+        return False
+    if _value_is_trusted(value, lines, index):
+        return True
+    if not scalar_values:
+        return False
+    for name in _X024_PATH_VAR_RE.findall(value):
+        assigned = scalar_values.get(name)
+        if assigned and not ("$(" in assigned or "`" in assigned) \
+                and _value_is_trusted(assigned, lines, index):
+            return True
+    return False
+
+
+def _x024_is_flag_filter(body: str, match: re.Match) -> bool:
+    """True when CFLAGS/LDFLAGS-like flags are rewritten from themselves.
+
+    ``LDFLAGS="$(echo "${LDFLAGS}" | sed s/-Wl,-z,nodlopen//)"`` filters the
+    flags the build already had. Only a pure echo/printf | filter pipeline
+    that names the same variable stands down; a fetch or an executor keeps
+    the finding.
+    """
+    var = match.groupdict().get("x024var", "").upper()
+    if var not in {"CFLAGS", "CXXFLAGS", "LDFLAGS", "MAKEFLAGS", "RUSTFLAGS"}:
+        return False
+    value = _x024_assignment_value(body, match)
+    if not re.match(r"^\$\(\s*(?:echo|printf)\b", value):
+        return False
+    if not re.search(r"\$\{?" + re.escape(var) + r"\b", value, re.IGNORECASE):
+        return False
+    if not re.search(r"\|\s*(?:sed|tr|awk|gawk|grep)\b", value):
+        return False
+    if re.search(_NETWORK_CLIENT, value, re.IGNORECASE):
+        return False
+    if re.search(SCRIPT_EXECUTOR, value, re.IGNORECASE):
+        return False
+    return True
+
+
 #: Build-tool search paths that are configured by deriving them from other
 #: variables.  They name where a compiler/pkg-config reads metadata, not code
 #: the shell will load, so an indirect value is ordinary build plumbing.  The
@@ -361,7 +426,14 @@ def _x024_is_passthrough(body: str, match: re.Match) -> bool:
     var = match.group("x024var")
     value = body[match.start():match.end()]
     expansion = _X024_VALUE_VAR_RE.search(value)
-    return bool(expansion and expansion.group(1) == var)
+    if not expansion:
+        return False
+    source = expansion.group(1)
+    # `LDFLAGS="${LDFLAGS_NEW}"` forwards a derived flags variable; the
+    # same-name rule covers the direct spelling, the prefix rule the
+    # `_NEW`/`_BASE` sibling the recipe itself computed.
+    return source == var or source.upper().startswith(var.upper() + "_") \
+        or var.upper().startswith(source.upper() + "_")
 
 _FUNC_CONTINUATION_RE = re.compile(
     r"^\s*(\w+)\s*\(\s*\)",

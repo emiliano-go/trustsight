@@ -192,6 +192,7 @@ def capability_in_diff(diff_text: str, current_text: str | None = None) -> str |
     """
     import os
 
+    from ..build import dependency_entry_texts
     from ..delivery import (
         _BUILD_FUNCTIONS,
         _H072_BENIGN_EXEC,
@@ -212,6 +213,8 @@ def capability_in_diff(diff_text: str, current_text: str | None = None) -> str |
         if not line.startswith("+") or fn is None:
             continue
         body = strip_comment(line[1:])
+        if body.strip().strip("\"',") in dependency_entry_texts(current_text):
+            continue
         client = _FETCH_CLIENT_RE.search(body)
         if client and not _non_executing_client(body, client):
             return f"a network fetch ({client.group(0)[:40]})"

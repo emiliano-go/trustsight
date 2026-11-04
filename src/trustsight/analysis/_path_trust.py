@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from functools import lru_cache
 
-__all__ = ["is_trusted_path_append", "path_variable_is_trusted"]
+__all__ = ["is_trusted_path_append", "path_variable_is_trusted", "value_is_trusted"]
 
 #: The assignment that extends a search path with a leading component.
 #: The value is read linearly, not with a backtracking span: a resolved line
@@ -128,17 +128,49 @@ def path_variable_is_trusted(lines: list[str], index: int, name: str) -> bool:
     return _value_is_trusted(assigned, lines, index)
 
 
+def _shell_word(rest: str) -> str:
+    """Read one shell word, removing quote characters.
+
+    A PATH value is routinely split into adjacent quoted segments
+    (``"$srcdir"/bin:"$PATH"``). Stopping at the first closing quote read
+    only ``$srcdir`` and missed the self-append, so an ordinary build PATH
+    looked like a hidden one. Read the whole word instead.
+    """
+    out: list[str] = []
+    i = 0
+    n = len(rest)
+    while i < n:
+        ch = rest[i]
+        if ch in ("\"", "'"):
+            quote = ch
+            i += 1
+            while i < n and rest[i] != quote:
+                if quote == '"' and rest[i] == "\\" and i + 1 < n:
+                    out.append(rest[i])
+                    i += 1
+                out.append(rest[i])
+                i += 1
+            i += 1
+            continue
+        if ch in " \t\r\n;&|":
+            break
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
 def _append_value(body: str) -> str | None:
     """The right-hand side of the first PATH-like assignment in *body*."""
     start = _ASSIGN_START_RE.search(body)
     if start is None:
         return None
-    rest = body[start.end():]
-    if rest[:1] in ("\"", "'"):
-        quote = rest[0]
-        end = rest.find(quote, 1)
-        return rest[1:end if end >= 0 else len(rest)]
-    return rest.split("\n", 1)[0].split(None, 1)[0] if rest.strip() else ""
+    rest = body[start.end():].lstrip(" \t")
+    return _shell_word(rest) if rest else ""
+
+
+def value_is_trusted(value: str, lines: list[str] | None, index: int) -> bool:
+    """Whether an assignment value names a local build/toolchain path."""
+    return _value_is_trusted(value.strip().strip("\"'"), lines, index)
 
 
 def is_trusted_path_append(

@@ -327,7 +327,10 @@ H067_LEGACY_SYSTEMD_DETECT_VIRT = r"systemd-detect-virt"
 
 DEFAULT_ANTI_ANALYSIS_PROBES = [
     r"TracerPid",                                   # /proc/self/status debugger marker
-    r"\b(?:gdb|strace|lldb|ptrace)\b",              # debugger clients / probe interfaces
+    # A debugger name in a path is not a debugger invocation: `binutils-gdb`
+    # and `sys/ptrace.h` are ordinary build inputs. Require a command-like
+    # left boundary, not the start of a hyphenated or path segment.
+    r"(?<![-/\w])(?:gdb|strace|lldb|ptrace)\b",     # debugger clients / probe interfaces
     H067_SYSTEMD_DETECT_VIRT_PROBE,
     r"virt-what",
     r"\bdmidecode\b",

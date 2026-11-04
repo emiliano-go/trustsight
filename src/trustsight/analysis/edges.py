@@ -28,6 +28,7 @@ from ..novelty import normalize_url
 from ..recipedoc import parse_recipe
 from ..rules import ScopeResolver
 from ..rules import _classify_line_context
+from ..rules import _blank_quoted, _PRINTER_LINE_RE
 from ..tokenizer import resolve_added_lines, split_lines
 
 
@@ -362,7 +363,24 @@ def edge_committed_payload(name: str, head: bytes) -> dict | None:
             ln.content for ln in parse_diff_lines(split_lines(text)).lines
             if ln.side == "add" and not ln.raw.startswith("+++")
         )
-    m = _COMMITTED_PAYLOAD_RE.search(text)
+    m = None
+    for line in text.split("\n"):
+        candidate = _COMMITTED_PAYLOAD_RE.search(line)
+        if candidate is None:
+            continue
+        # A printer's quoted text is data, not shell. An install notice that
+        # tells the user to run `curl ... | sudo bash` is not that command
+        # running. If the printer's output is piped to an executor, the
+        # quoted text really does run, so the stand-down does not apply.
+        if _PRINTER_LINE_RE.match(line):
+            blanked = _blank_quoted(line)
+            # A quoted notice is data. The printer's output is only live if
+            # it is piped into something; `>&2` and `|| true` are not pipes.
+            if (not _COMMITTED_PAYLOAD_RE.search(blanked)
+                    and not re.search(r"(?<!\|)\|(?!\|)", blanked)):
+                continue
+        m = candidate
+        break
     if not m:
         return None
     return stamp({

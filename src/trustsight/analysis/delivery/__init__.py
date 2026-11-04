@@ -609,6 +609,19 @@ _RUNTIME_SUBCOMMANDS = frozenset({
 _RUNTIME_BINARY_RE = re.compile(r"(?<![\w/.-])(?:bun|deno)\s")
 
 
+def _resolve_exec_token(raw: str, current_text: str | None) -> str:
+    """Resolve a variable-shaped exec target against the whole recipe."""
+    if "$" not in raw or not current_text:
+        return raw
+    try:
+        from ...expansion import resolve_text
+        from ...recipedoc import parse_recipe
+
+        return resolve_text(raw, parse_recipe(current_text).scalars)
+    except Exception:  # noqa: BLE001 - an unreadable recipe leaves the token raw
+        return raw
+
+
 def edge_undeclared_provenance_execution(ctx, add) -> None:
     """X033 predicate: a ``$srcdir``-root file with no provenance is run.
 
@@ -664,9 +677,15 @@ def edge_undeclared_provenance_execution(ctx, add) -> None:
             # and with it the evidence of which root it was.
             bare = _BUILD_ROOT_RE.sub("", raw).strip("\"'")
             if not bare or "/" in bare:
-                continue
+                resolved_bare = _BUILD_ROOT_RE.sub(
+                    "", _resolve_exec_token(raw, ctx.current_text)
+                ).strip("\"'")
+                if not resolved_bare or "/" in resolved_bare:
+                    continue
+                bare = resolved_bare
             base = bare
             if (_matches_declared_source(base, source_basenames)
+                    or base in ctx.extraction_dirs
                     or base in written or base in _H072_BENIGN_EXEC):
                 continue
             if _FETCH_CLIENT_RE.search(body):

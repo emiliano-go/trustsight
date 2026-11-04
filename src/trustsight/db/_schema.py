@@ -1,11 +1,12 @@
 """Schema creation and migrations for the local database."""
 
+import json
 import sqlite3
 import warnings
 from typing import Optional
 
 from ..rule_id_history import RENAMED_RULE_IDS
-from ..maintainer_email import normalize_domain
+from ..maintainer_email import maintainer_domain, normalize_domain
 from ._common import log
 
 def init_db():
@@ -559,6 +560,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
     _repair_first_observation_adoptions(conn)
     _migrate_dependency_seed_counts(conn)
     _migrate_observed_domains(conn)
+    _migrate_observed_domains_from_packages(conn)
+    _migrate_observed_keys_from_history(conn)
 
 _SCHEMA_VERSION = 1
 
@@ -607,6 +610,123 @@ def _migrate_observed_domains(conn: sqlite3.Connection) -> int:
             len(rows), len(merged),
         )
     return len(rows)
+
+def _migrate_observed_domains_from_packages(conn: sqlite3.Connection) -> int:
+    """Seed the domain ledger from maintainers the database already knows.
+
+    T002 was added after many installations had already recorded packages and
+    maintainers.  Those rows know the domain, but the observed-domain table
+    was never populated, so the first analysis after upgrading reports a
+    long-known maintainer as novel for 30 days.  Use the earliest history
+    timestamp available; when there is none, place the row outside the
+    novelty window rather than invent a first sighting now.
+
+    One-shot, keyed in ``metadata``; inserts never overwrite an existing row.
+    """
+    key = "observed_domains_from_packages_v1"
+    if conn.execute("SELECT 1 FROM metadata WHERE key = ?", (key,)).fetchone():
+        return 0
+    fallback = conn.execute(
+        "SELECT datetime('now', '-31 days')").fetchone()[0]
+    rows = conn.execute(
+        """SELECT p.current_maintainer AS maintainer,
+                  COALESCE(MIN(h.timestamp), ?) AS first_seen
+             FROM packages p
+             LEFT JOIN analysis_history h ON h.package_id = p.id
+            WHERE p.current_maintainer IS NOT NULL
+              AND p.current_maintainer != ''
+            GROUP BY p.id""",
+        (fallback,),
+    ).fetchall()
+    merged: dict[str, str] = {}
+    for row in rows:
+        domain = maintainer_domain(row["maintainer"])
+        if not domain:
+            continue
+        first = row["first_seen"] or fallback
+        current = merged.get(domain)
+        if current is None or first < current:
+            merged[domain] = first
+    if merged:
+        conn.executemany(
+            """INSERT OR IGNORE INTO observed_maintainer_domains(
+                   domain, first_seen) VALUES (?, ?)""",
+            merged.items(),
+        )
+        from ._history import MAX_OBSERVED_DOMAINS
+
+        conn.execute(
+            """DELETE FROM observed_maintainer_domains WHERE domain IN (
+                   SELECT domain FROM observed_maintainer_domains
+                   ORDER BY first_seen DESC LIMIT -1 OFFSET ?)""",
+            (MAX_OBSERVED_DOMAINS,),
+        )
+    conn.execute(
+        "INSERT OR REPLACE INTO metadata (key, value) VALUES (?, '1')",
+        (key,),
+    )
+    if merged:
+        log.info("Seeded %d maintainer domain(s) from stored packages",
+                 len(merged))
+    return len(merged)
+
+
+def _migrate_observed_keys_from_history(conn: sqlite3.Connection) -> int:
+    """Seed the signing-key ledger from the facts already in history.
+
+    T001 reads membership, not the first-seen stamp.  Historical facts carry
+    the change object, including gained and lost keys; replaying those into
+    the ledger stops a key the database has already seen from reading as
+    novel on every analysis after the 0.27.0 recording regression.
+
+    One-shot, keyed in ``metadata``; malformed facts are skipped, inserts
+    never overwrite, and the row cap is enforced.
+    """
+    key = "observed_signing_keys_from_history_v1"
+    if conn.execute("SELECT 1 FROM metadata WHERE key = ?", (key,)).fetchone():
+        return 0
+    fallback = conn.execute("SELECT datetime('now')").fetchone()[0]
+    found: dict[str, str] = {}
+    rows = conn.execute(
+        """SELECT timestamp, fact_json FROM analysis_history
+            WHERE fact_json IS NOT NULL"""
+    )
+    for row in rows:
+        try:
+            fact = json.loads(row["fact_json"])
+        except (TypeError, ValueError):
+            continue
+        change = fact.get("change") if isinstance(fact, dict) else None
+        pgp = change.get("pgp_keys") if isinstance(change, dict) else None
+        if not isinstance(pgp, dict):
+            continue
+        for value in (*pgp.get("gained", ()), *pgp.get("lost", ())):
+            value = str(value).strip()[:512]
+            if value and value not in found:
+                found[value] = row["timestamp"] or fallback
+    if found:
+        conn.executemany(
+            """INSERT OR IGNORE INTO observed_signing_keys(
+                   key, first_seen) VALUES (?, ?)""",
+            found.items(),
+        )
+        from ._history import MAX_OBSERVED_KEYS
+
+        conn.execute(
+            """DELETE FROM observed_signing_keys WHERE key IN (
+                   SELECT key FROM observed_signing_keys
+                   ORDER BY first_seen DESC LIMIT -1 OFFSET ?)""",
+            (MAX_OBSERVED_KEYS,),
+        )
+    conn.execute(
+        "INSERT OR REPLACE INTO metadata (key, value) VALUES (?, '1')",
+        (key,),
+    )
+    if found:
+        log.info("Seeded %d signing key(s) from stored analysis history",
+                 len(found))
+    return len(found)
+
 
 def _migrate_dependency_seed_counts(conn: sqlite3.Connection) -> int:
     """Split pre-0.23 dependency totals into seed and local contributions.

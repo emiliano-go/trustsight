@@ -519,3 +519,21 @@ def finalise_fact(
         triggered_rules, load_rules())
     with_changes(fact, scan.diff_text)
     return fact, triggered_rules, campaign_context
+
+
+def record_observed_identity(change: dict, maintainer: str) -> None:
+    """Record the signing keys and maintainer domain an analysis observed.
+
+    This is the write half of the T-series ecosystem index.  It belongs on
+    both producers (git and corpus), and only when the caller asked for a
+    recording run: a review must not warm the ledger (A15).
+    """
+    from ...db import record_observed_domain, record_observed_key
+    from ...maintainer_email import maintainer_domain
+
+    pgp = (change or {}).get("pgp_keys", {}) or {}
+    for key in (*pgp.get("gained", ()), *pgp.get("lost", ())):
+        record_observed_key(str(key))
+    domain = maintainer_domain(maintainer)
+    if domain:
+        record_observed_domain(domain)

@@ -69,7 +69,13 @@ from ..version import (
 )
 from ..temporal import _package_is_new, _recent_update, _stale_revival
 from ._common import log
-from ._core import FactIdentity, ScanInput, finalise_fact, scan_recipe
+from ._core import (
+    FactIdentity,
+    ScanInput,
+    finalise_fact,
+    record_observed_identity,
+    scan_recipe,
+)
 from ._tree import _added_dependency_names, _binary_metadata_finding, _cached_analysis
 
 __all__ = ['_make_fresh_analysis', '_walk_dependencies', 'analyze_package', 'apply_diff_caps', 'scored_source_urls']
@@ -526,6 +532,14 @@ def analyze_package(
         record_dependency_names(sorted(
             name for names in dependency_changes.values() for name in names
         ))
+        record_observed_identity(fact.change, new_maintainer)
+
+        # Keep the added encoded literals so G002 can join across packages
+        # at cycle end, the same feed the corpus path records.
+        from ..entropy import added_literals, added_text
+        from ...db import record_added_literals
+
+        record_added_literals(pkg_name, added_literals(added_text(diff_text)))
     return fact
 
 def apply_diff_caps(

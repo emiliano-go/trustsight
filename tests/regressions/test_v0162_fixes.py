@@ -332,3 +332,23 @@ def test_cached_note():
         "Unchanged since last review; reusing the analysis from 2026-09-28.")
     assert cached_note(PackageFact(cached=True)) == (
         "Unchanged since last review; reusing the recorded analysis.")
+
+
+def test_git_recording_writes_the_identity_ledger(isolated, monkeypatch):
+    """The 0.27.0 pipeline merge dropped the git path's T-series writes."""
+    import trustsight.analysis.pipeline as pipeline
+    from trustsight.db import domain_first_seen, key_observed_before
+
+    maintainer = "# Maintainer: T Maintainer <t@example.invalid>\n"
+    first = maintainer + _RECIPE_1
+    second = maintainer + _RECIPE_2 + "validpgpkeys=('KEYGIT')\n"
+    repo, _head = _repo(isolated, [first, second])
+    monkeypatch.setattr(
+        pipeline._analyze, "clone_or_fetch",
+        lambda name, mtime=None: FakeGitProject(repo))
+
+    pipeline.analyze_package("demo-git-record", installed_version="1.0-1",
+                             record=True)
+
+    assert domain_first_seen("example.invalid") is not None
+    assert key_observed_before("KEYGIT")

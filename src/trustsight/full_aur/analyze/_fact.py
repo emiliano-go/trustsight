@@ -559,6 +559,9 @@ def analyze_package_text(
             triggered_rules=triggered_rules,
         )
 
+        from ...analysis.pipeline._core import record_observed_identity
+        record_observed_identity(fact.change, maintainer)
+
         # Keep the added encoded literals so G002 can join across packages
         # at cycle end, the same feed the review path records.
         from ...analysis.entropy import added_literals, added_text

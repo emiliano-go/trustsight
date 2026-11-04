@@ -1493,3 +1493,70 @@ def test_brand_new_packages_since_uses_the_latest_recipe_state(db):
     rows = brand_new_packages_since(900)
     assert rows[0]["brand_new"] is True
     assert rows[0]["placeholder"] is False
+
+
+def test_upgrade_seeds_observed_domains_from_stored_packages(db):
+    """T002 existed before the ledger did; existing packages already know
+    their maintainer domains and must not read as novel after upgrading."""
+    from trustsight.db import (
+        domain_first_seen, get_connection, insert_analysis,
+        update_package_maintainer, upsert_package,
+    )
+
+    pid = upsert_package("known-maintainer", "1.0")
+    update_package_maintainer("known-maintainer", "Olav <olav@known.example>")
+    insert_analysis(
+        pid, "", "1.0", "", "", 0, "",
+        '{"change": {"pgp_keys": {"gained": ["KNOWNKEY"], "lost": []}}}',
+        [],
+    )
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE analysis_history SET timestamp = '2020-01-01 00:00:00'")
+        conn.execute(
+            "DELETE FROM metadata WHERE key IN "
+            "('observed_domains_from_packages_v1', "
+            "'observed_signing_keys_from_history_v1')")
+        conn.commit()
+
+    init_db()
+
+    assert domain_first_seen("known.example") == "2020-01-01 00:00:00"
+    from trustsight.db import key_observed_before
+
+    assert key_observed_before("KNOWNKEY")
+
+    with get_connection() as conn:
+        before = (
+            conn.execute(
+                "SELECT COUNT(*) FROM observed_maintainer_domains").fetchone()[0],
+            conn.execute(
+                "SELECT COUNT(*) FROM observed_signing_keys").fetchone()[0],
+        )
+    init_db()
+    with get_connection() as conn:
+        after = (
+            conn.execute(
+                "SELECT COUNT(*) FROM observed_maintainer_domains").fetchone()[0],
+            conn.execute(
+                "SELECT COUNT(*) FROM observed_signing_keys").fetchone()[0],
+        )
+    assert after == before
+
+
+def test_upgrade_places_a_domain_without_history_outside_the_novelty_window(db):
+    from trustsight.db import (
+        domain_seen_within, get_connection, update_package_maintainer,
+        upsert_package,
+    )
+
+    upsert_package("no-history", "1.0")
+    update_package_maintainer("no-history", "Olav <olav@old.example>")
+    with get_connection() as conn:
+        conn.execute(
+            "DELETE FROM metadata WHERE key = 'observed_domains_from_packages_v1'")
+        conn.commit()
+
+    init_db()
+
+    assert not domain_seen_within("old.example", 30)

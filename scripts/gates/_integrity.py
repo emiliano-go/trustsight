@@ -189,6 +189,37 @@ def gate_coverage_fails_closed() -> Gate:
     if "noextract_suppressed" not in noextract.coverage_gaps \
             or noextract.risk == "Low":
         problems.append("existing noextract reported a complete Low result")
+
+    # Exercise the corpus fetcher too: an over-cap install member used to be
+    # swallowed as "no install script", leaving the fallback PKGBUILD clean.
+    import io
+    import tarfile
+    from unittest.mock import patch
+
+    from trustsight.full_aur import fetch as corpus_fetch
+
+    archive = io.BytesIO()
+    with tarfile.open(fileobj=archive, mode="w:gz") as tf:
+        for member_name, payload in (
+            ("demo/PKGBUILD", b"pkgname=demo\n"),
+            ("demo/demo.install", b"\0" * 8192),
+        ):
+            member = tarfile.TarInfo(member_name)
+            member.size = len(payload)
+            tf.addfile(member, io.BytesIO(payload))
+    original_cap = corpus_fetch.MAX_TAR_MEMBER_BYTES
+    try:
+        corpus_fetch.MAX_TAR_MEMBER_BYTES = 4096
+        with patch.object(
+            corpus_fetch, "_fetch_snapshot_tarball", return_value=archive.getvalue()
+        ), patch.object(corpus_fetch, "fetch_pkgbuild", return_value="pkgname=demo\n"):
+            _text, _tree, _trailer, refused, *_rest = (
+                corpus_fetch.fetch_pkgbuild_with_tree("demo")
+            )
+    finally:
+        corpus_fetch.MAX_TAR_MEMBER_BYTES = original_cap
+    if not refused:
+        problems.append("an over-cap install member reported no snapshot refusal")
     return Gate("incomplete coverage fails closed", not problems, problems)
 
 def gate_truncation_is_visible() -> Gate:

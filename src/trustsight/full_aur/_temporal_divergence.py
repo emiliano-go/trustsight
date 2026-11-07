@@ -158,8 +158,17 @@ def _name_repo_divergence_findings(snapshot: HistorySnapshot) -> list[dict]:
             repo_tokens |= _repo_path_tokens(repo)
         if not repo_tokens:
             continue
+        # Separators are spelling: mosaico-labs names python-mosaicolabs,
+        # and GTAIV.EFLC.FusionFix names gtaiv-eflc-fusionfix-bin.  Compare
+        # the folded forms as well as the literal tokens, so a hyphen,
+        # underscore or dot between two name parts is not a divergence.
+        folded_tokens = {re.sub(r"[-_.]", "", t) for t in tokens}
+        folded_repos = {re.sub(r"[-_.]", "", rt) for rt in repo_tokens}
         overlapping = any(
             t in rt or rt in t for t in tokens for rt in repo_tokens
+        ) or any(
+            t in rt or rt in t
+            for t in folded_tokens for rt in folded_repos
         )
         if not overlapping:
             # A short leading token is often the vendor's acronym

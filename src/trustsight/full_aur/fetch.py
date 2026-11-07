@@ -152,18 +152,14 @@ def _http_get(url: str) -> Optional[bytes]:
                     resp, MAX_RESPONSE_BYTES, f"response from {url}",
                     _DOWNLOAD_DEADLINE_SECONDS,
                 )
-            except ReadTooLarge:
-                log.warning(
-                    "response from %s exceeds %d bytes; abandoning",
-                    url, MAX_RESPONSE_BYTES,
-                )
-                return None
             except ReadTimedOut:
                 log.warning(
                     "response from %s exceeded its %gs deadline; abandoning",
                     url, _DOWNLOAD_DEADLINE_SECONDS,
                 )
                 return None
+        except ReadTooLarge:
+            raise
         except urllib.error.HTTPError as e:
             if e.code in _RETRYABLE_STATUS and attempt < _MAX_RETRIES:
                 delay = _retry_after(e)
@@ -296,14 +292,10 @@ def _install_from_tarfile(
             handle = tf.extractfile(member)
             if handle is None:
                 continue
-            try:
-                raw = read_capped(
-                    handle, MAX_TAR_MEMBER_BYTES,
-                    f"install member of the {name} snapshot",
-                )
-            except ReadTooLarge:
-                log.warning("install member of %s refused by the read cap", name)
-                return None
+            raw = read_capped(
+                handle, MAX_TAR_MEMBER_BYTES,
+                f"install member of the {name} snapshot",
+            )
             return raw.decode("utf-8", errors="replace"), \
                 member.name.rsplit("/", 1)[-1]
     return None
@@ -457,8 +449,13 @@ def fetch_pkgbuild_with_tree(
     """
     from ..analysis.archives import check_archive_trailer
 
-    body = _fetch_snapshot_tarball(name)
     refused = False
+    try:
+        body = _fetch_snapshot_tarball(name)
+    except ReadTooLarge as e:
+        log.warning("snapshot for %s refused: %s", name, e)
+        body = None
+        refused = True
     if body is not None:
         try:
             with tarfile.open(fileobj=BytesIO(body), mode="r:gz") as tf:

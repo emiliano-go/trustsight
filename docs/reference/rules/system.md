@@ -1322,6 +1322,26 @@ See [T006: Metadata-Git Divergence](temporal.md#t006).
 
 See [T007: Packager Not In History](temporal.md#t007).
 
+### T008 {#t008}
+
+See [T008: Delayed Payload Adoption](temporal.md#t008).
+
+### T009 {#t009}
+
+See [T009: High-Value Dormant Takeover](temporal.md#t009).
+
+### T010 {#t010}
+
+See [T010: Dependency Redirection](naming-and-dependency.md#t010).
+
+### T011 {#t011}
+
+See [T011: Package Reappearance](temporal.md#t011).
+
+### T012 {#t012}
+
+See [T012: Trust Erosion Sequence](temporal.md#t012).
+
 ### G001 {#g001}
 
 See [G001: Shared Gained Host](correlation.md#g001).

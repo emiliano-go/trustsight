@@ -2078,6 +2078,51 @@
     "target": "programmatic (AUR maintainer vs git commit identities)",
     "uid": "TS-0215"
   },
+  "t008": {
+    "canonical": true,
+    "capability": "temporal",
+    "name": "Delayed Payload Adoption",
+    "severity": "INFO",
+    "severity_text": "INFO (weight 0)",
+    "target": "programmatic (full-AUR maintainer history and current cycle findings)",
+    "uid": "TS-0290"
+  },
+  "t009": {
+    "canonical": true,
+    "capability": "temporal",
+    "name": "High-Value Dormant Takeover",
+    "severity": "INFO",
+    "severity_text": "INFO (weight 0)",
+    "target": "programmatic (full-AUR metadata transitions and dependency graph)",
+    "uid": "TS-0291"
+  },
+  "t010": {
+    "canonical": true,
+    "capability": "dependency",
+    "name": "Dependency Redirection",
+    "severity": "INFO",
+    "severity_text": "INFO (weight 0)",
+    "target": "programmatic (full-AUR dependency changes and target transitions)",
+    "uid": "TS-0292"
+  },
+  "t011": {
+    "canonical": true,
+    "capability": "temporal",
+    "name": "Package Reappearance",
+    "severity": "INFO",
+    "severity_text": "INFO (weight 0)",
+    "target": "programmatic (full-AUR package cycle-event history)",
+    "uid": "TS-0293"
+  },
+  "t012": {
+    "canonical": true,
+    "capability": "temporal",
+    "name": "Trust Erosion Sequence",
+    "severity": "INFO",
+    "severity_text": "INFO (weight 0)",
+    "target": "programmatic (full-AUR prior-rule history and current findings)",
+    "uid": "TS-0294"
+  },
   "u001": {
     "canonical": true,
     "capability": "dependency-manifest",

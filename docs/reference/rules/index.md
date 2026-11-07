@@ -5,7 +5,7 @@
 TrustSight uses rules to detect structural signals in PKGBUILD diffs. The
 inventory is the R-series regex rules, the H-series heuristics, sabotage rules S001-S008, crossfire
 rules X001-X034, integrity-change rules C001-C034, dependency rules
-D001-D005, temporal rules T001-T007, correlation rules G001-G011 and G012-G014, entropy
+D001-D005, temporal rules T001-T012, correlation rules G001-G011 and G012-G014, entropy
 rules E001-E003, the indicator rule H056, meta rules M001-M006, upstream
 rules U001-U012, artifact rules A001-A008, declared-practice rules P001-P009 (P004 skipped), and
 unverifiable rules W001-W013.
@@ -49,9 +49,9 @@ generated from it by `scripts/build_rules_index.py`.
 | [Install and Persistence](install-and-persist.md) | `install-and-persist` | 23 | Something survives the build: a root-time hook, a unit, a privileged bit, a file in the user's profile. |
 | [Staging and Reconnaissance](staging-and-recon.md) | `staging-and-recon` | 10 | The build steps outside its staging roots, hides a drop, or profiles the host it is running on. |
 | [Integrity and Verification](integrity.md) | `integrity` | 47 | A verification the recipe used to carry is weakened, removed, or cannot cover what it claims to. |
-| [Naming and Dependencies](naming-and-dependency.md) | `naming-and-dependency` | 13 | A name is claimed or a dependency set changes in a way that redirects what gets installed. |
+| [Naming and Dependencies](naming-and-dependency.md) | `naming-and-dependency` | 14 | A name is claimed or a dependency set changes in a way that redirects what gets installed. |
 | [Maintainer and Metadata](maintainer-and-metadata.md) | `maintainer-and-metadata` | 16 | Who owns the package, or a long-stable declared property, changed. |
-| [Temporal Context](temporal.md) | `temporal` | 10 | How recently the package or this revision appeared, independent of any diff content. |
+| [Temporal Context](temporal.md) | `temporal` | 14 | How recently the package or this revision appeared, independent of any diff content. |
 | [Composition](composition.md) | `composition` | 6 | Distinct kinds of finding co-occurred; the combination is the signal. H027 and H043 annotate at weight 0; H098 scores the naming/deception cluster. |
 | [Count-Based](count-based.md) | `count-based` | 5 | A count of indicators crossed a fixed threshold within one artifact or one cluster. |
 | [Corpus Behavioral](corpus-behavioral.md) | `corpus-behavioral` | 6 | The package's position in, or deviation from, the corpus baseline - silent without prior observations. |
@@ -328,6 +328,11 @@ is deliberately non-contiguous; see
 | [T005](temporal.md#t005) | Scheme Downgrade | Temporal | MEDIUM | [Temporal Context](temporal.md) |
 | [T006](temporal.md#t006) | Metadata-Git Divergence | Temporal | MEDIUM | [Temporal Context](temporal.md) |
 | [T007](temporal.md#t007) | Packager Not In History | Temporal | INFO | [Temporal Context](temporal.md) |
+| [T008](temporal.md#t008) | Delayed Payload Adoption | Temporal | INFO | [Temporal Context](temporal.md) |
+| [T009](temporal.md#t009) | High-Value Dormant Takeover | Temporal | INFO | [Temporal Context](temporal.md) |
+| [T010](naming-and-dependency.md#t010) | Dependency Redirection | Temporal | INFO | [Naming and Dependencies](naming-and-dependency.md) |
+| [T011](temporal.md#t011) | Package Reappearance | Temporal | INFO | [Temporal Context](temporal.md) |
+| [T012](temporal.md#t012) | Trust Erosion Sequence | Temporal | INFO | [Temporal Context](temporal.md) |
 | [U001](upstream-manifests.md#u001) | Manifest Added Or Removed | U | INFO | [Upstream Manifests](upstream-manifests.md) |
 | [U002](upstream-manifests.md#u002) | Upstream Dependency Delta | U | INFO | [Upstream Manifests](upstream-manifests.md) |
 | [U003](upstream-manifests.md#u003) | New Remote Source In Manifest | U | MEDIUM | [Upstream Manifests](upstream-manifests.md) |

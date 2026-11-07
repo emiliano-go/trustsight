@@ -177,6 +177,11 @@ TEMPLATES: dict[str, str] = {
     "T003": "signing key rotated: {match}",
     "T004": "vouch surface removed: {match}",
     "T005": "scheme downgrade: {match}",
+    "T008": "delayed payload adoption: {match}",
+    "T009": "high-value dormant takeover: {match}",
+    "T010": "dependency redirection: {match}",
+    "T011": "package reappearance: {match}",
+    "T012": "trust erosion sequence: {match}",
     "X032": "command name assembled by splicing: {shape}",
     "C028": "build cache written outside the build trees: {match}",
     "C029": "{match}",
@@ -252,6 +257,9 @@ NON_CONTENT_RULES = {
     # The missing-self predicates are diff-level facts; a removed line has
     # no post-file location to cite.
     "T004": "temporal", "T005": "temporal",
+    # Full-AUR history/cycle findings name stored observations, not a line.
+    "T008": "temporal", "T009": "temporal", "T010": "dependency",
+    "T011": "temporal", "T012": "temporal",
     "C033": "integrity", "C034": "maintainer-and-metadata",
     "W013": "unverifiable",
 }

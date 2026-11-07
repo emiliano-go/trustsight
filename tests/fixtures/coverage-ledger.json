@@ -2,7 +2,7 @@
   "anergic": {
     "C033": {
       "changelog": "missing-self-axis",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.27.0",
       "promotion": "remove status or mark promoted after the calibration checkpoint; record the measured rate in the changelog",
       "rule_id": "C033",
       "signal": "locked benign corpus fire-rate < 0.30 after the deletion-ratio threshold is corpus-adjudicated, plus a malicious twin",
@@ -11,7 +11,7 @@
     },
     "T004": {
       "changelog": "missing-self-axis",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.27.0",
       "promotion": "remove status or mark promoted after the calibration checkpoint; record the measured rate in the changelog",
       "rule_id": "T004",
       "signal": "locked benign corpus fire-rate < 0.30 plus a malicious partial-key-removal twin",
@@ -20,19 +20,64 @@
     },
     "T005": {
       "changelog": "missing-self-axis",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.27.0",
       "promotion": "remove status or mark promoted after the calibration checkpoint; record the measured rate in the changelog",
       "rule_id": "T005",
       "signal": "locked benign corpus fire-rate < 0.30 plus a malicious same-host path-changed downgrade twin",
       "since": "0.27.0",
       "status": "promoted"
+    },
+    "T008": {
+      "changelog": "full-aur-history-campaigns",
+      "promoted_in": "Unreleased",
+      "promotion": "remove status or mark promoted after the full-AUR benign replay checkpoint; record the measured rate in the changelog",
+      "rule_id": "T008",
+      "signal": "full-AUR benign replay fire-rate < 0.30 plus positive delayed-adoption and benign transition twins",
+      "since": "0.27.1",
+      "status": "anergic"
+    },
+    "T009": {
+      "changelog": "full-aur-history-campaigns",
+      "promoted_in": "Unreleased",
+      "promotion": "remove status or mark promoted after the full-AUR benign replay checkpoint; record the measured rate in the changelog",
+      "rule_id": "T009",
+      "signal": "full-AUR benign replay fire-rate < 0.30 plus positive dormant-takeover and active/low-exposure transition twins",
+      "since": "0.27.1",
+      "status": "anergic"
+    },
+    "T010": {
+      "changelog": "full-aur-history-campaigns",
+      "promoted_in": "Unreleased",
+      "promotion": "remove status or mark promoted after the full-AUR benign replay checkpoint; record the measured rate in the changelog",
+      "rule_id": "T010",
+      "signal": "full-AUR benign replay fire-rate < 0.30 plus positive dependency-redirection and established/related-target twins",
+      "since": "0.27.1",
+      "status": "anergic"
+    },
+    "T011": {
+      "changelog": "full-aur-history-campaigns",
+      "promoted_in": "Unreleased",
+      "promotion": "remove status or mark promoted after the full-AUR benign replay checkpoint; record the measured rate in the changelog",
+      "rule_id": "T011",
+      "signal": "full-AUR benign replay fire-rate < 0.30 plus positive reappearance and first-appearance/no-removal twins",
+      "since": "0.27.1",
+      "status": "anergic"
+    },
+    "T012": {
+      "changelog": "full-aur-history-campaigns",
+      "promoted_in": "Unreleased",
+      "promotion": "remove status or mark promoted after the full-AUR benign replay checkpoint; record the measured rate in the changelog",
+      "rule_id": "T012",
+      "signal": "full-AUR benign replay fire-rate < 0.30 plus positive trust-erosion and no-precursor/no-terminal twins",
+      "since": "0.27.1",
+      "status": "anergic"
     }
   },
-  "catalog_size": 301,
+  "catalog_size": 306,
   "corpus_content_sha256": "a4cbea4ef14029c97d7746e2be080a2e5c931502429ee261d974810b35f5cafc",
   "counts": {
     "adversarial_only": 18,
-    "cold_only": 42,
+    "cold_only": 47,
     "measured": 166,
     "zero_fire": 75
   },
@@ -5506,6 +5551,66 @@
       "state": "cold_only",
       "strata": [],
       "uid": "TS-0215"
+    },
+    "T008": {
+      "expected_strata": [],
+      "fires": 0,
+      "id": "T008",
+      "pseudo": false,
+      "reason": "needs observation history or warm state; measured by the history/warm replay when available",
+      "series": "T",
+      "sources": {},
+      "state": "cold_only",
+      "strata": [],
+      "uid": "TS-0290"
+    },
+    "T009": {
+      "expected_strata": [],
+      "fires": 0,
+      "id": "T009",
+      "pseudo": false,
+      "reason": "needs observation history or warm state; measured by the history/warm replay when available",
+      "series": "T",
+      "sources": {},
+      "state": "cold_only",
+      "strata": [],
+      "uid": "TS-0291"
+    },
+    "T010": {
+      "expected_strata": [],
+      "fires": 0,
+      "id": "T010",
+      "pseudo": false,
+      "reason": "needs observation history or warm state; measured by the history/warm replay when available",
+      "series": "T",
+      "sources": {},
+      "state": "cold_only",
+      "strata": [],
+      "uid": "TS-0292"
+    },
+    "T011": {
+      "expected_strata": [],
+      "fires": 0,
+      "id": "T011",
+      "pseudo": false,
+      "reason": "needs observation history or warm state; measured by the history/warm replay when available",
+      "series": "T",
+      "sources": {},
+      "state": "cold_only",
+      "strata": [],
+      "uid": "TS-0293"
+    },
+    "T012": {
+      "expected_strata": [],
+      "fires": 0,
+      "id": "T012",
+      "pseudo": false,
+      "reason": "needs observation history or warm state; measured by the history/warm replay when available",
+      "series": "T",
+      "sources": {},
+      "state": "cold_only",
+      "strata": [],
+      "uid": "TS-0294"
     },
     "TAG_CONVERGENCE": {
       "expected_strata": [],

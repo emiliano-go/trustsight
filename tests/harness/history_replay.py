@@ -37,6 +37,11 @@ def replay() -> list[dict]:
             prior_history=cycle.get("prior_history"),
             maintainer_history=cycle.get("maintainer_history"),
             edges=cycle.get("edges"),
+            detail=cycle.get("detail"),
+            maintainer_transitions=cycle.get("maintainer_transitions"),
+            prior_rule_history=cycle.get("prior_rule_history"),
+            package_cycle_events=cycle.get("package_cycle_events"),
+            now=cycle.get("now", 0),
         )
         rows.append({
             "name": cycle["name"],

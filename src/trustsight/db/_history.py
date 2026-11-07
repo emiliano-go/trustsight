@@ -7,7 +7,7 @@ from ._connection import get_connection
 from ._packages import _RESERVED_NAMES
 from ..maintainer_email import normalize_domain
 
-__all__ = ['clear_correlation_feeds', 'clear_upstream_dep_additions', 'MAX_OBSERVED_DOMAINS', 'MAX_OBSERVED_KEYS', 'MAX_OBSERVED_LITERALS', 'MAX_PROPERTY_TRANSITIONS_PER_KEY', 'MAX_RECIPE_OBSERVATIONS_PER_PACKAGE', '_array_entries_hash', '_parse_ts', 'array_seen_before', 'correlation_feed', 'domain_first_seen', 'domain_seen_within', 'get_all_packages', 'get_history', 'get_pkgbuild_snapshot', 'get_previous_pkgbuild_snapshot', 'get_property_transitions', 'key_observed_before', 'maintainer_first_seen', 'observed_domain_count', 'observed_key_count', 'package_added_literals', 'read_aur_cache', 'record_added_literals', 'record_observed_domain', 'record_observed_key', 'record_property_transition', 'record_recipe_document', 'record_upstream_dep_additions', 'save_pkgbuild_snapshot', 'tuple_observation_count', 'write_aur_cache']
+__all__ = ['clear_correlation_feeds', 'clear_upstream_dep_additions', 'MAX_OBSERVED_DOMAINS', 'MAX_OBSERVED_KEYS', 'MAX_OBSERVED_LITERALS', 'MAX_PROPERTY_TRANSITIONS_PER_KEY', 'MAX_RECIPE_OBSERVATIONS_PER_PACKAGE', '_array_entries_hash', '_parse_ts', 'array_seen_before', 'correlation_feed', 'domain_first_seen', 'domain_seen_within', 'get_all_packages', 'get_history', 'get_pkgbuild_snapshot', 'get_previous_pkgbuild_snapshot', 'get_property_transitions', 'key_observed_before', 'maintainer_first_seen', 'observed_domain_count', 'observed_key_count', 'package_added_literals', 'read_aur_cache', 'record_added_literals', 'record_observed_domain', 'record_observed_key', 'record_property_transition', 'record_recipe_document', 'record_upstream_dep_additions', 'save_pkgbuild_snapshot', 'tuple_observation_count', 'write_aur_cache', 'temporal_rule_history']
 
 def get_history(package_id: int, limit: int = 20, *, from_date: str | None = None, to_date: str | None = None) -> list[dict]:
     """Return recent analysis history for *package_id*, newest first.
@@ -68,6 +68,89 @@ def get_property_transitions(
             )
         rows = conn.execute(query, params).fetchall()
         return [dict(r) for r in rows]
+
+
+def temporal_rule_history(package_names, per_package_limit: int = 32) -> dict:
+    """Bounded maintainer, analysis-rule and cycle timelines for T008--T012.
+
+    The newest analysis is the cycle currently being evaluated, so it is
+    deliberately excluded from the returned prior-rule observations.  SQL
+    window functions bound each package's contribution without one query per
+    package; chunks stay below SQLite's host-parameter limit.
+    """
+    names = sorted({str(name) for name in package_names or () if str(name)})[:4096]
+    try:
+        limit = max(1, min(128, int(per_package_limit)))
+    except (TypeError, ValueError, OverflowError):
+        limit = 32
+    out = {"maintainer_transitions": {}, "prior_rule_history": {},
+           "package_cycle_events": {}}
+    if not names:
+        return out
+    with get_connection() as conn:
+        for start in range(0, len(names), 500):
+            chunk = names[start:start + 500]
+            placeholders = ",".join("?" for _ in chunk)
+            transitions = conn.execute(
+                f"""SELECT * FROM (
+                       SELECT *, ROW_NUMBER() OVER (
+                           PARTITION BY package_name ORDER BY id DESC) AS rn
+                       FROM property_transitions
+                       WHERE property_key = 'maintainer'
+                         AND package_name IN ({placeholders}))
+                    WHERE rn <= ? ORDER BY package_name, id""",
+                (*chunk, limit)).fetchall()
+            for row in transitions:
+                item = dict(row)
+                item.pop("rn", None)
+                out["maintainer_transitions"].setdefault(
+                    item["package_name"], []).append(item)
+
+            analyses = conn.execute(
+                f"""SELECT * FROM (
+                       SELECT h.id AS history_id, p.name AS package_name,
+                              h.timestamp, ROW_NUMBER() OVER (
+                                  PARTITION BY p.name ORDER BY h.id DESC) AS rn
+                       FROM analysis_history h
+                       JOIN packages p ON p.id = h.package_id
+                       WHERE p.name IN ({placeholders}))
+                    WHERE rn > 1 AND rn <= ? + 1
+                    ORDER BY package_name, history_id""",
+                (*chunk, limit)).fetchall()
+            history_rows = [dict(row) for row in analyses]
+            by_history = {row["history_id"]: row for row in history_rows}
+            if by_history:
+                ids = sorted(by_history)
+                for id_start in range(0, len(ids), 500):
+                    id_chunk = ids[id_start:id_start + 500]
+                    placeholders = ",".join("?" for _ in id_chunk)
+                    rules = conn.execute(
+                        f"""SELECT history_id, rule_id FROM triggered_rules
+                            WHERE history_id IN ({placeholders})
+                            ORDER BY history_id, rule_id""", id_chunk).fetchall()
+                    for rule in rules:
+                        by_history[rule[0]].setdefault("rules", []).append(rule[1])
+            for row in history_rows:
+                row.pop("rn", None)
+                row.setdefault("rules", [])
+                out["prior_rule_history"].setdefault(
+                    row["package_name"], []).append(row)
+
+            placeholders = ",".join("?" for _ in chunk)
+            events = conn.execute(
+                f"""SELECT * FROM (
+                       SELECT *, ROW_NUMBER() OVER (
+                           PARTITION BY package_name ORDER BY cycle_time DESC) AS rn
+                       FROM cycle_events WHERE package_name IN ({placeholders}))
+                    WHERE rn <= ? ORDER BY package_name, cycle_time""",
+                (*chunk, limit)).fetchall()
+            for row in events:
+                item = dict(row)
+                item.pop("rn", None)
+                out["package_cycle_events"].setdefault(
+                    item["package_name"], []).append(item)
+    return out
+
 
 def get_all_packages() -> list[dict]:
     """Return every package row excluding internal sentinels, ordered by name."""

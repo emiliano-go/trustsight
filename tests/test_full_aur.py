@@ -1454,14 +1454,18 @@ def test_slim_diff_matches_full_diff():
     old = {
         "same": {"Version": "1", "LastModified": 1, "Description": "d"},
         "moved": {"Version": "1", "LastModified": 1, "Maintainer": "a"},
+        "adopted": {"Version": "1", "LastModified": 1, "Maintainer": None},
         "gone": {"Version": "1", "LastModified": 1},
     }
     new = {
         "same": {"Version": "1", "LastModified": 1, "Description": "changed"},
         "moved": {"Version": "2", "LastModified": 2, "Maintainer": "b"},
+        "adopted": {"Version": "1", "LastModified": 1, "Maintainer": "b"},
         "fresh": {"Version": "1", "LastModified": 3},
     }
-    assert diff_metadata(old, new) == diff_metadata(slim_metadata(old), new)
+    changes = diff_metadata(old, new)
+    assert changes == diff_metadata(slim_metadata(old), new)
+    assert changes["adopted"] == "modified"
 
 
 def test_release_memory_is_best_effort():

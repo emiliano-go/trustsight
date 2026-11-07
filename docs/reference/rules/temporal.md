@@ -38,6 +38,10 @@ severity weights and the reserved identifier ranges.
 | [T005](#t005) | Scheme Downgrade | MEDIUM |
 | [T006](#t006) | Metadata-Git Divergence | MEDIUM |
 | [T007](#t007) | Packager Not In History | INFO |
+| [T008](#t008) | Delayed Payload Adoption | INFO |
+| [T009](#t009) | High-Value Dormant Takeover | INFO |
+| [T011](#t011) | Package Reappearance | INFO |
+| [T012](#t012) | Trust Erosion Sequence | INFO |
 <!-- /generated: page-index -->
 
 ### H020: Very Recent Update {#h020}
@@ -188,3 +192,68 @@ writes no message at all. Name matching is fuzzy (display name vs email vs
 git config), so this corroborates T006 and G008 but never scores alone. On
 its own tier it is nearly a confession; as a solo scorer it would
 eventually burn someone with an unusual committer setup.
+
+### T008: Delayed Payload Adoption {#t008}
+
+- **Target:** programmatic (full-AUR maintainer history and current cycle findings)
+- **Severity:** INFO (weight 0)
+- **Category:** `temporal`
+
+- **Condition:** A package has a current payload rule, no maintainer transition
+  in the current cycle, and its latest recorded maintainer adoption is at least
+  `[thresholds] t008.min_delay_days` (default 14) days old.
+
+Delayed execution separates the takeover from the payload, so same-cycle
+adoption heuristics no longer see the two events together. T008 joins the
+stored transition to the later payload without reading recipe content. It is
+full-AUR history/cycle context, report-only and anergic pending benign replay;
+missing or malformed history produces no finding.
+
+### T009: High-Value Dormant Takeover {#t009}
+
+- **Target:** programmatic (full-AUR metadata transitions and dependency graph)
+- **Severity:** INFO (weight 0)
+- **Category:** `temporal`
+
+- **Condition:** A package gains a non-empty maintainer after exceeding
+  `[thresholds] t009.dormant_days` (default 180) days since its previous
+  `LastModified`, and meets at least one exposure floor: `min_votes` (100),
+  `min_popularity` (1.0), or `min_dependents` (10 direct dependents).
+
+Dormancy alone is common and popularity alone is not compromise. Their join
+with an ownership transition prioritises review of a high-blast-radius target.
+This is full-AUR history/cycle context, not a content judgement; it remains
+INFO and anergic pending benign replay.
+
+### T011: Package Reappearance {#t011}
+
+- **Target:** programmatic (full-AUR package cycle-event history)
+- **Severity:** INFO (weight 0)
+- **Category:** `temporal`
+
+- **Condition:** A package marked added in the current full-AUR cycle has an
+  earlier recorded removal event. The latest valid removal supplies the cycle
+  and maintainer context; current metadata supplies the new maintainer and
+  `FirstSubmitted` value.
+
+Reappearance can be an ordinary resurrection or a name returning under new
+control. The rule states the historical fact without choosing between those
+explanations. It does not inspect recipe content and remains INFO, weight 0 and
+anergic pending benign replay.
+
+### T012: Trust Erosion Sequence {#t012}
+
+- **Target:** programmatic (full-AUR prior-rule history and current findings)
+- **Severity:** INFO (weight 0)
+- **Category:** `temporal`
+
+- **Condition:** Earlier package history contains an integrity, provenance,
+  build-flag, dependency-exposure or claim-expansion precursor, and the current
+  cycle contains a terminal payload or sabotage rule. Duplicate history rows
+  contribute only once.
+
+The sequence preserves the order that isolated findings lose: verification or
+provenance eroded first, then a payload arrived. It is corroborating full-AUR
+history/cycle context, not independent proof of compromise. Missing precursor
+history or a missing current terminal rule is silent; the rule is INFO, weight
+0 and anergic pending benign replay.

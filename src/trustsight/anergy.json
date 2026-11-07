@@ -23,6 +23,46 @@
       "signal": "locked benign corpus fire-rate < 0.30 plus a malicious same-host path-changed downgrade twin",
       "since": "0.27.0",
       "status": "promoted"
+    },
+    "T008": {
+      "changelog": "full-aur-history-campaigns",
+      "promoted_in": "Unreleased",
+      "promotion": "remove status or mark promoted after the full-AUR benign replay checkpoint; record the measured rate in the changelog",
+      "signal": "full-AUR benign replay fire-rate < 0.30 plus positive delayed-adoption and benign transition twins",
+      "since": "0.27.1",
+      "status": "anergic"
+    },
+    "T009": {
+      "changelog": "full-aur-history-campaigns",
+      "promoted_in": "Unreleased",
+      "promotion": "remove status or mark promoted after the full-AUR benign replay checkpoint; record the measured rate in the changelog",
+      "signal": "full-AUR benign replay fire-rate < 0.30 plus positive dormant-takeover and active/low-exposure transition twins",
+      "since": "0.27.1",
+      "status": "anergic"
+    },
+    "T010": {
+      "changelog": "full-aur-history-campaigns",
+      "promoted_in": "Unreleased",
+      "promotion": "remove status or mark promoted after the full-AUR benign replay checkpoint; record the measured rate in the changelog",
+      "signal": "full-AUR benign replay fire-rate < 0.30 plus positive dependency-redirection and established/related-target twins",
+      "since": "0.27.1",
+      "status": "anergic"
+    },
+    "T011": {
+      "changelog": "full-aur-history-campaigns",
+      "promoted_in": "Unreleased",
+      "promotion": "remove status or mark promoted after the full-AUR benign replay checkpoint; record the measured rate in the changelog",
+      "signal": "full-AUR benign replay fire-rate < 0.30 plus positive reappearance and first-appearance/no-removal twins",
+      "since": "0.27.1",
+      "status": "anergic"
+    },
+    "T012": {
+      "changelog": "full-aur-history-campaigns",
+      "promoted_in": "Unreleased",
+      "promotion": "remove status or mark promoted after the full-AUR benign replay checkpoint; record the measured rate in the changelog",
+      "signal": "full-AUR benign replay fire-rate < 0.30 plus positive trust-erosion and no-precursor/no-terminal twins",
+      "since": "0.27.1",
+      "status": "anergic"
     }
   }
 }

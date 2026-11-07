@@ -449,6 +449,9 @@ def _run_baseline_build(
             "pkgbuild_sha256": _recipe_digest(new_pkgbuild),
             "previous_pkgbuild_sha256": _recipe_digest(old_pkgbuild or ""),
             "rules": [f["rule_id"] for f in findings],
+            # T010 joins recipe dependency additions against nodes whose
+            # creation/adoption is visible in this metadata cycle.
+            "dependency_changes": getattr(fact, "dependency_changes", {}),
             "payload_urls": payload_targets,
             "findings": findings,
             # H058 stands down only when every member of a maintainer's batch

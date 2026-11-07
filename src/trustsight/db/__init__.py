@@ -102,6 +102,7 @@ from ._history import (
     record_upstream_dep_additions,
     save_pkgbuild_snapshot,
     tuple_observation_count,
+    temporal_rule_history as temporal_rule_history,
     write_aur_cache,
 )
 from ._maintainers import (

@@ -2,11 +2,11 @@
 
 import fnmatch
 import re
-from ._bounds import MAX_COMPANION_BYTES, MAX_COMPANION_NAME_BYTES, MAX_COMPANION_TREE_ENTRIES, MAX_STREAM_BYTES
+from ._bounds import MAX_COMPANION_BYTES, MAX_COMPANION_NAME_BYTES, MAX_COMPANION_TREE_ENTRIES, MAX_DIFF_PATH_BYTES, MAX_STREAM_BYTES
 from ._common import _is_metadata_path
 from ._sources import local_source_names
 
-__all__ = ['_BINARY_DIFF_MARKER_RE', '_COMPANION_INCOMPLETE', '_COMPANION_MAX_BYTES', '_COMPANION_SKIP', '_DRAIN_CHUNK_BYTES', '_PATTERN_REF_RE', '_TOOL_CONTRACT_FILES', '_companion_names', '_is_safe_companion_name', '_referenced_by_pattern', '_top_level_blob', 'binary_metadata_in_text', 'binary_metadata_paths', 'changed_opaque_members', 'companion_source_hunks', 'read_blob_head']
+__all__ = ['_tree_blob', '_BINARY_DIFF_MARKER_RE', '_COMPANION_INCOMPLETE', '_COMPANION_MAX_BYTES', '_COMPANION_SKIP', '_DRAIN_CHUNK_BYTES', '_PATTERN_REF_RE', '_TOOL_CONTRACT_FILES', '_companion_names', '_is_safe_companion_name', '_referenced_by_pattern', '_top_level_blob', 'binary_metadata_in_text', 'binary_metadata_paths', 'changed_opaque_members', 'companion_source_hunks', 'read_blob_head']
 
 _COMPANION_MAX_BYTES = MAX_COMPANION_BYTES
 
@@ -14,6 +14,33 @@ def _top_level_blob(tree, name: str):
     """The blob named *name* at the tree root, or None."""
     try:
         entry = tree[name]
+    except (KeyError, TypeError):
+        return None
+    if getattr(entry, "type_str", None) != "blob":
+        return None
+    return entry
+
+
+def _tree_blob(tree, path: str):
+    """The blob at a normalized relative *path* in *tree*, or None.
+
+    Companion paths may be nested (`scripts/helper.sh`).  The lookup walks
+    one tree entry at a time; it never accepts an absolute path or a
+    traversal component (the selection already rejects those).
+    """
+    parts = [part for part in str(path or "").split("/") if part]
+    if not parts:
+        return None
+    current = tree
+    for part in parts[:-1]:
+        try:
+            current = current[part]
+        except (KeyError, TypeError):
+            return None
+        if getattr(current, "type_str", None) != "tree":
+            return None
+    try:
+        entry = current[parts[-1]]
     except (KeyError, TypeError):
         return None
     if getattr(entry, "type_str", None) != "blob":
@@ -76,23 +103,19 @@ def _referenced_by_pattern(name: str, pkgbuild_text: str) -> bool:
     return False
 
 def _companion_names(tree, pkgbuild_text: str) -> list[str]:
-    """Committed top-level files whose content the recipe pulls in.
+    """Committed files whose content the recipe pulls in.
 
-    A file is included when it is a declared ``source=()`` entry *or* its name
-    appears anywhere in the PKGBUILD: ``bash "${startdir}/helper.sh"`` names a
-    committed file that makepkg never copies through ``source=()`` yet the
-    build still executes, so declaring the source was never required to run
-    it.  Tying the scan to files the recipe *names* keeps an unrelated
-    committed blob out of it while leaving no referenced file unread.
+    A file is included when it is a declared ``source=()`` entry *or* its
+    name appears anywhere in the PKGBUILD: ``bash "${startdir}/scripts/helper.sh"``
+    names a committed file that makepkg never copies through ``source=()``
+    yet the build still executes.  The scan now walks nested trees too, so a
+    top-level-only blind spot cannot hide a helper under ``scripts/``.
+
+    Tying the scan to files the recipe *names* keeps an unrelated committed
+    blob out of it while leaving no referenced file unread.
     """
     unsafe_names = False
     declared = local_source_names(pkgbuild_text)
-    # A build tool names its own input by contract, not by spelling it in the
-    # recipe.  `npm install` reads package.json, `cargo build` reads
-    # Cargo.toml and compiles build.rs, `cmake` reads CMakeLists.txt - each
-    # of those files is committed code that runs at build time, and none of
-    # them appears in the PKGBUILD text, so the name test above excluded
-    # exactly the records whose contents matter most.
     implied = {
         name
         for pattern, name in _TOOL_CONTRACT_FILES
@@ -100,54 +123,62 @@ def _companion_names(tree, pkgbuild_text: str) -> list[str]:
     }
     names: list[str] = []
     inspected = 0
-    for entry in tree:
-        # The walk is bounded, not just the selection: a tree is free to hold
-        # any number of entries, and the per-file cap applies to what was
-        # already chosen.
-        if inspected >= MAX_COMPANION_TREE_ENTRIES:
-            break
-        inspected += 1
-        if getattr(entry, "type_str", None) != "blob":
-            continue
-        name = entry.name
-        if not _is_safe_companion_name(name):
-            # A name past the length cap, or one that fails the safety
-            # check, is a referenced file left unread.  Silence here was a
-            # place to put a payload: 25 with a generic committed-exec
-            # claim and no sign that anything had been skipped.
-            unsafe_names = True
-            continue
-        if name in _COMPANION_SKIP:
-            continue
-        # `.install` used to be skipped here.  A scriptlet runs as root at
-        # install time, and its body is the single most consequential text in
-        # an AUR package; skipping it meant that a hook committed in an
-        # earlier commit was never read at all, so a `post_install()` holding
-        # `curl ... | bash` scored 15 for the attribute change and nothing
-        # for the payload.  H017 reads hook lines from the diff; this makes
-        # the committed body one of those lines.
-        if (name in declared or name in implied or name in pkgbuild_text
-                or _referenced_by_pattern(name, pkgbuild_text)):
-            names.append(name)
-    if inspected >= MAX_COMPANION_TREE_ENTRIES or unsafe_names:
+    hit_limit = False
+    stack: list[tuple[object, str]] = [(tree, "")]
+    while stack:
+        current, prefix = stack.pop()
+        for entry in current:
+            if inspected >= MAX_COMPANION_TREE_ENTRIES:
+                hit_limit = True
+                stack.clear()
+                break
+            inspected += 1
+            name = getattr(entry, "name", "")
+            path = f"{prefix}/{name}" if prefix else name
+            kind = getattr(entry, "type_str", None)
+            if kind == "tree":
+                if not _is_safe_companion_name(path):
+                    unsafe_names = True
+                    continue
+                stack.append((entry, path))
+                continue
+            if kind != "blob":
+                continue
+            if not _is_safe_companion_name(path):
+                # A name past the length cap, or one that fails the safety
+                # check, is a referenced file left unread.  Silence here was
+                # a place to put a payload.
+                unsafe_names = True
+                continue
+            if path in _COMPANION_SKIP:
+                continue
+            base = path.rsplit("/", 1)[-1]
+            if (base in declared or base in implied or path in pkgbuild_text
+                    or _referenced_by_pattern(path, pkgbuild_text)):
+                names.append(path)
+    if hit_limit or unsafe_names:
         names.append(_COMPANION_INCOMPLETE)
     return names
 
 def _is_safe_companion_name(name: str) -> bool:
-    """Whether *name* is a plain, bounded, top-level filename.
+    """Whether *name* is a bounded, normalized relative repository path.
 
-    The scanner reads top-level blobs, so anything carrying path structure is
-    not a name it can have produced honestly. Rejecting these here keeps an
-    absolute path or a traversal component out of a rendered hunk header,
-    where it would name a file the reader does not have.
+    Companion hunks carry this string as ``+++ b/<path>``.  Absolute paths,
+    traversal components, backslashes, control characters and overlong
+    paths are not names the tree walk can produce honestly.
     """
-    if not name or len(name.encode("utf-8", errors="replace")) > MAX_COMPANION_NAME_BYTES:
+    if not name or len(name.encode("utf-8", errors="replace")) > MAX_DIFF_PATH_BYTES:
         return False
-    if name in (".", ".."):
+    if name.startswith("/") or "\\" in name or "\x00" in name:
         return False
-    if name.startswith("/") or "/" in name or "\\" in name:
+    parts = name.split("/")
+    if any(part in ("", ".", "..") for part in parts):
         return False
-    return "\x00" not in name
+    if any(len(part.encode("utf-8", errors="replace")) > MAX_COMPANION_NAME_BYTES
+           for part in parts):
+        return False
+    return not any(ord(ch) < 32 or ord(ch) == 127 for ch in name)
+
 
 _DRAIN_CHUNK_BYTES = 256 * 1024
 

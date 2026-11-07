@@ -232,15 +232,15 @@ class _FakeResponse:
         return self._buf.read(size or self._chunk)
 
 
-def test_an_oversized_response_is_abandoned(monkeypatch):
-    """A response read with no bound lets the remote end choose how much of
-    this machine's memory to use."""
+def test_an_oversized_response_is_refused(monkeypatch):
+    """An over-cap response is a refusal, not an indistinguishable empty reply."""
     monkeypatch.setattr(corpus_fetch, "MAX_RESPONSE_BYTES", 4096)
     monkeypatch.setattr(
         corpus_fetch.urllib.request, "urlopen",
         lambda *a, **k: _FakeResponse(b"A" * 100_000),
     )
-    assert corpus_fetch._http_get("https://example.invalid/x") is None
+    with pytest.raises(ReadTooLarge):
+        corpus_fetch._http_get("https://example.invalid/x")
 
 
 def test_a_normal_response_is_returned_whole(monkeypatch):
@@ -543,6 +543,57 @@ def test_a_refused_snapshot_is_reported_as_a_coverage_gap(monkeypatch):
     assert qualified_band("High", gaps).endswith("(incomplete analysis)")
 
 
+def test_an_oversized_install_script_is_reported_as_a_coverage_gap(monkeypatch):
+    """An over-cap install member is skipped content, not an absent script."""
+    monkeypatch.setattr(corpus_fetch, "MAX_TAR_MEMBER_BYTES", 4096)
+
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+        for member_name, payload in (
+            ("demo/PKGBUILD", b"pkgname=demo\npkgver=1.0\n"),
+            ("demo/demo.install", b"\0" * 1_000_000),
+        ):
+            info = tarfile.TarInfo(member_name)
+            info.size = len(payload)
+            tf.addfile(info, io.BytesIO(payload))
+
+    with patch.object(
+        corpus_fetch, "_http_get", side_effect=[buf.getvalue(), b"pkgname=demo\n"]
+    ):
+        (text, manifest, trailer, refused,
+         install, install_name, manifest_texts,
+         manifest_complete) = corpus_fetch.fetch_pkgbuild_with_tree("demo")
+
+    assert text == "pkgname=demo\n"
+    assert manifest is None
+    assert refused is True
+    assert install is None
+    assert SNAPSHOT_REFUSED in gaps_from(
+        CoverageSignals(tree_analyzed=bool(manifest), snapshot_refused=refused)
+    )
+
+
+def test_an_oversized_snapshot_response_is_reported_as_a_coverage_gap(monkeypatch):
+    """The compressed-body bound must reach the same fail-closed path."""
+    monkeypatch.setattr(corpus_fetch, "MAX_RESPONSE_BYTES", 4)
+    monkeypatch.setattr(corpus_fetch, "_throttle", lambda _url: None)
+    with patch.object(corpus_fetch.urllib.request, "urlopen", return_value=io.BytesIO(b"12345")):
+        with pytest.raises(ReadTooLarge):
+            corpus_fetch._http_get("https://aur.archlinux.org/demo.tar.gz")
+
+    with patch.object(
+        corpus_fetch, "_http_get",
+        side_effect=[ReadTooLarge("snapshot too large"), b"pkgname=demo\n"],
+    ):
+        text, manifest, _trailer, refused, *_rest = (
+            corpus_fetch.fetch_pkgbuild_with_tree("demo")
+        )
+
+    assert text == "pkgname=demo\n"
+    assert manifest is None
+    assert refused is True
+
+
 def test_a_snapshot_member_under_the_bound_still_reads(monkeypatch):
     """The refusal is a ceiling, not a ban: a real PKGBUILD is unaffected."""
     monkeypatch.setattr(corpus_fetch, "MAX_TAR_MEMBER_BYTES", 4096)
@@ -649,21 +700,24 @@ def test_the_two_value_generator_still_works_for_old_callers():
 
 
 @pytest.mark.parametrize("name", [
-    "../../etc/passwd", "/etc/passwd", "..", ".", "", "a/b",
-    "back\\slash", "a" * 4096,
+    "../../etc/passwd", "/etc/passwd", "..", ".", "", "a/../b",
+    "a//b", "a/./b", "back\\slash", "a" * 4096,
 ])
 def test_a_hostile_companion_name_is_refused(name):
     """A rendered hunk header names a file the reader can open.
 
-    A name carrying path structure, or an unbounded one, would name a file
-    that is not the top-level blob the scanner actually read.
+    Traversal, absolute paths and unbounded names would name a file the
+    scanner did not read.  Nested relative paths are supported and are
+    covered separately.
     """
     from trustsight.differ import _is_safe_companion_name
 
     assert _is_safe_companion_name(name) is False
 
 
-@pytest.mark.parametrize("name", ["helper.sh", "patch-1.diff", "a.tar.gz", "x"])
+@pytest.mark.parametrize("name", [
+    "helper.sh", "patch-1.diff", "a.tar.gz", "x", "scripts/helper.sh",
+])
 def test_an_ordinary_companion_name_is_accepted(name):
     from trustsight.differ import _is_safe_companion_name
 

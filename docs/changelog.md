@@ -2,6 +2,12 @@
 
 # Changelog
 
+## [Unreleased]
+
+### Security
+
+- **Snapshot read refusals fail closed on the corpus path.** An oversized compressed snapshot response or `.install` member now propagates to the existing `snapshot_refused` coverage gap instead of falling back with no bound-specific gap. Two adversarial archive/response regressions pin the behavior, and the `incomplete coverage fails closed` gate exercises the install-member path; 174 focused fetch, watcher, hardening and security-gate tests pass. Detection rules and scoring are unchanged.
+
 ## [0.27.1] - 2026-11-04
 
 ### Fixed

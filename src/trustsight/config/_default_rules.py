@@ -614,6 +614,10 @@ domains = [
     # the same trust model as the forges above.  Classifying it `unknown`
     # fired C005 on packages pulling a build straight from Copr.
     "copr.fedorainfracloud.org",
+    # Public Gitea forge: user content like the forges above, not a
+    # project-owned release host.  voix-bin sources its release from
+    # git.gay; unknown it paid SOURCE_BUCKET for a forge bucket.
+    "git.gay",
 ]
 
 [official_projects]
@@ -651,6 +655,10 @@ domains = [
     # Qoder's project-owned Alibaba Cloud OSS bucket: the vendor's own
     # distribution host, the same model as cef-builds.spotifycdn.com.
     "qoder-ide.oss-accelerate.aliyuncs.com",
+    # CPAN's canonical distribution host: every Perl module's release
+    # tarball is served from cpan.metacpan.org.  Unknown it charged
+    # perl-orlite SOURCE_BUCKET and NOVELTY on a routine release.
+    "metacpan.org",
     # Vendors that publish their own prebuilt binaries from a CDN on a
     # subdomain of their registered domain.  The parent-domain check makes
     # the registered entry enough; the specific hosts are named so the
@@ -702,6 +710,17 @@ domains = [
     "api.nuget.org",            # Microsoft's NuGet v3 API
     "download.opensuse.org",    # SUSE / openSUSE distribution mirror
     "invent.kde.org",           # KDE's own GitLab
+    # Project-owned distribution hosts that were classified unknown.  Each
+    # serves the package's own release artifact; the AUR url= is on a
+    # different host or a sibling subdomain, so declared_upstream cannot
+    # recover them.  Exact hosts, not registered domains.
+    "get.izoone.com",           # Izoone's release host (sibling of automation.izoone.com)
+    "download.eclipse.org",     # Eclipse Foundation's milestone builds
+    "hangeul.pstatic.net",      # Naver's Nanum font CDN
+    "git.corbet.ch",            # corbet-libs' self-hosted forge
+    "packages.domicile-desktop.com",  # Domicile's own Arch repository
+    "clever-tools.clever-cloud.com",  # Clever Cloud's release CDN
+    "kepler-static-artifacts.kepler.labcollab.net",  # Kepler's artifact CDN
 ]
 
 [raw_hosting]

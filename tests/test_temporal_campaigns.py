@@ -1,6 +1,9 @@
-"""Focused positive, benign and cold-start tests for T008--T012."""
+"""Positive, benign, adversarial and cold-start tests for T008--T012."""
 
+import json
 from types import SimpleNamespace
+
+from hypothesis import given, settings, strategies as st
 
 from trustsight.full_aur._temporal_campaigns import (
     _delayed_adoption_findings,
@@ -210,3 +213,90 @@ def test_t012_cold_rule_history_is_silent():
     assert _trust_erosion_findings(snapshot(
         detail={"pkg": {"rules": ["S011"]}},
     )) == []
+
+
+def test_t009_rejects_a_malformed_string_transition():
+    assert _dormant_takeover_findings(snapshot(
+        old_meta={"target": {"LastModified": NOW - 300 * DAY}},
+        new_meta={"target": {"NumVotes": 150}},
+        transitions={"target": "ab"},
+    )) == []
+
+
+def test_t010_provider_resolution_covers_the_full_snapshot():
+    # A lexicographic package cap must not hide a valid late-sorting provider.
+    new_meta = {
+        **{f"filler-{n:04}": {} for n in range(4096)},
+        "consumer": {},
+        "zz-provider": {"Provides": ["virtual>=1"]},
+    }
+    findings = _dependency_redirection_findings(snapshot(
+        new_meta=new_meta,
+        transitions={"zz-provider": ("alice", "mallory")},
+        detail={"consumer": {
+            "dependency_changes": {"depends_added": ["virtual>=1"]},
+        }},
+    ))
+    assert len(findings) == 1
+    assert findings[0]["params"]["target"] == "zz-provider"
+
+
+def test_t011_rejects_a_boolean_cycle_ordinal():
+    assert _reappearance_findings(snapshot(
+        changes={"pkg": "added"},
+        package_cycle_events={"pkg": [{"cycle_time": True, "status": "removed"}]},
+    )) == []
+
+
+def test_transition_shapes_require_two_distinct_maintainer_names():
+    dormant = snapshot(
+        old_meta={"target": {"LastModified": NOW - 300 * DAY}},
+        new_meta={"target": {"NumVotes": 150}},
+        transitions={"target": ("alice", {"not": "a name"})},
+    )
+    redirection = snapshot(
+        new_meta={"target": {}, "consumer": {}},
+        transitions={"target": ("alice", True)},
+        detail={"consumer": {
+            "dependency_changes": {"depends_added": ["target"]},
+        }},
+    )
+    assert _dormant_takeover_findings(dormant) == []
+    assert _dependency_redirection_findings(redirection) == []
+
+
+_JSON = st.recursive(
+    st.none() | st.booleans() | st.integers() |
+    st.floats(allow_nan=False, allow_infinity=False) | st.text(max_size=24),
+    lambda children: st.lists(children, max_size=4) | st.dictionaries(
+        st.text(max_size=16), children, max_size=4),
+    max_leaves=20,
+)
+_EMITTERS = (
+    _delayed_adoption_findings,
+    _dormant_takeover_findings,
+    _dependency_redirection_findings,
+    _reappearance_findings,
+    _trust_erosion_findings,
+)
+
+
+@settings(max_examples=100, deadline=None)
+@given(overrides=st.fixed_dictionaries({
+    "new_meta": _JSON,
+    "old_meta": _JSON,
+    "changes": _JSON,
+    "transitions": _JSON,
+    "edges": _JSON,
+    "detail": _JSON,
+    "maintainer_transitions": _JSON,
+    "prior_rule_history": _JSON,
+    "package_cycle_events": _JSON,
+    "now": _JSON,
+}))
+def test_emitters_are_total_deterministic_and_json_safe(overrides):
+    value = snapshot(**overrides)
+    for emitter in _EMITTERS:
+        first = emitter(value)
+        assert first == emitter(value)
+        json.dumps(first, allow_nan=False)

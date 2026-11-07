@@ -54,6 +54,8 @@ def _sequence(value, cap: int):
 
 
 def _number(value, default: float = 0.0) -> float:
+    if isinstance(value, bool):
+        return default
     try:
         result = float(value)
     except (TypeError, ValueError, OverflowError):
@@ -169,11 +171,12 @@ def _dormant_takeover_findings(snapshot: HistorySnapshot) -> list[dict]:
             reverse.setdefault(str(target), set()).add(str(dependent))
     out: list[dict] = []
     for name, change in sorted(_mapping(snapshot.transitions).items()):
-        try:
-            old_maintainer, new_maintainer = change
-        except (TypeError, ValueError):
+        if not isinstance(change, (list, tuple)) or len(change) != 2:
             continue
-        if not new_maintainer or old_maintainer == new_maintainer:
+        old_maintainer, new_maintainer = change
+        if (not isinstance(old_maintainer, str)
+                or not isinstance(new_maintainer, str)
+                or not new_maintainer or old_maintainer == new_maintainer):
             continue
         modified = _timestamp(_mapping(old_meta.get(name)).get("LastModified"))
         if modified is None or now - modified <= dormant_days * 86400:
@@ -215,8 +218,10 @@ def _dormant_takeover_findings(snapshot: HistorySnapshot) -> list[dict]:
 
 def _unique_providers(meta: dict) -> dict[str, str]:
     candidates: dict[str, set[str]] = {}
-    for name in _packages(meta):
-        entry = _mapping(meta[name])
+    # Provider resolution is snapshot-wide.  Applying the per-cycle package
+    # cap here made every alias beyond the first 4096 names unresolvable.
+    for name, raw_entry in meta.items():
+        entry = _mapping(raw_entry)
         for provided in _sequence(entry.get("Provides"), _MAX_PROVIDES):
             alias = normalize_dependency(str(provided))
             if alias and alias != name:
@@ -249,7 +254,10 @@ def _dependency_redirection_findings(snapshot: HistorySnapshot) -> list[dict]:
                 adopted = bool(
                     isinstance(current_transition, (list, tuple))
                     and len(current_transition) == 2
+                    and isinstance(current_transition[0], str)
+                    and isinstance(current_transition[1], str)
                     and current_transition[1]
+                    and current_transition[0] != current_transition[1]
                 )
                 if changes.get(target) != "added" and not adopted:
                     continue

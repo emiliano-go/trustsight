@@ -210,7 +210,11 @@ def _maintainer_deviation_findings(snapshot: HistorySnapshot) -> list[dict]:
             prior_by_maintainer.setdefault(m, []).append(int(row.get("activity") or 0))
     activity_now: dict[str, list[str]] = {}
     for name, status in changes.items():
-        if status == "removed":
+        # New packages are H045/H074's shape, not a deviation from an
+        # existing maintainer's baseline.  Counting them here made one
+        # maintainer filing a batch of new packages read as a surge
+        # (pele/zaptide, 2026-11-04; lmartinez-mirror, 2026-11-05).
+        if status in ("removed", "added"):
             continue
         m = _maintainer(new_meta.get(name))
         if m:

@@ -143,6 +143,28 @@ def _h049_findings(breaks: list) -> list[dict]:
     # entries).  A real move adds an owner or changes the host, and still
     # fires; an empty new set was already skipped above.
     hosts_changed = any(break_.key == "source_hosts" for break_, _, _ in changed)
+    if hosts_changed:
+        # Adding a source host is an expansion, not an origin move: the
+        # previous hosts remain.  A project that starts shipping one more
+        # artifact from its own release host is not changing where its
+        # source comes from (proxmox-backup-client, 2026-11-06).  The new
+        # host is still classified by SOURCE_BUCKET, so an unknown host is
+        # not hidden.  A replacement or removal still fires below.
+        host_changes = [
+            (old, new) for break_, old, new in changed
+            if break_.key == "source_hosts"
+        ]
+        if host_changes and all(
+            old and set(new) > set(old) for old, new in host_changes
+        ):
+            changed = [
+                (break_, old, new) for break_, old, new in changed
+                if break_.key != "source_hosts"
+                and not (break_.key == "source_orgs" and set(new) <= set(old))
+            ]
+            if not changed:
+                return []
+            hosts_changed = False
     if not hosts_changed:
         changed = [
             (break_, old, new)

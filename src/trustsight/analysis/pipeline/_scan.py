@@ -77,6 +77,7 @@ from ..version import (
     pkgver_move_in_diff,
 )
 from ._analyze import apply_diff_caps
+from ._resolved import split_resolved_lines
 from ._tree import _adds_a_dependency, _binary_metadata_finding, _has_noextract, _scriptlet_files_unread
 
 __all__ = ['analyze_package_text', 'scan_diff']
@@ -301,8 +302,12 @@ def scan_diff(
         diff_text, package_name, current_text=current_text
     )
 
+    resolved_commands, resolved_recipe = split_resolved_lines(
+        resolved_strings, resolved_indices, raw_lines, raw_indices,
+    )
     exec_changes = ExecutionChanges(
-        resolved_commands=resolved_strings,
+        resolved_commands=resolved_commands,
+        resolved_recipe=resolved_recipe,
         suspicious_patterns_detected=rule_ids,
         unresolved_patterns=unresolved_strings,
     )

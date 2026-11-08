@@ -13,7 +13,8 @@ trustsight inspect <package>
 This shows:
 
 - The **diff summary**: a summary of detected changes between the installed and candidate PKGBUILD.
-- **Resolved commands**: statically reconstructed values where resolution is supported.
+- **Resolved commands**: the executable command lines reconstructed after variable resolution.
+- **Resolved recipe values**: resolved metadata, comments and other non-executable recipe text, kept separate so it is not read as a command.
 - **Triggered rules**: which published R/H/C/D/S/X rules fired, with the specific lines that matched.
 - **Evidence breakdown**: contribution from each [evidence tier](../reference/evidence-tiers.md): structural (A), priors (B), novelty (C), verification (D).
 

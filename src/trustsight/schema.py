@@ -36,6 +36,7 @@ class ExecutionChanges:
     """Resolved command strings and suspicious patterns found in a diff."""
 
     resolved_commands: list[str] = field(default_factory=list)
+    resolved_recipe: list[str] = field(default_factory=list)
     suspicious_patterns_detected: list[str] = field(default_factory=list)
     unresolved_patterns: list[str] = field(default_factory=list)
 
@@ -337,6 +338,7 @@ def fact_to_dict(fact: PackageFact) -> dict:
         "source_buckets": fact.source_buckets,
         "execution_changes": {
             "resolved_commands": fact.execution_changes.resolved_commands,
+            "resolved_recipe": fact.execution_changes.resolved_recipe,
             "suspicious_patterns_detected": fact.execution_changes.suspicious_patterns_detected,
             "unresolved_patterns": fact.execution_changes.unresolved_patterns,
         },
@@ -507,6 +509,7 @@ def fact_from_dict(data: dict) -> PackageFact | None:
             source_buckets=dict(data["source_buckets"]),
             execution_changes=ExecutionChanges(
                 resolved_commands=list(execution.get("resolved_commands", [])),
+                resolved_recipe=list(execution.get("resolved_recipe", [])),
                 suspicious_patterns_detected=list(
                     execution.get("suspicious_patterns_detected", [])),
                 unresolved_patterns=list(execution.get("unresolved_patterns", [])),

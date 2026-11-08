@@ -381,6 +381,7 @@ The analysis of one package.
 | `source_buckets` | `dict` | URL to its classification, for example `trusted_forge` or `homograph_attack`. |
 | `checksum_behavior` | `str` | How the checksum arrays changed. |
 | `resolved_commands` | `tuple[str, ...]` | Commands after variable resolution and decoding. |
+| `resolved_recipe` | `tuple[str, ...]` | Resolved added recipe text that is not a command. |
 | `maintainer`, `previous_maintainer`, `maintainer_changed` | `str`, `str`, `bool` | Maintainer transition. |
 | `dependency_changes` | `dict` | Newly declared dependency names by field. |
 | `first_seen` | `bool` | No prior history, so novelty signals carry no weight yet. |

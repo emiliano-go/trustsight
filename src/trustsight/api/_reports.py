@@ -160,6 +160,7 @@ def _report_from_fact(fact) -> Report:
         source_buckets=dict(fact.source_buckets),
         checksum_behavior=fact.source_changes.checksum_behavior,
         resolved_commands=tuple(fact.execution_changes.resolved_commands),
+        resolved_recipe=tuple(fact.execution_changes.resolved_recipe),
         # Both are attacker-chosen strings that arrive from a PKGBUILD
         # comment or an AUR record and leave through `Report`. The CLI
         # renderer cleans what it prints, but an API consumer printing a

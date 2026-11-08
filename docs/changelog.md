@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **`Resolved commands` now contains commands only.** The inspect panel and the report carried every resolved added line under that heading, so a full recipe showed `pkgbase`, comments and function braces as commands. The resolved text is split with the same command-position definition the rule families use, and non-command text is reported separately as `resolved_recipe`. The report field is additive; existing consumers of `resolved_commands` now receive only executable lines.
+
 ### Security
 
 - **Snapshot read refusals fail closed on the corpus path.** An oversized compressed snapshot response or `.install` member now propagates to the existing `snapshot_refused` coverage gap instead of falling back with no bound-specific gap. Two adversarial archive/response regressions pin the behavior, and the `incomplete coverage fails closed` gate exercises the install-member path; 174 focused fetch, watcher, hardening and security-gate tests pass. Detection rules and scoring are unchanged.

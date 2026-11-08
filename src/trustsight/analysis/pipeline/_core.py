@@ -65,6 +65,7 @@ from ..structural import partial_install_files, unchanged_upstream_host  # noqa:
 from ..structural._engine import ScanRequest, _structural_findings_from_request
 from ..structural_rules import apply_structural_rules
 from ._analyze_helpers import _campaign_corroboration
+from ._resolved import split_resolved_lines
 from ._evidence import Evidence, collect_evidence
 from ._tree import _deps_not_scanned, _has_noextract, _scriptlet_files_unread
 
@@ -163,6 +164,8 @@ class ScanResult:
     change_delta_obj: Any
     evidence: Evidence
     resolved_strings: list[str]
+    resolved_commands: list[str]
+    resolved_recipe: list[str]
     unresolved_strings: list[str]
     tree_analyzed: bool
     tree_manifest: list
@@ -207,6 +210,9 @@ def scan_recipe(scan: ScanInput, config: dict) -> ScanResult:
         tokenize_and_resolve_indexed(diff_text)
     )
     raw_lines, raw_indices = get_raw_diff_lines_indexed(diff_text)
+    resolved_commands, resolved_recipe = split_resolved_lines(
+        resolved_strings, resolved_indices, raw_lines, raw_indices,
+    )
     line_map = map_diff_lines(diff_text)
     triggered_rules = apply_rules(
         resolved_strings, raw_lines,
@@ -347,6 +353,8 @@ def scan_recipe(scan: ScanInput, config: dict) -> ScanResult:
         change_delta_obj=change_delta_obj,
         evidence=evidence,
         resolved_strings=resolved_strings,
+        resolved_commands=resolved_commands,
+        resolved_recipe=resolved_recipe,
         unresolved_strings=unresolved_strings,
         tree_analyzed=tree_analyzed,
         tree_manifest=scan.tree_manifest,
@@ -480,7 +488,8 @@ def finalise_fact(
         source_changes=scan.source_changes,
         source_buckets=scan.source_buckets,
         execution_changes=ExecutionChanges(
-            resolved_commands=scan.resolved_strings,
+            resolved_commands=scan.resolved_commands,
+            resolved_recipe=scan.resolved_recipe,
             suspicious_patterns_detected=scan.rule_ids,
             unresolved_patterns=scan.unresolved_strings,
         ),

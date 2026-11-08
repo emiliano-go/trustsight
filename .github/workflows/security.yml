@@ -7,10 +7,17 @@ name: Security Gates
 # blocker in a way a failing unit test is not: the doc is the promise and
 # the gates are the proof, and the last gate checks that the two still
 # describe the same set.
-on: [push, pull_request]
+on:
+  push:
+    branches: [master]
+  pull_request:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   gates:

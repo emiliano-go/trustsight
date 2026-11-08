@@ -339,14 +339,17 @@ def diff_metadata(old: dict, new: dict) -> dict[str, str]:
 
     Returns a dict mapping package name to ``"added"``, ``"removed"``,
     or ``"modified"`` based on whether the package appeared, disappeared,
-    or changed (by ``LastModified`` or ``Version``).
+    or changed (by ``LastModified``, ``Version`` or ``Maintainer``).
+    Ownership-only transitions must reach the temporal sweep: they are the
+    precursor the delayed-adoption and high-value takeover rules read.
     """
     changes: dict[str, str] = {}
     for name, entry in new.items():
         if name not in old:
             changes[name] = "added"
         elif (entry.get("LastModified") != old[name].get("LastModified")
-              or entry.get("Version") != old[name].get("Version")):
+              or entry.get("Version") != old[name].get("Version")
+              or entry.get("Maintainer") != old[name].get("Maintainer")):
             changes[name] = "modified"
     for name in old:
         if name not in new:

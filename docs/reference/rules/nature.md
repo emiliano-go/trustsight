@@ -215,7 +215,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 ## T-series: **Temporal** Observation History
 
-**Count:** 7 rules (T001-T007; 16 further history-backed rules still carry H ids)
+**Count:** 12 rules (T001-T012; 16 further history-backed rules still carry H ids)
 
 **Mechanism:** Predicates over the observation database - the history of the package, its maintainers, its signing keys and its rates. The input is stored history, not the diff, which is what makes T a distinct kind from H: fire rates depend on how much history exists, cold-start semantics are special, and reproducibility requires a pinned DB fixture. The observation-database H rules (H020, H021, H022, H026, H037, H044, H045, H046, H058, H060, H073, H074, H086, H088) are T-natured and keep their H ids for citation stability; new history-backed rules take T ids.
 

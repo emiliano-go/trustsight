@@ -2,14 +2,16 @@
 
 The locked benign corpus is stateless diffs, so the observation-history
 rules (H020/H021/H022, H026/H044, H045/H073, H052/H053/H055/H059/H073/H074,
-plus the graph rules) never fire there and their overlap cannot be measured.
+T008--T012, plus the graph rules) never fire there and their overlap cannot
+be measured.
 These cycles are the metadata snapshots that exercise them:
 ``tests/harness/history_replay.py`` runs ``run_corpus_sweep`` over each cycle
 and the H-reduction audit joins the result, so the co-fire matrix has
 a committed measurement.
 
 Each cycle is ``{name, old, new, prior_history?, maintainer_history?,
-source_repos?, edges?, expected}``.  ``expected`` is the rule-id set the
+source_repos?, edges?, detail?, maintainer_transitions?, prior_rule_history?,
+package_cycle_events?, now?, expected}``.  ``expected`` is the rule-id set the
 cycle must fire; a replay that drifts fails the parity test in the suite.
 """
 
@@ -108,6 +110,58 @@ CYCLES: list[dict] = [
         "new": {"pkg-a": _pkg("pkg-a", "mallory", version="2",
                               last_modified=200)},
         "expected": ["H026", "H044", "H074"],
+    },
+    {
+        "name": "delayed-post-adoption-payload",
+        "old": {"pkg-a": _pkg("pkg-a", "mallory")},
+        "new": {"pkg-a": _pkg("pkg-a", "mallory")},
+        "now": 1_800_000_000,
+        "detail": {"pkg-a": {"rules": ["R001"]}},
+        "maintainer_transitions": {"pkg-a": [{
+            "observed_at": 1_800_000_000 - 30 * 86400,
+            "new_value": "mallory", "property_key": "maintainer",
+        }]},
+        "expected": ["T008"],
+    },
+    {
+        "name": "high-value-dormant-takeover",
+        "old": {"pkg-a": _pkg(
+            "pkg-a", "alice", last_modified=1_800_000_000 - 300 * 86400)},
+        "new": {"pkg-a": _pkg("pkg-a", "mallory") | {"NumVotes": 150}},
+        "now": 1_800_000_000,
+        "expected": ["H026", "H044", "T009"],
+    },
+    {
+        "name": "dependency-redirection-to-adopted-node",
+        "old": {"consumer": _pkg("consumer", "alice"),
+                "target": _pkg("target", "")},
+        "new": {"consumer": _pkg("consumer", "alice", version="2"),
+                "target": _pkg("target", "mallory")},
+        "detail": {"consumer": {
+            "dependency_changes": {"depends_added": ["target"]},
+        }},
+        "expected": ["H026", "H044", "T010"],
+    },
+    {
+        "name": "recorded-removal-then-reappearance",
+        "old": {"seed": _pkg("seed", "alice")},
+        "new": {"seed": _pkg("seed", "alice"),
+                "returned": _pkg("returned", "mallory")},
+        "package_cycle_events": {"returned": [{
+            "cycle_time": 4, "status": "removed", "maintainer": "alice",
+        }]},
+        "expected": ["T011"],
+    },
+    {
+        "name": "cross-window-trust-erosion",
+        "old": {"pkg-a": _pkg("pkg-a", "alice")},
+        "new": {"pkg-a": _pkg("pkg-a", "alice", version="2")},
+        "detail": {"pkg-a": {"rules": ["R001"]}},
+        "prior_rule_history": {"pkg-a": [{
+            "history_id": 10, "timestamp": "2026-01-01T00:00:00+00:00",
+            "rules": ["H049"],
+        }]},
+        "expected": ["T012"],
     },
 ]
 

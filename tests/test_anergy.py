@@ -69,4 +69,7 @@ def test_admin_anergic_json_lists_the_ledger():
     result = CliRunner().invoke(app, ["admin", "anergic", "--json"])
     assert result.exit_code == 0, result.output
     rows = json.loads(result.output)
-    assert rows == []  # the calibrated rules are promoted, not anergic
+    assert {row["rule_id"] for row in rows} == {
+        "T008", "T009", "T010", "T011", "T012",
+    }
+    assert all(row["status"] == "anergic" for row in rows)

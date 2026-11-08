@@ -29,6 +29,13 @@ from typing import Callable
 
 from ..config import load_thresholds
 from ..novelty import normalize_url
+from ._temporal_campaigns import (
+    _delayed_adoption_findings,
+    _dependency_redirection_findings,
+    _dormant_takeover_findings,
+    _reappearance_findings,
+    _trust_erosion_findings,
+)
 from ._temporal_adoption import (
     _attribute_burst,
     _introduction_deviation,
@@ -71,6 +78,10 @@ class HistorySnapshot:
     maintainer_history: list = field(default_factory=list)
     edges: dict[str, set[str]] | None = None
     routine_only: frozenset[str] = field(default_factory=frozenset)
+    detail: dict = field(default_factory=dict)
+    maintainer_transitions: dict = field(default_factory=dict)
+    prior_rule_history: dict = field(default_factory=dict)
+    package_cycle_events: dict = field(default_factory=dict)
     now: int = 0
 
     @classmethod
@@ -84,14 +95,17 @@ class HistorySnapshot:
         maintainer_history: list | None = None,
         edges: dict[str, set[str]] | None = None,
         routine_only: set[str] | frozenset[str] | None = None,
+        detail: dict | None = None,
+        maintainer_transitions: dict | None = None,
+        prior_rule_history: dict | None = None,
+        package_cycle_events: dict | None = None,
         now: int = 0,
     ) -> "HistorySnapshot":
         """Capture the cycle's derived history in one object.
 
         The two metadata snapshots are already in memory; the database reads
-        arrive through *prior_history*/*maintainer_history* (see
-        :func:`read_cycle_history`), so the snapshot is a pure value and the
-        rules never touch the database themselves.
+        arrive through the history arguments (see :func:`read_cycle_history`),
+        so the snapshot is a pure value and rules never query the database.
         """
         if old_meta is None:
             changes: dict = {}
@@ -109,6 +123,10 @@ class HistorySnapshot:
             maintainer_history=maintainer_history or [],
             edges=edges,
             routine_only=frozenset(routine_only or ()),
+            detail=detail or {},
+            maintainer_transitions=maintainer_transitions or {},
+            prior_rule_history=prior_rule_history or {},
+            package_cycle_events=package_cycle_events or {},
             now=now,
         )
 
@@ -160,6 +178,7 @@ def read_cycle_history(processed=None, *, refresh: bool = False) -> dict:
         introduction_rate_history,
         latest_cycle_time,
         maintainer_activity_history,
+        temporal_rule_history,
     )
 
     key = latest_cycle_time()
@@ -168,6 +187,7 @@ def read_cycle_history(processed=None, *, refresh: bool = False) -> dict:
         _HISTORY_CACHE[key] = {
             "prior_history": introduction_rate_history(),
             "maintainer_history": maintainer_activity_history(),
+            **temporal_rule_history(processed),
         }
     return _HISTORY_CACHE[key]
 
@@ -253,6 +273,34 @@ CYCLE_INSTANCES: tuple[TemporalInstance, ...] = (
         _name_repo_divergence_findings,
         doc="docs/reference/rules/naming-and-dependency.md",
         fixtures=("tests/test_class_d.py",)),
+    TemporalInstance(
+        "T008", "Delayed Payload Adoption", "transition", "cycle", "INFO", "temporal",
+        _delayed_adoption_findings,
+        parameters=("t008.min_delay_days",),
+        doc="docs/reference/rules/temporal.md",
+        fixtures=("tests/test_temporal_campaigns.py",)),
+    TemporalInstance(
+        "T009", "High-Value Dormant Takeover", "transition", "cycle", "INFO", "temporal",
+        _dormant_takeover_findings,
+        parameters=("t009.dormant_days", "t009.min_votes",
+                    "t009.min_popularity", "t009.min_dependents"),
+        doc="docs/reference/rules/temporal.md",
+        fixtures=("tests/test_temporal_campaigns.py",)),
+    TemporalInstance(
+        "T010", "Dependency Redirection", "transition", "cycle", "INFO", "dependency",
+        _dependency_redirection_findings,
+        doc="docs/reference/rules/naming-and-dependency.md",
+        fixtures=("tests/test_temporal_campaigns.py",)),
+    TemporalInstance(
+        "T011", "Package Reappearance", "transition", "cycle", "INFO", "temporal",
+        _reappearance_findings,
+        doc="docs/reference/rules/temporal.md",
+        fixtures=("tests/test_temporal_campaigns.py",)),
+    TemporalInstance(
+        "T012", "Trust Erosion Sequence", "transition", "cycle", "INFO", "temporal",
+        _trust_erosion_findings,
+        doc="docs/reference/rules/temporal.md",
+        fixtures=("tests/test_temporal_campaigns.py",)),
 )
 
 #: The graph-scope rows, executed by :func:`run_graph_sweep` as one producer.
@@ -413,6 +461,10 @@ def run_corpus_sweep(
     maintainer_history: list[dict] | None = None,
     edges: dict[str, set[str]] | None = None,
     routine_only: set[str] | None = None,
+    detail: dict | None = None,
+    maintainer_transitions: dict | None = None,
+    prior_rule_history: dict | None = None,
+    package_cycle_events: dict | None = None,
     now: int = 0,
 ) -> list[dict]:
     """Run the cycle-scope temporal instances over one metadata cycle."""
@@ -424,6 +476,10 @@ def run_corpus_sweep(
         maintainer_history=maintainer_history,
         edges=edges,
         routine_only=routine_only,
+        detail=detail,
+        maintainer_transitions=maintainer_transitions,
+        prior_rule_history=prior_rule_history,
+        package_cycle_events=package_cycle_events,
         now=now,
     )
     return run_cycle_instances(snapshot)

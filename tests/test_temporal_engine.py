@@ -71,9 +71,12 @@ def test_snapshot_captures_changes_and_transitions():
     assert snapshot.transitions["p"] == ("alice", "mallory")
 
 
-def test_read_cycle_history_returns_the_two_feeds(db):
+def test_read_cycle_history_returns_the_rate_and_rule_timelines(db):
     history = read_cycle_history()
-    assert set(history) == {"prior_history", "maintainer_history"}
+    assert set(history) == {
+        "prior_history", "maintainer_history", "maintainer_transitions",
+        "prior_rule_history", "package_cycle_events",
+    }
 
 
 def test_read_cycle_history_is_cached(db):

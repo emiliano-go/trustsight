@@ -45,8 +45,8 @@ COLD_ONLY_RULES = frozenset(
         *{f"G{n:03d}" for n in range(1, 15)},
         *{f"M{n:03d}" for n in range(1, 7)},
         # T004/T005 are pure-diff missing-self predicates and replay cold;
-        # the rest of T needs observation history.
-        *{f"T{n:03d}" for n in range(1, 8) if n not in (4, 5)},
+        # the rest of T needs observation history or a full-AUR cycle.
+        *{f"T{n:03d}" for n in range(1, 13) if n not in (4, 5)},
         *{f"A{n:03d}" for n in range(1, 9)},
     }
 )

@@ -52,6 +52,7 @@ severity weights and the reserved identifier ranges.
 | [H064](#h064) | Provides/Replaces Scope Expansion | HIGH |
 | [H104](#h104) | Placeholder Package | INFO |
 | [H106](#h106) | Registry Or Index Override | MEDIUM |
+| [T010](#t010) | Dependency Redirection | INFO |
 <!-- /generated: page-index -->
 
 ### H006: New Make/Opt/Check Dependency {#h006}
@@ -273,3 +274,19 @@ the ecosystem's trust anchor. It is a delivery chain when the same function or
 install hook also resolves a package: the recipe chooses attacker-controlled
 resolution before the build runs. A read-only query such as
 `npm config get registry` is not an override.
+
+### T010: Dependency Redirection {#t010}
+
+- **Target:** programmatic (full-AUR dependency changes and target transitions)
+- **Severity:** INFO (weight 0)
+- **Category:** `dependency`
+
+- **Condition:** A package adds a dependency on an unrelated package that was
+  added or adopted in the same full-AUR cycle. Unique `Provides` aliases count;
+  self-dependencies, related packages, shared package bases and ambiguous
+  aliases do not.
+
+A newly controlled target becomes dangerous when other packages start resolving
+to it. T010 reports that redirection across the cycle rather than judging the
+dependency declaration's text. It is INFO, weight 0 and anergic pending benign
+replay; established targets and missing history are silent.

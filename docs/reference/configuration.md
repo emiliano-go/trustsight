@@ -481,6 +481,8 @@ own project's names from firing a scope-expansion rule.
 | `t_key.min_observations` | T001 | `1` | Ecosystem signing keys recorded before T001 judges a new `validpgpkeys` fingerprint novel; below the floor the rule declines silently. |
 | `t_dom.min_observations` / `t_dom.window_days` | T002 | `1` / `30` | Domains recorded before T002 judges a maintainer domain novel, and the observation window that counts as "new". |
 | `t006.min_divergence_hours` | T006 | `24` | Hours the AUR `LastModified` may lead the git tip commit date before T006 reports a history rewrite. |
+| `t008.min_delay_days` | T008 | `14` | Minimum days between the latest maintainer adoption and a current payload rule before the delayed-adoption context is reported. |
+| `t009.dormant_days` / `t009.min_votes` / `t009.min_popularity` / `t009.min_dependents` | T009 | `180` / `100` / `1.0` / `10` | Dormancy age and exposure floors for a high-value dormant takeover; any one exposure floor is sufficient. |
 | `t004.min_removed_keys` | T004 | `1` | `validpgpkeys` entries that must be removed, with none added and at least one remaining, before T004 reports a vouch-surface removal. |
 | `c033.min_deleted_comment_ratio` / `c033.min_deleted_comment_lines` | C033 | `0.50` / `8` | Fraction and absolute floor of a diff's pre-state comment prose deleted before C033 reports context bleed. Both are corpus-adjudicated and the rule ships anergic (weight 0). |
 | `tags.convergence_kinds` | `TAG_CONVERGENCE` | `4` | Distinct weight-0 tag kinds on one diff that emit the INFO convergence ledger entry. |
@@ -506,8 +508,8 @@ or length is clamped to zero.
 The E-series thresholds (`e001`/`e002`/`e003`) ship **empty** by design: the
 series is silent until a threshold is set from the first corpus measurement
 (`scripts/entropy_calibrate.py` prints conservative floors in the calibration
-CI job). The `g003`, `g008`, `g009`, `g010`, `g011` and `t006` tables ship in
-`thresholds.toml`. The older G keys (`g_host`, `g_blob`, `g_adopt`), the T
+CI job). The `g003`, `g008`, `g009`, `g010`, `g011`, `t006`, `t008` and
+`t009` tables ship in `thresholds.toml`. The older G keys (`g_host`, `g_blob`, `g_adopt`), the T
 keys (`t_key`, `t_dom`), `m002` and `cofire_pairs` are honoured if you add them,
 with the code defaults in the table above.
 

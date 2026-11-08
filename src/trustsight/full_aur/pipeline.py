@@ -155,6 +155,10 @@ def _run_corpus_sweep(
         prior_history=history["prior_history"],
         maintainer_history=history["maintainer_history"],
         routine_only=routine_only,
+        detail=detail_map,
+        maintainer_transitions=history["maintainer_transitions"],
+        prior_rule_history=history["prior_rule_history"],
+        package_cycle_events=history["package_cycle_events"],
         now=int(time.time()),
     )
 

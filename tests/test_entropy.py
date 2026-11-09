@@ -55,8 +55,29 @@ def test_encoded_fraction_counts_long_runs():
     assert encoded_fraction(text, min_length=200) == 0.0
 
 
-def test_e_series_is_silent_with_empty_thresholds():
-    assert _collect(_diff("pkgver=1.0"), {}) == []
+def test_e_series_is_silent_with_explicitly_empty_thresholds():
+    assert _collect(_diff("pkgver=1.0"), {"thresholds": {}}) == []
+
+
+def test_shipped_thresholds_are_calibrated():
+    import tomllib
+
+    from trustsight.config import DEFAULT_THRESHOLDS
+
+    thresholds = tomllib.loads(DEFAULT_THRESHOLDS)
+    assert thresholds["e001"]["max_ratio"] == 0.2302
+    assert thresholds["e002"]["min_fraction"] == 0.8889
+    assert thresholds["e003"]["max_entropy"] == 4.9535
+    assert thresholds["e003"]["max_bigram"] == 7.0039
+
+
+def test_entropy_reads_thresholds_toml_when_config_omits_them(monkeypatch):
+    import trustsight.config as config
+
+    monkeypatch.setattr(
+        config, "load_thresholds", lambda: {"e001": {"max_ratio": 10.0}})
+    assert [e["rule_id"] for e in _collect(
+        _diff("pkgver=1.0"), {"thresholds": None})] == ["E001"]
 
 
 def test_e001_fires_when_configured():

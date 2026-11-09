@@ -1,4 +1,4 @@
-<!-- description: E-series rules read the added content as a distribution - a statistical outlier is suspicion, never a verdict, and the thresholds ship empty until the corpus sets them. -->
+<!-- description: E-series rules read the added content as a distribution - a statistical outlier is suspicion, never a verdict, and the thresholds are calibrated at a 0.5% benign tail. -->
 
 # Entropy
 
@@ -18,8 +18,9 @@ This is a reference page. For how weight and scope work, see
 ## Reading an E finding
 
 - It is **suspicion, never a verdict**. An E finding never reaches FATAL.
-- Its thresholds ship **empty**: every E rule is silent until an operator or
-  the calibration job sets the threshold from the first corpus measurement.
+- Its thresholds are calibrated from the locked benign corpus at a 0.5%
+  per-rule tail. A p05 E001 would add 15 points to one in twenty benign
+  diffs and move the published p95.
   The benign fire rate is the published number once measured.
 - It names the measured value, never the content.
 
@@ -65,7 +66,9 @@ The alphabet sets are X029's, applied as a statistic rather than a staging predi
 
 The second-order statistic keeps the structure a unigram distribution flattens, so it separates generated names (`a`, `b`, `x1` - few bigrams) from packed names more reliably.
 
-**Calibration.** Every E threshold ships empty. `scripts/entropy_calibrate.py`
+**Calibration.** `scripts/entropy_calibrate.py` measures the locked benign
+corpus at a 0.5% per-rule tail. Re-run it after a corpus change and update
+the `e001`/`e002`/`e003` table; do not guess a threshold.
 measures the E001/E002/E003 distributions on the locked benign corpus in the
 calibration CI job and prints conservative percentile floors; copying one
 into `config.toml` is the deliberate calibration decision, and the tool never

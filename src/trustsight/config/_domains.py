@@ -177,9 +177,33 @@ def load_hosts() -> dict:
     """Load host tables from hosts.toml (R047/R048/H041)."""
     return load_toml("hosts.toml", copy_result=False)
 
+def _merge_thresholds(default: dict, user: dict) -> dict:
+    """Overlay the user's thresholds on the shipped table.
+
+    A thresholds.toml written by an older release lacks every section added
+    since.  E001-E003 in particular would stay silently disabled forever on
+    an existing install even though the shipped release calibrated them.
+    The user's values win; only missing keys are filled from the shipped
+    table.  Set a permissive value (for example ``max_ratio = -1``) to
+    disable a calibrated rule instead of deleting its key.
+    """
+    merged = dict(default)
+    for key, value in (user or {}).items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _merge_thresholds(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
 def load_thresholds() -> dict:
-    """Load thresholds from thresholds.toml (H036/H073/H074)."""
-    return load_toml("thresholds.toml", copy_result=False)
+    """Load thresholds from thresholds.toml, filled from the shipped table."""
+    import tomllib
+
+    from ._default_config import DEFAULT_THRESHOLDS
+
+    user = load_toml("thresholds.toml", copy_result=False)
+    return _merge_thresholds(tomllib.loads(DEFAULT_THRESHOLDS), user)
 
 def load_iocs() -> dict:
     """Load the versioned indicator list from iocs.toml (H056)."""

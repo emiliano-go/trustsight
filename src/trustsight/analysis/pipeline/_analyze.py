@@ -370,6 +370,15 @@ def analyze_package(
     if revived:
         post_filter_findings.append(revived)
 
+    # T006/T007 need the retained git history, which only this producer has.
+    # The shared-pipeline refactor dropped these calls with the old body.
+    from ..temporal import t_metadata_git_divergence, t_packager_not_in_history
+
+    post_filter_findings.extend(t_metadata_git_divergence(
+        project, head_commit, upstream_mtime or 0, config))
+    post_filter_findings.extend(t_packager_not_in_history(
+        project, head_commit, new_maintainer, config))
+
     recent_commit_burst = False
     if head_commit:
         try:

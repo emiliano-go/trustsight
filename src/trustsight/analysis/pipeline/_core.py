@@ -228,6 +228,16 @@ def scan_recipe(scan: ScanInput, config: dict) -> ScanResult:
     if scan.delta_transform is not None:
         change_delta_obj = scan.delta_transform(change_delta_obj)
 
+    # T001/T002/T003 read the change-as-data.  They were dropped from the
+    # git path when the two producers were merged into this one, and never
+    # existed on the corpus path, so the live watcher emitted none of them.
+    from ..temporal import t_domain_findings, t_key_findings, t_key_rotation
+
+    change_data = change_delta_obj.to_dict()
+    triggered_rules.extend(t_key_findings(change_data, config))
+    triggered_rules.extend(t_key_rotation(change_data))
+    triggered_rules.extend(t_domain_findings(scan.maintainer, config))
+
     triggered_rules.extend(
         _structural_findings_from_request(ScanRequest(
             diff_text=clamp_text(diff_text),

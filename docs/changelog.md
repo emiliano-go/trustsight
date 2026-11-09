@@ -11,6 +11,8 @@
 
 ### Fixed
 
+- **The T-series temporal rules are wired again.** The shared-pipeline refactor dropped the calls to T001/T002/T003 and T006/T007, so the watcher emitted none of them even though every rule remained registered and unit-tested. The shared scan now emits the change-backed novelty and rotation rules, and the git path emits the metadata/git divergence and packager-history rules. A pipeline regression pins T001/T002/T003 in the resulting report.
+
 - **`Resolved commands` now contains commands only.** The inspect panel and the report carried every resolved added line under that heading, so a full recipe showed `pkgbase`, comments and function braces as commands. The resolved text is split with the same command-position definition the rule families use, and non-command text is reported separately as `resolved_recipe`. The report field is additive; existing consumers of `resolved_commands` now receive only executable lines.
 - **T008-T012 read the streams they were shipped with.** T010 matched `depends_added`-style keys that the dependency extractor never produces, so it stayed silent; it now reads the real `depends`, `makedepends` and `checkdepends` fields. T009's `min_dependents` floor read a dependency graph the cycle sweep never built; the sweep now builds the graph once and shares it with the graph rules. When a snapshot is refused and the cgit fallback exceeds the response cap too, the refusal is retained as `snapshot_refused` instead of escaping as a generic fetch failure. The history-replay fixtures use production-shaped dependency detail.
 

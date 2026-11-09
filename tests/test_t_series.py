@@ -243,3 +243,19 @@ def test_split_maintainer_keeps_the_display_name():
         "Caleb Maclennan", "caleb@alerque.com")
     assert split_maintainer("tippfehlr") == ("tippfehlr", "")
     assert split_maintainer("caleb@alerque.com") == ("", "caleb@alerque.com")
+
+
+def test_analysis_wires_t001_t002_and_t003(db):
+    """The shared pipeline must emit the T-series it reads from `change`."""
+    from trustsight import TrustSight
+
+    record_observed_key("KNOWNKEY")
+    record_observed_domain("known.example")
+    old = ("pkgname=demo\npkgver=1\npkgrel=1\n"
+           "validpgpkeys=('AAAA')\n")
+    new = ("pkgname=demo\npkgver=1\npkgrel=1\n"
+           "validpgpkeys=('BBBB')\n")
+    report = TrustSight().analyze_text(
+        "demo", new, old, maintainer="me@new.example")
+    ids = {row["rule_id"] for row in report.to_dict()["findings"]}
+    assert {"T001", "T002", "T003"} <= ids

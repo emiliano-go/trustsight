@@ -63,7 +63,7 @@ class RuleCategory(StrEnum):
     META = "meta"
     #: The E series. Distribution/entropy of the added content (the
     #: statistical twin of the X-series). Suspicion, never a verdict;
-    #: thresholds ship empty and are corpus-calibrated.
+    #: thresholds are calibrated from the locked benign corpus.
     ENTROPY = "entropy"
     # The G series. Cross-package correlation: joins
     #: over the set of recent analyses, run at cycle end, never per package.

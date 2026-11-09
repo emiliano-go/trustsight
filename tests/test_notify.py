@@ -780,3 +780,41 @@ def test_a_loose_feed_key_file_warns(monkeypatch, caplog, tmp_path):
     with caplog.at_level(logging.WARNING):
         notify._feed_key()
     assert "readable by group or others" in caplog.text
+
+
+def test_scan_payload_is_compact_and_chunked():
+    from trustsight.notify import scan_payloads
+
+    cycle = CycleResult()
+    cycle.started_at = "2026-11-10T00:00:00+00:00"
+    cycle.finished_at = "2026-11-10T00:01:00+00:00"
+    cycle.new_alerts = [("alpha", "H037")]
+    cycle.scans = [
+        {
+            "package": f"pkg{i}",
+            "status": "ok",
+            "score": 10,
+            "risk": "low",
+            "rules": [{"id": "H037", "severity": "MEDIUM"}],
+            "coverage_gaps": [],
+            "has_diff": True,
+        }
+        for i in range(501)
+    ]
+    cycle.scan_summary = {
+        "attempted": 501, "succeeded": 501, "fetch_failed": 0,
+        "not_vetted": 0, "vanished": 0, "reserved": 0, "with_diff": 501,
+    }
+    documents = scan_payloads(cycle)
+    assert len(documents) == 2
+    assert documents[0]["event"] == "trustsight.scans"
+    assert documents[0]["chunk_count"] == 2
+    assert documents[0]["summary"]["alerts"] == 1
+    assert all("diff" not in row and "findings" not in row
+               for row in documents[0]["scans"])
+
+
+def test_scan_payload_empty_cycle_is_not_published():
+    from trustsight.notify import scan_payloads
+
+    assert scan_payloads(CycleResult()) == []

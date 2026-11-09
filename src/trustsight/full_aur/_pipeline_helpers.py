@@ -811,3 +811,14 @@ class CycleResult:
     refused: bool = False
     # True when a stop signal interrupted the cycle; progress is saved.
     stopped: bool = False
+    # All-scan export: one compact record per attempted package and the
+    # cycle's own workload summary.  This is the denominator the feed
+    # dashboard uses; it never carries a diff or finding prose.
+    scans: list[dict] = field(default_factory=list)
+    scan_summary: dict = field(default_factory=dict)
+    started_at: str = ""
+    finished_at: str = ""
+    partial: bool = False
+    # Stable identity for the all-scan document; a retry of the same cycle
+    # must not create a second scan cycle in the feed.
+    cycle_id: str = ""

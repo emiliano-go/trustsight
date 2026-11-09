@@ -171,12 +171,17 @@ def run_watch(
                     _log(f"  {rule_id}  {package}")
             elif result.cluster_findings:
                 _log("No new alerts; every cluster this cycle was already reported")
-            from ..notify import maybe_heartbeat, maybe_notify
+            from ..notify import maybe_heartbeat, maybe_notify, maybe_publish_scans
 
             if maybe_notify(result, notify_url):
                 _log("  alert webhook delivered")
             elif maybe_heartbeat(result, notify_url):
                 _log("  heartbeat delivered")
+            try:
+                if maybe_publish_scans(result):
+                    _log("  all-scan feed delivered")
+            except Exception as scan_exc:  # noqa: BLE001 - never fail the loop
+                _log(f"  all-scan feed skipped: {scan_exc}")
             if auto_pull_baselines or auto_pull_iocs or auto_pull_watchlists:
                 from ..channels import auto_pull
 

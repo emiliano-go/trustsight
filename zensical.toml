@@ -100,6 +100,7 @@ Tutorial = [
 Guides = [
   {Overview = "guides/index.md"},
   {"Auditing Before Update" = "guides/auditing-before-update.md"},
+  {"Gating yay and paru" = "guides/gating-yay-paru.md"},
   {"Using in CI" = "guides/using-in-ci.md"},
   {"Acting on a Flag" = "guides/acting-on-a-flag.md"},
   {"Configuring Rules and Weights" = "guides/configuring-rules-and-weights.md"},

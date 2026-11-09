@@ -7,6 +7,7 @@
 ### Added
 
 - **T008-T012 report full-AUR history and cycle context.** {#full-aur-history-campaigns} T008 reports a payload appearing after an earlier maintainer transition, T009 a high-value dormant takeover, T010 dependencies redirected to newly added or adopted targets, T011 package reappearance after removal, and T012 an integrity/provenance erosion sequence followed by a payload. All five are INFO, weight 0 and anergic pending benign replay; none performs new network fetches or changes a score.
+- **`trustsight-gate` adds a per-package approval step to yay and paru.** The gate runs `trustsight inspect --allow-uninstalled --depth 1` for every target in the package manager's pre-build hook, prints the report, and asks for a yes/no per package. It is a hard gate: a refusal, an analysis failure, or an unavailable terminal aborts the whole transaction, because neither manager can drop one package at that stage and an AUR package may be a pulled dependency. Includes yay `AURPreInstall` and paru `PreBuildCommand` examples, an explicit `TRUSTSIGHT_GATE_DISABLE=1` bypass, and stable exit codes.
 
 ### Fixed
 

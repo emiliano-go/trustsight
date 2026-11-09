@@ -35,7 +35,13 @@ _IDENT_RE = re.compile(r"(?:^|[\s;&|(){}])([A-Za-z_][A-Za-z0-9_]{2,})\s*=")
 
 
 def _thresholds(config) -> dict:
-    return (config or {}).get("thresholds", {})
+    """Explicit caller thresholds, else the calibrated thresholds.toml."""
+    explicit = (config or {}).get("thresholds")
+    if explicit is not None:
+        return explicit
+    from ..config import load_thresholds
+
+    return load_thresholds()
 
 
 def added_text(diff_text: str) -> str:

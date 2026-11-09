@@ -6,10 +6,13 @@ locked benign corpus and prints suggested floors, using conservative
 percentiles (a floor chosen so the benign fire rate stays near the tail, not
 in the body):
 
-    e001.max_ratio   ~ p05 of compression ratios (low = repetitive)
-    e002.min_fraction ~ p99 of encoded-fraction (high = encoded-heavy)
-    e003.min_entropy / max_entropy ~ p01 / p99 of unigram entropy
-    e003.min_bigram / max_bigram    ~ p01 / p99 of bigram entropy
+    e001.max_ratio    ~ lower tail of compression ratios
+    e002.min_fraction ~ upper tail of encoded-fraction (encoded-heavy)
+    e003.min_entropy / max_entropy ~ two-sided unigram entropy band
+    e003.min_bigram / max_bigram    ~ two-sided bigram entropy band
+
+The default tail is 0.5% per rule, not 5%: these rules carry weight 15, so a
+p05 E001 would add 15 points to one in twenty benign diffs and move p95.
 
 Print only.  A threshold a human copies into `config.toml` is a deliberate
 calibration decision; the tool never rewrites the shipped defaults.
@@ -17,7 +20,7 @@ calibration decision; the tool never rewrites the shipped defaults.
 Usage:
 
     python scripts/entropy_calibrate.py [--corpus tests/fixtures/benign-corpus]
-        [--json entropy-thresholds.json]
+        [--tail 0.005] [--json entropy-thresholds.json]
 """
 
 import argparse
@@ -47,7 +50,7 @@ def _percentile(values: list[float], q: float) -> float:
     return ordered[index]
 
 
-def measure(corpus: Path) -> dict:
+def measure(corpus: Path, tail: float = 0.005) -> dict:
     ratios, fractions, entropies, bigrams = [], [], [], []
     for path in sorted(corpus.rglob("*.diff")):
         text = added_text(path.read_text(errors="replace"))
@@ -57,16 +60,18 @@ def measure(corpus: Path) -> dict:
         fractions.append(encoded_fraction(text, min_length=64))
         entropies.append(identifier_entropy(text))
         bigrams.append(identifier_bigram_entropy(text))
+    tail = min(max(float(tail), 0.0001), 0.5)
     return {
         "n": len(ratios),
+        "tail": tail,
         "suggested": {
-            "e001": {"max_ratio": round(_percentile(ratios, 0.05), 4)},
-            "e002": {"min_fraction": round(_percentile(fractions, 0.99), 4),
+            "e001": {"max_ratio": round(_percentile(ratios, tail), 4)},
+            "e002": {"min_fraction": round(_percentile(fractions, 1 - tail), 4),
                      "min_length": 64},
-            "e003": {"min_entropy": round(_percentile(entropies, 0.01), 4),
-                     "max_entropy": round(_percentile(entropies, 0.99), 4),
-                     "min_bigram": round(_percentile(bigrams, 0.01), 4),
-                     "max_bigram": round(_percentile(bigrams, 0.99), 4)},
+            "e003": {"min_entropy": round(_percentile(entropies, tail / 2), 4),
+                     "max_entropy": round(_percentile(entropies, 1 - tail / 2), 4),
+                     "min_bigram": round(_percentile(bigrams, tail / 2), 4),
+                     "max_bigram": round(_percentile(bigrams, 1 - tail / 2), 4)},
         },
     }
 
@@ -75,12 +80,14 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--corpus", type=Path,
                         default=FIXTURES / "benign-corpus")
+    parser.add_argument("--tail", type=float, default=0.005,
+                        help="per-rule benign tail (default 0.005 = 0.5%%)")
     parser.add_argument("--json", type=Path, default=None)
     args = parser.parse_args()
     if not args.corpus.exists():
         print(f"corpus not found: {args.corpus}", file=sys.stderr)
         return 1
-    result = measure(args.corpus)
+    result = measure(args.corpus, args.tail)
     print(f"measured {result['n']} diffs; suggested thresholds:")
     print(json.dumps(result["suggested"], indent=2))
     if args.json:

@@ -68,7 +68,7 @@ the selected policy too.
 
 | Profile | Default threshold | Intended use |
 |---------|-------------------|--------------|
-| `default` | `20` | Historical behavior; about 6.6% of locked benign-corpus diffs enter the review queue. |
+| `default` | `20` | Historical behavior; about 6.9% of locked benign-corpus diffs enter the review queue. |
 | `quiet` | `40` | Smaller queue; it does not claim the same labelled-fixture coverage as `default`. |
 | `strict` | `10` | Broader queue for operators who prefer sensitivity over review volume. |
 
@@ -487,9 +487,9 @@ own project's names from firing a scope-expansion rule.
 | `c033.min_deleted_comment_ratio` / `c033.min_deleted_comment_lines` | C033 | `0.50` / `8` | Fraction and absolute floor of a diff's pre-state comment prose deleted before C033 reports context bleed. Both are corpus-adjudicated and the rule ships anergic (weight 0). |
 | `tags.convergence_kinds` | `TAG_CONVERGENCE` | `4` | Distinct weight-0 tag kinds on one diff that emit the INFO convergence ledger entry. |
 | `tender.min_unresolved` / `tender.window_months` | tender point | `3` / `6` | Unresolved review verdicts in the window that turn the report header's tender point on. |
-| `e001.max_ratio` | E001 | *empty* | gzip ratio below which added lines read as repetitive/padded. Ships empty: silent until the calibration job or an operator sets it. |
-| `e002.min_fraction` / `e002.min_length` | E002 | *empty* / `64` | Fraction of added tokens that must be base64/base32/hex runs, and the run-length floor. |
-| `e003.min_entropy` / `e003.max_entropy` / `e003.min_bigram` / `e003.max_bigram` | E003 | *empty* | Unigram and bigram entropy band for newly assigned variable/function names; generated names sit low, packed names high. |
+| `e001.max_ratio` | E001 | `0.2302` | gzip ratio below which added lines read as repetitive/padded, from the 0.5% lower tail of the locked benign corpus. |
+| `e002.min_fraction` / `e002.min_length` | E002 | `0.8889` / `64` | Fraction of added tokens that must be base64/base32/hex runs, and the run-length floor, from the 0.5% upper tail. |
+| `e003.min_entropy` / `e003.max_entropy` / `e003.min_bigram` / `e003.max_bigram` | E003 | `0.0` / `4.9535` / `0.0` / `7.0039` | Unigram and bigram entropy band for newly assigned variable/function names, from the 0.5% two-sided tail. The lower bounds stay zero because most diffs assign no identifier. |
 | `g_host.min_packages` | G001 | `5` | Distinct packages that must add the same canonical host within the cycle window. |
 | `g_blob.min_length` / `g_blob.min_packages` | G002 | `256` / `2` | Length floor for a shared added literal and the number of unrelated packages that must carry it. |
 | `g_adopt.min_members` | G003 | `3` | Packages with a recorded adoption predicate one maintainer key must be joined to among a cycle's processed packages for a coordinated-adoption finding. |
@@ -505,10 +505,10 @@ number is expected) falls back to the shipped default instead of aborting a
 corpus cycle. Counts are clamped to at least one, and a never-negative window
 or length is clamped to zero.
 
-The E-series thresholds (`e001`/`e002`/`e003`) ship **empty** by design: the
-series is silent until a threshold is set from the first corpus measurement
-(`scripts/entropy_calibrate.py` prints conservative floors in the calibration
-CI job). The `g003`, `g008`, `g009`, `g010`, `g011`, `t006`, `t008` and
+The E-series thresholds (`e001`/`e002`/`e003`) are calibrated from the locked
+benign corpus at a 0.5% per-rule tail (`scripts/entropy_calibrate.py`). The
+chosen tail keeps benign p95 at 30; a p05 E001 would add 15 points to one in
+twenty benign diffs. The `g003`, `g008`, `g009`, `g010`, `g011`, `t006`, `t008` and
 `t009` tables ship in `thresholds.toml`. The older G keys (`g_host`, `g_blob`, `g_adopt`), the T
 keys (`t_key`, `t_dom`), `m002` and `cofire_pairs` are honoured if you add them,
 with the code defaults in the table above.

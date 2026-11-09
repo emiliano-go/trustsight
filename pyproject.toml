@@ -75,6 +75,7 @@ Changelog = "https://docs.trustsight.org/changelog/"
 
 [project.scripts]
 trustsight = "trustsight.cli:entrypoint"
+trustsight-gate = "trustsight.gate:entrypoint"
 
 [build-system]
 requires = ["hatchling"]

@@ -525,8 +525,8 @@ HIGH. The shipped file is empty, and a miss is uninformative.
 
 ## Environment variables
 
-TrustSight reads sixteen environment variables. Everything else that changes
-behaviour is a config key or a command flag.
+TrustSight reads the environment variables below. Everything else that
+changes behaviour is a config key or a command flag.
 
 | Variable | Values | Effect |
 |----------|--------|--------|
@@ -537,6 +537,10 @@ behaviour is a config key or a command flag.
 | `FORCE_COLOR` | Any non-empty value | Forces Rich output even when stdout is not a terminal. |
 | `TRUSTSIGHT_FORCE_RICH` | Any non-empty value | The same as `FORCE_COLOR`, for callers that already use `FORCE_COLOR` for something else. |
 | `TRUSTSIGHT_DOC_CACHE` | A directory path | Overrides where the parsed-document cache stores its JSON entries. Default: `$XDG_CACHE_HOME/trustsight/documents`. |
+| `TRUSTSIGHT_BIN` | A path | The `trustsight` executable `trustsight-gate` runs. Default: `trustsight` on `PATH`, else the running interpreter's `-m trustsight` module. |
+| `TRUSTSIGHT_GATE_DISABLE` | `1` | Skip the `trustsight-gate` approval step. It logs that it did; the bypass is for emergencies, not routine use. |
+| `TRUSTSIGHT_GATE_BIN` | A path | The `trustsight-gate` executable the yay `init.lua` hook runs. Default: `trustsight-gate` on `PATH`. |
+| `TRUSTSIGHT_GATE_DEPTH` | An integer | AUR dependency levels the yay hook asks the gate to inspect. Default: `1`. |
 | `XDG_CACHE_HOME` | A directory path | Base for the document cache when `TRUSTSIGHT_DOC_CACHE` is unset. |
 | `TRUSTSIGHT_SQLITE_SYNCHRONOUS` | `OFF`, `NORMAL`, `FULL`, `EXTRA` (case-insensitive); an unknown value falls back to `NORMAL` | SQLite commit durability. `NORMAL` (the default) keeps WAL's crash-safety without an fsync per commit; `FULL` is the old behaviour. |
 | `TRUSTSIGHT_SQLITE_BUSY_TIMEOUT` | A non-negative integer of milliseconds; an invalid value falls back to `30000` | How long a connection waits for a locked database before erroring. `30000` (the default) lets a `seed fetch` and a corpus cycle overlap without a spurious "database is locked"; raise it if a single cycle writes for longer. |

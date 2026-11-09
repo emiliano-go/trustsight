@@ -293,3 +293,72 @@ def test_main_disable_bypass_is_visible(monkeypatch):
     out = io.StringIO()
     assert gate.main(["--yes", "demo"], out=out) == gate.EXIT_APPROVED
     assert "disabled" in out.getvalue()
+
+
+def test_render_sanitizes_untrusted_report_text():
+    """The gate prints package-controlled evidence to a terminal."""
+    out = io.StringIO()
+    body = {
+        "package": "demo\033[31mRED",
+        "verdict": "safe\033]0;forged\007",
+        "findings": [{
+            "rule_id": "R001",
+            "severity": "HIGH",
+            "description": "payload\033[2Jwiped",
+            "file": "PKGBUILD",
+            "line": 1,
+        }],
+        "coverage_gaps": ["gap\033[0m"],
+    }
+    gate.render(gate.summarize(body), out)
+    text = out.getvalue()
+    assert "\033" not in text and "\007" not in text
+    assert "RED" in text and "payload" in text
+
+
+def test_run_gate_sanitizes_the_approval_prompt():
+    prompts: list[str] = []
+
+    def answer(prompt):
+        prompts.append(prompt)
+        return "y"
+
+    code = gate.run_gate(
+        ["demo\033[31m"], inspect=lambda name: _body(package=name),
+        answer=answer, out=io.StringIO(),
+    )
+    assert code == gate.EXIT_APPROVED
+    assert "\033" not in prompts[0]
+    assert "demo" in prompts[0]
+
+
+def test_run_inspect_falls_back_to_lint_for_a_local_package(tmp_path):
+    (tmp_path / "PKGBUILD").write_text("pkgname=local\npkgver=1\n")
+    calls: list[list[str]] = []
+
+    def runner(argv, **kwargs):
+        calls.append(argv)
+        if "inspect" in argv:
+            return subprocess.CompletedProcess(
+                argv, 0,
+                json.dumps({"error": "Package 'local' not found in the AUR."}),
+                "",
+            )
+        return subprocess.CompletedProcess(
+            argv, 0,
+            json.dumps({
+                "rules": [{
+                    "rule_id": "H001",
+                    "severity": "HIGH",
+                    "message": "checksum disabled",
+                }],
+            }),
+            "",
+        )
+
+    body = gate.run_inspect(
+        "local", full_recipe=False, directory=str(tmp_path), runner=runner,
+    )
+    assert body["verdict"] == "local recipe (no diff)"
+    assert body["findings"][0]["description"] == "checksum disabled"
+    assert calls[1][1:3] == ["lint", "--json"]

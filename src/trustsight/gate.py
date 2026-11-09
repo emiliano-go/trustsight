@@ -33,6 +33,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, TextIO
 
+from .safe_text import clean
 from .subproc import minimal_env
 
 EXIT_APPROVED = 0
@@ -185,32 +186,38 @@ def _version_line(summary: Summary) -> str:
 
 
 def render(summary: Summary, out: TextIO) -> None:
-    """Write the short report a human approves from."""
-    print(f":: TrustSight gate: {summary.package}", file=out)
+    """Write the short report a human approves from.
+
+    Every value here came from the inspected package or from the analysis of
+    it, so it is untrusted text at a terminal boundary.  Clean it once, here,
+    rather than trusting the child's JSON to be inert.
+    """
+    print(f":: TrustSight gate: {clean(summary.package)}", file=out)
     version = _version_line(summary)
     if version:
-        print(f"   version: {version}", file=out)
+        print(f"   version: {clean(version)}", file=out)
     facts = []
     if summary.verdict:
-        facts.append(f"verdict: {summary.verdict}")
+        facts.append(f"verdict: {clean(summary.verdict)}")
     if summary.risk:
-        facts.append(f"risk: {summary.risk}")
+        facts.append(f"risk: {clean(summary.risk)}")
     if summary.score is not None:
         facts.append(f"score: {summary.score}")
     if facts:
         print("   " + "   ".join(facts), file=out)
     for finding in summary.findings:
-        rule = _as_text(finding.get("rule_id"), "?")
-        severity = _as_text(finding.get("severity"), "")
-        description = _as_text(finding.get("description"), "")
-        where = _as_text(finding.get("file"), "")
+        rule = clean(_as_text(finding.get("rule_id"), "?"))
+        severity = clean(_as_text(finding.get("severity"), ""))
+        description = clean(_as_text(finding.get("description"), ""))
+        where = clean(_as_text(finding.get("file"), ""))
         line = _as_int(finding.get("line"))
         location = f" [{where}:{line}]" if where and line else ""
         label = f"{rule} ({severity})" if severity else rule
         print(f"   - {label}: {description}{location}", file=out)
     if summary.coverage_gaps:
-        shown = ", ".join(summary.coverage_gaps[:4])
-        extra = len(summary.coverage_gaps) - 4
+        gaps = [clean(gap) for gap in summary.coverage_gaps]
+        shown = ", ".join(gaps[:4])
+        extra = len(gaps) - 4
         suffix = f" (+{extra} more)" if extra > 0 else ""
         print(f"   coverage gaps: {shown}{suffix}", file=out)
 
@@ -279,12 +286,63 @@ def _child_env() -> dict[str, str]:
     return env
 
 
+def _lint_body(
+    package: str,
+    directory: str,
+    *,
+    timeout: int = DEFAULT_TIMEOUT,
+    runner: Callable[..., subprocess.CompletedProcess] = subprocess.run,
+) -> dict:
+    """Turn ``trustsight lint --json`` into the gate's summary shape."""
+    path = Path(directory) / "PKGBUILD"
+    if not path.is_file():
+        raise GateError(f"no local PKGBUILD for {package} in {directory}")
+    argv = [_trustsight_binary() or "trustsight", "lint", "--json", str(path)]
+    try:
+        result = runner(
+            argv, capture_output=True, text=True,
+            timeout=max(1, int(timeout)), check=False,
+            env=_child_env(),
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise GateError(f"could not lint {path}: {exc}") from exc
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip().split("\n")
+        reason = detail[-1] if detail else f"exit {result.returncode}"
+        raise GateError(f"lint of {path} failed: {reason}")
+    try:
+        doc = json.loads(result.stdout)
+    except (TypeError, ValueError) as exc:
+        raise GateError(f"lint of {path} returned invalid JSON") from exc
+    if not isinstance(doc, dict):
+        raise GateError(f"lint of {path} returned a non-object body")
+    rules = doc.get("rules")
+    findings = []
+    for row in (rules if isinstance(rules, list) else ()):
+        if not isinstance(row, dict):
+            continue
+        findings.append({
+            "rule_id": _as_text(row.get("rule_id"), "?"),
+            "severity": _as_text(row.get("severity"), ""),
+            "description": _as_text(row.get("message"), ""),
+            "file": path.name,
+            "line": _as_int(row.get("line")),
+        })
+    return {
+        "package": package,
+        "verdict": "local recipe (no diff)",
+        "findings": findings,
+        "coverage_gaps": [],
+    }
+
+
 def run_inspect(
     package: str,
     *,
     depth: int = DEFAULT_DEPTH,
     timeout: int = DEFAULT_TIMEOUT,
     full_recipe: bool | None = None,
+    directory: str = "",
     runner: Callable[..., subprocess.CompletedProcess] = subprocess.run,
 ) -> dict:
     """Run one inspection and return its parsed JSON body, or raise GateError."""
@@ -308,13 +366,20 @@ def run_inspect(
     if result.returncode != 0:
         detail = (result.stderr or result.stdout or "").strip().split("\n")
         reason = detail[-1] if detail else f"exit {result.returncode}"
+        if directory and "not found in the AUR" in reason:
+            return _lint_body(
+                package, directory, timeout=timeout, runner=runner)
         raise GateError(f"inspection of {package} failed: {reason}")
     try:
         body = json.loads(result.stdout)
     except (TypeError, ValueError) as exc:
         raise GateError(f"inspection of {package} returned invalid JSON") from exc
     if isinstance(body, dict) and body.get("error"):
-        raise GateError(f"inspection of {package} failed: {body['error']}")
+        reason = str(body["error"])
+        if directory and "not found in the AUR" in reason:
+            return _lint_body(
+                package, directory, timeout=timeout, runner=runner)
+        raise GateError(f"inspection of {package} failed: {reason}")
     return body
 
 
@@ -356,12 +421,12 @@ def run_gate(
             return EXIT_ERROR
         render(summary, out)
         if approve_all:
-            print(f"   approved (--yes): {package}", file=out)
+            print(f"   approved (--yes): {clean(package)}", file=out)
             continue
         if refuse_all:
-            print(f"trustsight-gate: refused (--no): {package}", file=out)
+            print(f"trustsight-gate: refused (--no): {clean(package)}", file=out)
             return EXIT_REFUSED
-        reply = answer(f"Continue with {package}? [y/N] ")
+        reply = answer(f"Continue with {clean(package)}? [y/N] ")
         if reply is None:
             print(
                 "trustsight-gate: no terminal for approval; aborting "
@@ -370,7 +435,7 @@ def run_gate(
             )
             return EXIT_NONINTERACTIVE
         if not _approved(reply):
-            print(f"trustsight-gate: refused: {package}", file=out)
+            print(f"trustsight-gate: refused: {clean(package)}", file=out)
             return EXIT_REFUSED
     return EXIT_APPROVED
 
@@ -430,7 +495,7 @@ def main(argv: list[str] | None = None, *, out: TextIO = sys.stderr) -> int:
     def inspect(package: str) -> dict:
         return run_inspect(
             package, depth=args.depth, timeout=args.timeout,
-            full_recipe=args.full_recipe,
+            full_recipe=args.full_recipe, directory=args.dir,
         )
 
     return run_gate(

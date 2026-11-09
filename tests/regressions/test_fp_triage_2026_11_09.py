@@ -7,7 +7,6 @@ Each case pins the benign shape and the true-positive twin the fix keeps.
 
 from __future__ import annotations
 
-import copy
 import sys
 from pathlib import Path
 

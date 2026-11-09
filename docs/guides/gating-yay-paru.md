@@ -5,6 +5,10 @@
 `trustsight inspect` is a report; `trustsight-gate` is the policy wrapper that
 turns it into an approval step inside yay and paru.
 
+The hooks require a TrustSight build that provides the `trustsight-gate`
+console script. Verify it with `command -v trustsight-gate`; an older package
+that only ships `trustsight` will abort the hook with "command not found".
+
 Both package managers expose a per-package-base hook that runs **after the AUR
 PKGBUILD is checked out and before sources are downloaded or built**:
 
@@ -107,9 +111,14 @@ Environment: `TRUSTSIGHT_BIN` overrides the `trustsight` executable,
 
 ## Limits
 
-- Only AUR PKGBUILDs pass through these hooks; repository packages do not.
+- yay's hook is AUR-only. paru also runs `PreBuildCommand` for PKGBUILD
+  repositories and local `-B` builds; when the package is not in the AUR the
+  gate falls back to `trustsight lint` on the checked-out PKGBUILD, so a local
+  build is still stopped on recipe findings but is not diff-analysed.
 - The gate inspects the recipe and its AUR dependency graph. It does not see
   downloaded source tarballs unless you enable the yay `AURPostDownload` check.
+  A local paru build uses `trustsight lint`, which reports recipe hygiene
+  findings but has no diff and no score.
 - The hook is a user-controlled guard against AUR content, not an enforcement
   boundary against a local root user who can edit the hook or set the bypass.
 - Approvals are not cached: a package is asked about on every transaction.

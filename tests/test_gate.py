@@ -200,7 +200,10 @@ def test_run_gate_yes_never_reads_the_terminal():
 
 def test_run_inspect_parses_the_body():
     def runner(argv, **kwargs):
-        assert argv[1] == "inspect"
+        # The binary may be `trustsight` on PATH or the `-m trustsight` module
+        # fallback; both put the subcommand after it.
+        assert "inspect" in argv
+        assert argv[argv.index("inspect") + 1] == "demo"
         return subprocess.CompletedProcess(argv, 0, json.dumps(_body()), "")
 
     body = gate.run_inspect("demo", full_recipe=False, runner=runner)

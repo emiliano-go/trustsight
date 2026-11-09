@@ -456,6 +456,24 @@ def gate_terminal_output_is_inert() -> Gate:
             sys.stderr = saved
         return buffer.getvalue()
 
+    def gate_report() -> str:
+        """The yay/paru approval gate prints inspected evidence to a terminal."""
+        from trustsight import gate as gate_mod
+
+        out = io.StringIO()
+        gate_mod.render(gate_mod.summarize({
+            "package": HOSTILE,
+            "verdict": HOSTILE,
+            "risk": HOSTILE,
+            "score": 40,
+            "findings": [{
+                "rule_id": HOSTILE, "severity": HOSTILE,
+                "description": HOSTILE, "file": HOSTILE, "line": 1,
+            }],
+            "coverage_gaps": [HOSTILE],
+        }), out)
+        return out.getvalue()
+
     def ioc_plain() -> str:
         """The plain IOC table is a separate renderer from the Rich table."""
         from trustsight.cli.ioc import ioc_list
@@ -500,6 +518,7 @@ def gate_terminal_output_is_inert() -> Gate:
         "corpus sweep log": corpus_log,
         "stderr log handler": stderr_log,
         "ioc plain": ioc_plain,
+        "gate report": gate_report,
     }
 
     problems = []

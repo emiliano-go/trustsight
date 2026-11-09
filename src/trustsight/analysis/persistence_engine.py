@@ -28,8 +28,10 @@ from .build import (
     _HOOK_ADMIN_RE,
     _HOOK_EXEC_RE,
     _INSTALL_HOOKS,
+    _EXECUTES_QUOTED_RE,
     _added_line_number,
     _network_fetch_url,
+    _quote_span_at,
     _sudo_escalates,
 )
 from .delivery import (
@@ -287,6 +289,12 @@ def emit_install_hook(ctx: GraphContext, add: Callable) -> None:
                 position=ctx.scopes.direct(i), body=body.strip()[:80])
             break
         if _HOOK_ADMIN_RE.search(body):
+            admin = _HOOK_ADMIN_RE.search(body)
+            # A service-enable command inside quoted notice text is an
+            # instruction to the user, not privileged setup the hook runs.
+            if (_quote_span_at(body, admin.start()) is not None
+                    and not _EXECUTES_QUOTED_RE.search(body)):
+                continue
             # Privileged setup (service enable, account change, sudoers, setuid
             # bit): reported, but MEDIUM - it is the ordinary shape of a
             # legitimate hook, not fetch-or-execute.

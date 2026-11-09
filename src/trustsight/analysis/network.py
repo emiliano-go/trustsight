@@ -298,7 +298,12 @@ def _moved_git_ref_findings(diff_text, config, add, current_text=None) -> None:
 # H071 - covert egress
 # ---------------------------------------------------------------------------
 
-_ONION_HOST_RE = re.compile(r"\b[a-z0-9-]+\.(?:onion|i2p)\b", re.IGNORECASE)
+#: A covert-egress host is a hostname whose final label is ``.onion`` or
+#: ``.i2p``.  The negative lookahead stops a clearnet domain that merely
+#: contains ``.i2p`` as an inner label (``files.i2p.net``, the I2P project's
+#: own download mirror) from reading as an anonymised endpoint.
+_ONION_HOST_RE = re.compile(
+    r"\b[a-z0-9-]+\.(?:onion|i2p)(?![a-z0-9.-])", re.IGNORECASE)
 _DOH_QUERY_RE = re.compile(r"https?://[^\s'\"\)]*dns-query", re.IGNORECASE)
 # DNS hostnames are at most 253 characters; bounding this avoids unbounded
 # backtracking when a URL-like prefix has no path separator.

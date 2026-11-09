@@ -127,6 +127,17 @@ def _notify_diff(old_text: str, new_text: str) -> dict:
 
 _ROUTINE_SCALAR_RE = re.compile(
     r"^\s*(?:pkgver|pkgrel|epoch)\s*=[^\n]*$", re.IGNORECASE)
+# Metadata-only edits carry no build, source, dependency or command change:
+# a DESCRIPTION rewrite, a SPDX license-identifier normalisation
+# (``GPL3`` -> ``GPL-3.0-only``) and a comment are inert at build time.
+# H058 is an activity-volume rule, so a batch that only rewrites these is
+# maintenance, not the xz-style surge it exists for.  Multi-line license
+# entries stay non-routine (fail closed); the assignment line and any
+# single-line array are covered.
+_ROUTINE_META_RE = re.compile(
+    r"^\s*(?:pkgdesc|license|license_[A-Za-z0-9_]*)\s*=[^\n]*$",
+    re.IGNORECASE)
+_ROUTINE_COMMENT_RE = re.compile(r"^\s*#")
 _ROUTINE_SUMS_LINE_RE = re.compile(
     r"^\s*(?:sha(?:1|224|256|384|512)sums|b2sums|md5sums|ck)"
     r"(?:_[A-Za-z0-9_]+)?\s*=\s*\(\s*['\"]?[0-9a-fA-F]{32,128}['\"]?\s*\)?\s*$")
@@ -135,11 +146,13 @@ _ROUTINE_SUM_ENTRY_RE = re.compile(
 
 
 def _is_routine_bump(old_text: str, new_text: str) -> bool:
-    """True when the recipe changed only version scalars and checksums.
+    """True when the recipe changed only version, checksum or metadata lines.
 
     H058 measures a maintainer's activity volume.  A batch of routine
-    version bumps is maintenance, not the xz-style surge the rule exists for,
-    so the batch can stand down when every member is routine.  The test is
+    version bumps, checksum refreshes or metadata-only rewrites (pkgdesc,
+    SPDX license normalisation, comments) is maintenance, not the xz-style
+    surge the rule exists for, so the batch can stand down when every member
+    is routine.  The test is
     deliberately fail-closed: any source, dependency, install, function or
     URL change, any removed checksum, and any change that cannot be classed
     keeps the finding.
@@ -167,7 +180,10 @@ def _is_routine_bump(old_text: str, new_text: str) -> bool:
         if not body.strip():
             continue
         changed = True
-        if _ROUTINE_SCALAR_RE.match(body) or _ROUTINE_SUMS_LINE_RE.match(body):
+        if (_ROUTINE_SCALAR_RE.match(body)
+                or _ROUTINE_META_RE.match(body)
+                or _ROUTINE_COMMENT_RE.match(body)
+                or _ROUTINE_SUMS_LINE_RE.match(body)):
             continue
         if _ROUTINE_SUM_ENTRY_RE.match(body):
             if marker == "+":

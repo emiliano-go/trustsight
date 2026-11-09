@@ -879,5 +879,5 @@ def test_maintainer_activity_history(db):
          "maintainer": "n", "last_modified": NOW},
     ])
     history = maintainer_activity_history()
-    assert {"maintainer": "m", "cycle_time": 1, "activity": 2} in history
-    assert {"maintainer": "n", "cycle_time": 1, "activity": 1} in history
+    assert {"maintainer": "m", "cycle_time": 1, "activity": 1} in history
+    assert all(row["maintainer"] != "n" for row in history)

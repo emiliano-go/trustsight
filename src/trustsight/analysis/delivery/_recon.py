@@ -20,6 +20,16 @@ from ._common import _SCOPE_FUNCTIONS, _find_line, _heredoc_body_indices
 
 __all__ = ['_anti_analysis_findings', '_anti_analysis_probes']
 
+#: A CI/automation environment probe is routine build configuration on its
+#: own (select a flag, skip a test); it is the evasion shape only when the
+#: same line also carries the payload it is gating.
+_CI_ENV_RE = re.compile(
+    r"\$\{?(?:CI|GITHUB_ACTIONS|GITLAB_CI|TRAVIS|JENKINS_URL|BUILD_ID"
+    r"|BUILD_NUMBER|CIRCLECI|TF_BUILD|CONTAINER)\}?")
+_EVASION_PAYLOAD_RE = re.compile(
+    r"https?://|\b(?:curl|wget|bash|sh|python[0-9.]*|perl|ruby|node"
+    r"|eval|exec|source|nc|ncat|socat|base64|exit|return)\b|/dev/tcp")
+
 def _anti_analysis_probes(config=None) -> list[re.Pattern]:
     """Compile the H067 anti-analysis probe fragments from patterns.toml."""
     return compile_configured_patterns(
@@ -52,6 +62,11 @@ def _anti_analysis_findings(diff_text, config, add, current_text=None) -> None:
         for probe in probes:
             m = probe.search(body)
             if m:
+                # A bare CI guard is build configuration, not evasion.  Only
+                # keep it when the guarded line also fetches or executes.
+                if (_CI_ENV_RE.fullmatch(m.group(0))
+                        and not _EVASION_PAYLOAD_RE.search(body)):
+                    continue
                 add("H067", "Anti-Analysis Check", "HIGH", "anti_analysis",
                     f"{enclosing[i]}() probes its environment: {body.strip()[:80]}",
                     line=_find_line(diff_text, m.group(0)),

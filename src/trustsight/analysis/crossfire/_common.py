@@ -219,6 +219,8 @@ def _command_words(body: str, resolvable: frozenset[str] = frozenset(),
     spelling choice rather than an evasion.
     """
     for word, _tail in _command_starts(body, recurse=False):
+        if _TRUSTED_PKG_VAR_RE.match(word):
+            continue
         bare = _PLAIN_VAR_RE.match(word)
         if bare and bare.group(1) in resolvable:
             continue
@@ -237,8 +239,15 @@ _ARRAY_VAR_RE = re.compile(
 
 _PATH_LOOKUP_ASSIGN_RE = re.compile(
     r"^\s*([A-Za-z_][A-Za-z0-9_]*)=[\"']?\$\(\s*"
-    r"(?:which|type\s+-p|command\s+-v)\s+[A-Za-z0-9_.+-]+\s*\)",
+    r"(?:which|type\s+-p|command\s+-v)\s+[A-Za-z0-9_.+-]+[^)]*\)",
 )
+
+#: Makepkg's own identity/path scalars.  A command word built from one of
+#: these (``"${pkgname%-bin}.js"``) names a file the package itself ships, not
+#: an executable assembled to hide what runs, so it is a spelling choice.
+_TRUSTED_PKG_VAR_RE = re.compile(
+    r"^[\"']?\$\{?(?:pkgname|pkgbase|pkgver|pkgrel|epoch|srcdir|pkgdir"
+    r"|startdir|CARCH|CHOST)\b")
 
 def _matched_names(lines: list[str], pattern: re.Pattern) -> set[str]:
     """Names captured by *pattern* on any of *lines*."""

@@ -185,6 +185,7 @@ def maintainer_activity_history() -> list[dict]:
             """SELECT maintainer, cycle_time, COUNT(*) AS activity
                FROM cycle_events
                WHERE maintainer != ''
+                 AND status NOT IN ('added', 'removed')
                GROUP BY maintainer, cycle_time
                ORDER BY cycle_time ASC, maintainer ASC"""
         ).fetchall()

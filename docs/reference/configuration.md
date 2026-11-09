@@ -470,7 +470,7 @@ own project's names from firing a scope-expansion rule.
 | `h052.min_packages` | H052 | `3` | Unrelated packages that must share a source repository. |
 | `h055.min_packages` / `h055.window_hours` | H055 | `5` / `24` | Cluster size and window for an attribute burst. |
 | `h057.min_hops` / `h060.min_hops` | H057, H060 | `2` | Hops that make an exposure transitive rather than direct, keeping both out of H046's lane. |
-| `h058.min_history_cycles` / `h058.z_score` / `h058.min_activity` | H058 | `3` / `2.0` / `3` | Baseline length, deviation and floor for maintainer activity. |
+| `h058.min_history_cycles` / `h058.z_score` / `h058.min_activity` / `h058.min_surge` | H058 | `4` / `3.0` / `3` / `6` | Baseline length, deviation, per-run floor and absolute batch floor for maintainer activity. |
 | `h061.min_dependents` | H061 | `50` | Dependents that make a package a hub. |
 | `h073.min_history_cycles` / `h073.z_score` / `h073.min_introduced` | H073 | `3` / `3.0` / `3` | Baseline length, deviation and floor for the corpus introduction rate. |
 | `h064.widely_provided_observations` | H064 | `25` | Observations that make a provided name widely provided. |

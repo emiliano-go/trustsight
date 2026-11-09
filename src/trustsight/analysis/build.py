@@ -201,6 +201,33 @@ _SERVICE_ENABLE_RE = re.compile(
     re.IGNORECASE,
 )
 
+#: A quoted service command is *executed* only when the line evaluates it.
+_EXECUTES_QUOTED_RE = re.compile(
+    r"\beval\b|\bsource\b"
+    r"|\b(?:ba|z|k|da)?sh\b[^|;&]*\s-c\b"
+    r"|\b(?:python[0-9.]*|perl|ruby|node)\b[^|;&]*\s-[ce]\b"
+    r"|\$\(|`|\|\s*(?:sudo\s+)?\S*(?:ba|z|da|k|)sh\b",
+    re.IGNORECASE,
+)
+
+
+def _quote_span_at(text: str, pos: int) -> str | None:
+    """The quote character still open at ``pos``, or None when unquoted."""
+    quote = None
+    i = 0
+    while i < pos:
+        ch = text[i]
+        if quote == '"' and ch == "\\":
+            i += 2
+            continue
+        if quote is None:
+            if ch in ('"', "'"):
+                quote = ch
+        elif ch == quote:
+            quote = None
+        i += 1
+    return quote
+
 
 _REGISTRY_INSTALL_RE = re.compile(
     r"\b(?:npm|pnpm|yarn|bun)\s+(?:install|add|ci|exec)\b"
@@ -238,10 +265,17 @@ def _service_enable_findings(ctx, add) -> None:
             if not re.search(r"\$\(|`|\|\s*(?:sudo\s+)?(?:ba|z|da|k|)sh\b", body):
                 continue
             body = _blank_quoted(body)
-        if _SERVICE_ENABLE_RE.search(body):
-            add("H108", "Service Or Cron Enable Command", "HIGH", "persistence",
-                f"{scope}() enables a service or cron job: {body.strip()[:90]}",
-                position=scope, body=body.strip()[:90])
+        match = _SERVICE_ENABLE_RE.search(body)
+        if match is None:
+            continue
+        # A notice function (`note "… 'systemctl enable …' …"`) prints the
+        # service command as instructions.  Quoted text is data unless the
+        # same line evaluates it (`bash -c`, `eval`, `$(…)`, a pipe).
+        if _quote_span_at(body, match.start()) is not None and not _EXECUTES_QUOTED_RE.search(body):
+            continue
+        add("H108", "Service Or Cron Enable Command", "HIGH", "persistence",
+            f"{scope}() enables a service or cron job: {body.strip()[:90]}",
+            position=scope, body=body.strip()[:90])
 
 def _registry_override_findings(ctx, add) -> None:
     """H106: build/install code redirects a package manager's registry."""

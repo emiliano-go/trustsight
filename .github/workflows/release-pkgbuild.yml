@@ -81,7 +81,7 @@ jobs:
     needs: classify
     if: needs.classify.outputs.is_software_release == 'true'
     runs-on: ubuntu-latest
-    container: archlinux:latest@sha256:e82623936fa1a69700b48e98b058df6eaab18b737c27473a7234a40fdecb9413
+    container: archlinux:latest@sha256:b1c2fe6e717bfd5673af8fc217e1e1c3ce0dcbb1d53c3414c8425e7ce79fc6d9
     steps:
       # git is required so that actions/checkout performs a real checkout:
       # the container's fallback downloads the source archive, which honours

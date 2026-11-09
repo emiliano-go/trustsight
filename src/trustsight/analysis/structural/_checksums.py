@@ -15,7 +15,7 @@ from ...rules import find_line_in_diff
 from ...diffdoc import parse_diff_lines
 from ...tokenizer import split_lines
 
-__all__ = ['_CHECKSUM_ADDED_RE', '_CHECKSUM_ARRAY_NAMES', '_CHECKSUM_EMPTIED_RE', '_CHECKSUM_REMOVED_LINE_RE', '_CHECKSUM_SKIP_RE', '_CHECKSUM_STRENGTH', '_FETCH_IN_PACKAGE_RE', '_HARDENING_OPTIONS', '_INTERPRETER_FETCH_RE', '_SCHEME_MARKERS', '_family_values', '_first_insertion_index', '_ip_literal_hosts', '_is_checksum_array', '_is_subsequence', '_line_has_scheme', '_package_fetch_client', '_removed_declarations', '_require_content_change', '_skip_positions', '_url_host', '_userinfo_urls', 'addendum4_findings', 'array_order_changes', 'isolated_checksum_insertion', 'recipe_checksum_parity_finding', 'substantive_change_outside_checksums']
+__all__ = ['_CHECKSUM_ADDED_RE', '_CHECKSUM_ARRAY_NAMES', '_CHECKSUM_EMPTIED_RE', '_CHECKSUM_REMOVED_LINE_RE', '_CHECKSUM_SKIP_RE', '_CHECKSUM_STRENGTH', '_FETCH_IN_PACKAGE_RE', '_HARDENING_OPTIONS', '_INTERPRETER_FETCH_RE', '_SCHEME_MARKERS', '_family_values', '_first_insertion_index', '_ip_literal_hosts', '_is_checksum_array', '_is_subsequence', '_line_has_scheme', '_package_fetch_client', '_removed_declarations', '_require_content_change', '_skip_positions', '_url_host', '_userinfo_urls', 'addendum4_findings', 'array_order_changes', 'isolated_checksum_insertion', 'only_local_checksums_changed', 'recipe_checksum_parity_finding', 'substantive_change_outside_checksums']
 
 _CHECKSUM_SKIP_RE = re.compile(
     r"sha256sums\s*=\s*\(?\s*[\'\"]?(?:SKIP|NONE)"
@@ -237,6 +237,62 @@ def _array_opener_name(content: str) -> str | None:
     while i < n and s[i].isspace():
         i += 1
     return name if i < n and s[i] == "(" else None
+
+_HEX_CHECKSUM_VALUE_RE = re.compile(r"[0-9a-fA-F]{32,128}")
+
+
+def only_local_checksums_changed(diff_text: str, current_text: str | None) -> bool:
+    """True when every changed checksum backs a committed (non-URL) source.
+
+    C001's silent-swap shape is a *remote* artifact blessed again at the same
+    version.  A checksum that changed for a file committed beside the recipe
+    (a locally maintained ``.patch``) is the maintainer editing that file,
+    and the recipe diff shows it; demote to C002 instead of claiming a remote
+    swap.  Returns False whenever a changed hash backs a URL source so a real
+    remote rotation keeps the HIGH fire.
+    """
+    if not current_text:
+        return False
+    try:
+        doc = parse_diff_lines(split_lines(diff_text))
+    except Exception:  # noqa: BLE001 - an unparsable diff must not demote
+        return False
+    changed = set()
+    for line in doc.lines:
+        if line.side != "add" or line.raw.startswith("+++"):
+            continue
+        for match in _HEX_CHECKSUM_VALUE_RE.finditer(line.content):
+            changed.add(match.group(0).lower())
+    if not changed:
+        return False
+    from ...recipedoc import parse_recipe
+
+    try:
+        arrays = parse_recipe(current_text, file="PKGBUILD").arrays
+    except Exception:  # noqa: BLE001 - an unparsable recipe must not demote
+        return False
+    saw_local = saw_remote = False
+    for name, values in arrays.items():
+        if not _is_checksum_array(name):
+            continue
+        base, _, suffix = name.partition("_")
+        source_name = "source" + (f"_{suffix}" if suffix else "")
+        sources = arrays.get(source_name)
+        if sources is None:
+            sources = arrays.get("source", ())
+        for index, value in enumerate(values):
+            if str(value).lower() not in changed:
+                continue
+            source = sources[index] if index < len(sources) else None
+            if not source:
+                return False
+            target = source.split("::", 1)[-1]
+            if "://" in target:
+                saw_remote = True
+            else:
+                saw_local = True
+    return saw_local and not saw_remote
+
 
 def substantive_change_outside_checksums(diff_text: str) -> bool:
     """True when the diff changes recipe content beyond the checksum arrays.

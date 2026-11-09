@@ -28,6 +28,15 @@ _OBFUSCATION_MARKER_RE = re.compile(
     re.IGNORECASE,
 )
 
+#: An interpreter fed an inline program is source, not an assembled shell
+#: literal.  `node -p "require('./package.json')..."` is a version read; its
+#: quotes are JavaScript, not obfuscation, so H065 has nothing to report.
+_INLINE_PROGRAM_RE = re.compile(
+    r"\b(?:node|python[0-9.]*|perl|ruby|php|lua[0-9.]*)\s+"
+    r"(?:-p|-e|-c|--print|--eval)\b",
+    re.IGNORECASE,
+)
+
 
 def _reconstruction_findings(diff_text, config, add) -> None:
     """Report that a line was read in reconstructed form (H065).
@@ -55,6 +64,8 @@ def _reconstruction_findings(diff_text, config, add) -> None:
     rebuilt_pairs = reconstruct_lines_stateful(bodies)
     for body, (rebuilt, fully, quoted) in zip(bodies, rebuilt_pairs, strict=True):
         if quoted:
+            continue
+        if _INLINE_PROGRAM_RE.search(body):
             continue
         if not fully:
             # An ANSI-C quote that survived reconstruction is the

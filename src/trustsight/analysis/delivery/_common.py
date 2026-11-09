@@ -273,7 +273,7 @@ def _source_basename(url: str) -> str:
     return base
 
 _VCS_SOURCE_RE = re.compile(
-    r"(?:^|::)(?:git|hg|svn|bzr|fossil)(?:\+|://)", re.IGNORECASE
+    r"(?:^|::)[\"']?(?:git|hg|svn|bzr|fossil)(?:\+|://)", re.IGNORECASE
 )
 
 _SRCINFO_SOURCE_RE = re.compile(r"^\s*source(?:_[a-z0-9_]+)?\s*=\s*(\S.*)$")

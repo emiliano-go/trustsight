@@ -180,6 +180,31 @@ _AUTO_TRACKING_SUFFIX_RE = re.compile(
 )
 _AUTO_TRACKING_URL_RE = re.compile(r"\.git(?:[#?]|$)", re.IGNORECASE)
 
+#: Format markers a distro uses to ship one upstream asset in several
+#: encodings (``eot/otf/ttf/woff/woff2-<family>-fonts``).  They are not part
+#: of the project identity, so ``ttf-foo-fonts`` and ``otf-foo-fonts`` are
+#: one upstream release, not a surge across two unrelated packages.
+_FORMAT_PREFIX_RE = re.compile(
+    r"^(?:eot|otf|ttf|ttc|otc|woff2?)-", re.IGNORECASE)
+
+
+def _activity_stem(pkgbase: str) -> str:
+    """Stem used to group one maintainer's batch by project identity.
+
+    Extends :func:`~trustsight.deps._package_stem` with the format prefixes
+    that only name an encoding of the same asset, so a font family rebuilt in
+    five formats collapses to one stem instead of reading as a surge.
+    """
+    stem = _package_stem(pkgbase)
+    changed = True
+    while changed:
+        changed = False
+        stripped = _FORMAT_PREFIX_RE.sub("", stem)
+        if stripped != stem:
+            stem = stripped
+            changed = True
+    return stem
+
 
 def _is_auto_tracking(name: str, snapshot: HistorySnapshot) -> bool:
     """True when *name*'s version tracks upstream instead of being declared.
@@ -203,6 +228,11 @@ def _maintainer_deviation_findings(snapshot: HistorySnapshot) -> list[dict]:
     min_cycles = int(_threshold("h058", "min_history_cycles", 3))
     z_score = float(_threshold("h058", "z_score", 2.0))
     min_activity = int(_threshold("h058", "min_activity", 3))
+    # Small batches are normal housekeeping for a low-activity maintainer.
+    # A z-test against a tiny, zero-variance baseline turns a three-package
+    # tidy into a surge, so require an absolute batch floor as well.  The
+    # xz shape publishes a whole package set at once, far above this.
+    min_surge = int(_threshold("h058", "min_surge", 6))
     prior_by_maintainer: dict[str, list[int]] = {}
     for row in maintainer_history:
         m = row.get("maintainer") or ""
@@ -222,6 +252,8 @@ def _maintainer_deviation_findings(snapshot: HistorySnapshot) -> list[dict]:
     out: list[dict] = []
     for maintainer, members in activity_now.items():
         if len(members) < min_activity:
+            continue
+        if len(members) < min_surge:
             continue
         prior = prior_by_maintainer.get(maintainer, [])
         if len(prior) < min_cycles:
@@ -275,7 +307,7 @@ def _maintainer_deviation_findings(snapshot: HistorySnapshot) -> list[dict]:
             from ..analysis.correlation import _one_related_cluster
             if _one_related_cluster(members):
                 continue
-            if len({_package_stem(base) for base in bases}) == 1:
+            if len({_activity_stem(base) for base in bases}) == 1:
                 continue
         # A batch of routine version/checksum bumps is maintenance, not a
         # surge.  Every member must be routine: an unknown or non-routine

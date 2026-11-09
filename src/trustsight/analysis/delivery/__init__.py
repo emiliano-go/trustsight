@@ -668,6 +668,14 @@ def edge_undeclared_provenance_execution(ctx, add) -> None:
             # tree; only a `$srcdir`-root file has no provenance.
             if m.group(0).rstrip().endswith("./" + raw):
                 continue
+            # A VCS checkout (git+/hg+/svn+) unpacks a working tree full of
+            # files; a relative script inside it (``cd ../ndiff; python
+            # ndifftest.py``) has provenance from the checkout, not nowhere.
+            # Only an explicitly ``$srcdir``-rooted name is a bare download.
+            if (not _BUILD_ROOT_RE.search(raw)
+                    and ctx.current_text
+                    and _VCS_SOURCE_RE.search(ctx.current_text)):
+                continue
             path = _norm_path(raw)
             # Only a ``$srcdir``-root file: legitimate build scripts live
             # inside the unpacked tree (``$srcdir/pkg-ver/stage.sh``) or

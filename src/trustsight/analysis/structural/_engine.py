@@ -395,9 +395,17 @@ def _structural_findings_from_request(request: ScanRequest) -> list[dict]:
                          .get("c001", {}).get("require_isolated_change", True))
         isolated = True
         if not version_moved and isolated_gate:
-            from ._checksums import substantive_change_outside_checksums
+            from ._checksums import (
+                only_local_checksums_changed,
+                substantive_change_outside_checksums,
+            )
 
             isolated = not substantive_change_outside_checksums(diff_text)
+            # A checksum refresh for a committed source file (a locally
+            # maintained .patch) is the maintainer editing that file, not a
+            # remote artifact swapped under a standing version.
+            if isolated and only_local_checksums_changed(diff_text, current_text):
+                isolated = False
         if not version_moved and isolated_gate and not isolated \
                 and not maintainer_changed:
             add("C002", "Checksum Updated Without Version Change", "INFO",

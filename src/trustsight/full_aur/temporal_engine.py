@@ -242,7 +242,8 @@ CYCLE_INSTANCES: tuple[TemporalInstance, ...] = (
     TemporalInstance(
         "H058", "Maintainer Baseline Deviation", "baseline_deviation", "cycle", "MEDIUM", "adoption",
         _maintainer_deviation_findings,
-        parameters=("h058.min_history_cycles", "h058.z_score", "h058.min_activity"),
+        parameters=("h058.min_history_cycles", "h058.z_score", "h058.min_activity",
+                    "h058.min_surge"),
         doc="docs/reference/rules/maintainer-and-metadata.md",
         fixtures=("tests/test_class_d.py",)),
     TemporalInstance(

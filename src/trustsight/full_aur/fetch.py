@@ -484,7 +484,16 @@ def fetch_pkgbuild_with_tree(
             # bootstrap of tens of thousands of packages does not spam the
             # progress bar with one line per VCS/-bin package.
             log.debug("snapshot tarball for %s unusable: %s", name, e)
-    return fetch_pkgbuild(name), None, None, refused, None, None, None, True
+    try:
+        text = fetch_pkgbuild(name)
+    except ReadTooLarge as e:
+        # The snapshot raised, and the cgit fallback refused too.  A bound
+        # dropped content; keep the refusal visible instead of letting it
+        # escape as a generic fetch failure.
+        log.warning("PKGBUILD for %s refused: %s", name, e)
+        text = None
+        refused = True
+    return text, None, None, refused, None, None, None, True
 
 
 def default_resume_path() -> Path:

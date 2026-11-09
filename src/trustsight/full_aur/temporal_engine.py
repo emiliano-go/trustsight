@@ -468,6 +468,12 @@ def run_corpus_sweep(
     now: int = 0,
 ) -> list[dict]:
     """Run the cycle-scope temporal instances over one metadata cycle."""
+    if edges is None:
+        # T009 reads reverse dependency edges; the graph sweep uses the same
+        # object, so build it once here instead of leaving the snapshot empty.
+        from .graph import dependency_edges
+
+        edges = dependency_edges(new_meta)
     snapshot = HistorySnapshot.from_cycle(
         new_meta,
         old_meta,

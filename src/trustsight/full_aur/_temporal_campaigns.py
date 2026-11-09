@@ -32,7 +32,7 @@ _MAX_HISTORY = 256
 _MAX_RULES = 128
 _MAX_DEPENDENCIES = 128
 _MAX_PROVIDES = 128
-_DEP_FIELDS = ("depends_added", "makedepends_added", "checkdepends_added")
+_DEP_FIELDS = ("depends", "makedepends", "checkdepends")
 _PRECURSOR_RULES = frozenset({
     "H024", "H078", "H091", "H092", "H047",
     "H049", "H054", "H057", "H064", "D004",

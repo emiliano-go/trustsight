@@ -11,6 +11,8 @@
 
 ### Fixed
 
+- **The gate report is inert and local paru builds still work.** The yay/paru approval gate now sanitizes every value it prints, so package-controlled finding text cannot repaint the terminal or forge a prompt. When paru runs `PreBuildCommand` for a PKGBUILD repository or `-B` local build, a package absent from the AUR falls back to `trustsight lint` on the checked-out recipe instead of aborting the build. Both paths have live-style regression tests.
+
 - **`Resolved commands` now contains commands only.** The inspect panel and the report carried every resolved added line under that heading, so a full recipe showed `pkgbase`, comments and function braces as commands. The resolved text is split with the same command-position definition the rule families use, and non-command text is reported separately as `resolved_recipe`. The report field is additive; existing consumers of `resolved_commands` now receive only executable lines.
 - **T008-T012 read the streams they were shipped with.** T010 matched `depends_added`-style keys that the dependency extractor never produces, so it stayed silent; it now reads the real `depends`, `makedepends` and `checkdepends` fields. T009's `min_dependents` floor read a dependency graph the cycle sweep never built; the sweep now builds the graph once and shares it with the graph rules. When a snapshot is refused and the cgit fallback exceeds the response cap too, the refusal is retained as `snapshot_refused` instead of escaping as a generic fetch failure. The history-replay fixtures use production-shaped dependency detail.
 

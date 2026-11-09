@@ -112,8 +112,8 @@ def test_t010_resolves_a_unique_provider_and_groups_members():
         },
         transitions={"provider": ("", "mallory")},
         detail={
-            "one": {"dependency_changes": {"depends_added": ["virtual>=1"]}},
-            "two": {"dependency_changes": {"makedepends_added": ["virtual"]}},
+            "one": {"dependency_changes": {"depends": ["virtual>=1"]}},
+            "two": {"dependency_changes": {"makedepends": ["virtual"]}},
         },
     ))
     assert len(findings) == 1
@@ -126,12 +126,12 @@ def test_t010_resolves_a_unique_provider_and_groups_members():
 def test_t010_ignores_stable_related_and_ambiguous_targets():
     stable = snapshot(
         new_meta={"target": {}, "consumer": {}},
-        detail={"consumer": {"dependency_changes": {"depends_added": ["target"]}}},
+        detail={"consumer": {"dependency_changes": {"depends": ["target"]}}},
     )
     related = snapshot(
         new_meta={"foo-bin": {"PackageBase": "foo"}, "foo": {}},
         changes={"foo": "added"},
-        detail={"foo-bin": {"dependency_changes": {"depends_added": ["foo"]}}},
+        detail={"foo-bin": {"dependency_changes": {"depends": ["foo"]}}},
     )
     ambiguous = snapshot(
         new_meta={
@@ -140,7 +140,7 @@ def test_t010_ignores_stable_related_and_ambiguous_targets():
             "consumer": {},
         },
         transitions={"one": ("", "new"), "two": ("", "new")},
-        detail={"consumer": {"dependency_changes": {"depends_added": ["virtual"]}}},
+        detail={"consumer": {"dependency_changes": {"depends": ["virtual"]}}},
     )
     assert _dependency_redirection_findings(stable) == []
     assert _dependency_redirection_findings(related) == []
@@ -234,7 +234,7 @@ def test_t010_provider_resolution_covers_the_full_snapshot():
         new_meta=new_meta,
         transitions={"zz-provider": ("alice", "mallory")},
         detail={"consumer": {
-            "dependency_changes": {"depends_added": ["virtual>=1"]},
+            "dependency_changes": {"depends": ["virtual>=1"]},
         }},
     ))
     assert len(findings) == 1
@@ -258,7 +258,7 @@ def test_transition_shapes_require_two_distinct_maintainer_names():
         new_meta={"target": {}, "consumer": {}},
         transitions={"target": ("alice", True)},
         detail={"consumer": {
-            "dependency_changes": {"depends_added": ["target"]},
+            "dependency_changes": {"depends": ["target"]},
         }},
     )
     assert _dormant_takeover_findings(dormant) == []

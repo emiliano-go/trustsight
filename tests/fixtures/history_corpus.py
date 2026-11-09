@@ -138,7 +138,7 @@ CYCLES: list[dict] = [
         "new": {"consumer": _pkg("consumer", "alice", version="2"),
                 "target": _pkg("target", "mallory")},
         "detail": {"consumer": {
-            "dependency_changes": {"depends_added": ["target"]},
+            "dependency_changes": {"depends": ["target"]},
         }},
         "expected": ["H026", "H044", "T010"],
     },

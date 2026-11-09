@@ -52,6 +52,7 @@ CHANGE = "PKGBUILD modified"
 SUPPRESSED = "R099"
 GAP = "diff_truncated"
 COMMAND = "curlpipe-cmd"
+RECIPE = "recipe-value"
 MAINTAINER = "Parity Maintainer"
 URL = "https://parity.invalid/p.tar.gz"
 
@@ -66,7 +67,8 @@ def _fact() -> PackageFact:
         # fixture, it was left out of the plain renderer too: the evidence
         # behind a finding was visible only where Rich happened to be
         # installed, and nothing here noticed.
-        execution_changes=ExecutionChanges(resolved_commands=[COMMAND]),
+        execution_changes=ExecutionChanges(
+            resolved_commands=[COMMAND], resolved_recipe=[RECIPE]),
         source_changes=SourceChanges(added_urls=[URL]),
         source_buckets={URL: "unknown"},
         diff_summary=DiffSummary(
@@ -193,6 +195,7 @@ def test_every_terminal_render_shows_the_evidence(token, what):
 
 @pytest.mark.parametrize("token,what", [
     (COMMAND, "the resolved command a rule matched on"),
+    (RECIPE, "resolved recipe text that is not a command"),
     (MAINTAINER, "who maintains the package"),
     (URL, "the source URL that was added"),
     (FILE, "the file that changed"),

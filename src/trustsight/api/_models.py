@@ -172,6 +172,7 @@ class Report:
     :ivar source_buckets: source categories the change touched, with counts.
     :ivar checksum_behavior: how the update affects package checksums.
     :ivar resolved_commands: shell commands the PKGBUILD resolves to.
+    :ivar resolved_recipe: resolved recipe text that is not a command.
     :ivar maintainer: current AUR maintainer, cleaned of control bytes.
     :ivar previous_maintainer: maintainer the previous analysis recorded.
     :ivar maintainer_changed: whether the maintainer changed in this update.
@@ -288,6 +289,7 @@ class Report:
     source_buckets: dict = field(default_factory=dict)
     checksum_behavior: str = ""
     resolved_commands: tuple[str, ...] = ()
+    resolved_recipe: tuple[str, ...] = ()
 
     maintainer: str = ""
     previous_maintainer: str = ""

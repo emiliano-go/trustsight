@@ -8,6 +8,10 @@
 
 - **T008-T012 report full-AUR history and cycle context.** {#full-aur-history-campaigns} T008 reports a payload appearing after an earlier maintainer transition, T009 a high-value dormant takeover, T010 dependencies redirected to newly added or adopted targets, T011 package reappearance after removal, and T012 an integrity/provenance erosion sequence followed by a payload. All five are INFO, weight 0 and anergic pending benign replay; none performs new network fetches or changes a score.
 
+### Fixed
+
+- **`Resolved commands` now contains commands only.** The inspect panel and the report carried every resolved added line under that heading, so a full recipe showed `pkgbase`, comments and function braces as commands. The resolved text is split with the same command-position definition the rule families use, and non-command text is reported separately as `resolved_recipe`. The report field is additive; existing consumers of `resolved_commands` now receive only executable lines.
+
 ### Security
 
 - **Snapshot read refusals fail closed on the corpus path.** An oversized compressed snapshot response or `.install` member now propagates to the existing `snapshot_refused` coverage gap instead of falling back with no bound-specific gap. Two adversarial archive/response regressions pin the behavior, and the `incomplete coverage fails closed` gate exercises the install-member path; 174 focused fetch, watcher, hardening and security-gate tests pass. Detection rules and scoring are unchanged.

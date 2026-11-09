@@ -39,6 +39,7 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
   "source_buckets": {"url": "bucket"},
   "execution_changes": {
     "resolved_commands": ["string"],
+    "resolved_recipe": ["string"],
     "suspicious_patterns_detected": ["string"],
     "unresolved_patterns": ["string"]
   },
@@ -226,6 +227,7 @@ Classified by `classify_urls()` in `src/trustsight/buckets.py`.
 | Field | Type | Description |
 |-------|------|-------------|
 | `resolved_commands` | `list[string]` | Fully resolved command strings after tokenization and variable expansion. Each is a single command extracted from the diff. |
+| `resolved_recipe` | `list[string]` | Resolved recipe text that names no command: metadata assignments, comments, function braces and other non-executable added lines. |
 | `suspicious_patterns_detected` | `list[string]` | Rule IDs from the published R/H/C/D/S/X families that fired during analysis. |
 | `unresolved_patterns` | `list[string]` | Strings anywhere in the diff that the tokenizer could not fully resolve. Diagnostic only: nothing reads this field to decide a verdict. The subset that affects a verdict is the `source=` case, reported as the `unresolved_source` coverage gap and quoted in `unresolved_sources`. |
 

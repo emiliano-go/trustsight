@@ -168,6 +168,15 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
         if extra > 0:
             inside.add_row("", f"  [dim]... {extra} more[/]")
 
+    if fact.execution_changes.resolved_recipe:
+        inside.add_row("", "")
+        inside.add_row("[underline]Resolved recipe values[/]", "")
+        for value in fact.execution_changes.resolved_recipe[:20]:
+            inside.add_row("", Text("  " + clean(value.strip())))
+        extra = len(fact.execution_changes.resolved_recipe) - 20
+        if extra > 0:
+            inside.add_row("", f"  [dim]... {extra} more[/]")
+
     if fact.score_breakdown:
         inside.add_row("", "")
         inside.add_row("[underline]Rules Triggered[/]", "")
@@ -368,6 +377,13 @@ def _inspect_plain(fact, verbose=False, show_score=False, show_risk=False):
         for cmd in fact.execution_changes.resolved_commands[:20]:
             print(f"    {clean(cmd.strip())}")
         extra = len(fact.execution_changes.resolved_commands) - 20
+        if extra > 0:
+            print(f"    ... {extra} more")
+    if fact.execution_changes.resolved_recipe:
+        print("  Resolved recipe values:")
+        for value in fact.execution_changes.resolved_recipe[:20]:
+            print(f"    {clean(value.strip())}")
+        extra = len(fact.execution_changes.resolved_recipe) - 20
         if extra > 0:
             print(f"    ... {extra} more")
     if fact.score_breakdown:

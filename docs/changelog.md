@@ -11,6 +11,7 @@
 
 ### Fixed
 
+- **The T-series temporal rules are wired again.** The shared-pipeline refactor dropped the calls to T001/T002/T003 and T006/T007, so the watcher emitted none of them even though every rule remained registered and unit-tested. The shared scan now emits the change-backed novelty and rotation rules, and the git path emits the metadata/git divergence and packager-history rules. A pipeline regression pins T001/T002/T003 in the resulting report.
 - **The gate report is inert and local paru builds still work.** The yay/paru approval gate now sanitizes every value it prints, so package-controlled finding text cannot repaint the terminal or forge a prompt. When paru runs `PreBuildCommand` for a PKGBUILD repository or `-B` local build, a package absent from the AUR falls back to `trustsight lint` on the checked-out recipe instead of aborting the build. Both paths have live-style regression tests.
 
 - **`Resolved commands` now contains commands only.** The inspect panel and the report carried every resolved added line under that heading, so a full recipe showed `pkgbase`, comments and function braces as commands. The resolved text is split with the same command-position definition the rule families use, and non-command text is reported separately as `resolved_recipe`. The report field is additive; existing consumers of `resolved_commands` now receive only executable lines.

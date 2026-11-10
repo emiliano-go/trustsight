@@ -795,6 +795,115 @@ def _register_full_aur(app: typer.Typer) -> None:
         if not state.get("watching") and not optional:
             raise typer.Exit(code=1)
 
+    @full_aur_app.command("export-scans")
+    def full_aur_export_scans_cmd(
+        output: Path = typer.Option(..., "--output", help="NDJSON output path"),
+        since: str = typer.Option("", "--since", help="First UTC day, YYYY-MM-DD"),
+        until: str = typer.Option("", "--until", help="Last UTC day, YYYY-MM-DD"),
+    ):
+        """Export analysis history as compact ``trustsight.scans`` NDJSON.
+
+        The export groups rows by UTC day into synthetic backfill cycles.  It
+        carries no diff and no fact JSON; the feed's scan tables only need the
+        package, score, risk, versions, rules and coverage gaps.
+        """
+        from .. import __version__
+        from ..db import get_connection
+        from ..scoring import risk_level
+
+        clauses = ["h.timestamp IS NOT NULL", "h.timestamp != ''"]
+        params: list[str] = []
+        if since:
+            clauses.append("substr(h.timestamp, 1, 10) >= ?")
+            params.append(since)
+        if until:
+            clauses.append("substr(h.timestamp, 1, 10) <= ?")
+            params.append(until)
+        sql = f"""
+            SELECT h.id, h.timestamp, h.old_version, h.new_version,
+                   h.final_score, h.fact_json, h.raw_diff_blob, p.name,
+                   tr.rule_id, tr.severity
+              FROM analysis_history h
+              JOIN packages p ON p.id = h.package_id
+              LEFT JOIN triggered_rules tr ON tr.history_id = h.id
+             WHERE {' AND '.join(clauses)}
+             ORDER BY h.timestamp, h.id, tr.rule_id
+        """
+        with get_connection() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        days: dict[str, dict[int, dict]] = {}
+        for row in rows:
+            stamp = str(row["timestamp"] or "")
+            day = stamp[:10]
+            if not day:
+                continue
+            entry = days.setdefault(day, {})
+            record = entry.get(row["id"])
+            if record is None:
+                facts = {}
+                try:
+                    facts = json.loads(row["fact_json"] or "{}")
+                except (TypeError, ValueError):
+                    facts = {}
+                score = int(row["final_score"] or 0)
+                record = {
+                    "package": row["name"],
+                    "status": "ok",
+                    "score": score,
+                    "risk": str(facts.get("risk") or risk_level(score)),
+                    "old_version": str(row["old_version"] or ""),
+                    "new_version": str(row["new_version"] or ""),
+                    "maintainer": "",
+                    "rules": [],
+                    "coverage_gaps": list(facts.get("coverage_gaps") or ()),
+                    "has_diff": bool(row["raw_diff_blob"]),
+                    "_stamp": stamp,
+                }
+                entry[row["id"]] = record
+            rule_id = str(row["rule_id"] or "")
+            if rule_id and all(r["id"] != rule_id for r in record["rules"]):
+                record["rules"].append({
+                    "id": rule_id,
+                    "severity": str(row["severity"] or ""),
+                })
+        out_lines: list[str] = []
+        for day in sorted(days):
+            records = list(days[day].values())
+            records.sort(key=lambda item: item["package"])
+            stamps = [str(item.pop("_stamp")) for item in records]
+            started = min(stamps)
+            finished = max(stamps)
+            for index in range(0, len(records), 500):
+                chunk = records[index:index + 500]
+                doc = {
+                    "event": "trustsight.scans",
+                    "tool": "trustsight",
+                    "tool_version": __version__,
+                    "cycle_id": f"backfill:{day}",
+                    "started_at": started,
+                    "finished_at": finished,
+                    "partial": False,
+                    "bootstrap": False,
+                    "backfill_day": day,
+                    "chunk_index": index // 500,
+                    "chunk_count": (len(records) + 499) // 500,
+                    "summary": {
+                        "attempted": len(records),
+                        "succeeded": len(records),
+                        "fetch_failed": 0,
+                        "not_vetted": 0,
+                        "vanished": 0,
+                        "reserved": 0,
+                        "with_diff": sum(1 for item in records if item["has_diff"]),
+                        "alerts": 0,
+                    },
+                    "scans": chunk,
+                }
+                out_lines.append(json.dumps(doc, separators=(",", ":"), sort_keys=True))
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text("\n".join(out_lines) + ("\n" if out_lines else ""))
+        typer.echo(f"exported {sum(len(v) for v in days.values())} scans in {len(out_lines)} chunk(s) to {output}")
+
     @full_aur_app.command("verify")
     def full_aur_verify_cmd(
         package: list[str] = typer.Option(

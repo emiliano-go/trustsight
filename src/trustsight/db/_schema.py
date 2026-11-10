@@ -533,6 +533,12 @@ _ADDED_COLUMNS = {
     "dependency_names": {
         "seed_observation_count": "INTEGER NOT NULL DEFAULT 0",
     },
+    # Feed-only scan documents share the durable outbox but must never be
+    # sent to ntfy.  A row with feed_only=1 is marked ntfy-delivered as soon
+    # as it is queued, so only the signed feed sink is attempted.
+    "alert_outbox": {
+        "feed_only": "INTEGER NOT NULL DEFAULT 0",
+    },
 }
 
 def _migrate(conn: sqlite3.Connection) -> None:

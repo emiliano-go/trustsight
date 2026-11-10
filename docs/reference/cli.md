@@ -823,6 +823,19 @@ trustsight full-aur maintenance [--json] [--dry-run] [--vacuum] [--prune-cycle-e
 
 Reports database and outbox size. Pruning is opt-in and destructive: cycle events older than the given number of days and alert history not seen for that many days are removed. `--vacuum` reclaims space after a prune. Run `--dry-run` first; a long-lived watcher should be pointed at a backup before deleting history.
 
+### `trustsight full-aur export-scans`
+
+```text
+trustsight full-aur export-scans --output scans.ndjson [--since YYYY-MM-DD] [--until YYYY-MM-DD]
+```
+
+Export `analysis_history` as compact `trustsight.scans` NDJSON for the feed's
+all-scan tables. Rows are grouped by UTC day into synthetic backfill cycles;
+the export carries package, status, score, risk, versions, maintainer, rule
+ids and coverage-gap names, never a diff or `fact_json`. Use it after taking a
+consistent watcher database backup. The feed import and daily squash scripts
+live in `trustsight-feed` (`npm run import:scans`, `npm run rollup:scans`).
+
 ### `trustsight full-aur verify`
 
 ```

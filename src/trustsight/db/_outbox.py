@@ -48,15 +48,24 @@ def enqueue_alert_payload(
     webhook_id: str,
     webhook_timestamp: int,
     now: datetime | None = None,
+    *,
+    feed_only: bool = False,
 ) -> int:
-    """Store *payload* and return its row id."""
+    """Store *payload* and return its row id.
+
+    ``feed_only`` is for the all-scan stream: it shares the durable retry
+    queue but is never sent to ntfy.  The ntfy flag is set at enqueue time so
+    the pending query completes once the signed feed sink accepts it.
+    """
     stamp = _stamp(now or _now())
     body = json.dumps(payload, separators=(",", ":"), sort_keys=True)
     with get_connection() as conn:
         cur = conn.execute(
             "INSERT INTO alert_outbox (created_at, payload_json, webhook_id, "
-            "webhook_timestamp) VALUES (?, ?, ?, ?)",
-            (stamp, body, webhook_id, int(webhook_timestamp)),
+            "webhook_timestamp, feed_only, ntfy_delivered) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (stamp, body, webhook_id, int(webhook_timestamp),
+             1 if feed_only else 0, 1 if feed_only else 0),
         )
         conn.commit()
         return int(cur.lastrowid)
@@ -71,7 +80,7 @@ def pending_alert_payloads(
         rows = conn.execute(
             "SELECT id, created_at, payload_json, webhook_id, "
             "webhook_timestamp, attempts, next_attempt_at, "
-            "ntfy_delivered, feed_delivered "
+            "ntfy_delivered, feed_delivered, feed_only "
             "FROM alert_outbox "
             "WHERE parked_at IS NULL "
             "AND (next_attempt_at IS NULL OR next_attempt_at <= ?) "

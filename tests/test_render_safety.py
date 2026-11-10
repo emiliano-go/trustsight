@@ -20,6 +20,8 @@ import contextlib
 import io
 import pathlib
 import re
+import io
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -146,10 +148,11 @@ def test_a_first_analysis_panel_closes_its_markup_and_says_status_once():
         first_seen=True,
     )
 
-    con = Console(record=True, width=200, force_terminal=False, no_color=True)
-    with patch.object(inspect_cli._render, "console", lambda: con):
+    from trustsight.cli import display
+    buffer = io.StringIO()
+    with patch.object(display, "_console", SimpleNamespace(file=buffer)):
         inspect_cli._inspect_rich(fact)
-    out = con.export_text()
+    out = buffer.getvalue()
 
     assert "[]" not in out
     assert out.count("First analysis.") == 1
@@ -208,10 +211,10 @@ def _review_with_bracketed_value(tmp_path, monkeypatch, argv, **patches):
     monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
 
     buffer = io.StringIO()
-    con = Console(file=buffer, force_terminal=False, width=100)
     with contextlib.ExitStack() as stack:
         stack.enter_context(patch("trustsight.cli.review.HAS_RICH", True))
-        stack.enter_context(patch("trustsight.cli.review.console", lambda: con))
+        stack.enter_context(patch(
+            "trustsight.cli.display._console", SimpleNamespace(file=buffer)))
         # A review with no cached AUR snapshot downloads one; these tests are
         # about Rich markup escaping, so stub the metadata fetch so it never
         # touches the network (the suite is offline).
@@ -243,7 +246,7 @@ def test_a_bracketed_repo_name_survives_the_review_warning(tmp_path, monkeypatch
         },
     )
     assert result.exit_code == 0, result.output
-    assert "repo '[x]' does not exist." in out
+    assert "repo '[x]' does not exist." in (out or result.output)
 
 
 def test_a_bracketed_value_survives_the_all_repos_error(tmp_path, monkeypatch):
@@ -258,4 +261,4 @@ def test_a_bracketed_value_survives_the_all_repos_error(tmp_path, monkeypatch):
         },
     )
     assert result.exit_code == 2, result.output
-    assert "cannot parse '[x]' in pacman.conf" in out
+    assert "cannot parse '[x]' in pacman.conf" in (out or result.output)

@@ -5,15 +5,12 @@ import typer
 from ..config import ensure_default_configs
 from ..coverage import GAP_REASONS
 from ..db import get_history, get_package_id, get_triggered_rules, init_db
-from ..safe_text import clean
 from ..scoring import stored_band
 from .completion import tracked_packages
 from .display import (
-    band_colour,
     _print_colored,
-    _severity_text,
-    console,
     display_version,
+    emit,
     use_rich,
 )
 
@@ -128,42 +125,29 @@ def register_commands(app: typer.Typer):
             return
 
         if use_rich():
-            from rich.box import SIMPLE_HEAD
-            from rich.table import Table
-            from rich.text import Text
+            from ..sandbox.render_client import render
 
-            con = console()
-            table = Table(title=Text(f"History: {clean(package)}"))
-            table.add_column("ID", style="dim", justify="right")
-            table.add_column("Date", style="dim")
-            table.add_column("Old", justify="right")
-            table.add_column("-> New", justify="right")
-            table.add_column("Score", justify="right")
-            table.add_column("Risk")
-
+            payload_rows = []
             for h in history_records:
-                ts = h.get("timestamp", "")[:10] if h.get("timestamp") else ""
-                score = h.get("final_score", 0)
                 band, complete = stored_band(h)
-                score_text = Text(f"{score}/100", style=band_colour(band))
-                risk_text = Text(clean(band))
-                if not complete:
-                    risk_text.append(" (incomplete)", style="yellow")
-                table.add_row(str(h.get("id", "")), ts, display_version(h.get("old_version")), display_version(h.get("new_version")), score_text, risk_text)
-
-            con.print(table)
-
+                payload_rows.append({
+                    "id": h.get("id"),
+                    "timestamp": h.get("timestamp", ""),
+                    "old_version": display_version(h.get("old_version")),
+                    "new_version": display_version(h.get("new_version")),
+                    "final_score": h.get("final_score", 0),
+                    "band": band,
+                    "complete": complete,
+                })
+            breakdown = []
             if score_breakdown and history_records:
-                rules = get_triggered_rules(history_records[0]["id"])
-                if rules:
-                    bd = Table(title="Latest run: rules that fired", box=SIMPLE_HEAD)
-                    bd.add_column("Rule", style="cyan")
-                    bd.add_column("Severity")
-                    for r in rules:
-                        bd.add_row(Text(clean(r["rule_id"])), _severity_text(r["severity"]))
-                    con.print(bd)
-                else:
-                    con.print("[dim]No rules fired on the latest run.[/]")
+                breakdown = get_triggered_rules(history_records[0]["id"]) or []
+            emit(render("history_table", {
+                "package": package,
+                "records": payload_rows,
+                "breakdown_rows": breakdown,
+                "show_breakdown": bool(score_breakdown and history_records),
+            }))
         else:
             for h in history_records:
                 band, complete = stored_band(h)

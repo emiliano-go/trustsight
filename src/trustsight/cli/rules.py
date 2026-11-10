@@ -14,7 +14,7 @@ import typer
 
 from ..categories import RuleCategory
 from ..registry import REGISTRY
-from .display import _print_colored, console, use_rich
+from .display import _print_colored, emit, use_rich
 
 
 def register_commands(app: typer.Typer):
@@ -60,16 +60,9 @@ def register_commands(app: typer.Typer):
             return
 
         if use_rich():
-            from rich.table import Table
+            from ..sandbox.render_client import render
 
-            table = Table(title=f"Rules ({len(rows)} total)")
-            table.add_column("Rule", style="cyan", no_wrap=True)
-            table.add_column("UID", no_wrap=True)
-            table.add_column("Category")
-            table.add_column("Status")
-            for row in rows:
-                table.add_row(row["id"], row["uid"], row["category"], row["status"])
-            console().print(table)
+            emit(render("rules_table", {"rows": rows}))
         else:
             print(f"{'Rule':<8} {'UID':<9} {'Category':<22} Status")
             print("-" * 60)

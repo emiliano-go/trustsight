@@ -501,8 +501,8 @@ def _run_baseline_build(
             done += 1
 
             if progress is not None:
-                progress[0].update(
-                    progress[1], advance=1, description=f"Analysing {name[:36]}"
+                progress.update(
+                    advance=1, description=f"Analysing {name[:36]}"
                 )
             elif done % 1000 == 0:
                 elapsed = time.time() - batch_start
@@ -513,7 +513,7 @@ def _run_baseline_build(
                 save_resume_state({"processed": sorted(processed)})
     finally:
         if progress is not None:
-            progress[0].stop()
+            progress.stop()
 
     result.scans = _scan_records(detail, scan_status)
     result.scan_summary = _scan_summary(result.scans, scan_status)

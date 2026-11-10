@@ -204,14 +204,6 @@ def test_python_m_entrypoint_reports_version(tmp_path):
     assert result.stdout.strip().startswith("trustsight ")
 
 
-def test_console_raises_without_rich(monkeypatch):
-    from trustsight.cli import display
-
-    monkeypatch.setattr(display, "HAS_RICH", False)
-    with pytest.raises(RuntimeError, match="rich is not available"):
-        display.console()
-
-
 def test_print_colored_falls_back_to_plain_print_without_rich(monkeypatch, capsys):
     from trustsight.cli import display
 
@@ -363,8 +355,12 @@ def test_inspect_omits_the_lines_row_on_a_zero_diff(monkeypatch):
     from trustsight.cli import inspect as inspect_cli
     from trustsight.schema import DiffSummary, PackageFact
 
-    out = Console(record=True, width=200)
-    monkeypatch.setattr(inspect_cli._render, "console", lambda: out)
+    import io
+    from types import SimpleNamespace
+    from trustsight.cli import display
+
+    buffer = io.StringIO()
+    monkeypatch.setattr(display, "_console", SimpleNamespace(file=buffer))
 
     no_diff = PackageFact(
         package_name="p", old_version="1.0", new_version="1.1",
@@ -376,13 +372,13 @@ def test_inspect_omits_the_lines_row_on_a_zero_diff(monkeypatch):
     )
 
     inspect_cli._inspect_rich(no_diff)
-    rendered = out.export_text()
+    rendered = buffer.getvalue()
     assert "Lines" not in rendered
 
-    out2 = Console(record=True, width=200)
-    monkeypatch.setattr(inspect_cli._render, "console", lambda: out2)
+    buffer2 = io.StringIO()
+    monkeypatch.setattr(display, "_console", SimpleNamespace(file=buffer2))
     inspect_cli._inspect_rich(with_diff)
-    assert "Lines" in out2.export_text()
+    assert "Lines" in buffer2.getvalue()
 
 
 # ---------------------------------------------------------------------------

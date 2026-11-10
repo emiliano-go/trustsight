@@ -17,11 +17,7 @@ from ..override import (
 )
 from ..safe_text import clean
 from .completion import installed_packages
-from .display import (
-    _print_colored,
-    console,
-    use_rich,
-)
+from .display import _print_colored, emit, use_rich
 
 log = logging.getLogger(__name__)
 
@@ -51,7 +47,7 @@ def override_list(
         if json_output:
             typer.echo(json.dumps({"overrides": [], "url_acks": []}))
         elif use_rich():
-            console().print(msg)
+            _print_colored(msg)
         else:
             print(msg)
         return
@@ -72,40 +68,28 @@ def override_list(
         return
 
     if use_rich():
-        from rich.box import SIMPLE_HEAD
-        from rich.table import Table
-        from rich.text import Text
-        con = console()
-        if overrides:
-            table = Table(title=f"Rule overrides ({OVERRIDES_PATH})", box=SIMPLE_HEAD)
-            table.add_column("Rule", style="cyan")
-            table.add_column("Scope")
-            table.add_column("Reason", overflow="fold")
-            table.add_column("Added", style="dim")
-            for o in overrides:
-                # `Text`, not a bare string: Rich reads markup in a plain str,
-                # so a `[green]` in the value recolours the row and an
-                # unbalanced tag aborts the render of everything after it.
-                table.add_row(Text(clean(o.rule_id)),
-                              Text(clean(o.package or "all packages")),
-                              Text(clean(o.reason)), Text(clean(o.created_at)))
-            con.print(table)
-        if url_acks:
-            table = Table(title="Acknowledged source URLs", box=SIMPLE_HEAD)
-            table.add_column("Package", style="cyan")
-            table.add_column("URL", overflow="fold")
-            table.add_column("Reason", overflow="fold")
-            table.add_column("Added", style="dim")
-            for a in url_acks:
-                table.add_row(Text(clean(a.package)), Text(clean(a.url)),
-                              Text(clean(a.reason)), Text(clean(a.created_at)))
-            con.print(table)
-        con.print(
-            f"[dim]{', '.join(sorted(FATAL_RULES))} cannot be overridden; a FATAL "
+        from ..sandbox.render_client import render
+
+        note = (
+            f"{', '.join(sorted(FATAL_RULES))} cannot be overridden; a FATAL "
             f"finding is never suppressed. An acknowledged URL stops scoring "
             f"SOURCE_BUCKET and NOVELTY and stands R152 down for that package "
-            f"only.[/]"
+            f"only."
         )
+        emit(render("override_tables", {
+            "overrides": [
+                {"path": str(OVERRIDES_PATH), "rule_id": o.rule_id,
+                 "package": o.package, "reason": o.reason,
+                 "created_at": o.created_at}
+                for o in overrides
+            ],
+            "url_acks": [
+                {"package": a.package, "url": a.url, "reason": a.reason,
+                 "created_at": a.created_at}
+                for a in url_acks
+            ],
+            "note": note,
+        }))
     else:
         for o in overrides:
             print(f"{clean(o.rule_id):<8} {clean(o.package or 'all'):<20} "
@@ -283,15 +267,18 @@ def override_wizard(
     from ..analysis import analyze_package
     from ..override import get_active_overrides
 
-    con = console()
+    from ..sandbox import render_client
 
+    render_client.start_progress(
+        "override-analyze", f"Analyzing {package}...", kind="spinner")
     try:
-        with con.status(f"Analyzing {package}...", spinner="dots"):
-            fact = analyze_package(package)
+        fact = analyze_package(package)
     except Exception as exc:
         msg = f"Could not analyze '{package}': {exc}"
         _print_colored(msg, "red", stderr=True)
         raise typer.Exit(code=2)
+    finally:
+        render_client.stop_progress("override-analyze")
 
     existing = get_active_overrides(package=package)
     existing_ids = {o.rule_id for o in existing}
@@ -301,34 +288,22 @@ def override_wizard(
     available = [e for e in non_fatal if e.rule_id not in existing_ids]
 
     if not non_fatal:
-        con.print(f"[yellow]No suppressible rules triggered for '{package}'.[/] "
-                  f"(FATAL rules cannot be overridden.)")
+        _print_colored(
+            f"No suppressible rules triggered for '{package}'. "
+            f"(FATAL rules cannot be overridden.)", "yellow")
         return
 
     if available:
-        from rich.box import SIMPLE_HEAD
-        from rich.table import Table
+        from ..sandbox.render_client import render
 
-        con.print(f"\n[bold]Triggered rules for [cyan]{package}[/][/]\n")
-        table = Table(box=SIMPLE_HEAD)
-        table.add_column("#", style="dim", justify="right")
-        table.add_column("Rule", style="cyan")
-        table.add_column("Severity")
-        table.add_column("Reason", overflow="fold")
-        from rich.text import Text
-        for i, e in enumerate(available, 1):
-            # `e.reason` carries package-controlled text: a tree member
-            # name, a quoted diff fragment. The weaker `unicode` helper
-            # used here before leaves C1 control bytes, BEL and newlines
-            # behind, and \x9b2J is the 8-bit spelling of "clear screen".
-            table.add_row(Text(str(i)), Text(clean(e.rule_id)),
-                          Text(clean(e.severity)), Text(clean(e.reason)))
-        con.print(table)
-
-        if already_suppressed:
-            con.print(f"\n[dim](Already suppressed: {', '.join(e.rule_id for e in already_suppressed)})[/]")
-
-        con.print()
+        emit(render("override_wizard_table", {
+            "package": package,
+            "rows": [
+                {"rule_id": e.rule_id, "severity": e.severity, "reason": e.reason}
+                for e in available
+            ],
+            "already_suppressed": [e.rule_id for e in already_suppressed],
+        }))
         added = []
         while True:
             try:
@@ -339,7 +314,7 @@ def override_wizard(
                 )
             except EOFError:
                 # stdin is not interactive (piped/CI): stop cleanly.
-                con.print("[yellow]Input closed; no more overrides added.[/]")
+                _print_colored("Input closed; no more overrides added.", "yellow")
                 break
             if pick.lower() in ("q", "quit", ""):
                 break
@@ -357,38 +332,38 @@ def override_wizard(
                         break
 
             if matched is None:
-                con.print(f"[red]No rule matches '{pick}'.[/] Try again or enter q to quit.")
+                _print_colored(f"No rule matches '{pick}'. Try again or enter q to quit.", "red")
                 continue
 
             reason = None
             try:
                 reason = typer.prompt(f"Reason for suppressing {matched.rule_id}")
             except EOFError:
-                con.print("[yellow]Input closed; override not added.[/]")
+                _print_colored("Input closed; override not added.", "yellow")
                 break
             if not reason or not reason.strip():
-                con.print("[red]Reason cannot be empty.[/]")
+                _print_colored("Reason cannot be empty.", "red")
                 continue
 
             add_override(matched.rule_id, reason, package=package)
             added.append(matched.rule_id)
             available = [e for e in available if e.rule_id != matched.rule_id]
-            con.print(f"[green]Override added: {matched.rule_id} for {package}[/]")
+            _print_colored(f"Override added: {matched.rule_id} for {package}", "green")
 
             if not available:
-                con.print("[dim]All suppressible rules have been handled.[/]")
+                _print_colored("All suppressible rules have been handled.")
                 break
 
         if added:
-            con.print(f"\n[bold green]Done.[/] Added {len(added)} override(s) for '{package}':")
+            _print_colored(f"Done. Added {len(added)} override(s) for '{package}':", "green")
             for rid in added:
-                con.print(f"  [green]\u2713[/] {rid}")
+                _print_colored(f"  \u2713 {rid}", "green")
         else:
-            con.print("[yellow]No overrides were added.[/]")
+            _print_colored("No overrides were added.", "yellow")
     else:
-        con.print(f"[yellow]All triggered rules for '{package}' are already suppressed.[/]")
+        _print_colored(f"All triggered rules for '{package}' are already suppressed.", "yellow")
         if already_suppressed:
-            con.print(f"  Existing: {', '.join(e.rule_id for e in already_suppressed)}")
+            print(f"  Existing: {', '.join(e.rule_id for e in already_suppressed)}")
 
 
 @override_app.command("rm")

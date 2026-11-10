@@ -17,7 +17,7 @@ import typer
 from ..config import ensure_default_configs
 from ..db import init_db
 from ..safe_text import clean
-from .display import _print_colored, console, download_progress, use_rich, use_rich_progress
+from .display import _print_colored, download_progress, emit, use_rich, use_rich_progress
 
 #: The corpus baseline release asset.  Matches the name the release
 #: workflow builds (``scripts/build_release_baselines.py --corpus``);
@@ -245,23 +245,13 @@ def _render_pivot(result: dict) -> None:
         return
 
     if use_rich():
-        from rich.table import Table
-        from rich.text import Text
+        from ..sandbox.render_client import render
 
-        con = console()
-        con.print(Text(clean(header), style="bold cyan"))
-        table = Table(show_header=True, header_style="bold")
-        table.add_column("Package")
-        table.add_column("Surface")
-        table.add_column("Reference")
-        for match in result["matches"]:
-            table.add_row(
-                Text(clean(match["package"])),
-                Text(clean(match["surface"])),
-                Text(clean(match["detail"], limit=200)),
-            )
-        con.print(table)
-        con.print(f"[dim]searched: {', '.join(result['sources'])}[/]")
+        emit(render("pivot_table", {
+            "header": header,
+            "sources": result["sources"],
+            "matches": result["matches"],
+        }))
     else:
         print(clean(header))
         for match in result["matches"]:

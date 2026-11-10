@@ -10,11 +10,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-try:
-    import rich  # noqa: F401
-    _HAS_RICH = True
-except ImportError:  # pragma: no cover - rich is a dependency, but degrade gracefully
-    _HAS_RICH = False
+import importlib.util
+
+_HAS_RICH = importlib.util.find_spec("rich") is not None
 
 from ..config import load_config, load_naming
 from ..db import (

@@ -4,17 +4,6 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 import sys
 
-from rich.progress import (
-    BarColumn,
-    MofNCompleteColumn,
-    Progress,
-    SpinnerColumn,
-    TextColumn,
-    TimeElapsedColumn,
-    TimeRemainingColumn,
-)
-from rich.console import Console
-
 import logging
 
 from ..config import load_config
@@ -214,24 +203,24 @@ def _iter_prefetched(names, fetch_fn, workers: int):
 
 
 def _corpus_progress(total: int, json_output: bool):
-    """A rich progress bar for the analysis loop, or None when not interactive.
-
-    Renders on stderr so it does not corrupt the artifact or a piped ``--json``
-    stream; falls back to periodic log lines when there is no TTY.
-    """
+    """A worker-drawn progress bar, or None when not interactive."""
     if not (_HAS_RICH and not json_output and sys.stderr.isatty()):
         return None
-    progress = Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        MofNCompleteColumn(),
-        TextColumn("elapsed"),
-        TimeElapsedColumn(),
-        TextColumn("eta"),
-        TimeRemainingColumn(),
-        console=Console(stderr=True),
-    )
-    progress.start()
-    task = progress.add_task("Analysing packages", total=total)
-    return progress, task
+    from ..sandbox import render_client
+
+    class _Progress:
+        def __init__(self):
+            self.done = 0
+            render_client.start_progress(
+                "corpus-analysis", "Analysing packages", total=total)
+
+        def update(self, advance=0, description=None):
+            self.done += advance
+            render_client.update_progress(
+                "corpus-analysis", completed=self.done,
+                description=description)
+
+        def stop(self):
+            render_client.stop_progress("corpus-analysis")
+
+    return _Progress()

@@ -1,6 +1,8 @@
 """Baseline-build implementation, using the facade for patchable globals."""
 
 import json
+import uuid
+from datetime import datetime, timezone
 from typing import Callable, Optional
 
 from ._pipeline_helpers import CycleResult
@@ -212,6 +214,7 @@ def _run_baseline_build(
     detail: dict[str, dict] = {}
     ioc_hits: dict[str, list[str]] = {}
     refusals: set[str] = set()
+    scan_status: dict[str, str] = {}
 
     # Cap the work per invocation so even a bootstrap advances in bounded,
     # resumable chunks.  The remainder is picked up on the next run.
@@ -432,6 +435,8 @@ def _run_baseline_build(
         old_pkgbuild = previous_snapshot.get("pkgbuild_text") or ""
         detail[name] = {
             "score": fact.final_score,
+            "risk": getattr(fact, "risk", ""),
+            "coverage_gaps": list(getattr(fact, "coverage_gaps", ()) or ()),
             "old_version": old_snapshot["version"] if old_snapshot else "",
             "new_version": fact.new_version or meta.get("Version", ""),
             "last_modified": meta.get("LastModified"),
@@ -481,6 +486,7 @@ def _run_baseline_build(
                 stopped = True
                 break
             status = _store(name, fetched)
+            scan_status[name] = status
             if status == "fetch_failed":
                 fetch_failures += 1
             elif status == "not_vetted":
@@ -508,6 +514,14 @@ def _run_baseline_build(
     finally:
         if progress is not None:
             progress[0].stop()
+
+    result.scans = _scan_records(detail, scan_status)
+    result.scan_summary = _scan_summary(result.scans, scan_status)
+    result.started_at = datetime.fromtimestamp(
+        batch_start, timezone.utc).isoformat()
+    result.finished_at = datetime.now(timezone.utc).isoformat()
+    result.partial = partial
+    result.cycle_id = f"{result.started_at}-{uuid.uuid4().hex[:12]}"
 
     if fetch_failures:
         _log(f"{fetch_failures} package(s) had no fetchable PKGBUILD this cycle")
@@ -586,6 +600,59 @@ def _prefill_missing_dependencies(
             "candidates); more may remain for a later cycle"
         )
 
+
+
+def _scan_records(detail: dict, statuses: dict[str, str]) -> list[dict]:
+    """The compact all-scan rows for one cycle, one per attempted package."""
+    records = []
+    for package in sorted(statuses):
+        status = statuses[package]
+        record = {"package": package, "status": status}
+        data = detail.get(package) if status == "ok" else None
+        if data:
+            rules = []
+            seen = set()
+            for finding in data.get("findings") or ():
+                rule_id = str(finding.get("rule_id", ""))
+                if not rule_id or rule_id in seen:
+                    continue
+                seen.add(rule_id)
+                rules.append({
+                    "id": rule_id,
+                    "severity": str(finding.get("severity", "")),
+                })
+            record.update({
+                "score": int(data.get("score", 0) or 0),
+                "risk": str(data.get("risk", "") or ""),
+                "old_version": str(data.get("old_version", "") or ""),
+                "new_version": str(data.get("new_version", "") or ""),
+                "maintainer": str(data.get("maintainer", "") or ""),
+                "rules": rules,
+                "coverage_gaps": list(data.get("coverage_gaps") or ()),
+                "has_diff": bool(data.get("diff") or data.get("diff_sha256")),
+            })
+        records.append(record)
+    return records
+
+
+def _scan_summary(records: list[dict], statuses: dict[str, str]) -> dict:
+    """Cycle workload counts derived beside the records, never guessed."""
+    counts = {
+        "attempted": len(records),
+        "succeeded": 0,
+        "fetch_failed": 0,
+        "not_vetted": 0,
+        "vanished": 0,
+        "reserved": 0,
+        "with_diff": 0,
+    }
+    key = {"ok": "succeeded"}
+    for status in statuses.values():
+        name = key.get(status, status)
+        if name in counts:
+            counts[name] += 1
+    counts["with_diff"] = sum(1 for record in records if record.get("has_diff"))
+    return counts
 
 
 def _finish_cycle(

@@ -20,6 +20,7 @@ import os
 import stat
 import time
 import urllib.request
+import uuid
 from urllib.parse import urlsplit
 from pathlib import Path
 
@@ -574,6 +575,105 @@ def _fit_payload(payload: dict) -> dict:
     return out
 
 
+#: Records per all-scan chunk.  The feed rejects a body over 1 MB, so a
+#: cycle that analyses a large bootstrap is split; each chunk carries its
+#: own index and the same cycle id.
+_SCAN_CHUNK_RECORDS = 500
+
+
+def scan_payloads(cycle) -> list[dict]:
+    """The feed-only ``trustsight.scans`` documents for one cycle.
+
+    Every attempted root package is represented, including fetch and tokenizer
+    failures, so the dashboard has a true denominator.  The compact record
+    never carries a diff, finding prose, or a filesystem path.
+    """
+    scans = list(getattr(cycle, "scans", ()) or ())
+    summary = dict(getattr(cycle, "scan_summary", {}) or {})
+    if not scans and not summary.get("attempted"):
+        return []
+    summary["alerts"] = len({
+        package for package, _rule in (getattr(cycle, "new_alerts", ()) or ())
+    })
+    started = getattr(cycle, "started_at", "") or time.strftime(
+        "%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    finished = getattr(cycle, "finished_at", "") or started
+    cycle_id = getattr(cycle, "cycle_id", "") or f"{started}-{uuid.uuid4().hex[:12]}"
+    chunks: list[list[dict]] = []
+    current: list[dict] = []
+    for scan in scans:
+        candidate = current + [scan]
+        probe = {"event": "trustsight.scans", "scans": candidate}
+        if current and (_payload_size(probe) > _PAYLOAD_BUDGET_BYTES
+                        or len(candidate) > _SCAN_CHUNK_RECORDS):
+            chunks.append(current)
+            current = [scan]
+        else:
+            current = candidate
+    if current:
+        chunks.append(current)
+    if not chunks:
+        chunks = [[]]
+    documents = []
+    for index, chunk in enumerate(chunks):
+        document = {
+            "event": "trustsight.scans",
+            "tool": "trustsight",
+            "tool_version": _tool_version(),
+            "cycle_id": cycle_id,
+            "started_at": started,
+            "finished_at": finished,
+            "partial": bool(getattr(cycle, "partial", False)),
+            "bootstrap": bool(getattr(cycle, "bootstrap", False)),
+            "backfill_day": getattr(cycle, "backfill_day", "") or None,
+            "chunk_index": index,
+            "chunk_count": len(chunks),
+            "summary": summary,
+            "scans": chunk,
+        }
+        documents.append(document)
+    return documents
+
+
+def maybe_publish_scans(cycle, url: str | None = None) -> bool:
+    """Queue and publish the cycle's all-scan chunks to the signed feed only.
+
+    This is separate from :func:`maybe_notify`: a cycle with no alerts still
+    contributes its denominator, and a scan failure must never page anyone or
+    block the alert path.  The outbox marks each chunk feed-only.
+    """
+    documents = scan_payloads(cycle)
+    if not documents:
+        return False
+    feed = feed_url()
+    key_id, key = _feed_key()
+    if not feed or not key:
+        return False
+    try:
+        from .db import enqueue_alert_payload
+
+        for document in documents:
+            body = json.dumps(document, separators=(",", ":"),
+                              sort_keys=True).encode()
+            headers = _sign_feed(key, key_id, body)
+            enqueue_alert_payload(
+                document,
+                headers["webhook-id"],
+                int(headers["webhook-timestamp"]),
+                feed_only=True,
+            )
+        return flush_outbox(url)
+    except Exception as exc:  # noqa: BLE001 - a scan is not worth a dead loop
+        log.debug("scan outbox unavailable, delivering directly: %s", exc)
+    try:
+        for document in documents:
+            post_feed(feed, document, key, key_id)
+        return True
+    except Exception as exc:  # noqa: BLE001
+        log.warning("scan feed delivery failed: %s", type(exc).__name__)
+        return False
+
+
 def _tool_version() -> str:
     """The running TrustSight version, for the feed's pinned-version display.
 
@@ -853,7 +953,7 @@ def flush_outbox(url: str | None = None, now=None) -> bool:
             payload, effective, feed=feed, key_id=key_id, key=key,
             webhook_id=row.get("webhook_id") or None,
             timestamp=row.get("webhook_timestamp") or None,
-            skip_ntfy=bool(row.get("ntfy_delivered")),
+            skip_ntfy=bool(row.get("ntfy_delivered") or row.get("feed_only")),
             skip_feed=bool(row.get("feed_delivered")),
         )
         if ntfy_ok:

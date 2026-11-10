@@ -5,8 +5,8 @@ from urllib.parse import urlparse
 
 from ..buckets import PINNING_ORDER, classify_pinning_level
 from ..config import ensure_default_configs, load_patterns
-from ..db import init_db
-from ..sandbox.store_client import dependency_observation_counts
+from ..db import get_db_path
+from ..sandbox.store_client import dependency_observation_counts, init_db
 from ..differ import _has_checksum_in_post_diff
 from ..shell_words import COMMAND_ANCHOR
 from ..subproc import minimal_env
@@ -22,7 +22,6 @@ _CMD = COMMAND_ANCHOR
 
 def _ensure_init() -> None:
     global _initialized_for
-    from ..db import get_db_path
 
     # Keyed on the database path, not a bare boolean: the tests point
     # DATA_DIR at a fresh tmpdir per case, and a one-shot guard spent the

@@ -4,9 +4,7 @@ import json
 from ...config import (
     drifted_shipped_rules,
 )
-from ...db import (
-    get_last_analysis,
-)
+from ...sandbox.store_client import get_last_analysis
 from ...diffdoc import as_added_diff, parse_diff_lines
 from ...differ import (
     map_diff_lines,
@@ -113,7 +111,7 @@ def _campaign_corroboration(
     Impersonated targets are deliberately **not** matched: a campaign targets
     ``yay``, and reviewing ``yay`` is not corroboration of anything.
     """
-    from ...db import active_campaigns, campaign_state_available
+    from ...sandbox.store_client import active_campaigns, campaign_state_available
 
     campaigns = active_campaigns()
     if not campaigns:

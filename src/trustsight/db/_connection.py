@@ -22,8 +22,12 @@ def get_db_path() -> Path:
     """Return the path to the SQLite database file.
 
     ``DATA_DIR`` is resolved on the ``trustsight.db`` package at call time so
-    callers can redirect storage by patching ``trustsight.db.DATA_DIR``.
+    callers can redirect storage by patching ``trustsight.db.DATA_DIR``.  A
+    store worker receives the exact file through ``TRUSTSIGHT_DB_PATH``.
     """
+    override = os.environ.get("TRUSTSIGHT_DB_PATH")
+    if override:
+        return Path(override)
     from . import DATA_DIR
     return DATA_DIR / "trustsight.db"
 
@@ -242,6 +246,9 @@ def close_connections() -> None:
 def get_connection():
     """Yield the cached connection for the current database path.
 
+    In a read-only store worker the same call sites get a read-only handle;
+    the worker's filesystem is read-only, so a writer would fail closed.
+
     The connection is reused rather than closed on exit, so callers must
     still ``commit()`` their writes exactly as before.  Exactly one is kept
     per thread: a process only ever works against one database, and closing
@@ -255,6 +262,10 @@ def get_connection():
     writes the batch has already deferred, and a best-effort writer that
     catches its own error is expected to continue in the same transaction.
     """
+    if os.environ.get("TRUSTSIGHT_STORE_READ_ONLY") == "1":
+        with get_read_only_connection() as conn:
+            yield conn
+        return
     conn = _cached_connection()
     try:
         yield conn

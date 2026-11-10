@@ -1002,8 +1002,11 @@ def gate_git_worker_startup_is_isolated() -> Gate:
     leaked = sorted(k for k in minimal_env() if k.startswith("PYTHON"))
     if leaked:
         problems.append(f"the git worker environment carries PYTHON* vars: {leaked}")
-    if "env=minimal_env()" not in inspect.getsource(_spawn.spawn_isolated):
+    spawn_source = inspect.getsource(_spawn.spawn_isolated)
+    if "minimal_env()" not in spawn_source:
         problems.append("the git worker does not get a minimal environment")
+    if "env.update(" in spawn_source and "minimal_env()" not in spawn_source:
+        problems.append("the git worker environment can bypass minimal_env()")
     return Gate("git worker startup is isolated", not problems,
                 problems or "isolated (-I), minimal env")
 

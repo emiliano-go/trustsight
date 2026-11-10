@@ -28,7 +28,7 @@ from ...coverage import (
     resolution_coverage,
     stage_failures,
 )
-from ...db import effective_observation_count
+from ...sandbox.store_client import effective_observation_count
 from ...differ import detect_gpg_verification_removed, extract_urls_from_diff, map_diff_lines
 from ...diffdoc import diff_shape_fp
 from ...novelty import build_novelty_context

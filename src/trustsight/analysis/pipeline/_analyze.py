@@ -7,9 +7,6 @@ from ...config import (
     load_rules,
 )
 from ...db import (
-    get_last_analysis,
-    get_package,
-    get_package_id,
     insert_analysis,
     record_dependency_names,
     update_package_maintainer,
@@ -18,6 +15,7 @@ from ...db import (
     update_package_version,
     upsert_package,
 )
+from ...sandbox.store_client import get_last_analysis, get_package, get_package_id
 from ...differ import (
     extract_urls_from_diff,
 )

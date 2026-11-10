@@ -5,8 +5,8 @@ from ..config import (
     load_patterns,
     load_thresholds,
 )
-from .. import db as _db
-from ..db import (
+from ..db import official_package_names
+from ..sandbox.store_client import (
     dependency_observation_count,
     dependency_table_populated,
     is_established_package,
@@ -201,7 +201,7 @@ def name_shadow_findings(text: str, package_name: str,
         # Exact repository membership only: the observation-count fallback
         # includes the package's own corpus row, so it would report every
         # established-by-observation package as shadowing itself.
-        if name in _db.official_package_names():
+        if name in official_package_names():
             emit(name, "pkgname",
                  f"pkgname '{name}' is an established package")
 

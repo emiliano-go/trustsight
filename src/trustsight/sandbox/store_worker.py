@@ -1,0 +1,121 @@
+"""Read-only store worker for analysis.
+
+The analysis process must not hold a SQLite handle while reading
+package-controlled content.  This worker owns the read-only connection and
+answers a small named API; the parent sends operation name plus arguments and
+receives plain JSON.  Writes stay in the write path for now, but every
+observation read used by the analysis is served here.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sqlite3
+import sys
+
+from trustsight.sandbox import _linux_sandbox, protocol
+from trustsight.sandbox._spawn import core_sandbox_failures
+
+_MEMORY_BYTES = 256 * 1024 * 1024
+_CPU_SECONDS = 120
+_NOFILE = 32
+
+_OPS = {
+    "effective_observation_count",
+    "dependency_observation_count",
+    "dependency_observation_counts",
+    "dependency_table_populated",
+    "top_dependency_names",
+    "top_dependency_pairs",
+    "is_maintainer_globally_novel",
+    "get_package",
+    "get_package_id",
+    "get_last_analysis",
+    "key_observed_before",
+    "observed_key_count",
+    "domain_first_seen",
+    "domain_seen_within",
+    "observed_domain_count",
+    "maintainer_first_seen",
+    "active_campaigns",
+    "campaign_state_available",
+}
+
+
+def _handle(body: bytes) -> dict:
+    try:
+        request = json.loads(body.decode("utf-8"))
+        op = request.get("op")
+        if not isinstance(op, str) or op not in _OPS:
+            return {"error": f"unknown store op: {op!r}"}
+        args = request.get("args") or []
+        kwargs = request.get("kwargs") or {}
+        if not isinstance(args, list) or not isinstance(kwargs, dict):
+            return {"error": "invalid store request"}
+        import trustsight.db as db
+
+        result = getattr(db, op)(*args, **kwargs)
+        return {"result": json.loads(json.dumps(result, default=str))}
+    except sqlite3.OperationalError as exc:
+        if "unable to open database" not in str(exc):
+            return {"error": f"{type(exc).__name__}: {exc}"}
+        defaults = {
+            "effective_observation_count": 0,
+            "dependency_observation_count": 0,
+            "dependency_observation_counts": {},
+            "dependency_table_populated": False,
+            "is_maintainer_globally_novel": False,
+            "top_dependency_names": [],
+            "top_dependency_pairs": [],
+            "get_package": None,
+            "get_package_id": None,
+            "get_last_analysis": None,
+            "key_observed_before": False,
+            "observed_key_count": 0,
+            "domain_first_seen": None,
+            "domain_seen_within": False,
+            "observed_domain_count": 0,
+            "maintainer_first_seen": None,
+            "active_campaigns": [],
+            "campaign_state_available": False,
+        }
+        return {"result": defaults.get(op)}
+    except Exception as exc:
+        return {"error": f"{type(exc).__name__}: {exc}"}
+
+
+def main() -> int:
+    from trustsight.sandbox._limits import apply as apply_limits
+
+    failures = apply_limits(
+        memory_bytes=_MEMORY_BYTES, cpu_seconds=_CPU_SECONDS,
+        nofile=_NOFILE)
+    sandbox_failures, _proxy_url = _linux_sandbox.apply("read", "")
+    failures.extend(sandbox_failures)
+    core = core_sandbox_failures(failures)
+    if core:
+        print("trustsight-store-sandbox-refused: " + "; ".join(core),
+              file=sys.stderr, flush=True)
+        return 3
+    try:
+        os.chdir("/")
+    except OSError:
+        pass
+    stdin = sys.stdin.buffer
+    stdout = sys.stdout.buffer
+    while True:
+        try:
+            body = protocol.read_frame(stdin)
+        except protocol.FrameError:
+            return 0
+        response = _handle(body)
+        try:
+            stdout.write(protocol.frame(protocol.encode_response(response)))
+            stdout.flush()
+        except (BrokenPipeError, OSError):
+            return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

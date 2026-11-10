@@ -5,9 +5,7 @@ import re
 from ...config import (
     config_fingerprint,
 )
-from ...db import (
-    get_last_analysis,
-)
+from ...sandbox.store_client import get_last_analysis
 from ...findings import stamp
 from ...coverage import (
     note_stage_failure,
@@ -112,7 +110,7 @@ def _added_dependency_names(diff_text: str) -> set[str]:
     not vetted), so it propagates; any other failure is recorded as a
     degraded stage and the caller fails closed on the stage gap.
     """
-    from ...db import is_established_package
+    from ...sandbox.store_client import is_established_package
     from ...deps import extract_dependency_changes
     from ...tokenizer import TokenizerUnavailable
 

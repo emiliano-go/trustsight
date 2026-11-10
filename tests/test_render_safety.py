@@ -20,7 +20,6 @@ import contextlib
 import io
 import pathlib
 import re
-import io
 from types import SimpleNamespace
 from unittest.mock import patch
 

@@ -12,6 +12,7 @@ from trustsight.sandbox import manifest_client, render_client, render_worker
 def test_manifest_client_stops_a_wedged_worker(monkeypatch):
     class Dead:
         requests = 0
+        stderr: list[str] = []
 
         def alive(self):
             return True

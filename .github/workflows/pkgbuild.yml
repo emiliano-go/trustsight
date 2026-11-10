@@ -55,6 +55,13 @@ jobs:
           echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
           chown -R builder:builder "$GITHUB_WORKSPACE"
 
+      - name: Enable unprivileged user namespaces for the sandboxed suite
+        run: |
+          sysctl -w kernel.unprivileged_userns_clone=1 || true
+          sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          sysctl -w user.max_user_namespaces=28633 || true
+          su builder -c 'unshare -Ur true'
+
       - name: Verify the recorded checksum against the deterministic tarball
         run: |
           set -eu

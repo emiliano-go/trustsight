@@ -196,9 +196,12 @@ def _ask(payload: bytes):
                 if isinstance(response, dict)
                 else "manifest worker returned no result")
         return response["result"]
-    except ManifestUnavailable:
+    except ManifestUnavailable as exc:
+        detail = "; ".join(worker.stderr)
         worker.stop()
         _worker = None
+        if detail:
+            raise ManifestUnavailable(f"{exc} ({detail})") from exc
         raise
 
 

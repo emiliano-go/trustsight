@@ -990,8 +990,7 @@ def gate_tokenizer_worker_limit_failures_are_reported() -> Gate:
     with patch.object(expand_worker.resource, "setrlimit",
                       side_effect=OSError("denied")), \
             patch.object(expand_worker.ctypes, "CDLL",
-                         side_effect=AttributeError("no libc")), \
-            patch.object(expand_worker, "_report_isolation", lambda *a: None):
+                         side_effect=AttributeError("no libc")):
         failures = expand_worker._apply_limits()
     if len(failures) != 5:
         problems.append(f"expected five reported failures, got {len(failures)}")

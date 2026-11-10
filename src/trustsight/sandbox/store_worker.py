@@ -13,6 +13,7 @@ import json
 import os
 import sqlite3
 import sys
+from pathlib import Path
 
 from trustsight.sandbox import _linux_sandbox, protocol
 from trustsight.sandbox._spawn import core_sandbox_failures
@@ -22,6 +23,30 @@ _CPU_SECONDS = 120
 _NOFILE = 32
 
 _OPS = {
+    "init_db",
+    "upsert_package",
+    "update_package_version",
+    "update_package_maintainer",
+    "update_aur_orphan_state",
+    "insert_analysis",
+    "record_dependency_names",
+    "record_observed_domain",
+    "record_observed_key",
+    "record_added_literals",
+    "save_pkgbuild_snapshot",
+    "record_recipe_document",
+    "record_contact",
+    "record_host",
+    "record_property_transition",
+    "record_alerts",
+    "record_cycle_events",
+    "save_package_profile",
+    "record_upstream_dep_additions",
+    "record_gained_hosts",
+    "record_adoption_event",
+    "set_metadata",
+    "bump_observation_seq",
+
     "effective_observation_count",
     "dependency_observation_count",
     "dependency_observation_counts",
@@ -88,10 +113,16 @@ def _handle(body: bytes) -> dict:
 def main() -> int:
     from trustsight.sandbox._limits import apply as apply_limits
 
+    db_path = os.environ.get("TRUSTSIGHT_DB_PATH", "")
+    if not db_path:
+        print("trustsight-store-sandbox-refused: no database path",
+              file=sys.stderr, flush=True)
+        return 3
     failures = apply_limits(
         memory_bytes=_MEMORY_BYTES, cpu_seconds=_CPU_SECONDS,
-        nofile=_NOFILE)
-    sandbox_failures, _proxy_url = _linux_sandbox.apply("read", "")
+        nofile=_NOFILE, fsize=512 * 1024 * 1024)
+    sandbox_failures, _proxy_url = _linux_sandbox.apply(
+        "store", str(Path(db_path).parent))
     failures.extend(sandbox_failures)
     core = core_sandbox_failures(failures)
     if core:

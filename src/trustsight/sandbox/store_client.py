@@ -35,7 +35,6 @@ class _Worker:
             WORKER_MODULE,
             extra_env={
                 "TRUSTSIGHT_DB_PATH": self.db_path,
-                "TRUSTSIGHT_STORE_READ_ONLY": "1",
             },
         )
         self.requests = 0
@@ -184,6 +183,58 @@ def _call(op: str, *args, **kwargs):
             worker.stop()
             _worker = None
             raise
+
+
+def _write(op: str, *args, **kwargs):
+    return _call(op, *args, **kwargs)
+
+
+def init_db() -> None:
+    _write("init_db")
+
+
+def upsert_package(name: str, version: str) -> int:
+    return int(_write("upsert_package", name, version))
+
+
+def update_package_version(name: str, version: str):
+    return _write("update_package_version", name, version)
+
+
+def update_package_maintainer(name: str, maintainer: str):
+    return _write("update_package_maintainer", name, maintainer)
+
+
+def update_aur_orphan_state(name: str, orphaned):
+    return _write("update_aur_orphan_state", name, orphaned)
+
+
+def insert_analysis(**kwargs):
+    return _write("insert_analysis", **kwargs)
+
+
+def record_dependency_names(names: list[str]):
+    return _write("record_dependency_names", names)
+
+
+def record_observed_domain(domain: str):
+    return _write("record_observed_domain", domain)
+
+
+def record_observed_key(key: str):
+    return _write("record_observed_key", key)
+
+
+def record_added_literals(package_name: str, literals, observed_at=None):
+    return _write("record_added_literals", package_name, literals, observed_at)
+
+
+def set_metadata(key: str, value: str):
+    return _write("set_metadata", key, value)
+
+
+def bump_observation_seq() -> int:
+    return int(_write("bump_observation_seq"))
 
 
 def effective_observation_count() -> int:

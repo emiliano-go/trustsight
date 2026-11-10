@@ -547,7 +547,7 @@ def record_observed_identity(change: dict, maintainer: str) -> None:
     both producers (git and corpus), and only when the caller asked for a
     recording run: a review must not warm the ledger (A15).
     """
-    from ...db import record_observed_domain, record_observed_key
+    from ...sandbox.store_client import record_observed_domain, record_observed_key
     from ...maintainer_email import maintainer_domain
 
     pgp = (change or {}).get("pgp_keys", {}) or {}

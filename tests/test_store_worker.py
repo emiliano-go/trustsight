@@ -29,10 +29,10 @@ def test_reads_are_served_by_the_store_worker(tmp_path, monkeypatch):
     assert store_client.effective_observation_count() >= 0
 
 
-def test_worker_is_read_only_and_has_the_os_sandbox(tmp_path, monkeypatch):
+def test_worker_has_the_store_sandbox(tmp_path, monkeypatch):
     _temp_db(tmp_path, monkeypatch)
     source = inspect.getsource(store_worker.main)
-    assert '_linux_sandbox.apply("read"' in source
+    assert '"store"' in source
     assert "apply_limits(" in source
 
 

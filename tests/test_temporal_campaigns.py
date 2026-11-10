@@ -45,7 +45,7 @@ def test_t008_fires_for_delayed_payload_after_adoption():
         }]},
     ))[0]
     assert finding["rule_id"] == "T008"
-    assert finding["severity"] == "MEDIUM"
+    assert finding["severity"] == "INFO"
     assert finding["category"] == "temporal"
     assert finding["params"]["adoption_timestamp"] == adopted
     assert finding["params"]["rules"] == ["R001"]

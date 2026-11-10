@@ -35,6 +35,13 @@ is evidence for a human decision, not an authority that halts a build on its own
 Exit code 2 if the analysis pipeline cannot complete (clone failure, database
 error). Otherwise 0; `inspect` is an information command and does not flag.
 
+### `trustsight preinstall`
+
+The same contract as `inspect`: exit 0 when the remote scan completed (flagged
+or not), 2 when it could not run. It is a scanner, not a gate; the flagged
+outcome is in the output and in `--json`, never in the status. For a blocking
+pre-build step, `trustsight-gate` uses its own approval codes.
+
 ### `trustsight db`
 
 - **`check`**: returns 0 only when SQLite reports `ok`. A corrupt database,

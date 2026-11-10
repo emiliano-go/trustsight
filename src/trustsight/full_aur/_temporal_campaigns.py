@@ -140,7 +140,7 @@ def _delayed_adoption_findings(snapshot: HistorySnapshot) -> list[dict]:
             f"{name} gained payload rule(s) {', '.join(rules)} "
             f"{(now - adopted) / 86400:.1f} days after maintainer adoption",
             [name],
-            severity="MEDIUM",
+            severity="INFO",
             category="temporal",
             adoption_date=str(row.get("observed_at") or _iso_time(adopted)),
             adoption_timestamp=adopted,
@@ -202,7 +202,7 @@ def _dormant_takeover_findings(snapshot: HistorySnapshot) -> list[dict]:
             f"{name} was dormant for {dormant_for:.1f} days before adoption; "
             + ", ".join(measures),
             [name],
-            severity="MEDIUM",
+            severity="INFO",
             category="temporal",
             previous_maintainer=old_maintainer,
             current_maintainer=new_maintainer,
@@ -278,7 +278,7 @@ def _dependency_redirection_findings(snapshot: HistorySnapshot) -> list[dict]:
             f"{len(members)} package(s) added dependencies on recently "
             f"added or adopted target {target}",
             members,
-            severity="MEDIUM",
+            severity="INFO",
             category="dependency",
             target=target,
             dependency_names=sorted(dependency_names[target]),
@@ -318,7 +318,7 @@ def _reappearance_findings(snapshot: HistorySnapshot) -> list[dict]:
             f"{removal.get('cycle_time')}; current maintainer "
             f"{maintainer or 'unknown'}, FirstSubmitted={first_submitted!r}",
             [name],
-            severity="MEDIUM",
+            severity="INFO",
             category="temporal",
             removal_cycle=removal.get("cycle_time"),
             removal_maintainer=removal.get("maintainer"),
@@ -362,7 +362,7 @@ def _trust_erosion_findings(snapshot: HistorySnapshot) -> list[dict]:
             f"{name} has precursor rule(s) {', '.join(precursor_rules)} "
             f"before current terminal rule(s) {', '.join(terminal)}",
             [name],
-            severity="MEDIUM",
+            severity="INFO",
             category="temporal",
             precursor_rules=precursor_rules,
             precursor_history_ids=history_ids,

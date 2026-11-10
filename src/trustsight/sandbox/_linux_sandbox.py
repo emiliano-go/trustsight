@@ -466,6 +466,7 @@ def _read_paths() -> list[str]:
         sys.base_prefix, sys.exec_prefix,
         "/usr", "/usr/local", "/lib", "/lib64", "/bin", "/sbin",
         "/etc/ssl", "/etc/ca-certificates", "/etc/pki", "/etc/ld.so.cache",
+        "/etc/gitconfig", "/etc/gitattributes",
         "/etc/localtime", "/etc/hosts", "/etc/resolv.conf",
         "/etc/nsswitch.conf",
         "/dev/null", "/dev/zero", "/dev/urandom", "/dev/random",

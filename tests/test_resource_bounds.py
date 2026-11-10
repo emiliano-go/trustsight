@@ -160,6 +160,8 @@ def test_a_failed_transfer_still_charges_what_it_wrote(monkeypatch):
     """
     from trustsight.sandbox import git_client
 
+    monkeypatch.delenv("TRUSTSIGHT_OFFLINE", raising=False)
+
     class _DeadSession:
         def open_fetch(self, *_a, **_k):
             raise git_client.GitTransferTooLargeError("transfer exceeded", 12_345)
@@ -176,6 +178,8 @@ def test_a_failed_transfer_still_charges_what_it_wrote(monkeypatch):
 def test_a_fetch_op_error_reads_as_an_incomplete_fetch(monkeypatch):
     """The B2 path every caller already handles, not a bare runtime error."""
     from trustsight.sandbox import git_client
+
+    monkeypatch.delenv("TRUSTSIGHT_OFFLINE", raising=False)
 
     class _DeadSession:
         def open_fetch(self, *_a, **_k):

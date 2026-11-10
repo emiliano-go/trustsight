@@ -5,11 +5,10 @@ from ..config import (
     load_patterns,
     load_thresholds,
 )
-from ..db import official_package_names
+from .. import db as _db
 from ..sandbox.store_client import (
     dependency_observation_count,
     dependency_table_populated,
-    is_established_package,
     top_dependency_names,
 )
 from ..coverage import note_stage_failure
@@ -55,6 +54,14 @@ def _network_tools(config: dict) -> frozenset:
         return frozenset(tools)
     tools = config.get("tools", {}).get("network_makedepends")
     return frozenset(tools) if tools else frozenset(DEFAULT_NETWORK_TOOLS)
+
+
+def _is_established(name: str) -> bool:
+    """Official-repo membership first, observation count as the fallback."""
+    official = _db.official_package_names()
+    if official:
+        return name in official
+    return len(name) >= 4 and dependency_observation_count(name) >= 10
 
 
 def _widely_provided_threshold(config: dict) -> int:
@@ -118,7 +125,7 @@ def _scope_expansion_findings(diff_text, package_name, config, add,
         for name in sorted(added_deps.get(field, ())):
             if is_related_package(name, package_name):
                 continue
-            established = is_established_package(name)
+            established = _is_established(name)
             widely = _is_widely_provided(name, config)
             if not (established or widely):
                 continue
@@ -201,7 +208,7 @@ def name_shadow_findings(text: str, package_name: str,
         # Exact repository membership only: the observation-count fallback
         # includes the package's own corpus row, so it would report every
         # established-by-observation package as shadowing itself.
-        if name in official_package_names():
+        if name in _db.official_package_names():
             emit(name, "pkgname",
                  f"pkgname '{name}' is an established package")
 
@@ -228,7 +235,7 @@ def name_shadow_findings(text: str, package_name: str,
                 continue
             if is_ignorable(name) or is_related_package(name, package_name):
                 continue
-            if is_established_package(name):
+            if _is_established(name):
                 claimed.add(name)
                 emit(name, field,
                      f"{field} claims '{name}', an established package "
@@ -238,7 +245,7 @@ def name_shadow_findings(text: str, package_name: str,
     for name in sorted(conflicts):
         if name in skip or is_related_package(name, package_name):
             continue
-        if is_established_package(name):
+        if _is_established(name):
             emit(name, "conflicts",
                  f"conflicts claims '{name}', an established package "
                  f"unrelated to '{package_name}'")
@@ -321,7 +328,7 @@ def _dependency_findings(diff_text, package_name, config, add, current_text=None
                 # typosquat: `tlottie` resembles `rlottie` but is a real extra
                 # package, and a name-similarity hit on a package that exists
                 # is a naming heuristic, not impersonation.
-                if "D002" in wanted and not is_established_package(name):
+                if "D002" in wanted and not _is_established(name):
                     if candidates is None:
                         candidates = top_dependency_names()
                     impersonated = typosquat_target(name, candidates)
@@ -360,7 +367,7 @@ def _dependency_findings(diff_text, package_name, config, add, current_text=None
             for name in sorted(added_deps.get(field, ())):
                 if is_related_package(name, package_name):
                     continue
-                if is_established_package(name):
+                if _is_established(name):
                     add("D004", "Dependency Hijack Via Provides", "HIGH", "dependency",
                         f"{field} '{name}', an established package unrelated to "
                         f"'{package_name}'",

@@ -130,6 +130,10 @@ def _db_path() -> str:
 def _get_worker() -> _Worker:
     global _worker
     path = _db_path()
+    try:
+        Path(path).parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    except OSError:
+        pass
     if _worker is None or _worker.db_path != path or not _worker.alive() \
             or _worker.requests >= MAX_REQUESTS_PER_WORKER:
         if _worker is not None:

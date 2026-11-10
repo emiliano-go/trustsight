@@ -125,7 +125,7 @@ def test_g003_escalates_for_a_first_seen_account_adopting_dormant_packages(
         for i in range(3)
     ]
     monkeypatch.setattr(
-        "trustsight.db.maintainer_first_seen",
+        "trustsight.sandbox.store_client.maintainer_first_seen",
         lambda m: "2026-10-18 12:00:00" if m == "fennekuiper" else None,
     )
     found = coordinated_adoption(records, min_members=3)
@@ -145,7 +145,7 @@ def test_g003_stays_medium_for_an_established_maintainer(monkeypatch):
         for i in range(3)
     ]
     monkeypatch.setattr(
-        "trustsight.db.maintainer_first_seen",
+        "trustsight.sandbox.store_client.maintainer_first_seen",
         lambda m: "2020-01-01 00:00:00",
     )
     found = coordinated_adoption(records, min_members=3)
@@ -163,7 +163,7 @@ def test_g003_stays_medium_when_targets_are_active(monkeypatch):
         for i in range(3)
     ]
     monkeypatch.setattr(
-        "trustsight.db.maintainer_first_seen",
+        "trustsight.sandbox.store_client.maintainer_first_seen",
         lambda m: "2026-10-18 12:00:00",
     )
     found = coordinated_adoption(records, min_members=3)
@@ -311,7 +311,7 @@ def test_g008_fires_for_first_seen_account_adopting_dormant_packages(
         for i in range(5)
     ]
     monkeypatch.setattr(
-        "trustsight.db.maintainer_first_seen",
+        "trustsight.sandbox.store_client.maintainer_first_seen",
         lambda m: observed if m == "fennekuiper" else None,
     )
     found = first_seen_adoption_burst(records, None)
@@ -331,7 +331,7 @@ def test_g008_requires_first_seen_account(monkeypatch):
         for i in range(5)
     ]
     monkeypatch.setattr(
-        "trustsight.db.maintainer_first_seen",
+        "trustsight.sandbox.store_client.maintainer_first_seen",
         lambda m: "2020-01-01 00:00:00",
     )
     assert first_seen_adoption_burst(records, None) == []
@@ -350,7 +350,7 @@ def test_g008_requires_dormant_targets(monkeypatch):
         for i in range(5)
     ]
     monkeypatch.setattr(
-        "trustsight.db.maintainer_first_seen",
+        "trustsight.sandbox.store_client.maintainer_first_seen",
         lambda m: "2026-10-18 12:00:00",
     )
     assert first_seen_adoption_burst(records, None) == []
@@ -366,7 +366,7 @@ def test_g008_requires_min_packages(monkeypatch):
          "last_modified": 1000},
     ]
     monkeypatch.setattr(
-        "trustsight.db.maintainer_first_seen",
+        "trustsight.sandbox.store_client.maintainer_first_seen",
         lambda m: "2026-10-18 12:00:00",
     )
     assert first_seen_adoption_burst(records, None) == []
@@ -384,7 +384,7 @@ def test_g008_survives_a_first_seen_read_failure(monkeypatch):
         for i in range(5)
     ]
     monkeypatch.setattr(
-        "trustsight.db.maintainer_first_seen",
+        "trustsight.sandbox.store_client.maintainer_first_seen",
         lambda m: (_ for _ in ()).throw(RuntimeError("database is locked")),
     )
     assert first_seen_adoption_burst(records, None) == []
@@ -403,7 +403,7 @@ def test_g008_counts_a_package_once(monkeypatch):
         for _ in range(5)
     ]
     monkeypatch.setattr(
-        "trustsight.db.maintainer_first_seen",
+        "trustsight.sandbox.store_client.maintainer_first_seen",
         lambda m: "2026-10-18 12:00:00",
     )
     assert first_seen_adoption_burst(records, None) == []

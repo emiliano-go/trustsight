@@ -6,7 +6,8 @@
 
 ### Added
 
-- **T008-T012 report full-AUR history and cycle context.** {#full-aur-history-campaigns} T008 reports a payload appearing after an earlier maintainer transition, T009 a high-value dormant takeover, T010 dependencies redirected to newly added or adopted targets, T011 package reappearance after removal, and T012 an integrity/provenance erosion sequence followed by a payload. All five are INFO, weight 0 and anergic pending benign replay; none performs new network fetches or changes a score.
+- **Static runtime-surface rules H009-H013 (report-only).** The reserved `runtime` ids now analyse the surface a package runs at runtime without executing anything: H009 a network client in a systemd unit's `Exec*` line, H010 a write to a sensitive runtime path from a unit, H011 a privilege-escalating binary in a unit, H012 `TracerPid`/`ptrace`/`strace` detection in a committed runtime carrier, and H013 strace log truncation. They ship anergic (weight 0); the weekly anergic calibration issue drives the eventual weight. The "nothing is executed" invariant is unchanged.
+- **T008-T012 report full-AUR history and cycle context.** {#full-aur-history-campaigns} T008 reports a payload appearing after an earlier maintainer transition, T009 a high-value dormant takeover, T010 dependencies redirected to newly added or adopted targets, T011 package reappearance after removal, and T012 an integrity/provenance erosion sequence followed by a payload. All five were report-only (INFO, weight 0) at introduction and are promoted to MEDIUM in this release (see Changed); none performs new network fetches.
 - **`trustsight-gate` adds a per-package approval step to yay and paru.** The gate runs `trustsight inspect --allow-uninstalled --depth 1` for every target in the package manager's pre-build hook, prints the report, and asks for a yes/no per package. It is a hard gate: a refusal, an analysis failure, or an unavailable terminal aborts the whole transaction, because neither manager can drop one package at that stage and an AUR package may be a pulled dependency. Includes yay `AURPreInstall` and paru `PreBuildCommand` examples, an explicit `TRUSTSIGHT_GATE_DISABLE=1` bypass, and stable exit codes.
 
 ### Fixed
@@ -17,6 +18,10 @@
 
 - **`Resolved commands` now contains commands only.** The inspect panel and the report carried every resolved added line under that heading, so a full recipe showed `pkgbase`, comments and function braces as commands. The resolved text is split with the same command-position definition the rule families use, and non-command text is reported separately as `resolved_recipe`. The report field is additive; existing consumers of `resolved_commands` now receive only executable lines.
 - **T008-T012 read the streams they were shipped with.** T010 matched `depends_added`-style keys that the dependency extractor never produces, so it stayed silent; it now reads the real `depends`, `makedepends` and `checkdepends` fields. T009's `min_dependents` floor read a dependency graph the cycle sweep never built; the sweep now builds the graph once and shares it with the graph rules. When a snapshot is refused and the cgit fallback exceeds the response cap too, the refusal is retained as `snapshot_refused` instead of escaping as a generic fetch failure. The history-replay fixtures use production-shaped dependency detail.
+
+### Changed
+
+- **T008-T012 are promoted to MEDIUM (weight 15).** The five full-AUR history/cycle rules now contribute to the score. Promotion rests on the committed history replay (`tests/fixtures/history_corpus.py`, `tests/harness/history_replay.py`): each rule fires on its positive cycle and stays silent on the benign transition cycles. They were anergic since 0.27.1; this is their first scored release. `trustsight admin anergic` now lists no undecided rules.
 
 ### Security
 

@@ -409,4 +409,7 @@ def scan_tree_manifest(files, source_urls, package_name: str = "") -> list[dict]
             "params": {"path": name},
         }))
         break
+    from ..runtime_surface import runtime_surface_findings
+
+    findings.extend(runtime_surface_findings(files, package_name))
     return findings

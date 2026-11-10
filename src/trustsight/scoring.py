@@ -418,12 +418,18 @@ def calculate_score(
                 )
             )
             continue
-        anergic = anergy_entry(rule["rule_id"])
-        if anergic is not None and anergic.status != ANERGIC:
-            anergic = None
+        ledger_entry = anergy_entry(rule["rule_id"])
+        anergic = (ledger_entry
+                   if ledger_entry is not None and ledger_entry.status == ANERGIC
+                   else None)
         weight = rule.get("weight_override", severity_weights.get(rule["severity"], 0))
         if not isinstance(weight, int):
             weight = severity_weights.get(rule["severity"], 0)
+        # A human-decided weight overrides severity once the rule has left the
+        # undecided (anergic) state; 0 is the explicit report-only decision.
+        if (anergic is None and ledger_entry is not None
+                and ledger_entry.weight is not None):
+            weight = ledger_entry.weight
         if anergic is not None:
             # Two-signal activation: the rule is visible, but it has not
             # earned a score until the signal the ledger names arrives.

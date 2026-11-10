@@ -216,6 +216,7 @@ def _register_anergic(admin_app: typer.Typer) -> None:
             table.add_column("Signal")
             table.add_column("Since")
             table.add_column("Promotion")
+            table.add_column("Weight")
             for row in rows:
                 rule = REGISTRY.resolve(row["rule_id"])
                 label = f"{row['rule_id']} {rule.name or ''}".strip()
@@ -225,6 +226,8 @@ def _register_anergic(admin_app: typer.Typer) -> None:
                     Text(clean(row["signal"])),
                     Text(clean(row["since"])),
                     Text(clean(row["promotion"])),
+                    Text("-" if row.get("weight") is None
+                         else str(row["weight"])),
                 )
             con.print(table)
             return
@@ -232,8 +235,11 @@ def _register_anergic(admin_app: typer.Typer) -> None:
         for row in rows:
             rule = REGISTRY.resolve(row["rule_id"])
             label = f"{row['rule_id']} {rule.name or ''}".strip()
+            weight = ("undecided" if row.get("weight") is None
+                      else str(row["weight"]))
             print(f"{label}\n  status: {row['status']}\n  signal: {row['signal']}"
-                  f"\n  since: {row['since']}\n  promotion: {row['promotion']}")
+                  f"\n  since: {row['since']}\n  promotion: {row['promotion']}"
+                  f"\n  weight: {weight}")
 
 
 

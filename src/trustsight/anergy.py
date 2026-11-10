@@ -48,6 +48,11 @@ class AnergyEntry:
     promotion: str
     promoted_in: str = ""
     changelog: str = ""
+    #: Decided score weight once a human has adjudicated the rule.  ``None``
+    #: means undecided (severity weight applies on promotion); ``0`` is the
+    #: explicit "report-only, never score" decision.
+    weight: int | None = None
+    decided_in: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -58,6 +63,8 @@ class AnergyEntry:
             "promotion": self.promotion,
             "promoted_in": self.promoted_in,
             "changelog": self.changelog,
+            "weight": self.weight,
+            "decided_in": self.decided_in,
         }
 
 
@@ -74,6 +81,12 @@ def _load() -> dict[str, AnergyEntry]:
         status = str(row.get("status") or ANERGIC)
         if status not in _STATUSES:
             raise RuntimeError(f"anergy entry {rule_id!r} has unknown status {status!r}")
+        weight = row.get("weight")
+        if weight is not None and (isinstance(weight, bool)
+                                   or not isinstance(weight, int)
+                                   or weight < 0):
+            raise RuntimeError(
+                f"anergy entry {rule_id!r} has invalid weight {weight!r}")
         out[str(rule_id)] = AnergyEntry(
             rule_id=str(rule_id),
             status=status,
@@ -82,6 +95,8 @@ def _load() -> dict[str, AnergyEntry]:
             promotion=str(row.get("promotion") or ""),
             promoted_in=str(row.get("promoted_in") or ""),
             changelog=str(row.get("changelog") or ""),
+            weight=weight,
+            decided_in=str(row.get("decided_in") or ""),
         )
     return out
 

@@ -54,7 +54,6 @@ def test_json_discovery_withholds_progress_and_notices(monkeypatch):
 
 
 def test_colored_stderr_goes_to_stderr(monkeypatch, capsys):
-    monkeypatch.setattr(display, "_err_console", None)
     display._print_colored("boom", "red", stderr=True)
     captured = capsys.readouterr()
     assert "boom" in captured.err

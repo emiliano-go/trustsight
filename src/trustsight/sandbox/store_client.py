@@ -17,6 +17,7 @@ from ._spawn import spawn_isolated
 WORKER_MODULE = "trustsight.sandbox.store_worker"
 REQUEST_TIMEOUT_SECONDS = 10.0
 MAX_REQUESTS_PER_WORKER = 1024
+MAX_REQUEST_BYTES = 16 * 1024 * 1024
 
 
 class StoreUnavailable(RuntimeError):
@@ -165,6 +166,9 @@ def _call(op: str, *args, **kwargs):
             {"op": op, "args": list(args), "kwargs": kwargs},
             ensure_ascii=False, separators=(",", ":"),
         ).encode("utf-8")
+        if len(body) > MAX_REQUEST_BYTES:
+            raise StoreUnavailable(
+                f"store request exceeds its {MAX_REQUEST_BYTES}-byte cap")
         try:
             raw = worker.request(body)
             worker.requests += 1

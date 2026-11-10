@@ -1,10 +1,9 @@
-"""Read-only store worker for analysis.
+"""Store worker for analysis.
 
-The analysis process must not hold a SQLite handle while reading
-package-controlled content.  This worker owns the read-only connection and
-answers a small named API; the parent sends operation name plus arguments and
-receives plain JSON.  Writes stay in the write path for now, but every
-observation read used by the analysis is served here.
+The analysis process must not hold a SQLite handle.  This worker owns the
+connection and answers a small named read/write API; the parent sends the
+operation name plus arguments and receives plain JSON.  Read operations run
+with a read-only connection, and write operations are an explicit closed set.
 """
 
 from __future__ import annotations
@@ -22,7 +21,7 @@ _MEMORY_BYTES = 256 * 1024 * 1024
 _CPU_SECONDS = 120
 _NOFILE = 32
 
-_OPS = {
+_WRITE_OPS = {
     "init_db",
     "upsert_package",
     "update_package_version",
@@ -46,7 +45,9 @@ _OPS = {
     "record_adoption_event",
     "set_metadata",
     "bump_observation_seq",
+}
 
+_READ_OPS = {
     "effective_observation_count",
     "dependency_observation_count",
     "dependency_observation_counts",
@@ -67,6 +68,38 @@ _OPS = {
     "campaign_state_available",
 }
 
+_OPS = _WRITE_OPS | _READ_OPS
+
+_READ_DEFAULTS = {
+    "effective_observation_count": 0,
+    "dependency_observation_count": 0,
+    "dependency_observation_counts": {},
+    "dependency_table_populated": False,
+    "is_maintainer_globally_novel": False,
+    "top_dependency_names": [],
+    "top_dependency_pairs": [],
+    "get_package": None,
+    "get_package_id": None,
+    "get_last_analysis": None,
+    "key_observed_before": False,
+    "observed_key_count": 0,
+    "domain_first_seen": None,
+    "domain_seen_within": False,
+    "observed_domain_count": 0,
+    "maintainer_first_seen": None,
+    "active_campaigns": [],
+    "campaign_state_available": False,
+}
+
+_FAILURES: list[str] = []
+
+
+def _set_mode(write: bool) -> None:
+    if write:
+        os.environ.pop("TRUSTSIGHT_STORE_READ_ONLY", None)
+    else:
+        os.environ["TRUSTSIGHT_STORE_READ_ONLY"] = "1"
+
 
 def _handle(body: bytes) -> dict:
     try:
@@ -78,6 +111,7 @@ def _handle(body: bytes) -> dict:
         kwargs = request.get("kwargs") or {}
         if not isinstance(args, list) or not isinstance(kwargs, dict):
             return {"error": "invalid store request"}
+        _set_mode(op in _WRITE_OPS)
         import trustsight.db as db
 
         result = getattr(db, op)(*args, **kwargs)
@@ -85,27 +119,9 @@ def _handle(body: bytes) -> dict:
     except sqlite3.OperationalError as exc:
         if "unable to open database" not in str(exc):
             return {"error": f"{type(exc).__name__}: {exc}"}
-        defaults = {
-            "effective_observation_count": 0,
-            "dependency_observation_count": 0,
-            "dependency_observation_counts": {},
-            "dependency_table_populated": False,
-            "is_maintainer_globally_novel": False,
-            "top_dependency_names": [],
-            "top_dependency_pairs": [],
-            "get_package": None,
-            "get_package_id": None,
-            "get_last_analysis": None,
-            "key_observed_before": False,
-            "observed_key_count": 0,
-            "domain_first_seen": None,
-            "domain_seen_within": False,
-            "observed_domain_count": 0,
-            "maintainer_first_seen": None,
-            "active_campaigns": [],
-            "campaign_state_available": False,
-        }
-        return {"result": defaults.get(op)}
+        if op not in _READ_OPS:
+            return {"error": "database unavailable for a write operation"}
+        return {"result": _READ_DEFAULTS.get(op)}
     except Exception as exc:
         return {"error": f"{type(exc).__name__}: {exc}"}
 
@@ -125,6 +141,7 @@ def main() -> int:
         "store", str(Path(db_path).parent))
     failures.extend(sandbox_failures)
     core = core_sandbox_failures(failures)
+    _FAILURES.extend(failures)
     if core:
         print("trustsight-store-sandbox-refused: " + "; ".join(core),
               file=sys.stderr, flush=True)
@@ -141,6 +158,8 @@ def main() -> int:
         except protocol.FrameError:
             return 0
         response = _handle(body)
+        if _FAILURES:
+            response["degraded"] = list(_FAILURES)
         try:
             stdout.write(protocol.frame(protocol.encode_response(response)))
             stdout.flush()

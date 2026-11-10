@@ -224,10 +224,10 @@ def test_worker_cpu_reading_matches_the_process():
 
 
 def test_isolation_helpers_report_a_bool():
-    from trustsight.sandbox import expand_worker
+    from trustsight.sandbox import _linux_sandbox, expand_worker
 
     assert isinstance(expand_worker._no_new_privs(), bool)
-    assert isinstance(expand_worker._drop_network(), bool)
+    assert callable(_linux_sandbox.apply)
 
 
 def test_worker_spawn_disables_user_site(monkeypatch):

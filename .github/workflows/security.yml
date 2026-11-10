@@ -32,6 +32,9 @@ jobs:
       - name: Install
         run: uv sync --locked --extra dev --python 3.12
 
+      - name: Require the parser sandbox floor
+        run: uv run python scripts/check_sandbox_floor.py
+
       - name: Run the security gates
         run: uv run python scripts/security_gates.py --json security-gates.json
 

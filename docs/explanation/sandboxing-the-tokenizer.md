@@ -75,13 +75,14 @@ silently ran without its parser.
 **It does not remove the Python runtime from the trust boundary.** The
 interpreter, the standard library and the OS remain [assumptions](../security.md#assumptions).
 A subprocess is the same interpreter with fewer privileges; it is a smaller
-target, not a different one. The syscall-level confinement that would
-change that - `seccomp`, `landlock`, `bwrap` - is deliberately not in the
-default: it is new dependency or C-adjacent code in a project whose stated
-aim is to shrink that surface, and the interpreter it would contain is
-already trusted. `PR_SET_NO_NEW_PRIVS` and a best-effort
-`unshare(CLONE_NEWNET)` are applied; they cost nothing and close the easy
-gaps.
+target, not a different one. The worker therefore also enters the shared
+kernel sandbox in `sandbox/_linux_sandbox.py`: a user namespace, a private
+network namespace, a Landlock filesystem ruleset and a seccomp allowlist
+with no socket syscalls. Landlock ABI 6 (Linux 6.12+) is required; a kernel
+that cannot provide that floor refuses the worker rather than analysing with
+weaker confinement. This reuses the same primitives as the git worker, not a
+new dependency: Landlock and seccomp are installed directly through
+`ctypes`.
 
 ## What it costs
 
@@ -141,8 +142,11 @@ read as full protection. The response is serialised under
 `MAX_RESPONSE_BYTES` and framed only if it fits: `protocol.encode_response`
 stops at the cap while the body is built, so a wide projection is a contained
 `TokenizerUnavailable` refusal rather than a frame the parent reads and
-discards. The git worker uses the same encoder. As with the git worker, these
-are resource-bounded subprocesses rather than an OS sandbox.
+discards. The git worker uses the same encoder. Both workers now run behind the kernel
+confinement described in A16: the tokenizer worker is a `read`-role sandbox
+with no socket syscalls and no writable filesystem, and the git worker adds
+the fetch-role proxy bridge. A missing Landlock ABI 6, seccomp, user
+namespace or network namespace is a startup refusal, not a degraded run.
 
 The sandbox covers the whole tokenizer module, so `split_lines` and
 `join_line_continuations` are sandboxed too, not only the expansion

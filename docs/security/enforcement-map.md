@@ -65,7 +65,8 @@ python scripts/security_gates.py
 | `tokenizer module is isolated` | A6 | no `src/` module imports `_tokenizer_engine` except `sandbox/expand_worker.py` |
 | `tokenizer worker startup is isolated` | A6 | the worker launches `-I` with no `PYTHON*` environment, so no `sitecustomize` runs at startup |
 | `git worker startup is isolated` | A16 | the git worker launches `-I` with a minimal environment, so no `sitecustomize` runs at startup |
-| `git worker limit failures are reported` | A16 | `sandbox/git_worker._apply_limits` returns every protection that could not be set; a lost `RLIMIT_AS`/`RLIMIT_CPU`/`PR_SET_NO_NEW_PRIVS` refuses the worker, and `_harden_libgit2` plus secondary limits surface as `degraded`; this is a **resource-bounded subprocess boundary, not an OS sandbox** (no separate UID, network namespace or seccomp) |
+| `git worker limit failures are reported` | A16 | `sandbox/git_worker._apply_limits` returns every protection that could not be set; a lost `RLIMIT_AS`/`RLIMIT_CPU`/`PR_SET_NO_NEW_PRIVS` refuses the worker, and `_harden_libgit2` plus secondary limits surface as `degraded` |
+| `git worker runs in an OS sandbox` | A16 | `sandbox/_linux_sandbox` gives the worker a user and network namespace, Landlock over the filesystem, a seccomp allowlist and no capabilities; the `read` role has no socket syscalls and the `fetch` role reaches only `aur.archlinux.org:443` through inherited socketpairs to the parent `sandbox/_aur_proxy` CONNECT proxy. A protection the kernel did not grant refuses the worker |
 | `every cited invariant is defined` | model parity | every `A<n>` cited by this map has a matching paragraph in `docs/security/program-under-attack.md` |
 | `tokenizer worker limit failures are reported` | A6 | `sandbox/expand_worker._apply_limits` returns every limit that could not be set; secondary limits attach `degraded` to every response and the client logs them rather than inferring protection from silence |
 | `sandbox core limit failure refuses the package` | A6, A16, B2 | `sandbox/_spawn.core_sandbox_failures` names the fatal set; both workers exit before serving when `RLIMIT_AS`, `RLIMIT_CPU` or `PR_SET_NO_NEW_PRIVS` failed, so the client refuses and the package is NOT vetted |
@@ -82,6 +83,7 @@ python scripts/security_gates.py
 | `release artifacts and tags use the verified commit` | release consistency | `.github/workflows/publishing.yml` builds from the checked-out target and refuses a tag that points elsewhere; `scripts/verify_release.py` rebuilds `HEAD` |
 | `SQL is parameterised` | A9 | `db/` |
 | `terminal output is inert` | A10 | `safe_text.py`, `cli/`, the `full_aur` progress log sink, and the CLI `_StderrHandler` (message and traceback text) |
+| `Rich runs only in the render worker` | A10/A17 | `render/**` owns every Rich construct; `sandbox/render_worker.py` imports no CLI, database, fetcher or socket module, and a worker that cannot apply the read-role sandbox refuses |
 | `freshness uses local marker` | A11 | `sandbox/git_project._is_current`, `sandbox/git_project.last_fetch_time` |
 | `a seed cannot rewrite the database` | A12 | `db.import_seed` |
 | `hashed maintainers protect privacy` | P1 | `db.maintainers_hashed`, `seed_meta.salt` |
@@ -129,12 +131,13 @@ python scripts/security_gates.py
 | `run diff assembly is bounded` | A14, B2 | `fetcher.MAX_RUN_DIFF_BYTES` charged across results |
 | `a truncated history walk is a declared gap` | B2 | `coverage.HISTORY_TRUNCATED` set on every early stop |
 | `every history diff is scored independently` | B1 | no aggregate score reachable from the `--last` path |
-| `manifest parses are bounded and refusing` | A4b/A5 | hostile TOML/JSON/line fixtures return a refusal, never a hang |
+| `manifest parses are bounded and refusing` | A4b/A5 | hostile TOML/JSON/line fixtures and the PyYAML merge-key bomb return a refusal or linear parse, never a hang |
+| `manifest parsing is sandboxed` | A17 | the parent facades (`analysis/manifests`, `srcinfo`, `tokenizer`, `full_aur/fetch`) call `sandbox/manifest_client`; `sandbox/manifest_worker` applies the read-role Linux sandbox and is the only production caller of the manifest, archive and tokenizer-engine parsers |
 | `manifest table is configuration` | A6 | the manifest filename table is written to `patterns.toml` |
 | `U003 joins the host view` | B11 | a manifest-introduced git host appears in `hosts_gained` |
 | `manifest ledger stays weight 0` | B10 | U001/U002/U005/U006 are INFO and U009 is a feed-only LOW; all weigh 0, and only U003/U004 score |
 | `archive listing adds no extraction` | A8 | the manifest layer reads committed files only |
-| `yaml is only ever safe_load` | A5 | package-controlled YAML is parsed with `yaml.safe_load` only |
+| `yaml is only ever safe_load` | A5 | package-controlled YAML uses a bounded `SafeLoader` subclass (merge/alias/node/depth limits, duplicate-key refusal); no `yaml.load`/`full_load`/custom unsafe loader |
 | `libgit2 is not the vulnerable version` | A14 | the pygit2 pin bundles libgit2 >= 1.9.7 (delta result-size allocation fix, CVE-2026-53585, and the libssh2 remote-path command injection, CVE-2026-5917), read from the runtime version, and every declared floor (`pyproject.toml`, both PKGBUILDs, `.SRCINFO`) requires pygit2 >= 1.20.1 so a fresh install cannot resolve the affected 1.9.6 bundle |
 
 How each gate is scoped, and the recurring mistake that lets one pass while its invariant is broken, is set out in [reviewing a security control](../contributing/security-review.md). Read it before adding an invariant or a gate.

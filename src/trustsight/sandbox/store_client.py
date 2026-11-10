@@ -229,6 +229,30 @@ def record_added_literals(package_name: str, literals, observed_at=None):
     return _write("record_added_literals", package_name, literals, observed_at)
 
 
+def record_recipe_document(package_name: str, scalars, arrays):
+    return _write("record_recipe_document", package_name, scalars, arrays)
+
+
+def save_pkgbuild_snapshot(*args, **kwargs):
+    return _write("save_pkgbuild_snapshot", *args, **kwargs)
+
+
+def save_package_profile(*args, **kwargs):
+    return _write("save_package_profile", *args, **kwargs)
+
+
+def record_gained_hosts(*args, **kwargs):
+    return _write("record_gained_hosts", *args, **kwargs)
+
+
+def record_property_transition(*args, **kwargs):
+    return _write("record_property_transition", *args, **kwargs)
+
+
+def record_upstream_dep_additions(*args, **kwargs):
+    return _write("record_upstream_dep_additions", *args, **kwargs)
+
+
 def set_metadata(key: str, value: str):
     return _write("set_metadata", key, value)
 

@@ -423,7 +423,7 @@ def analyze_package_text(
             if maintainer:
                 update_package_maintainer(pkg_name, maintainer)
             from ...recipedoc import parse_recipe
-            from ...db import record_recipe_document
+            from ...sandbox.store_client import record_recipe_document
 
             try:
                 recipe = parse_recipe(new_pkgbuild or "", file="PKGBUILD")
@@ -565,7 +565,7 @@ def analyze_package_text(
         # Keep the added encoded literals so G002 can join across packages
         # at cycle end, the same feed the review path records.
         from ...analysis.entropy import added_literals, added_text
-        from ...db import record_added_literals
+        from ...sandbox.store_client import record_added_literals
 
         record_added_literals(pkg_name, added_literals(added_text(diff_text)))
 
@@ -573,7 +573,7 @@ def analyze_package_text(
         # exact tuple history.  The index is analysis-side; the signed
         # seed/baseline pipeline is untouched.
         from ...recipedoc import parse_recipe
-        from ...db import record_recipe_document
+        from ...sandbox.store_client import record_recipe_document
 
         try:
             recipe = parse_recipe(new_pkgbuild or "", file="PKGBUILD")

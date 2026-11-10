@@ -31,6 +31,7 @@ runner = CliRunner()
 CASES = [
     ("review", ["review"]),
     ("inspect", ["inspect", "pkg"]),
+    ("preinstall", ["preinstall", "pkg"]),
     ("explain", ["explain", "pkg", "C003"]),
     ("lint", ["lint", "/nonexistent"]),
     ("verify-build", ["verify-build", "pkg"]),

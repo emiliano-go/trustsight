@@ -147,4 +147,7 @@ def gate_anergic_promotions_are_changelogged() -> Gate:
         if row.rule_id not in section:
             problems.append(
                 f"{row.rule_id}: absent from the {row.promoted_in} changelog section")
+        if row.weight is not None and not row.decided_in:
+            problems.append(
+                f"{row.rule_id}: decided weight {row.weight} without decided_in")
     return Gate(name, not problems, {"promoted": len(promoted)}, "; ".join(problems))

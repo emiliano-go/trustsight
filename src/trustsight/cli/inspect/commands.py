@@ -2,6 +2,7 @@
 
 import json
 import sys
+from typing import Optional
 import typer
 from ...config import ensure_default_configs, load_config
 from ...coverage import HISTORY_TRUNCATED
@@ -54,6 +55,11 @@ def register_commands(app: typer.Typer):
             help="AUR dependency levels to analyse: 0 off, 1 default, n levels, "
                  "-1 every level (bounded).",
         ),
+        deep: Optional[bool] = typer.Option(
+            None, "--deep/--no-deep",
+            help="Deep analysis: full dependency depth, and the L9 build lane "
+                 "when [verify] is enabled. Defaults to the [deep] config.",
+        ),
         allow_uninstalled: bool = typer.Option(
             False, "--allow-uninstalled",
             help="Analyse a package not in the local pacman set",
@@ -84,7 +90,8 @@ def register_commands(app: typer.Typer):
         _show_risk = risk
         ensure_default_configs()
         init_db()
-        if load_config().get("seed", {}).get("auto_import", True):
+        config = load_config()
+        if config.get("seed", {}).get("auto_import", True):
             maybe_auto_import_seed(quiet=json_output, allow_release_fetch=True)
 
         # --last validation
@@ -166,6 +173,10 @@ def register_commands(app: typer.Typer):
             return
 
         # Single-result path (current behaviour).
+        deep_enabled = (deep if deep is not None
+                        else bool((config.get("deep") or {}).get("enabled", False)))
+        if deep_enabled and depth is None:
+            depth = -1  # deep mode analyses the full dependency closure
         try:
             fact = analyze_package(package, depth=depth, record=record, full_recipe=full_recipe)
         except Exception as exc:
@@ -196,6 +207,26 @@ def register_commands(app: typer.Typer):
             ))
             typer.echo(f"\nFile at: {issue_url(package_name, rule_ids)}")
             return
+        from ...analysis.deep import deep_decision
+
+        deep_info = deep_decision(
+            config, getattr(fact, "final_score", None), explicit=bool(deep))
+        deep_l9 = None
+        if deep_info["triggered"] and deep_info["l9_requested"]:
+            try:
+                from ...api import TrustSight
+
+                static_clean = not any(
+                    e.severity in ("FATAL", "CRITICAL", "HIGH")
+                    for e in fact.score_breakdown)
+                deep_l9 = TrustSight().verify_build(
+                    package, static_clean=static_clean)
+            except Exception as exc:  # noqa: BLE001 - the L9 lane is optional
+                deep_l9 = {"status": "l9_unavailable",
+                           "reason": f"{type(exc).__name__}: {exc}"}
+        elif deep_info["triggered"]:
+            deep_l9 = {"status": "l9_unavailable",
+                       "reason": "verify lane disabled"}
         body = _inspect_one(
             fact,
             show_score=_show_score,
@@ -203,6 +234,20 @@ def register_commands(app: typer.Typer):
             verbose=verbose,
             json_output=json_output,
         )
+        if deep_info["triggered"]:
+            if body is not None:
+                body["deep"] = {**deep_info, "l9": deep_l9}
+            elif deep_l9 and deep_l9.get("status") == "l9_unavailable":
+                typer.echo(
+                    f"Deep analysis: L9 unavailable ({deep_l9.get('reason')}).")
+            elif deep_l9:
+                typer.echo("Deep analysis (L9 build lane):")
+                for finding in deep_l9.get("findings", ()):
+                    typer.echo(f"{finding['rule_id']}: {finding['match']}")
+                if deep_l9.get("l9_divergence"):
+                    typer.echo(
+                        "L9 divergence: the artifact and the static analysis "
+                        "disagree; both profiles stand.")
         if explain:
             from ...fetcher import clone_or_fetch
             project = clone_or_fetch(package)

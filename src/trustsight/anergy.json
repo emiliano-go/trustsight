@@ -8,6 +8,46 @@
       "since": "0.27.0",
       "status": "promoted"
     },
+    "H009": {
+      "changelog": "runtime-surface-lane",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly anergic calibration, then set weight and decided_in",
+      "signal": "weekly calibration review: assign an explicit weight (0 keeps it report-only, a positive weight promotes it) after a true-positive twin and a quiet benign replay",
+      "since": "0.28.0",
+      "status": "anergic"
+    },
+    "H010": {
+      "changelog": "runtime-surface-lane",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly anergic calibration, then set weight and decided_in",
+      "signal": "weekly calibration review: assign an explicit weight (0 keeps it report-only, a positive weight promotes it) after a true-positive twin and a quiet benign replay",
+      "since": "0.28.0",
+      "status": "anergic"
+    },
+    "H011": {
+      "changelog": "runtime-surface-lane",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly anergic calibration, then set weight and decided_in",
+      "signal": "weekly calibration review: assign an explicit weight (0 keeps it report-only, a positive weight promotes it) after a true-positive twin and a quiet benign replay",
+      "since": "0.28.0",
+      "status": "anergic"
+    },
+    "H012": {
+      "changelog": "runtime-surface-lane",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly anergic calibration, then set weight and decided_in",
+      "signal": "weekly calibration review: assign an explicit weight (0 keeps it report-only, a positive weight promotes it) after a true-positive twin and a quiet benign replay",
+      "since": "0.28.0",
+      "status": "anergic"
+    },
+    "H013": {
+      "changelog": "runtime-surface-lane",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly anergic calibration, then set weight and decided_in",
+      "signal": "weekly calibration review: assign an explicit weight (0 keeps it report-only, a positive weight promotes it) after a true-positive twin and a quiet benign replay",
+      "since": "0.28.0",
+      "status": "anergic"
+    },
     "T004": {
       "changelog": "missing-self-axis",
       "promoted_in": "0.27.0",

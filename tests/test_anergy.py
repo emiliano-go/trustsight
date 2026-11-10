@@ -69,7 +69,48 @@ def test_admin_anergic_json_lists_the_ledger():
     result = CliRunner().invoke(app, ["admin", "anergic", "--json"])
     assert result.exit_code == 0, result.output
     rows = json.loads(result.output)
-    assert {row["rule_id"] for row in rows} == {
-        "T008", "T009", "T010", "T011", "T012",
-    }
+    assert {row["rule_id"] for row in rows} == set(anergy.anergic_ids())
     assert all(row["status"] == "anergic" for row in rows)
+
+
+def test_a_decided_zero_weight_keeps_a_promoted_rule_report_only(monkeypatch):
+    decided = AnergyEntry(
+        rule_id="X999", status="promoted", signal="s", since="0.28.0",
+        promotion="p", promoted_in="0.28.0", changelog="c",
+        weight=0, decided_in="0.28.0",
+    )
+    monkeypatch.setattr(anergy, "_ENTRIES", {"X999": decided}, raising=False)
+    finding = {
+        "rule_id": "X999", "name": "probe", "severity": "HIGH",
+        "category": "x", "match": "probe",
+    }
+    _, breakdown, _ = calculate_score([finding], {}, NoveltyContext())
+    row = next(entry for entry in breakdown if entry.rule_id == "X999")
+    assert row.weight == 0
+
+
+def test_a_decided_weight_overrides_severity(monkeypatch):
+    decided = AnergyEntry(
+        rule_id="X999", status="promoted", signal="s", since="0.28.0",
+        promotion="p", promoted_in="0.28.0", changelog="c",
+        weight=40, decided_in="0.28.0",
+    )
+    monkeypatch.setattr(anergy, "_ENTRIES", {"X999": decided}, raising=False)
+    finding = {
+        "rule_id": "X999", "name": "probe", "severity": "MEDIUM",
+        "category": "x", "match": "probe",
+    }
+    _, breakdown, _ = calculate_score([finding], {}, NoveltyContext())
+    row = next(entry for entry in breakdown if entry.rule_id == "X999")
+    assert row.weight == 40
+
+
+def test_anergic_temporal_rules_stay_weight_zero():
+    finding = {
+        "rule_id": "T008", "name": "Delayed Payload Adoption",
+        "severity": "INFO", "category": "temporal", "match": "probe",
+    }
+    _, breakdown, _ = calculate_score([finding], {}, NoveltyContext())
+    row = next(entry for entry in breakdown if entry.rule_id == "T008")
+    assert row.weight == 0
+    assert row.evidence.get("anergic") is True

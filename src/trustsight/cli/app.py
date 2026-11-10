@@ -46,6 +46,7 @@ def _main(
 # Register all command modules
 from .review import register_commands as _register_review
 from .inspect import register_commands as _register_inspect
+from .preinstall import register_commands as _register_preinstall
 from .explain import register_commands as _register_explain
 from .lint import register_commands as _register_lint
 from .history import register_commands as _register_history
@@ -61,6 +62,7 @@ from .verdict import register_commands as _register_verdict
 
 _register_review(app)
 _register_inspect(app)
+_register_preinstall(app)
 _register_explain(app)
 _register_lint(app)
 _register_history(app)

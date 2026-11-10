@@ -1,0 +1,100 @@
+name: Anergic Weekly Calibration
+
+# Every rule held at weight 0 (anergic) waits for a second signal before it may
+# score.  This job keeps that decision visible: once a week it collects the
+# live trigger counts from the watcher feed and the committed history-replay
+# fires for each anergic rule, and files (or refreshes) an issue whose
+# checklist records the eventual weight - 0 keeps the rule report-only, a
+# positive weight promotes it.  It never changes scoring itself.
+
+on:
+  schedule:
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: anergic-weekly
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+      - name: Install
+        run: uv sync --locked --extra dev --python 3.12
+
+      - name: Collect the weekly calibration data
+        run: |
+          uv run python scripts/anergic_weekly.py \
+            --json /tmp/anergic.json \
+            --markdown /tmp/anergic.md
+
+      - name: Open or refresh the weekly issue
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const fs = require('fs');
+            let report;
+            try {
+              report = JSON.parse(fs.readFileSync('/tmp/anergic.json', 'utf8'));
+            } catch (e) {
+              core.setFailed(`could not read the weekly report: ${e}`);
+              return;
+            }
+            const rows = report.rules || [];
+            if (rows.length === 0) {
+              core.notice('No rules are anergic; every shipped rule is decided. No issue filed.');
+              return;
+            }
+            let table = fs.readFileSync('/tmp/anergic.md', 'utf8');
+            const LIMIT = 50000;
+            if (table.length > LIMIT) table = table.slice(0, LIMIT) + '\n... truncated, see run log ...';
+            const week = new Date().toISOString().slice(0, 10);
+            const title = `Anergic calibration - week of ${week}`;
+            const body = [
+              table,
+              '',
+              '---',
+              `Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            ].join('\n');
+
+            const label = 'anergic-calibration';
+            const open = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: label,
+              per_page: 10,
+            });
+            if (open.data.length) {
+              const issue = open.data[0];
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                title,
+                body,
+                assignees: ['emiliano-go'],
+              });
+              core.notice(`Updated #${issue.number}`);
+            } else {
+              const created = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: [label, 'calibration'],
+                assignees: ['emiliano-go'],
+              });
+              core.notice(`Opened #${created.data.number}`);
+            }

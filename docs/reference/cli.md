@@ -206,6 +206,45 @@ With `--record`, the analysis result (`PackageFact` serialised to JSON, triggere
 
 ---
 
+## trustsight preinstall
+
+A read-only remote scanner for packages you have not installed yet. It is
+`inspect --allow-uninstalled` without the flag: a package absent from the local
+pacman set is resolved in the AUR and its **whole recipe** is analysed (there is
+no installed side to diff against), while an installed package is analysed
+against the pending update. It never installs, builds, or executes a package,
+and it never prompts.
+
+```
+trustsight preinstall <package>...
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `package...` | Yes | One or more AUR package names to scan. |
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--depth` | AUR dependency levels, as in `inspect`. In deep mode it defaults to `-1`. |
+| `--deep` / `--no-deep` | Deep analysis: full dependency closure, and the optional L9 build lane when `[verify] enabled` is set. Defaults to the `[deep]` config. |
+| `--full-recipe` / `--no-full-recipe` | Default: whole recipe when the package is not installed, the pending diff when it is. |
+| `--verbose`, `--score`, `--risk` | Same meaning as `inspect`. |
+| `--json` | One report body, or an array for several packages. Exits 0 on completion. |
+
+### Output and exit codes
+
+The body and renderers are the same as `inspect` ([B11](../security.md#b11-every-surface-reports-the-same-thing)).
+It is a **report, not a gate**: exit **0** when the scan completed (whatever it
+found) and **2** when it could not run, per [B6](../security.md#b6-what-a-result-does-not-claim).
+Gate a pipeline on the JSON, not the exit status. For an approval step inside
+yay/paru use [`trustsight-gate`](../guides/gating-yay-paru.md) instead.
+
+---
+
 ## trustsight history
 
 Show analysis history for a package.

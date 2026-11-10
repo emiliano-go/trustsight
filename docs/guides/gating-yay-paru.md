@@ -5,6 +5,13 @@
 `trustsight inspect` is a report; `trustsight-gate` is the policy wrapper that
 turns it into an approval step inside yay and paru.
 
+For a manual check of a package you have not installed yet, use
+`trustsight preinstall <package>…`. It is the same analysis without
+`--allow-uninstalled` and without the approval prompt: a read-only remote
+scanner that exits 0 when the scan completed and 2 when it could not (it never
+installs and never encodes a verdict in its status). `trustsight-gate` remains
+the interactive pre-build approval step.
+
 The hooks require a TrustSight build that provides the `trustsight-gate`
 console script. Verify it with `command -v trustsight-gate`; an older package
 that only ships `trustsight` will abort the hook with "command not found".

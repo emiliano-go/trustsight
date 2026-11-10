@@ -317,17 +317,17 @@ must never kill the watch loop. Overridden per run by `--notify`.
 
 ### `[deep]`
 
-!!! note "Reserved, not implemented"
-
-    These keys are written to the default config but no code reads them.
-    Setting them has no effect.
-
-Deep analysis mode: reserved.
+Deep analysis mode. When enabled, `trustsight inspect` analyses the full AUR
+dependency closure (as if `--depth -1`), and for a package whose static score
+reaches `threshold` it runs the optional L9 build lane when `[verify] enabled`
+is true. The L9 result is reported separately and never changes the static
+score; when the lane is unavailable the report says `l9_unavailable`.
+`--deep` / `--no-deep` override the config for one run.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `enabled` | bool | `false` | Enable deep analysis mode. |
-| `threshold` | int | `80` | Minimum score to trigger deep analysis. |
+| `threshold` | int | `80` | Minimum static score that triggers the L9 lane in deep mode. |
 
 ### `[diff]`
 

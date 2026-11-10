@@ -45,6 +45,10 @@ quiet = 40
 strict = 10
 
 [deep]
+# Deep analysis. ``inspect`` analyses the full AUR dependency closure when the
+# mode is on, and runs the optional L9 build lane for a package whose static
+# score reaches ``threshold`` - only when ``[verify] enabled`` is set.  The
+# L9 result is reported separately and never changes the static score.
 enabled = false
 threshold = 80
 

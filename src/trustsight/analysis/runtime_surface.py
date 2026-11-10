@@ -28,13 +28,11 @@ _SCRIPT_SUFFIXES = (".install", ".sh", ".bash", ".py")
 _EXEC_LINE_RE = re.compile(r"^\s*Exec[A-Za-z]*\s*=", re.MULTILINE)
 _NETWORK_CLIENT_RE = re.compile(
     r"\b(?:curl|wget|nc|ncat|netcat|socat|telnet)\b|/dev/tcp/", re.IGNORECASE)
-_SENSITIVE_WRITE_RE = re.compile(
-    r"(?:>>?|\btee\b)[^\n]{0,80}(?:/etc/|/var/|/run/|\$HOME|~/|/root/)")
+_WRITE_MARKERS = (">", "tee")
+_SENSITIVE_PREFIXES = ("/etc/", "/var/", "/run/", "$HOME", "~/", "/root/")
 _ESCALATION_RE = re.compile(r"\b(?:sudo|pkexec|doas|su)\b")
 _TRACE_DETECT_RE = re.compile(r"TracerPid|ptrace\s*\(\s*PTRACE_|\bstrace\s+-p\b")
-_TRACE_TRUNCATE_RE = re.compile(
-    r"(?:>\s*|truncate\s+-s\s*0\s+|rm\s+-f\s+)[^\n]{0,80}strace",
-    re.IGNORECASE)
+_TRACE_TRUNCATE_MARKERS = (">", "truncate", "rm ")
 
 
 def _is_test(path: str) -> bool:
@@ -46,6 +44,23 @@ def _is_test(path: str) -> bool:
 def _is_unit(path: str) -> bool:
     return path.lower().endswith(_UNIT_SUFFIXES)
 
+
+
+def _sensitive_write(line: str) -> bool:
+    """A runtime write to a sensitive path, checked without a regex.
+
+    An unanchored ``(?:>>?|tee).{0,80}(?:/etc/|...)`` pattern was 21 ms on the
+    adversarial audit input, over the regex budget; a bounded string scan is
+    linear and needs no audit exemption.
+    """
+    if not any(marker in line for marker in _WRITE_MARKERS):
+        return False
+    return any(prefix in line for prefix in _SENSITIVE_PREFIXES)
+
+
+def _trace_truncate(line: str) -> bool:
+    """A strace log truncation or removal, checked without a regex."""
+    return "strace" in line and any(m in line for m in _TRACE_TRUNCATE_MARKERS)
 
 
 def _finding(rule_id: str, name: str, path: str, line: int, match: str) -> dict:
@@ -85,7 +100,7 @@ def runtime_surface_findings(files, package_name: str = "") -> list[dict]:
                     findings.append(_finding(
                         "H009", "Network connection attempt", path,
                         number, line.strip()[:160]))
-                if _SENSITIVE_WRITE_RE.search(line):
+                if _sensitive_write(line):
                     findings.append(_finding(
                         "H010", "Suspicious file write", path,
                         number, line.strip()[:160]))
@@ -97,7 +112,7 @@ def runtime_surface_findings(files, package_name: str = "") -> list[dict]:
                 findings.append(_finding(
                     "H012", "Strace detection attempt", path,
                     number, line.strip()[:160]))
-            if _TRACE_TRUNCATE_RE.search(line):
+            if _trace_truncate(line):
                 findings.append(_finding(
                     "H013", "Strace log truncated", path,
                     number, line.strip()[:160]))

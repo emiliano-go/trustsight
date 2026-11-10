@@ -36,6 +36,7 @@ CORE_SANDBOX_FAILURES = (
     "RLIMIT_AS",
     "RLIMIT_CPU",
     "PR_SET_NO_NEW_PRIVS",
+    "OS sandbox",
 )
 
 
@@ -47,12 +48,15 @@ def core_sandbox_failures(failures: list[str]) -> list[str]:
     ]
 
 
-def launch_args(module: str) -> list[str]:
+def launch_args(module: str, role: str | None = None,
+                extra_argv: tuple = ()) -> list[str]:
     """The child command line for worker *module* (dotted name).
 
     ``-I`` is isolated mode.  Isolation also means the child cannot find this
     package through the environment, so the bootstrap inserts the trusted
-    source root explicitly and then calls the worker's ``main``.
+    source root explicitly and then calls the worker's ``main``.  A *role*
+    (and any extra arguments after it) lets the git worker choose fetch or
+    read confinement; the tokenizer worker passes neither.
     """
     bootstrap = (
         "import sys;"
@@ -60,17 +64,24 @@ def launch_args(module: str) -> list[str]:
         f"import {module} as _worker;"
         "raise SystemExit(_worker.main())"
     )
-    return [sys.executable, "-I", "-c", bootstrap]
+    args = [sys.executable, "-I", "-c", bootstrap]
+    if role is not None:
+        args.append(role)
+        args.extend(str(item) for item in extra_argv)
+    return args
 
 
-def spawn_isolated(module: str, cwd: str = "/") -> subprocess.Popen:
+def spawn_isolated(module: str, cwd: str = "/", role: str | None = None,
+                   extra_argv: tuple = (),
+                   pass_fds: tuple = ()) -> subprocess.Popen:
     """Start worker *module* with stdio piped, a minimal env, own session."""
     return subprocess.Popen(
-        launch_args(module),
+        launch_args(module, role, extra_argv),
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         close_fds=True,
+        pass_fds=pass_fds,
         start_new_session=True,
         cwd=cwd,
         env=minimal_env(),

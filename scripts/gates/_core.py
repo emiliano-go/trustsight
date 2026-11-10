@@ -60,8 +60,12 @@ _NETWORK_MODULES = {
     "full_aur/metadata.py",
     "notify.py",
     "release.py",
-    # The isolated git worker clones the AUR repository (A16).
+    # The isolated git worker clones the AUR repository (A16), but only
+    # through its own loopback bridge and the parent CONNECT proxy pinned to
+    # aur.archlinux.org:443.
     "sandbox/git_worker.py",
+    "sandbox/_linux_sandbox.py",
+    "sandbox/_aur_proxy.py",
 }
 
 _NETWORK_CALLS = ("urlopen", "urlretrieve", "clone_repository", "create_connection")
@@ -314,7 +318,17 @@ _BOUND_CONSTANTS = {
     "sandbox/git_bounds.py": [
         "GIT_WORKER_MEMORY_BYTES", "GIT_WORKER_CPU_SECONDS",
         "GIT_WORKER_RETIRE_CPU_SECONDS", "GIT_WORKER_FSIZE_BYTES",
-        "GIT_WORKER_NOFILE", "GIT_PACK_MAX_OBJECTS",
+        "GIT_WORKER_NOFILE", "GIT_WORKER_WRITE_BYTES",
+        "GIT_WORKER_MAX_FILES", "GIT_WORKER_MONITOR_SECONDS",
+        "GIT_WORKER_HOME_BYTES", "GIT_WORKER_HOME_FILES",
+        "GIT_WORKER_ROOT_BYTES", "GIT_WORKER_ROOT_FILES",
+        "GIT_PACK_MAX_OBJECTS",
+        "GIT_PROXY_HEADER_BYTES", "GIT_PROXY_REQUEST_BODY_BYTES",
+        "GIT_PROXY_TOTAL_REQUEST_BYTES", "GIT_PROXY_RESPONSE_BYTES",
+        "GIT_PROXY_MAX_REQUESTS", "GIT_PROXY_DEADLINE_SECONDS",
+        "GIT_PROXY_HEADER_SECONDS", "GIT_PROXY_BODY_SECONDS",
+        "GIT_PROXY_ADVERT_BYTES", "GIT_PROXY_MAX_REFS",
+        "GIT_PROXY_MAX_WANTS", "GIT_PROXY_RESPONSE_HEADER_BYTES",
         "GIT_TRANSFER_DEADLINE_SECONDS", "GIT_FETCH_TIMEOUT_SECONDS",
         "GIT_OP_TIMEOUT_SECONDS", "MAX_TRANSFER_BYTES",
         "MAX_TOTAL_TRANSFER_BYTES", "GIT_DIFF_MAX_CONTEXT_LINES",

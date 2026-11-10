@@ -60,7 +60,7 @@ def test_stale_marker_and_future_dated_commit_still_fetches(tmp_path, monkeypatc
     is only for a clone that has no marker at all, so a marker that says the
     clone is behind must win over HEAD's self-declared date.
     """
-    from trustsight.sandbox.git_project import _is_current, record_fetch as _record_fetch
+    from trustsight.sandbox.git_worker import _is_current, _record_fetch
 
     repo = pygit2.init_repository(str(tmp_path / "r"))
     author = pygit2.Signature(

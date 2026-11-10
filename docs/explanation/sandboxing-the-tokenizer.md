@@ -141,8 +141,10 @@ read as full protection. The response is serialised under
 `MAX_RESPONSE_BYTES` and framed only if it fits: `protocol.encode_response`
 stops at the cap while the body is built, so a wide projection is a contained
 `TokenizerUnavailable` refusal rather than a frame the parent reads and
-discards. The git worker uses the same encoder. As with the git worker, these
-are resource-bounded subprocesses rather than an OS sandbox.
+discards. The git worker uses the same encoder. The tokenizer worker remains
+a resource-bounded subprocess rather than the git worker's kernel sandbox;
+the git worker, which parses native libgit2 objects and fetches from the
+network, additionally runs behind the confinement described in A16.
 
 The sandbox covers the whole tokenizer module, so `split_lines` and
 `join_line_continuations` are sandboxed too, not only the expansion

@@ -195,4 +195,9 @@ def test_a_worker_that_exits_at_startup_is_a_refusal(monkeypatch):
     with pytest.raises(
         git_client.GitSandboxUnavailable, match="exited during startup"
     ):
-        session.request("head", {})
+        session.request("head", {"pkg": "demo", "cache_dir": "/tmp"})
+
+
+def test_run_op_refuses_the_unverified_fetch_path():
+    with pytest.raises(ValueError, match="clone_or_fetch"):
+        git_client.run_op("open_fetch", {"pkg": "demo", "cache_dir": "/tmp"})

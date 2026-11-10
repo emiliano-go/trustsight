@@ -83,6 +83,7 @@ python scripts/security_gates.py
 | `release artifacts and tags use the verified commit` | release consistency | `.github/workflows/publishing.yml` builds from the checked-out target and refuses a tag that points elsewhere; `scripts/verify_release.py` rebuilds `HEAD` |
 | `SQL is parameterised` | A9 | `db/` |
 | `terminal output is inert` | A10 | `safe_text.py`, `cli/`, the `full_aur` progress log sink, and the CLI `_StderrHandler` (message and traceback text) |
+| `Rich runs only in the render worker` | A10/A17 | `render/**` owns every Rich construct; `sandbox/render_worker.py` imports no CLI, database, fetcher or socket module, and a worker that cannot apply the read-role sandbox refuses |
 | `freshness uses local marker` | A11 | `sandbox/git_project._is_current`, `sandbox/git_project.last_fetch_time` |
 | `a seed cannot rewrite the database` | A12 | `db.import_seed` |
 | `hashed maintainers protect privacy` | P1 | `db.maintainers_hashed`, `seed_meta.salt` |

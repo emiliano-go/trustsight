@@ -350,8 +350,6 @@ def test_fallback_verdict_first_analysis_says_no_version_bump_confirmed():
 
 def test_inspect_omits_the_lines_row_on_a_zero_diff(monkeypatch):
     """A review with no diff must not draw a stale '+0 -0' line."""
-    from rich.console import Console
-
     from trustsight.cli import inspect as inspect_cli
     from trustsight.schema import DiffSummary, PackageFact
 

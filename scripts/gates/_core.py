@@ -60,8 +60,12 @@ _NETWORK_MODULES = {
     "full_aur/metadata.py",
     "notify.py",
     "release.py",
-    # The isolated git worker clones the AUR repository (A16).
+    # The isolated git worker clones the AUR repository (A16), but only
+    # through its own loopback bridge and the parent CONNECT proxy pinned to
+    # aur.archlinux.org:443.
     "sandbox/git_worker.py",
+    "sandbox/_linux_sandbox.py",
+    "sandbox/_aur_proxy.py",
 }
 
 _NETWORK_CALLS = ("urlopen", "urlretrieve", "clone_repository", "create_connection")
@@ -162,23 +166,14 @@ def _render_forget_list(names: list[str]) -> None:
         typer.echo(f"  {clean(name)}")
 
 def _render_list_rows(rows: list[dict]) -> None:
-    """The `list` table, as the command builds it."""
-    from rich.table import Table
-    from rich.text import Text
+    """The `list` table, through the render sandbox."""
+    from trustsight.sandbox.render_client import render
+    from trustsight.cli import display
 
-    from trustsight.cli.display import band_colour, console
-    from trustsight.safe_text import clean
-
-    table = Table(title=f"Tracked packages ({len(rows)} total)")
-    for column in ("Package", "Version", "Maintainer", "Last Checked", "Score", "Risk"):
-        table.add_column(column)
-    for row in rows:
-        table.add_row(
-            Text(clean(row["name"])), Text(row["version"]),
-            Text(clean(row["maintainer"])), row["last_checked"][:10],
-            Text(str(row["score"])), Text(row["risk"], style=band_colour(row["risk"])),
-        )
-    console().print(table)
+    text = render("list_table", {"rows": rows})
+    con = display._console
+    stream = getattr(con, "file", None) if con is not None else None
+    (stream or __import__("sys").stdout).write(text)
 
 def _seed_ioc_baseline(source: str = "test-feed", expires_at: str = ""):
     """Import a tiny IOC baseline into the current db; return its entries."""

@@ -67,8 +67,8 @@ def arch_container() -> str:
     if probe.returncode != 0:
         pytest.skip(f"docker daemon is unavailable: {probe.stderr.strip()[:120]}")
     container = _run(
-        "docker", "run", "--detach", "--rm", "--memory=2g", IMAGE,
-        "sleep", "infinity",
+        "docker", "run", "--detach", "--rm", "--memory=2g", "--privileged",
+        IMAGE, "sleep", "infinity",
     ).stdout.strip()
     try:
         yield container

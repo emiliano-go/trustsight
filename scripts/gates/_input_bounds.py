@@ -379,6 +379,35 @@ def gate_manifest_parsing_is_sandboxed() -> Gate:
                 problems or "parent -> client -> read-role worker")
 
 
+def gate_sqlite_connection_is_hardened() -> Gate:
+    """A9: SQLite is opened defensively, not with default settings.
+
+    Values are parameterised, but SQLite is still C in the trusted computing
+    base.  Every connection must disable schema corruption and extension
+    loading, cap its inputs, and refuse ATTACH except for the seed importer.
+    """
+    import inspect
+
+    from trustsight.db import _connection
+
+    source = inspect.getsource(_connection._harden_connection)
+    problems: list[str] = []
+    for required in ("SQLITE_DBCONFIG_DEFENSIVE",
+                     "SQLITE_DBCONFIG_TRUSTED_SCHEMA",
+                     "SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION",
+                     "PRAGMA trusted_schema=OFF",
+                     "SQLITE_LIMIT_ATTACHED",
+                     "set_authorizer"):
+        if required not in source:
+            problems.append(f"connection hardening omits {required}")
+    if "_harden_connection(conn, read_only=False, allow_attach=allow_attach)" not in inspect.getsource(_connection._new_connection):
+        problems.append("_new_connection does not harden its connection")
+    if "_harden_connection(conn, read_only=True)" not in inspect.getsource(_connection.get_read_only_connection):
+        problems.append("the read-only connection is not hardened")
+    return Gate("sqlite connections are hardened", not problems,
+                problems or "defensive, trusted_schema=off, limits, authorizer")
+
+
 def gate_terminal_output_is_inert() -> Gate:
     """No renderer lets a hostile package write escapes to the terminal.
 

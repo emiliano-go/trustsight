@@ -629,22 +629,25 @@ def test_download_progress_disabled_is_a_noop():
 
 
 def test_download_progress_draws_on_stderr_and_stops(monkeypatch):
-    import io
-
-    from rich.console import Console
-
     from trustsight.cli import display
+    from trustsight.sandbox import render_client
 
-    buf = io.StringIO()
-    monkeypatch.setattr(
-        display,
-        "err_console",
-        lambda: Console(file=buf, force_terminal=False, width=100),
-    )
+    events = []
+    monkeypatch.setattr(render_client, "start_progress",
+                        lambda *a, **k: events.append(("start", a, k)))
+    monkeypatch.setattr(render_client, "update_progress",
+                        lambda *a, **k: events.append(("update", a, k)))
+    monkeypatch.setattr(render_client, "stop_progress",
+                        lambda *a, **k: events.append(("stop", a, k)))
+
     with display.download_progress("Downloading x...", enabled=True) as on_progress:
         on_progress(0, 10)
         on_progress(10, 10)
-    assert "Downloading x..." in buf.getvalue()
+    assert events[0][0] == "start"
+    assert events[-1][0] == "stop"
+    assert events[1][1] == ("download",)
+    assert events[1][2]["completed"] == 0
+
 
 # --- release-listing reads carry the total deadline ------------------------
 

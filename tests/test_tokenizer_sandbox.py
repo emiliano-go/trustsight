@@ -16,7 +16,8 @@ from unittest.mock import Mock
 import pytest
 
 from trustsight import _tokenizer_engine as engine
-from trustsight.sandbox import client
+from trustsight import tokenizer as tokenizer_mod
+from trustsight.sandbox import client, manifest_client
 from trustsight.tokenizer import (
     TokenizerUnavailable,
     clean_lines,
@@ -107,6 +108,8 @@ def _clear_cache() -> None:
     if store is not None:
         store.clear()
         client._cache.bytes = 0
+    manifest_client._cache.clear()
+    tokenizer_mod._line_memo = threading.local()
 
 
 def test_equal_strings_share_one_round_trip(monkeypatch):
@@ -117,7 +120,7 @@ def test_equal_strings_share_one_round_trip(monkeypatch):
         calls.append(op)
         return ["resolved"]
 
-    monkeypatch.setattr(client, "_send", fake)
+    monkeypatch.setattr(tokenizer_mod, "_request_tokenizer", fake)
     _clear_cache()
     first = resolve_added_lines("+a=b\n")
     second = resolve_added_lines("".join(["+a=b\n"]))
@@ -133,7 +136,7 @@ def test_equal_line_lists_share_one_round_trip(monkeypatch):
         calls.append(op)
         return ["joined"]
 
-    monkeypatch.setattr(client, "_send", fake)
+    monkeypatch.setattr(tokenizer_mod, "_request_tokenizer", fake)
     _clear_cache()
     assert join_line_continuations(["+a=b"]) == ["joined"]
     assert join_line_continuations(list(["+a=b"])) == ["joined"]
@@ -191,18 +194,13 @@ def test_reset_after_fork_clears_the_content_cache(monkeypatch):
     assert len(calls) == 2
 
 
-def test_a_dead_child_raises_tokenizer_unavailable():
-    original = client._acquire
+def test_a_dead_child_raises_tokenizer_unavailable(monkeypatch):
+    def dead(op, payload):
+        raise manifest_client.ManifestUnavailable("content worker is dead")
 
-    def dead():
-        raise TokenizerUnavailable("tokenizer_unavailable: forced")
-
-    client._acquire = dead
-    try:
-        with pytest.raises(TokenizerUnavailable):
-            split_lines("+a=b\n")
-    finally:
-        client._acquire = original
+    monkeypatch.setattr(tokenizer_mod, "_request_tokenizer", dead)
+    with pytest.raises(TokenizerUnavailable):
+        split_lines("+a=b\n")
 
 
 def test_workers_are_recycled_and_still_answer(monkeypatch):

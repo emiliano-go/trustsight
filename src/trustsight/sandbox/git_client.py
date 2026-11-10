@@ -31,6 +31,7 @@ from pathlib import Path
 from ..coverage import note_stage_failure
 from ..schema import DiffSummary
 from . import protocol
+from ._aur_proxy import AurFetchProxy
 from ._spawn import spawn_isolated
 from .git_bounds import (
     GIT_COMMIT_META_MAX_OIDS,
@@ -98,17 +99,60 @@ def _worker_cpu_seconds(pid: int) -> float:
 
 
 class GitSession:
-    """One isolated worker, exclusive to a package's requests."""
+    """One isolated worker, exclusive to a package's requests.
+
+    The worker is started lazily for the role the next request needs.  A
+    ``fetch`` request gets a worker that may reach the AUR only through the
+    parent proxy; every other request gets a worker with no network path at
+    all.  After a fetch, the next read restarts the session in ``read`` role
+    and tears the proxy down, so the process that parsed downloaded objects
+    no longer has even the loopback bridge.
+    """
 
     def __init__(self) -> None:
-        self.proc = spawn_isolated(_WORKER_MODULE)
+        self.proc = None
         self._closed = False
+        self._role = None
+        self._cache_dir = None
+        self._proxy: AurFetchProxy | None = None
         #: Why this worker was retired, so the refusal names the cause.
         self._retired = ""
         #: Limit failures the worker reported.  Empty means the worker's
-        #: resource bounds and NO_NEW_PRIVS were all applied.
+        #: resource bounds, NO_NEW_PRIVS and OS sandbox were all applied.
         self.degraded: list = []
         self._degraded_reported = False
+        self._stderr_thread = None
+        with _live_lock:
+            _live.add(self)
+
+    def _start(self, role: str, cache_dir: str) -> None:
+        """Replace any current worker with one confined for *role*."""
+        self._teardown_worker()
+        self._role = role
+        self._cache_dir = cache_dir
+        self._retired = ""
+        proxy_fds: tuple = ()
+        proxy_argument = ""
+        if role == "fetch":
+            try:
+                self._proxy = AurFetchProxy()
+            except Exception as exc:  # no proxy means no fetch
+                self._proxy = None
+                raise GitSandboxUnavailable(
+                    f"git fetch proxy could not start: {exc}") from exc
+            proxy_fds = tuple(self._proxy.child_fds)
+            proxy_argument = ",".join(str(fd) for fd in proxy_fds)
+        try:
+            self.proc = spawn_isolated(
+                _WORKER_MODULE, role=role,
+                extra_argv=(proxy_argument,), pass_fds=proxy_fds,
+            )
+        except OSError as exc:
+            self._close_proxy()
+            raise GitSandboxUnavailable(
+                f"git worker could not start: {exc}") from exc
+        if self._proxy is not None:
+            self._proxy.release_child_fds()
         # Drain stderr, or a child that writes a warning or a traceback
         # blocks on a full pipe.  The worker prints nothing by design, but
         # libgit2 or the interpreter can, and a wedged worker is a hang.
@@ -116,8 +160,43 @@ class GitSession:
             target=self._drain_stderr, daemon=True
         )
         self._stderr_thread.start()
-        with _live_lock:
-            _live.add(self)
+
+    def _ensure_worker(self, role: str, cache_dir: str) -> None:
+        current_role = getattr(self, "_role", None)
+        current_cache = getattr(self, "_cache_dir", None)
+        if self.proc is not None and current_role in (None, role) \
+                and current_cache in (None, cache_dir):
+            return
+        self._start(role, cache_dir)
+
+    def _close_proxy(self) -> None:
+        proxy = getattr(self, "_proxy", None)
+        self._proxy = None
+        if proxy is not None:
+            proxy.close()
+
+    def _teardown_worker(self) -> None:
+        proc = self.proc
+        self.proc = None
+        if proc is not None:
+            try:
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            except (ProcessLookupError, PermissionError, OSError):
+                try:
+                    proc.kill()
+                except OSError:
+                    pass
+            try:
+                proc.wait(timeout=2)
+            except Exception:
+                pass
+            for pipe in (proc.stdin, proc.stdout, proc.stderr):
+                if pipe is not None:
+                    try:
+                        pipe.close()
+                    except OSError:
+                        pass
+        self._close_proxy()
 
     def _drain_stderr(self) -> None:
         proc = self.proc
@@ -132,7 +211,15 @@ class GitSession:
 
     def request(self, op: str, payload: dict,
                 timeout: float = GIT_OP_TIMEOUT_SECONDS) -> dict:
-        if self._closed or self.proc.stdin is None or self.proc.stdout is None:
+        if self._closed:
+            raise GitSandboxUnavailable(self._retired or "session is not running")
+        cache_dir = payload.get("cache_dir")
+        if not isinstance(cache_dir, str) or not cache_dir:
+            raise GitSandboxUnavailable("request has no cache directory")
+        role = "fetch" if op == "open_fetch" else "read"
+        self._ensure_worker(role, cache_dir)
+        if self.proc is None or self.proc.stdin is None \
+                or self.proc.stdout is None:
             raise GitSandboxUnavailable(self._retired or "session is not running")
         if self.proc.poll() is not None:
             self.close()
@@ -284,26 +371,7 @@ class GitSession:
         if self._closed:
             return
         self._closed = True
-        proc = self.proc
-        self.proc = None
-        if proc is not None:
-            try:
-                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-            except (ProcessLookupError, PermissionError, OSError):
-                try:
-                    proc.kill()
-                except OSError:
-                    pass
-            try:
-                proc.wait(timeout=2)
-            except Exception:
-                pass
-            for pipe in (proc.stdin, proc.stdout, proc.stderr):
-                if pipe is not None:
-                    try:
-                        pipe.close()
-                    except OSError:
-                        pass
+        self._teardown_worker()
         with _live_lock:
             _live.discard(self)
 

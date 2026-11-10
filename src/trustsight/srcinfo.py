@@ -25,8 +25,8 @@ MAX_SRCINFO_VALUES_PER_KEY = 4096
 _LINE_RE = re.compile(r"^\s*(\w+)\s*=\s*(.+)$")
 
 
-def parse_srcinfo(text: str) -> dict[str, list[str]]:
-    """Parse a .SRCINFO text into a key-value mapping."""
+def _parse_srcinfo_local(text: str) -> dict[str, list[str]]:
+    """Parse a .SRCINFO text into a key-value mapping (worker-local)."""
     if len(text) > MAX_SRCINFO_BYTES:
         text = text[:MAX_SRCINFO_BYTES]
     result: dict[str, list[str]] = defaultdict(list)
@@ -51,6 +51,19 @@ def parse_srcinfo(text: str) -> dict[str, list[str]]:
             seen[key].add(value)
             result[key].append(value)
     return dict(result)
+
+
+def parse_srcinfo(text: str) -> dict[str, list[str]]:
+    """Parse .SRCINFO in the sandboxed manifest worker.
+
+    Kept as the public entry point; the local implementation is worker-only,
+    so the parent never parses package-controlled text.
+    """
+    from .sandbox.manifest_client import ManifestUnavailable, parse_srcinfo as _remote
+    try:
+        return _remote(text)
+    except ManifestUnavailable as exc:
+        raise ValueError("srcinfo sandbox unavailable") from exc
 
 
 SCALAR_KEYS = frozenset({

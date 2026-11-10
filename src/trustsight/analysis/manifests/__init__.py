@@ -214,8 +214,39 @@ from ._formats_d import (
     lowered_matches,
 )
 from ._parse import (
-    parse_manifest,
+    parse_manifest_local,
 )
+
+def parse_manifest(path: str, text: str):
+    """Parse a manifest in the sandboxed worker, never in this process."""
+    from ...sandbox.manifest_client import ManifestUnavailable as _Unavailable
+    from ...sandbox.manifest_client import parse_manifest as _remote
+
+    try:
+        payload = _remote(path, text)
+    except _Unavailable as exc:
+        from ..manifest_syntax import ManifestSyntaxError
+        raise ManifestSyntaxError("manifest sandbox unavailable") from exc
+    if payload is None:
+        return None
+    from ._common import Dep, ManifestDoc
+
+    deps = tuple(Dep(
+        name=item.get("name", ""),
+        constraint=item.get("constraint"),
+        source_kind=item.get("source_kind", "unknown"),
+        remote=item.get("remote"),
+        origin=item.get("origin"),
+        integrity=item.get("integrity"),
+    ) for item in payload.get("dependencies", ()))
+    return ManifestDoc(
+        path=payload.get("path", path),
+        format=payload.get("format", ""),
+        dependencies=deps,
+        unresolved=tuple(payload.get("unresolved", ())),
+        redirects=tuple(tuple(pair) for pair in payload.get("redirects", ())),
+    )
+
 
 __all__ = [
     "Dep",

@@ -10,11 +10,11 @@ import time
 import urllib.request
 import urllib.error
 from urllib.parse import quote, urlsplit
-from io import BytesIO
 from pathlib import Path
 from typing import Optional
 
-from ..bounded_io import ReadTooLarge, read_capped
+from ..bounded_io import ReadTooLarge
+from ..analysis import archive_snapshot as _archive
 
 log = logging.getLogger(__name__)
 
@@ -228,77 +228,22 @@ def fetch_srcinfo(name: str) -> Optional[str]:
 
 def _pkgbuild_from_tarfile(tf: tarfile.TarFile, name: str) -> Optional[str]:
     """Extract the PKGBUILD text from an open snapshot tarball."""
-    pkgbuild_path = f"{name}/PKGBUILD"
-    member = None
-    walked = 0
-    # Walked lazily and bounded: a snapshot holds a handful of files, and a
-    # tar that says otherwise is not one worth reading to the end.
-    for seen, m in enumerate(tf):
-        if seen >= MAX_TAR_MEMBERS:
-            break
-        walked += max(0, int(getattr(m, "size", 0) or 0))
-        if walked > MAX_TAR_TOTAL_BYTES:
-            log.warning("snapshot for %s declares more than %d bytes; refusing",
-                        name, MAX_TAR_TOTAL_BYTES)
-            return None
-        if m.name == pkgbuild_path:
-            member = m
-            break
-        if member is None and m.name.endswith("/PKGBUILD"):
-            member = m  # different internal directory name; keep looking
-    if member is None:
-        log.warning("no PKGBUILD found in snapshot for %s", name)
-        return None
-    content = tf.extractfile(member)
-    if content is None:
-        return None
-    # ReadTooLarge propagates: a refusal is not "no PKGBUILD found", and
-    # collapsing the two would let a bound that dropped content read as an
-    # ordinary empty snapshot.  The callers turn it into a coverage gap.
-    raw = read_capped(
-        content, MAX_TAR_MEMBER_BYTES, f"PKGBUILD member of the {name} snapshot"
+    return _archive.pkgbuild_from_tarfile(
+        tf, name, max_members=MAX_TAR_MEMBERS,
+        max_member_bytes=MAX_TAR_MEMBER_BYTES,
+        max_total_bytes=MAX_TAR_TOTAL_BYTES,
     )
-    return raw.decode("utf-8", errors="replace")
 
 
 def _install_from_tarfile(
     tf: tarfile.TarFile, name: str,
 ) -> Optional[tuple[str, str]]:
-    """The first top-level ``*.install`` scriptlet in the snapshot, or None.
-
-    The corpus path must scan the install scriptlet: an unconditional fetch
-    or write at its top level runs as root at pacman install/upgrade time,
-    and that is where a trojanised repackage hides its payload (the
-    ``yyay`` shape).  A snapshot holds at most one install file; the first
-    ``*.install`` member is read under the same member cap as the PKGBUILD.
-
-    Returns ``(text, basename)``.  The name matters: the synthesized diff
-    hunk is headed ``+++ b/<name>``, and a wrong name both mislabels R007's
-    evidence and makes C024 compare the shipped file against ``install=``
-    under a name the recipe never uses (monsoon-git ships ``monsoon.install``;
-    naming the hunk after the package produced a permanent "install= names
-    monsoon.install, not it").
-    """
-    walked = 0
-    for seen, member in enumerate(tf):
-        if seen >= MAX_TAR_MEMBERS:
-            break
-        walked += max(0, int(getattr(member, "size", 0) or 0))
-        if walked > MAX_TAR_TOTAL_BYTES:
-            log.warning("snapshot for %s declares more than %d bytes; refusing",
-                        name, MAX_TAR_TOTAL_BYTES)
-            return None
-        if member.isfile() and member.name.endswith(".install"):
-            handle = tf.extractfile(member)
-            if handle is None:
-                continue
-            raw = read_capped(
-                handle, MAX_TAR_MEMBER_BYTES,
-                f"install member of the {name} snapshot",
-            )
-            return raw.decode("utf-8", errors="replace"), \
-                member.name.rsplit("/", 1)[-1]
-    return None
+    """The first top-level ``*.install`` scriptlet in the snapshot, or None."""
+    return _archive.install_from_tarfile(
+        tf, name, max_members=MAX_TAR_MEMBERS,
+        max_member_bytes=MAX_TAR_MEMBER_BYTES,
+        max_total_bytes=MAX_TAR_TOTAL_BYTES,
+    )
 
 
 def _pkgbuild_from_snapshot(name: str) -> Optional[str]:
@@ -308,92 +253,33 @@ def _pkgbuild_from_snapshot(name: str) -> Optional[str]:
     if body is None:
         return None
 
+    from ..sandbox import manifest_client
     try:
-        with tarfile.open(fileobj=BytesIO(body), mode="r:gz") as tf:
-            return _pkgbuild_from_tarfile(tf, name)
-    except ReadTooLarge as e:
-        # A bound dropped content.  This entry point has no result object to
-        # hang a gap on, so the refusal is at least logged loudly; the
-        # gap-carrying path is fetch_pkgbuild_with_tree.
+        parsed = manifest_client.parse_snapshot(
+            name, body, max_members=MAX_TAR_MEMBERS,
+            max_member_bytes=MAX_TAR_MEMBER_BYTES,
+            max_total_bytes=MAX_TAR_TOTAL_BYTES)
+    except manifest_client.ManifestUnavailable as e:
         log.warning("snapshot for %s refused: %s", name, e)
         return None
-    except Exception as e:
-        log.warning("error extracting snapshot for %s: %s", name, e)
+    if parsed.get("refused"):
+        log.warning("snapshot for %s refused by a read bound", name)
         return None
+    if parsed.get("malformed"):
+        log.warning("error extracting snapshot for %s", name)
+        return None
+    return parsed.get("pkgbuild")
 
 
 def _snapshot_manifest(
     tf: tarfile.TarFile, max_members: int = MAX_TAR_MEMBERS,
 ) -> tuple[list[tuple[str, bytes]], list[tuple[str, str]], bool]:
-    """Heads, bounded manifest text, and whether the text is complete.
-
-    ``[(member_path, first_bytes)]`` for each regular file in the tarball,
-    plus ``[(member_path, text)]`` for committed dependency manifests (G004)
-    and a completeness flag.
-
-    The AUR snapshot tarball comes from the AUR mirror, never from a
-    PKGBUILD-declared ``source=`` URL, so reading it keeps the review path's
-    "no network, no execution" claim intact.  Heads stay at 64 bytes: H066
-    and the tree scanners need the magic bytes, not the whole file, and
-    handing them a manifest body would silently widen what those rules read.
-
-    Manifest text is read whole or not at all.  A member past the per-file
-    or per-package byte budget, or past the file-count budget, is refused:
-    reading its prefix and parsing that would report a complete dependency
-    set with its tail quietly removed, the seam A4/B2 forbid.  The caller
-    turns the incomplete flag into a coverage gap.
-    """
-    from ..analysis.manifests import (
-        MAX_MANIFEST_BYTES,
-        MAX_UPSTREAM_MANIFEST_BYTES,
-        MAX_UPSTREAM_MANIFEST_FILES,
-        manifest_format,
+    """Heads, bounded manifest text, and whether the text is complete."""
+    return _archive.snapshot_manifest(
+        tf, max_members=max_members,
+        max_member_bytes=MAX_TAR_MEMBER_BYTES,
+        max_total_bytes=MAX_TAR_TOTAL_BYTES,
     )
-
-    manifest: list[tuple[str, bytes]] = []
-    texts: list[tuple[str, str]] = []
-    complete = True
-    budget = MAX_UPSTREAM_MANIFEST_BYTES
-    text_files = 0
-    # Count *iterations*, not appended files: a tar of directories,
-    # symlinks or unreadable members leaves `len(manifest)` at zero while
-    # the loop walks the whole archive, so a bound on the list does not
-    # bound the work.
-    walked = 0
-    for seen, member in enumerate(tf):  # lazy: getmembers() parses it all
-        if seen >= max_members:
-            complete = False
-            break
-        walked += max(0, int(getattr(member, "size", 0) or 0))
-        if walked > MAX_TAR_TOTAL_BYTES:
-            # Refuse at the header, before tarfile seeks over the body: a
-            # declared-size bomb is a decompression bomb otherwise.
-            complete = False
-            break
-        if not member.isfile():
-            continue
-        try:
-            f = tf.extractfile(member)
-        except (tarfile.TarError, OSError):
-            continue
-        if f is None:
-            continue
-        if manifest_format(member.name) is None:
-            manifest.append((member.name, f.read(64)))
-            continue
-        too_large = (member.size > MAX_MANIFEST_BYTES
-                     or member.size > budget
-                     or text_files >= MAX_UPSTREAM_MANIFEST_FILES)
-        if too_large or not complete:
-            complete = False
-            manifest.append((member.name, f.read(64)))
-            continue
-        data = f.read(member.size)
-        manifest.append((member.name, data[:64]))
-        texts.append((member.name, data.decode("utf-8", "replace")))
-        budget -= len(data)
-        text_files += 1
-    return manifest, texts, complete
 
 
 def _fetch_snapshot_tarball(name: str) -> Optional[bytes]:
@@ -447,7 +333,7 @@ def fetch_pkgbuild_with_tree(
     requires the bound to be visible as a bound.  The caller turns it into
     the ``snapshot_refused`` coverage gap.
     """
-    from ..analysis.archives import check_archive_trailer
+    from ..sandbox import manifest_client
 
     refused = False
     try:
@@ -458,32 +344,31 @@ def fetch_pkgbuild_with_tree(
         refused = True
     if body is not None:
         try:
-            with tarfile.open(fileobj=BytesIO(body), mode="r:gz") as tf:
-                pkgbuild = _pkgbuild_from_tarfile(tf, name)
-                manifest, manifest_texts, manifest_complete = _snapshot_manifest(tf)
-                if pkgbuild is not None:
-                    # A fresh stream for the install file: reading the
-                    # PKGBUILD has already consumed this one.
-                    with tarfile.open(fileobj=BytesIO(body), mode="r:gz") as tf2:
-                        install = _install_from_tarfile(tf2, name)
-                    if install is not None:
-                        install_text, install_name = install
-                    else:
-                        install_text, install_name = None, None
-                    return (pkgbuild, manifest, check_archive_trailer(body),
-                            False, install_text, install_name,
-                            manifest_texts, manifest_complete)
-        except ReadTooLarge as e:
-            # Not benign, and not silent: warning level, and the flag rides
-            # out to the result so the analysis cannot read as complete.
+            parsed = manifest_client.parse_snapshot(
+            name, body, max_members=MAX_TAR_MEMBERS,
+            max_member_bytes=MAX_TAR_MEMBER_BYTES,
+            max_total_bytes=MAX_TAR_TOTAL_BYTES)
+        except manifest_client.ManifestUnavailable as e:
             log.warning("snapshot for %s refused: %s", name, e)
             refused = True
-        except Exception as e:
-            # Benign: a missing or empty snapshot tarball just means we fall
-            # back to the cgit text fetch below.  Debug, not warning, so a
-            # bootstrap of tens of thousands of packages does not spam the
-            # progress bar with one line per VCS/-bin package.
-            log.debug("snapshot tarball for %s unusable: %s", name, e)
+        else:
+            if parsed.get("refused"):
+                log.warning("snapshot for %s refused by a read bound", name)
+                refused = True
+            elif not parsed.get("malformed") and parsed.get("pkgbuild") is not None:
+                manifest = [
+                    (path, bytes.fromhex(head))
+                    for path, head in parsed.get("manifest") or ()
+                ]
+                manifest_texts = [
+                    (path, text) for path, text in parsed.get("manifest_texts") or ()
+                ]
+                return (parsed["pkgbuild"], manifest, parsed.get("trailer"),
+                        False, parsed.get("install_text"),
+                        parsed.get("install_name"), manifest_texts,
+                        bool(parsed.get("manifest_complete", True)))
+            elif parsed.get("malformed"):
+                log.debug("snapshot tarball for %s unusable", name)
     try:
         text = fetch_pkgbuild(name)
     except ReadTooLarge as e:

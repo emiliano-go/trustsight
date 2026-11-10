@@ -40,8 +40,10 @@ GIT_WORKER_RETIRE_CPU_SECONDS = 45
 #: pack on disk to well above ``fetcher.MAX_TRANSFER_BYTES``.
 GIT_WORKER_FSIZE_BYTES = 512 * 1024 * 1024
 
-#: Descriptors the child may hold.
-GIT_WORKER_NOFILE = 64
+#: Descriptors the child may hold.  The fetch role inherits the proxy
+#: socketpair pool as well as its stdio, and libgit2 opens several object
+#: and pack files at once, so this is above the fetch path's working set.
+GIT_WORKER_NOFILE = 256
 
 #: Objects one pack may declare.  Bounds the object inventory the way
 #: ``fetcher.MAX_HISTORY_COMMITS`` bounds the commit walk.

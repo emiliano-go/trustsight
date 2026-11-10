@@ -31,6 +31,7 @@ import json
 import re
 import tomllib
 import xml.etree.ElementTree as ET
+from collections.abc import Hashable
 
 __all__ = [
     "ManifestSyntaxError",
@@ -59,6 +60,16 @@ MAX_WALK_DEPTH = 64
 #: ``<!ENTITY`` is the billion-laughs primitive, and refusing it up front is
 #: independent of the expat version bundled with the interpreter.
 _XML_ENTITY_RE = re.compile(r"<!\s*ENTITY\b", re.IGNORECASE)
+
+#: Untrusted YAML budgets.  ``MAX_MANIFEST_BYTES`` bounds the input, but an
+#: 800-byte merge-key document can expand exponentially inside PyYAML before
+#: any post-load walk sees it.  These caps are enforced during composition and
+#: construction, and the merge-key flattening carries the upstream linearity
+#: fix (PyYAML #937) because no released PyYAML contains it yet.
+MAX_YAML_NODES = 100_000
+MAX_YAML_ALIASES = 64
+MAX_YAML_DEPTH = 64
+MAX_YAML_MERGE_ENTRIES = 10_000
 
 
 class ManifestSyntaxError(Exception):
@@ -133,19 +144,149 @@ def load_jsonc(text: str) -> object:
     return load_json(strip_jsonc(_bounded(text)))
 
 
+_STRICT_LOADER = None
+
+
+def _strict_loader():
+    """Return the bounded SafeLoader subclass, built once.
+
+    It is a ``SafeLoader`` subclass, not a new loader with object
+    construction: plain mappings/sequences/scalars only.  The extra checks
+    exist because ``safe_load`` does not bound aliases, node count, depth or
+    merge-key fan-out.  PyYAML 6.0.3 is the latest release and does not
+    contain the upstream merge-key fix, so the fix is carried here until a
+    release does.
+    """
+    global _STRICT_LOADER
+    if _STRICT_LOADER is not None:
+        return _STRICT_LOADER
+
+    import yaml
+    from yaml.composer import ComposerError
+    from yaml.constructor import ConstructorError
+    from yaml.events import AliasEvent
+    from yaml.nodes import MappingNode, SequenceNode
+
+    class StrictSafeLoader(yaml.SafeLoader):
+        def __init__(self, stream):
+            super().__init__(stream)
+            self._nodes = 0
+            self._aliases = 0
+            self._depth = 0
+            self._merge_entries = 0
+
+        def compose_node(self, parent, index):
+            if self.check_event(AliasEvent):
+                self._aliases += 1
+                if self._aliases > MAX_YAML_ALIASES:
+                    raise ComposerError(
+                        None, None, "too many YAML aliases", None)
+            self._nodes += 1
+            if self._nodes > MAX_YAML_NODES:
+                raise ComposerError(None, None, "too many YAML nodes", None)
+            self._depth += 1
+            if self._depth > MAX_YAML_DEPTH:
+                raise ComposerError(None, None, "YAML nesting too deep", None)
+            try:
+                return super().compose_node(parent, index)
+            finally:
+                self._depth -= 1
+
+        def flatten_mapping(self, node):
+            # The upstream #937 shape: de-duplicate merge sources by key
+            # identity while flattening, so a repeated alias cannot fan out
+            # exponentially.  The entry budget is the backstop for an
+            # unusual graph the de-duplication does not collapse.
+            merge = []
+            merge_key_ids = set()
+            index = 0
+            while index < len(node.value):
+                key_node, value_node = node.value[index]
+                if key_node.tag == "tag:yaml.org,2002:merge":
+                    del node.value[index]
+                    if isinstance(value_node, MappingNode):
+                        self.flatten_mapping(value_node)
+                        for pair in value_node.value:
+                            key_id = id(pair[0].value)
+                            if key_id not in merge_key_ids:
+                                merge_key_ids.add(key_id)
+                                merge.append(pair)
+                    elif isinstance(value_node, SequenceNode):
+                        for subnode in value_node.value:
+                            if not isinstance(subnode, MappingNode):
+                                raise ConstructorError(
+                                    "while constructing a mapping",
+                                    node.start_mark,
+                                    "expected a mapping for merging, but found %s"
+                                    % subnode.id, subnode.start_mark)
+                            self.flatten_mapping(subnode)
+                            for pair in subnode.value:
+                                key_id = id(pair[0].value)
+                                if key_id not in merge_key_ids:
+                                    merge_key_ids.add(key_id)
+                                    merge.append(pair)
+                    else:
+                        raise ConstructorError(
+                            "while constructing a mapping", node.start_mark,
+                            "expected a mapping or list of mappings for "
+                            "merging, but found %s" % value_node.id,
+                            value_node.start_mark)
+                    self._merge_entries += len(merge)
+                    if self._merge_entries > MAX_YAML_MERGE_ENTRIES:
+                        raise ConstructorError(
+                            "while constructing a mapping", node.start_mark,
+                            "YAML merge expansion exceeds its budget",
+                            node.start_mark)
+                elif key_node.tag == "tag:yaml.org,2002:value":
+                    key_node.tag = "tag:yaml.org,2002:str"
+                    index += 1
+                else:
+                    index += 1
+            if merge:
+                node.value = merge + node.value
+
+        def construct_mapping(self, node, deep=False):
+            if isinstance(node, MappingNode):
+                self.flatten_mapping(node)
+            mapping = {}
+            for key_node, value_node in node.value:
+                key = self.construct_object(key_node, deep=deep)
+                if not isinstance(key, Hashable):
+                    raise ConstructorError(
+                        "while constructing a mapping", node.start_mark,
+                        "found unhashable key", key_node.start_mark)
+                if key in mapping:
+                    raise ConstructorError(
+                        "while constructing a mapping", node.start_mark,
+                        "found duplicate key %r" % (key,), key_node.start_mark)
+                mapping[key] = self.construct_object(value_node, deep=deep)
+            return mapping
+
+    _STRICT_LOADER = StrictSafeLoader
+    return _STRICT_LOADER
+
+
 def load_yaml(text: str) -> object:
     text = _bounded(text)
     try:
         import yaml
     except ImportError as exc:  # pragma: no cover - dependency is declared
         raise ManifestSyntaxError("yaml unavailable") from exc
+    loader = None
     try:
-        # safe_load only: constructs plain types, never arbitrary objects.
-        return yaml.safe_load(text)
-    except yaml.YAMLError as exc:
-        raise ManifestSyntaxError("malformed yaml") from exc
-    except (RecursionError, MemoryError) as exc:
-        raise ManifestSyntaxError("yaml too deep") from exc
+        # A SafeLoader subclass: plain types only, never arbitrary objects.
+        loader = _strict_loader()(text)
+        return loader.get_single_data()
+    except yaml.YAMLError:
+        # Do not retain the PyYAML traceback: its frames hold composed
+        # nodes whose ``repr`` recursively walks an alias graph, so logging
+        # the chained exception can turn a refused document into a hang.
+        raise ManifestSyntaxError("malformed yaml") from None
+    except (RecursionError, MemoryError):
+        raise ManifestSyntaxError("yaml too deep") from None
+    finally:
+        if loader is not None:
+            loader.dispose()
 
 
 def load_xml(text: str) -> ET.Element:

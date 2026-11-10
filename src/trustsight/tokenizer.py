@@ -23,7 +23,11 @@ implementation behind them did.
 import threading
 from collections import OrderedDict
 
-from .sandbox.client import TokenizerUnavailable, request
+from .sandbox.client import TokenizerUnavailable
+from .sandbox.manifest_client import (
+    ManifestUnavailable,
+    request_tokenizer as _request_tokenizer,
+)
 
 __all__ = [
     "TokenizerUnavailable",
@@ -41,6 +45,19 @@ __all__ = [
     "tokenize_and_resolve_indexed",
     "variable_table",
 ]
+
+
+def request(op: str, value):
+    """Run a tokenizer operation in the content worker.
+
+    The content worker loads the engine locally and is already sandboxed, so
+    the analysis path has no nested tokenizer process.  A refusal keeps the
+    historical exception type so every caller's fail-closed path is unchanged.
+    """
+    try:
+        return _request_tokenizer(op, value)
+    except ManifestUnavailable as exc:
+        raise TokenizerUnavailable(str(exc)) from exc
 
 
 _line_memo = threading.local()

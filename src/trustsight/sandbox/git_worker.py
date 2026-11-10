@@ -14,10 +14,18 @@ Confinement, all fixed constants from :mod:`trustsight.sandbox.git_bounds`:
 * ``RLIMIT_CPU`` and ``RLIMIT_FSIZE`` cap work and disk (unlike the tokenizer
   worker, this one writes the clone and the fetch marker).
 * ``PR_SET_NO_NEW_PRIVS`` makes a defect here unable to gain privilege.
-* The network is *kept* - the worker must reach the A3 AUR host - but the
-  remote URL is built here from a validated package name, never received.
+* :mod:`trustsight.sandbox._linux_sandbox` adds the OS sandbox: a user and
+  network namespace, Landlock over the filesystem, a seccomp allowlist and no
+  capabilities.  The ``read`` role has no network path at all; the ``fetch``
+  role reaches the AUR only through a loopback bridge to a parent CONNECT
+  proxy pinned to ``aur.archlinux.org:443``.
+* The remote URL is built here from a validated package name, never received.
 * libgit2 is configured with no user home, strict object creation and strict
   hash verification, and a fixed pack object ceiling.
+
+The OS sandbox is applied before the first request is served.  A protection
+the kernel did not grant refuses the worker, because a package analysed with
+weaker confinement than the design claims is not a package this tool vetted.
 """
 
 import atexit
@@ -36,7 +44,7 @@ from urllib.parse import urlsplit
 
 import pygit2
 
-from trustsight.sandbox import protocol
+from trustsight.sandbox import _linux_sandbox, protocol
 from trustsight.sandbox._spawn import core_sandbox_failures
 from trustsight.sandbox.git_bounds import (
     GIT_COMMIT_META_MAX_OIDS,
@@ -135,6 +143,22 @@ _LIMIT_NAMES = {
 #: isolation instead of it vanishing into a swallowed exception.
 _DEGRADED: list[str] = []
 
+#: The private libgit2 home, created before Landlock so it can be granted.
+_GIT_HOME = ""
+
+#: The resolved cache root the OS sandbox was opened for.  Once set, every
+#: request must stay beneath it; the kernel would refuse anything else
+#: anyway, but the refusal should name the reason.
+_CACHE_ROOT = ""
+
+#: The role and inherited proxy descriptors are fixed at launch by the
+#: parent; the loopback URL is created inside this worker's netns for the
+#: fetch role.
+_ROLE = "read"
+_PROXY_FDS: tuple = ()
+_PROXY_URL = ""
+_SANDBOXED = False
+
 
 def _apply_limits() -> list[str]:
     """Apply the worker's fixed resource limits; return what could not be set.
@@ -170,6 +194,10 @@ def _apply_limits() -> list[str]:
 def _harden_libgit2() -> list[str]:
     """Configure libgit2 once; return the protections that could not be set.
 
+    The private home is recorded in :data:`_GIT_HOME` so the OS sandbox can
+    grant access to it.  Without that grant libgit2 would be confined away
+    from the very directory the hardening created.
+
     ``pygit2.settings`` has no setter for the config ``search_path`` in the
     pinned release, so system/XDG git config cannot be cleared from here; the
     user's own ``~/.gitconfig`` is removed by pointing ``homedir`` at an empty
@@ -181,6 +209,7 @@ def _harden_libgit2() -> list[str]:
     swallowed: strict hash verification silently missing reads exactly like
     strict hash verification working.
     """
+    global _GIT_HOME
     failures: list[str] = []
     try:
         home = tempfile.mkdtemp(prefix="trustsight-git-home-")
@@ -188,6 +217,7 @@ def _harden_libgit2() -> list[str]:
         failures.append(
             f"libgit2 homedir not applied: {type(exc).__name__}")
         return failures
+    _GIT_HOME = home
     atexit.register(shutil.rmtree, home, ignore_errors=True)
 
     def _attempt(label: str, apply) -> None:
@@ -217,6 +247,9 @@ def _contained_repo_path(cache_dir: str, pkg: str):
             or pkg in _RESERVED_PKG_NAMES:
         raise _OpError(f"invalid package name: {pkg!r}")
     root = Path(cache_dir).resolve()
+    if _CACHE_ROOT and str(root) != _CACHE_ROOT:
+        raise _OpError(
+            f"package path is outside the sandbox's cache root: {pkg!r}")
     path = (root / pkg).resolve()
     if path.parent != root:
         raise _OpError(f"package path escapes cache directory: {pkg!r}")
@@ -394,7 +427,8 @@ def _open_fetch(payload: dict) -> dict:
                         "received_bytes": 0}
             callbacks = _Callbacks(GIT_TRANSFER_DEADLINE_SECONDS)
             try:
-                cached.remotes["origin"].fetch(callbacks=callbacks)
+                cached.remotes["origin"].fetch(
+                    callbacks=callbacks, proxy=_PROXY_URL or None)
                 _advance_to_fetched_head(cached)
             except (pygit2.GitError, _OpError) as exc:
                 raise _transfer_aborted(callbacks, exc) from exc
@@ -413,8 +447,9 @@ def _open_fetch(payload: dict) -> dict:
         raise _OpError("refusing a non-HTTPS AUR remote")
     callbacks = _Callbacks(GIT_TRANSFER_DEADLINE_SECONDS)
     try:
-        repo = pygit2.clone_repository(url, str(path), bare=True,
-                                       callbacks=callbacks)
+        repo = pygit2.clone_repository(
+            url, str(path), bare=True, callbacks=callbacks,
+            proxy=_PROXY_URL or None)
     except (pygit2.GitError, _OpError) as exc:
         raise _transfer_aborted(callbacks, exc) from exc
     return {"path": str(path), "head": _head_commit_id(repo),
@@ -704,6 +739,70 @@ def _encode_response(response: dict) -> bytes:
     return protocol.encode_response(response)
 
 
+def _inline_tokenizer() -> None:
+    """Run tokenizer operations in this worker instead of spawning a child.
+
+    The analysis tokenizer is normally a separate sandboxed process.  This
+    worker is already confined more strongly than that child - same user and
+    network namespace, Landlock, seccomp, no capabilities - and its seccomp
+    filter forbids process creation.  Spawning the tokenizer child from here
+    would therefore fail; importing ``expand_worker`` and calling its
+    dispatch directly keeps the same parsing code inside the confinement that
+    is already in force.  The git worker's ``RLIMIT_AS`` bounds the engine's
+    expansion just as the tokenizer worker's own limit does.
+    """
+    from trustsight import tokenizer
+    from trustsight.sandbox import expand_worker
+
+    def request(op, payload):
+        try:
+            return expand_worker._dispatch(op, payload)
+        except Exception as exc:  # a parser defect is a refusal, not a crash
+            raise tokenizer.TokenizerUnavailable(
+                f"{type(exc).__name__}: {exc}") from exc
+
+    tokenizer.request = request
+
+
+def _sandbox_or_error(body: bytes) -> dict | None:
+    """Apply the OS sandbox on the first request; return a refusal if it fails.
+
+    The cache root is only known from the request, so the first frame is
+    parsed before confinement.  That parse is JSON over a parent-authored
+    frame and touches no repository data.  A request without a cache root is
+    refused rather than served outside the sandbox.
+    """
+    global _DEGRADED, _PROXY_URL, _CACHE_ROOT, _SANDBOXED
+    if _SANDBOXED:
+        return None
+    try:
+        request = json.loads(body.decode("utf-8"))
+        cache_dir = request.get("cache_dir")
+    except (UnicodeDecodeError, ValueError, AttributeError):
+        cache_dir = None
+    if not isinstance(cache_dir, str) or not cache_dir:
+        return {"error": "missing cache directory before sandbox startup"}
+    try:
+        resolved = str(Path(cache_dir).resolve())
+    except OSError:
+        return {"error": "invalid cache directory before sandbox startup"}
+    failures, proxy_url = _linux_sandbox.apply(
+        _ROLE, resolved, home_dir=_GIT_HOME, proxy_fds=_PROXY_FDS)
+    core = core_sandbox_failures(failures)
+    if core:
+        print(
+            "trustsight-git-sandbox-refused: " + "; ".join(core),
+            file=sys.stderr,
+            flush=True,
+        )
+        raise SystemExit(3)
+    _DEGRADED.extend(failures)
+    _PROXY_URL = proxy_url
+    _CACHE_ROOT = resolved
+    _SANDBOXED = True
+    return None
+
+
 def _attach_degraded(response: dict) -> dict:
     """Attach the startup limit failures to a response, when there are any.
 
@@ -717,7 +816,23 @@ def _attach_degraded(response: dict) -> dict:
 
 
 def main() -> int:
-    global _DEGRADED
+    global _DEGRADED, _ROLE, _PROXY_FDS
+    arguments = sys.argv[1:]
+    if arguments:
+        _ROLE = arguments[0]
+    if len(arguments) > 1 and arguments[1]:
+        try:
+            _PROXY_FDS = tuple(int(value)
+                               for value in arguments[1].split(",") if value)
+        except ValueError:
+            print("trustsight-git-sandbox-refused: invalid proxy fds",
+                  file=sys.stderr, flush=True)
+            return 3
+    if _ROLE not in ("read", "fetch"):
+        print("trustsight-git-sandbox-refused: unknown role", file=sys.stderr,
+              flush=True)
+        return 3
+
     limit_failures = _apply_limits()
     core = core_sandbox_failures(limit_failures)
     if core:
@@ -729,6 +844,16 @@ def main() -> int:
         return 3
     _DEGRADED = limit_failures + _harden_libgit2()
     try:
+        _inline_tokenizer()
+    except Exception as exc:  # a parser that cannot load is a refusal
+        print(
+            "trustsight-git-sandbox-refused: inline tokenizer unavailable: "
+            f"{type(exc).__name__}: {exc}",
+            file=sys.stderr,
+            flush=True,
+        )
+        return 3
+    try:
         os.chdir("/")
     except OSError:
         pass
@@ -739,7 +864,11 @@ def main() -> int:
             body = protocol.read_frame(stdin)
         except protocol.FrameError:
             return 0
-        response = _attach_degraded(_handle(body))
+        refused = _sandbox_or_error(body)
+        if refused is not None:
+            response = _attach_degraded(refused)
+        else:
+            response = _attach_degraded(_handle(body))
         stdout.write(protocol.frame(_encode_response(response)))
         stdout.flush()
 

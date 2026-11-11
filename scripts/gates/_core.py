@@ -367,6 +367,8 @@ _SHARED_ANALYSIS = {
 _GIT_ALLOWED_IMPORTS = frozenset({
     "sandbox/git_project.py",
     "sandbox/git_worker.py",
+    "sandbox/_linux_sandbox.py",
+    "sandbox/_aur_proxy.py",
 })
 
 def _h_series_live_ceiling() -> int:

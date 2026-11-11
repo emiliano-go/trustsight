@@ -46,8 +46,8 @@ import select
 import socket
 import struct
 import sys
-import tempfile
 import threading
+import uuid
 from pathlib import Path
 
 from .git_bounds import (
@@ -437,7 +437,11 @@ def _enter_mount_namespace(repo_path: str, home_dir: str,
         raise OSError(ctypes.get_errno(), "unshare(CLONE_NEWNS) failed")
     _mount(None, "/", None, _MS_REC | _MS_PRIVATE, None)
 
-    root = tempfile.mkdtemp(prefix="trustsight-root-")
+    # Do not use tempfile.mkdtemp here: it probes a candidate directory by
+    # creating a file, and a worker started with RLIMIT_FSIZE=0 would fail
+    # that probe even though mounting the root needs no file write.
+    root = os.path.join("/tmp", "trustsight-root-" + uuid.uuid4().hex)
+    os.mkdir(root, 0o700)
     _mount("tmpfs", root, "tmpfs", _MS_NOSUID,
            f"size={GIT_WORKER_ROOT_BYTES},"
            f"nr_inodes={GIT_WORKER_ROOT_FILES},mode=0755")

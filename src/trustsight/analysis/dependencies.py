@@ -56,7 +56,7 @@ def _network_tools(config: dict) -> frozenset:
     return frozenset(tools) if tools else frozenset(DEFAULT_NETWORK_TOOLS)
 
 
-def _is_established(name: str) -> bool:
+def is_established_package(name: str) -> bool:
     """Official-repo membership first, observation count as the fallback."""
     official = _db.official_package_names()
     if official:
@@ -125,7 +125,7 @@ def _scope_expansion_findings(diff_text, package_name, config, add,
         for name in sorted(added_deps.get(field, ())):
             if is_related_package(name, package_name):
                 continue
-            established = _is_established(name)
+            established = is_established_package(name)
             widely = _is_widely_provided(name, config)
             if not (established or widely):
                 continue
@@ -235,7 +235,7 @@ def name_shadow_findings(text: str, package_name: str,
                 continue
             if is_ignorable(name) or is_related_package(name, package_name):
                 continue
-            if _is_established(name):
+            if is_established_package(name):
                 claimed.add(name)
                 emit(name, field,
                      f"{field} claims '{name}', an established package "
@@ -245,7 +245,7 @@ def name_shadow_findings(text: str, package_name: str,
     for name in sorted(conflicts):
         if name in skip or is_related_package(name, package_name):
             continue
-        if _is_established(name):
+        if is_established_package(name):
             emit(name, "conflicts",
                  f"conflicts claims '{name}', an established package "
                  f"unrelated to '{package_name}'")
@@ -328,7 +328,7 @@ def _dependency_findings(diff_text, package_name, config, add, current_text=None
                 # typosquat: `tlottie` resembles `rlottie` but is a real extra
                 # package, and a name-similarity hit on a package that exists
                 # is a naming heuristic, not impersonation.
-                if "D002" in wanted and not _is_established(name):
+                if "D002" in wanted and not is_established_package(name):
                     if candidates is None:
                         candidates = top_dependency_names()
                     impersonated = typosquat_target(name, candidates)
@@ -367,7 +367,7 @@ def _dependency_findings(diff_text, package_name, config, add, current_text=None
             for name in sorted(added_deps.get(field, ())):
                 if is_related_package(name, package_name):
                     continue
-                if _is_established(name):
+                if is_established_package(name):
                     add("D004", "Dependency Hijack Via Provides", "HIGH", "dependency",
                         f"{field} '{name}', an established package unrelated to "
                         f"'{package_name}'",

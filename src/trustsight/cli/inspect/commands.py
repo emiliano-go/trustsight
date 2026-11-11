@@ -6,6 +6,7 @@ from typing import Optional
 import typer
 from ...config import ensure_default_configs, load_config
 from ...coverage import HISTORY_TRUNCATED
+from ...safe_text import clean
 from ...db import (
     init_db,
     maybe_auto_import_seed,
@@ -139,7 +140,7 @@ def register_commands(app: typer.Typer):
             local = None
         if local is None and not allow_uninstalled:
             msg = (
-                f"Package '{package}' is not installed locally; "
+                f"Package '{clean(package)}' is not installed locally; "
                 "pass --allow-uninstalled."
             )
             if json_output:
@@ -151,7 +152,7 @@ def register_commands(app: typer.Typer):
         # Resolve the package name against the AUR.
         info = get_aur_package_info([package])
         if package not in info and local is None:
-            msg = f"Package '{package}' not found in the AUR."
+            msg = f"Package '{clean(package)}' not found in the AUR."
             if json_output:
                 typer.echo(json.dumps({"error": msg}))
             else:
@@ -180,7 +181,7 @@ def register_commands(app: typer.Typer):
         try:
             fact = analyze_package(package, depth=depth, record=record, full_recipe=full_recipe)
         except Exception as exc:
-            msg = f"Analysis of '{package}' failed: {exc}"
+            msg = f"Analysis of '{clean(package)}' failed: {clean(str(exc))}"
             if json_output:
                 typer.echo(json.dumps({"error": msg}))
             else:
@@ -292,7 +293,7 @@ def register_commands(app: typer.Typer):
             fact = analyze_package(package, depth=depth, record=False)
         except Exception as exc:
             _print_colored(
-                f"Analysis of '{package}' failed: {exc}", "red", stderr=True)
+                f"Analysis of '{clean(package)}' failed: {clean(str(exc))}", "red", stderr=True)
             raise typer.Exit(code=2)
         diffs = None
         if diff_path:
@@ -420,7 +421,7 @@ def _inspect_history(
     try:
         project = clone_or_fetch(package, upstream_mtime)
     except Exception as exc:
-        msg = f"Could not fetch '{package}' from AUR: {exc}"
+        msg = f"Could not fetch '{clean(package)}' from AUR: {clean(str(exc))}"
         if json_output:
             typer.echo(json.dumps({"error": msg}))
         else:
@@ -429,7 +430,7 @@ def _inspect_history(
 
     head = get_head_commit(project)
     if not head:
-        msg = f"Package '{package}' has no commits."
+        msg = f"Package '{clean(package)}' has no commits."
         if json_output:
             typer.echo(json.dumps({"error": msg}))
         else:
@@ -533,7 +534,7 @@ def _inspect_history(
 
     # Exit 2 when zero results could be produced (exit code).
     if not results:
-        msg = f"No content-bearing diffs found for '{package}' (walked {commits_seen} commits)."
+        msg = f"No content-bearing diffs found for '{clean(package)}' (walked {commits_seen} commits)."
         if json_output:
             typer.echo(json.dumps({"error": msg}))
         else:

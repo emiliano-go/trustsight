@@ -20,6 +20,7 @@ import typer
 
 from ..config import ensure_default_configs, load_config
 from ..db import init_db, maybe_auto_import_seed
+from ..safe_text import clean
 from .display import _print_colored
 from .inspect import _inspect_one, analyze_package
 
@@ -39,7 +40,7 @@ def register_commands(app: typer.Typer):
         deep: Optional[bool] = typer.Option(
             None, "--deep/--no-deep",
             help="Deep analysis: full dependency depth, and the L9 build lane "
-                 "when [verify] is enabled. Defaults to the [deep] config.",
+                 "when verify.enabled is set. Defaults to the deep config.",
         ),
         full_recipe: Optional[bool] = typer.Option(
             None, "--full-recipe/--no-full-recipe",
@@ -87,7 +88,7 @@ def register_commands(app: typer.Typer):
             except Exception:  # noqa: BLE001 - network failure is handled below
                 info = {}
             if package not in info and installed is None:
-                msg = f"Package '{package}' not found in the AUR."
+                msg = f"Package '{clean(package)}' not found in the AUR."
                 if json_output:
                     typer.echo(json.dumps({"package": package, "error": msg}))
                 else:
@@ -101,7 +102,7 @@ def register_commands(app: typer.Typer):
                     package, depth=scan_depth, record=False,
                     full_recipe=bool(analyse_full))
             except Exception as exc:  # noqa: BLE001 - B6: could not run => 2
-                msg = f"Analysis of '{package}' failed: {exc}"
+                msg = f"Analysis of '{clean(package)}' failed: {clean(str(exc))}"
                 if json_output:
                     typer.echo(json.dumps({"package": package, "error": msg}))
                 else:
@@ -140,8 +141,8 @@ def register_commands(app: typer.Typer):
                 bodies.append(body)
             elif deep_enabled and not json_output:
                 _print_colored(
-                    "Deep analysis: full dependency closure; L9 runs only when "
-                    "[verify] is enabled.", "blue")
+                    "Deep analysis: full dependency closure; the L9 lane runs only "
+                    "when verify.enabled is set.", "blue")
 
         if json_output:
             payload = bodies[0] if len(bodies) == 1 else bodies

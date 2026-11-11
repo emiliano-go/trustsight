@@ -362,3 +362,29 @@ def test_run_inspect_falls_back_to_lint_for_a_local_package(tmp_path):
     assert body["verdict"] == "local recipe (no diff)"
     assert body["findings"][0]["description"] == "checksum disabled"
     assert calls[1][1:3] == ["lint", "--json"]
+
+
+def test_run_inspect_falls_back_when_a_banner_is_the_last_stderr_line(tmp_path):
+    """The live shape: the AUR miss is JSON on stdout, the update notice on
+    stderr.  Reading only the last stderr line skipped the local fallback."""
+    (tmp_path / "PKGBUILD").write_text("pkgname=local\npkgver=1\n")
+
+    def runner(argv, **kwargs):
+        if "inspect" in argv:
+            return subprocess.CompletedProcess(
+                argv, 2,
+                json.dumps({"error": "Package 'local' not found in the AUR."}),
+                "trustsight: update with `git pull && makepkg -si`.\n",
+            )
+        return subprocess.CompletedProcess(
+            argv, 0,
+            json.dumps({"rules": [{
+                "rule_id": "H001", "severity": "HIGH",
+                "message": "checksum disabled"}]}),
+            "",
+        )
+
+    body = gate.run_inspect(
+        "local", full_recipe=False, directory=str(tmp_path), runner=runner)
+    assert body["verdict"] == "local recipe (no diff)"
+    assert body["findings"][0]["description"] == "checksum disabled"

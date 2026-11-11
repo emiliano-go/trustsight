@@ -364,9 +364,16 @@ def run_inspect(
     except OSError as exc:
         raise GateError(f"could not run trustsight for {package}: {exc}") from exc
     if result.returncode != 0:
-        detail = (result.stderr or result.stdout or "").strip().split("\n")
+        # The child may print the reason on either stream: the AUR miss is a
+        # JSON document on stdout, while the update notice lands on stderr and
+        # used to be the only line read.  Search both before deciding the
+        # local-recipe fallback does not apply.
+        combined = "\n".join(
+            part for part in (result.stderr, result.stdout) if part)
+        detail = combined.strip().split("\n")
         reason = detail[-1] if detail else f"exit {result.returncode}"
-        if directory and "not found in the AUR" in reason:
+        if directory and any(
+                "not found in the AUR" in line for line in detail):
             return _lint_body(
                 package, directory, timeout=timeout, runner=runner)
         raise GateError(f"inspection of {package} failed: {reason}")

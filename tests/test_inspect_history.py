@@ -687,3 +687,21 @@ class TestComparisonBaseRendering:
         with contextlib.redirect_stdout(buffer):
             inspect_cli._inspect_plain(fact)
         assert "parent commit only" in buffer.getvalue()
+
+
+def test_a_package_name_cannot_inject_terminal_escapes(tmp_path, monkeypatch):
+    """The not-found path echoes the argument; it must be inert."""
+    monkeypatch.setattr("trustsight.config.DATA_DIR", tmp_path)
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr("trustsight.config.CACHE_DIR", tmp_path / ".cache")
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+    from trustsight.config import ensure_default_configs
+    ensure_default_configs()
+    from trustsight.db import init_db
+    init_db()
+    monkeypatch.setattr("trustsight.discovery.get_all_installed", lambda: {})
+    with patch("trustsight.discovery.get_aur_package_info", return_value={}):
+        result = runner.invoke(
+            app, ["inspect", "--allow-uninstalled", "evil\x1b[31mPWN"])
+    assert result.exit_code == 2
+    assert "\x1b" not in result.output

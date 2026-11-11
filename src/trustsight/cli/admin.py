@@ -1,6 +1,8 @@
 import json
 import logging
+import os
 import sqlite3
+import tempfile
 from pathlib import Path
 
 import typer
@@ -778,53 +780,20 @@ def _register_full_aur(app: typer.Typer) -> None:
              WHERE {' AND '.join(clauses)}
              ORDER BY h.timestamp, h.id, tr.rule_id
         """
-        with get_connection() as conn:
-            rows = conn.execute(sql, params).fetchall()
-        days: dict[str, dict[int, dict]] = {}
-        for row in rows:
-            stamp = str(row["timestamp"] or "")
-            day = stamp[:10]
-            if not day:
-                continue
-            entry = days.setdefault(day, {})
-            record = entry.get(row["id"])
-            if record is None:
-                facts = {}
-                try:
-                    facts = json.loads(row["fact_json"] or "{}")
-                except (TypeError, ValueError):
-                    facts = {}
-                score = int(row["final_score"] or 0)
-                record = {
-                    "package": row["name"],
-                    "status": "ok",
-                    "score": score,
-                    "risk": str(facts.get("risk") or risk_level(score)),
-                    "old_version": str(row["old_version"] or ""),
-                    "new_version": str(row["new_version"] or ""),
-                    "maintainer": "",
-                    "rules": [],
-                    "coverage_gaps": list(facts.get("coverage_gaps") or ()),
-                    "has_diff": bool(row["raw_diff_blob"]),
-                    "_stamp": stamp,
-                }
-                entry[row["id"]] = record
-            rule_id = str(row["rule_id"] or "")
-            if rule_id and all(r["id"] != rule_id for r in record["rules"]):
-                record["rules"].append({
-                    "id": rule_id,
-                    "severity": str(row["severity"] or ""),
-                })
-        out_lines: list[str] = []
-        for day in sorted(days):
-            records = list(days[day].values())
-            records.sort(key=lambda item: item["package"])
-            stamps = [str(item.pop("_stamp")) for item in records]
+        output_path = Path(output)
+        if output_path.is_symlink():
+            raise typer.BadParameter(
+                f"{output_path} is a symlink; refusing to write through it")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        def _day_documents(day: str, records: dict[int, dict]):
+            ordered = sorted(records.values(), key=lambda item: item["package"])
+            stamps = [str(item.pop("_stamp")) for item in ordered]
             started = min(stamps)
             finished = max(stamps)
-            for index in range(0, len(records), 500):
-                chunk = records[index:index + 500]
-                doc = {
+            for index in range(0, len(ordered), 500):
+                chunk = ordered[index:index + 500]
+                yield {
                     "event": "trustsight.scans",
                     "tool": "trustsight",
                     "tool_version": __version__,
@@ -835,23 +804,94 @@ def _register_full_aur(app: typer.Typer) -> None:
                     "bootstrap": False,
                     "backfill_day": day,
                     "chunk_index": index // 500,
-                    "chunk_count": (len(records) + 499) // 500,
+                    "chunk_count": (len(ordered) + 499) // 500,
                     "summary": {
-                        "attempted": len(records),
-                        "succeeded": len(records),
+                        "attempted": len(ordered),
+                        "succeeded": len(ordered),
                         "fetch_failed": 0,
                         "not_vetted": 0,
                         "vanished": 0,
                         "reserved": 0,
-                        "with_diff": sum(1 for item in records if item["has_diff"]),
+                        "with_diff": sum(
+                            1 for item in ordered if item["has_diff"]),
                         "alerts": 0,
                     },
                     "scans": chunk,
                 }
-                out_lines.append(json.dumps(doc, separators=(",", ":"), sort_keys=True))
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text("\n".join(out_lines) + ("\n" if out_lines else ""))
-        typer.echo(f"exported {sum(len(v) for v in days.values())} scans in {len(out_lines)} chunk(s) to {output}")
+
+        # Stream the history day by day into a private temporary file and
+        # replace the target atomically: a corpus export can be large, and a
+        # partial file must never be mistaken for a complete one.
+        count = 0
+        chunks = 0
+        fd, tmp_name = tempfile.mkstemp(
+            dir=str(output_path.parent), prefix=".scans-", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                with get_connection() as conn:
+                    cursor = conn.execute(sql, params)
+                    current_day = None
+                    records: dict[int, dict] = {}
+                    for row in cursor:
+                        stamp = str(row["timestamp"] or "")
+                        day = stamp[:10]
+                        if not day:
+                            continue
+                        if day != current_day:
+                            if current_day is not None:
+                                for doc in _day_documents(current_day, records):
+                                    handle.write(json.dumps(
+                                        doc, separators=(",", ":"),
+                                        sort_keys=True) + "\n")
+                                    chunks += 1
+                            current_day = day
+                            records = {}
+                        record = records.get(row["id"])
+                        if record is None:
+                            count += 1
+                            facts = {}
+                            try:
+                                facts = json.loads(row["fact_json"] or "{}")
+                            except (TypeError, ValueError):
+                                facts = {}
+                            score = int(row["final_score"] or 0)
+                            record = {
+                                "package": row["name"],
+                                "status": "ok",
+                                "score": score,
+                                "risk": str(facts.get("risk") or risk_level(score)),
+                                "old_version": str(row["old_version"] or ""),
+                                "new_version": str(row["new_version"] or ""),
+                                "maintainer": "",
+                                "rules": [],
+                                "coverage_gaps": list(
+                                    facts.get("coverage_gaps") or ()),
+                                "has_diff": bool(row["raw_diff_blob"]),
+                                "_stamp": stamp,
+                            }
+                            records[row["id"]] = record
+                        rule_id = str(row["rule_id"] or "")
+                        if rule_id and all(
+                                r["id"] != rule_id for r in record["rules"]):
+                            record["rules"].append({
+                                "id": rule_id,
+                                "severity": str(row["severity"] or ""),
+                            })
+                    if current_day is not None:
+                        for doc in _day_documents(current_day, records):
+                            handle.write(json.dumps(
+                                doc, separators=(",", ":"), sort_keys=True)
+                                + "\n")
+                            chunks += 1
+            os.replace(tmp_name, output_path)
+        except BaseException:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+            raise
+        typer.echo(
+            f"exported {count} scans in {chunks} chunk(s) to {output_path}")
 
     @full_aur_app.command("verify")
     def full_aur_verify_cmd(

@@ -80,3 +80,50 @@ def test_export_scans_writes_compact_ndjson(tmp_path, monkeypatch):
     assert document["scans"][0]["package"] == "demo"
     assert document["scans"][0]["rules"] == [{"id": "H037", "severity": "MEDIUM"}]
     assert "diff" not in document["scans"][0]
+
+
+def _seed_one_history(tmp_path, monkeypatch):
+    import json
+
+    import trustsight.db as db_module
+    from trustsight.db import init_db, insert_analysis, upsert_package
+
+    monkeypatch.setattr(db_module, "DATA_DIR", tmp_path)
+    init_db()
+    package_id = upsert_package("demo", "1.0")
+    insert_analysis(
+        package_id, "1.0", "1.1", "", "", 25,
+        "@@ -1 +1 @@",
+        json.dumps({"risk": "medium"}),
+        [{"rule_id": "H037", "severity": "MEDIUM"}],
+    )
+
+
+def test_export_scans_refuses_a_symlink_target(tmp_path, monkeypatch):
+    from typer.testing import CliRunner
+
+    from trustsight.cli.app import app
+
+    _seed_one_history(tmp_path, monkeypatch)
+    real = tmp_path / "real.ndjson"
+    real.write_text("keep me\n", encoding="utf-8")
+    link = tmp_path / "link.ndjson"
+    link.symlink_to(real)
+    result = CliRunner().invoke(
+        app, ["full-aur", "export-scans", "--output", str(link)])
+    assert result.exit_code != 0
+    assert real.read_text(encoding="utf-8") == "keep me\n"
+
+
+def test_export_scans_leaves_no_temporary_file(tmp_path, monkeypatch):
+    from typer.testing import CliRunner
+
+    from trustsight.cli.app import app
+
+    _seed_one_history(tmp_path, monkeypatch)
+    output = tmp_path / "scans.ndjson"
+    assert CliRunner().invoke(
+        app, ["full-aur", "export-scans", "--output", str(output)]
+    ).exit_code == 0
+    assert output.read_text(encoding="utf-8").strip()
+    assert list(tmp_path.glob(".scans-*")) == []

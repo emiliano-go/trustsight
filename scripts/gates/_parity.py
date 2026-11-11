@@ -629,12 +629,24 @@ def gate_ci_installs_from_the_lock() -> Gate:
     staleness check that resolves nothing) is allowed.  The install check
     alone missed it, so a workflow could resolve from PyPI and still pass.
 
+    A consumer checkout with its own lock is the one exception: that lock
+    freezes *this* project as a path dependency, so a core dependency change
+    invalidates it before the consumer can run.  The line must carry the
+    explicit ``# lock-exempt: consumer`` marker; an unmarked unlocked
+    install still fails.
+
     Checked structurally over every workflow, because the failure mode is a
     new workflow that installs the old way rather than an existing one
     changing back.
     """
     problems: list[str] = []
     installers: list[str] = []
+    #: A consumer checkout (the harness) carries its own lock and pins this
+    #: core as a path dependency, so locking its sync to *this* project's
+    #: graph cannot work: a core dependency change invalidates it before the
+    #: consumer runs.  The marker is explicit at the call site, and the
+    #: consumer's own CI still checks its lock against its pinned core.
+    consumer_exempt = "lock-exempt: consumer"
     workflows = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
     if not workflows:
         return Gate("CI installs from the lock", False, "no workflows found")
@@ -654,7 +666,8 @@ def gate_ci_installs_from_the_lock() -> Gate:
                 )
             if "uv sync" in stripped or "uv export" in stripped:
                 installers.append(f"{path.name}:{lineno}")
-                if "--locked" not in stripped:
+                if ("--locked" not in stripped
+                        and consumer_exempt not in stripped):
                     problems.append(
                         f"{path.name}:{lineno} reads the lock without --locked"
                         + (" (--frozen skips the staleness check)"

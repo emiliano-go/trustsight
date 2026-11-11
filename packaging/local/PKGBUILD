@@ -24,6 +24,7 @@ depends=(
   'python-tldextract'
   'python-rich'
   'python-typer'
+  'python-pydantic>=2.0'
   'python-cryptography'
   'python-yaml'
 )

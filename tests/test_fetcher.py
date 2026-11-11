@@ -2,62 +2,21 @@
 
 The clone/fetch *behaviour* now lives in the isolated worker and is tested in
 ``test_git_worker.py``; the subprocess transport is in ``test_git_client.py``;
-the freshness marker is in ``sandbox/git_project.py``.  What remains here is
+freshness is parent-owned in ``sandbox/fetch_state.py``.  What remains here is
 the parent seam: ``clone_or_fetch`` returns a bound handle, and the configured
 timeouts reach the worker.
 """
 
-import time
-
-import pygit2
 import pytest
 
 from trustsight import fetcher
 from trustsight.fetcher import clone_or_fetch
-from trustsight.sandbox import git_project
 
 
 @pytest.fixture(autouse=True)
 def _online(monkeypatch):
     """These tests exercise the fetch path, which TRUSTSIGHT_OFFLINE forbids."""
     monkeypatch.delenv("TRUSTSIGHT_OFFLINE", raising=False)
-
-
-@pytest.fixture
-def repo(tmp_path):
-    """A real git repository standing in for a cached AUR clone."""
-    path = tmp_path / "demo"
-    created = pygit2.init_repository(str(path))
-    author = pygit2.Signature("Tester", "tester@example.com")
-    blob = created.create_blob(b"pkgver=1.0\n")
-    builder = created.TreeBuilder()
-    builder.insert("PKGBUILD", blob, pygit2.GIT_FILEMODE_BLOB)
-    created.create_commit(
-        "HEAD", author, author, "initial", builder.write(), []
-    )
-    created.remotes.create("origin", "https://aur.archlinux.org/demo.git")
-    return created
-
-
-# --- the freshness marker (now owned by git_project) -------------------------
-
-
-def test_is_current_when_fetched_at_or_after_upstream(repo):
-    fetched = git_project.record_fetch(repo)
-    assert git_project._is_current(repo, fetched) is True
-    assert git_project._is_current(repo, fetched - 60) is True
-
-
-def test_is_not_current_when_upstream_is_newer_than_our_fetch(repo):
-    fetched = git_project.record_fetch(repo)
-    assert git_project._is_current(repo, fetched + 60) is False
-
-
-def test_is_not_current_without_a_marker(repo):
-    """A clone with no marker falls back to HEAD's commit time."""
-    assert git_project.last_fetch_time(repo) is None
-    assert git_project._is_current(repo, int(time.time()) + 3600) is False
-    assert git_project._is_current(repo, int(time.time()) - 3600) is True
 
 
 # --- the git-sandbox seam ---------------------------------------------------
@@ -71,15 +30,27 @@ class _FakeSession:
         self.closed = False
         _FakeSession.instances.append(self)
 
+    advertised = "a" * 40
+
     def open_fetch(self, pkg, cache_dir, upstream_mtime, offline,
-                   connect, transfer):
+                   connect, transfer, force=False, previous_head=""):
         self.calls.append({
             "pkg": pkg, "cache_dir": cache_dir,
             "upstream_mtime": upstream_mtime, "offline": offline,
-            "connect": connect, "transfer": transfer,
+            "connect": connect, "transfer": transfer, "force": force,
+            "previous_head": previous_head,
         })
-        return {"path": str(cache_dir), "head": "", "fetched": True,
-                "marker_time": None, "received_bytes": 0}
+        return {"path": str(cache_dir), "head": self.advertised,
+                "fetched": True, "marker_time": None, "received_bytes": 0}
+
+    def advertised_head(self):
+        return self.advertised
+
+    def received_bytes(self):
+        return 0
+
+    def head(self, pkg, cache_dir):
+        return self.advertised
 
     def close(self):
         self.closed = True
@@ -100,6 +71,7 @@ def test_clone_or_fetch_delegates_to_the_isolated_worker(tmp_path, monkeypatch):
         "upstream_mtime": 1234, "offline": False,
         "connect": fetcher.DEFAULT_CONNECT_TIMEOUT,
         "transfer": fetcher.DEFAULT_TRANSFER_TIMEOUT,
+        "force": True, "previous_head": "",
     }]
     project.close()
     assert session.closed, "the worker session was not closed"
@@ -146,3 +118,157 @@ def test_network_timeouts_fall_back_when_unconfigured(monkeypatch):
     assert fetcher._network_timeout_values() == (
         fetcher.DEFAULT_CONNECT_TIMEOUT, fetcher.DEFAULT_TRANSFER_TIMEOUT,
     )
+
+
+def test_clone_or_fetch_rejects_a_head_that_differs_from_the_advertisement(
+        tmp_path, monkeypatch):
+    cache = tmp_path / "repos"
+    cache.mkdir()
+    monkeypatch.setattr("trustsight.fetcher.CACHE_DIR", cache)
+
+    class _Mismatch(_FakeSession):
+        advertised = "a" * 40
+
+        def head(self, pkg, cache_dir):
+            return "b" * 40
+
+    _FakeSession.instances = []
+    monkeypatch.setattr("trustsight.sandbox.git_client.GitSession", _Mismatch)
+    with pytest.raises(fetcher._TimeoutError, match="does not match"):
+        clone_or_fetch("demo", 1234)
+    assert _FakeSession.instances[-1].closed
+
+
+def test_offline_without_parent_state_refuses_before_spawning(
+        tmp_path, monkeypatch):
+    cache = tmp_path / "repos"
+    cache.mkdir()
+    monkeypatch.setattr("trustsight.fetcher.CACHE_DIR", cache)
+    monkeypatch.setenv("TRUSTSIGHT_OFFLINE", "1")
+
+    class _Explode:
+        def __init__(self):
+            raise AssertionError("a session was spawned for an unverified cache")
+
+    monkeypatch.setattr("trustsight.sandbox.git_client.GitSession", _Explode)
+    with pytest.raises(fetcher._TimeoutError, match="no verified fetch state"):
+        clone_or_fetch("demo")
+
+
+def test_a_no_op_fetch_is_accepted_only_when_the_parent_state_matches(
+        tmp_path, monkeypatch):
+    cache = tmp_path / "repos"
+    cache.mkdir()
+    monkeypatch.setattr("trustsight.fetcher.CACHE_DIR", cache)
+    from trustsight.sandbox import fetch_state
+
+    head = "a" * 40
+    fetch_state.store(cache, "demo", fetch_state.FetchState(
+        head=head, advertised_head=head, fetched_at=10,
+        upstream_mtime=10, verified=True))
+
+    class _Noop(_FakeSession):
+        def open_fetch(self, *args, **kwargs):
+            return {"path": str(args[1]), "head": head,
+                    "fetched": False, "marker_time": None,
+                    "received_bytes": 0}
+
+        def head(self, pkg, cache_dir):
+            return head
+
+    _Noop.advertised = head
+    _FakeSession.instances = []
+    monkeypatch.setattr("trustsight.sandbox.git_client.GitSession", _Noop)
+    project = clone_or_fetch("demo", 10)
+    assert project.last_fetch_time() == 10
+    project.close()
+
+
+def test_a_no_op_mismatch_discards_the_repository(tmp_path, monkeypatch):
+    cache = tmp_path / "repos"
+    cache.mkdir()
+    repo = cache / "demo"
+    repo.mkdir()
+    (repo / "marker").write_text("x")
+    monkeypatch.setattr("trustsight.fetcher.CACHE_DIR", cache)
+    from trustsight.sandbox import fetch_state
+
+    fetch_state.store(cache, "demo", fetch_state.FetchState(
+        head="a" * 40, advertised_head="a" * 40, fetched_at=10,
+        upstream_mtime=10, verified=True))
+
+    class _Noop(_FakeSession):
+        advertised = "a" * 40
+
+        def open_fetch(self, *args, **kwargs):
+            return {"path": str(args[1]), "head": self.advertised,
+                    "fetched": False, "marker_time": None,
+                    "received_bytes": 0}
+
+        def head(self, pkg, cache_dir):
+            return "b" * 40
+
+    _FakeSession.instances = []
+    monkeypatch.setattr("trustsight.sandbox.git_client.GitSession", _Noop)
+    with pytest.raises(fetcher._TimeoutError, match="not the verified HEAD"):
+        clone_or_fetch("demo", 10)
+    assert not repo.exists()
+
+
+def test_prefetch_reports_a_state_backed_hint(tmp_path, monkeypatch):
+    cache = tmp_path / "repos"
+    cache.mkdir()
+    monkeypatch.setattr("trustsight.fetcher.CACHE_DIR", cache)
+    _FakeSession.instances = []
+    monkeypatch.setattr("trustsight.sandbox.git_client.GitSession", _FakeSession)
+
+    from trustsight.review import prefetch
+
+    hints = prefetch([{"name": "demo"}])
+
+    assert isinstance(hints["demo"], int)
+    assert hints["demo"] > 0
+
+
+def test_a_worker_cannot_ignore_a_required_fetch(tmp_path, monkeypatch):
+    cache = tmp_path / "repos"
+    cache.mkdir()
+    monkeypatch.setattr("trustsight.fetcher.CACHE_DIR", cache)
+    from trustsight.sandbox import fetch_state
+
+    head = "a" * 40
+    fetch_state.store(cache, "demo", fetch_state.FetchState(
+        head=head, advertised_head=head, fetched_at=10,
+        upstream_mtime=10, verified=True))
+
+    class _Stale(_FakeSession):
+        def open_fetch(self, *args, **kwargs):
+            return {"path": str(args[1]), "head": head,
+                    "fetched": False, "marker_time": None,
+                    "received_bytes": 0}
+
+        def head(self, pkg, cache_dir):
+            return head
+
+    _FakeSession.instances = []
+    monkeypatch.setattr("trustsight.sandbox.git_client.GitSession", _Stale)
+    with pytest.raises(fetcher._TimeoutError, match="did not perform"):
+        clone_or_fetch("demo", 11)
+
+
+def test_a_changed_upstream_mtime_forces_a_fetch(tmp_path, monkeypatch):
+    cache = tmp_path / "repos"
+    cache.mkdir()
+    monkeypatch.setattr("trustsight.fetcher.CACHE_DIR", cache)
+    from trustsight.sandbox import fetch_state
+
+    head = "a" * 40
+    fetch_state.store(cache, "demo", fetch_state.FetchState(
+        head=head, advertised_head=head, fetched_at=10,
+        upstream_mtime=10, verified=True))
+    _FakeSession.instances = []
+    monkeypatch.setattr("trustsight.sandbox.git_client.GitSession", _FakeSession)
+
+    project = clone_or_fetch("demo", 11)
+    assert _FakeSession.instances[-1].calls[-1]["force"] is True
+    project.close()

@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import io
 import json
+import os
+import pty
 import subprocess
 
 import pytest
@@ -124,6 +126,43 @@ def test_render_shows_the_decision_facts():
     assert "review" in text
     assert "H017" in text
     assert "1.1-1 (from 1.0-1)" in text
+
+
+def test_render_one_lines_a_long_verdict_and_skips_info():
+    long_verdict = "This analysis was incomplete: " + "reason " * 80
+    out = io.StringIO()
+    body = _body(
+        verdict=long_verdict,
+        findings=[
+            {"rule_id": "W011", "severity": "INFO", "weight": 0,
+             "description": "upstream not read"},
+            {"rule_id": "H026", "severity": "HIGH", "weight": 10,
+             "description": "maintainer changed"},
+        ],
+        coverage_gaps=["ruleset_drifted"],
+    )
+    gate.render(gate.summarize(body), out)
+    text = out.getvalue()
+    assert long_verdict not in text
+    assert "..." in text
+    assert "W011" not in text
+    assert "H026" in text
+    assert "config sync-rules --update" in text
+
+
+def test_read_answer_reads_a_real_terminal():
+    master, slave = pty.openpty()
+    try:
+        os.write(master, b"y\n")
+        answer = gate._read_answer("Continue? ", tty_path=os.ttyname(slave))
+    finally:
+        os.close(master)
+        os.close(slave)
+    assert answer == "y"
+
+
+def test_read_answer_without_a_terminal_is_none():
+    assert gate._read_answer("Continue? ", tty_path="/nonexistent/tty") is None
 
 
 def test_run_gate_prompts_once_per_package_and_approves():

@@ -45,6 +45,8 @@ MAX_TARGETS = 64
 MAX_FINDINGS = 8
 DEFAULT_DEPTH = 1
 DEFAULT_TIMEOUT = 180
+MAX_ANSWER_BYTES = 64
+VERDICT_LINE_BYTES = 200
 
 _SEVERITY_RANK = {
     "FATAL": 6, "CRITICAL": 5, "HIGH": 4, "MEDIUM": 3, "LOW": 2, "INFO": 1,
@@ -142,7 +144,13 @@ def _as_int(value) -> int | None:
 def _finding_rows(value) -> list[dict]:
     if not isinstance(value, (list, tuple)):
         return []
-    rows = [dict(item) for item in value if isinstance(item, dict)]
+    rows = [
+        dict(item) for item in value
+        if isinstance(item, dict)
+        # INFO is rendered as evidence by inspect; in a yes/no prompt it is
+        # noise beside the scored findings and the coverage gaps.
+        and _as_text(item.get("severity")).upper() != "INFO"
+    ]
     rows.sort(
         key=lambda row: (
             _SEVERITY_RANK.get(_as_text(row.get("severity")).upper(), 0),
@@ -185,6 +193,17 @@ def _version_line(summary: Summary) -> str:
     return new or old or ""
 
 
+def _one_line(text: str, limit: int = VERDICT_LINE_BYTES) -> str:
+    """Collapse a report sentence onto one bounded prompt line."""
+    collapsed = " ".join(clean(text).split())
+    if len(collapsed) <= limit:
+        return collapsed
+    cut = collapsed[:limit]
+    if " " in cut:
+        cut = cut.rsplit(" ", 1)[0]
+    return cut.rstrip() + "..."
+
+
 def render(summary: Summary, out: TextIO) -> None:
     """Write the short report a human approves from.
 
@@ -197,14 +216,14 @@ def render(summary: Summary, out: TextIO) -> None:
     if version:
         print(f"   version: {clean(version)}", file=out)
     facts = []
-    if summary.verdict:
-        facts.append(f"verdict: {clean(summary.verdict)}")
     if summary.risk:
         facts.append(f"risk: {clean(summary.risk)}")
     if summary.score is not None:
         facts.append(f"score: {summary.score}")
     if facts:
         print("   " + "   ".join(facts), file=out)
+    if summary.verdict:
+        print(f"   verdict: {_one_line(summary.verdict)}", file=out)
     for finding in summary.findings:
         rule = clean(_as_text(finding.get("rule_id"), "?"))
         severity = clean(_as_text(finding.get("severity"), ""))
@@ -220,6 +239,12 @@ def render(summary: Summary, out: TextIO) -> None:
         extra = len(gaps) - 4
         suffix = f" (+{extra} more)" if extra > 0 else ""
         print(f"   coverage gaps: {shown}{suffix}", file=out)
+    if "ruleset_drifted" in summary.coverage_gaps:
+        print(
+            "   note: rules.toml is behind the shipped set; run "
+            "'trustsight config sync-rules --update'",
+            file=out,
+        )
 
 
 def build_inspect_argv(
@@ -390,15 +415,24 @@ def run_inspect(
     return body
 
 
-def _read_answer(prompt: str) -> str | None:
-    """Read one line from the controlling terminal; None when there is none."""
+def _read_answer(prompt: str, tty_path: str = "/dev/tty") -> str | None:
+    """Read one line from the controlling terminal; None when there is none.
+
+    A terminal is a character device, not a seekable file.  Opening it
+    ``r+`` builds a buffered random-access stream, which raises
+    ``UnsupportedOperation`` before the prompt is ever written, so the gate
+    must open the write and read sides separately.
+    """
     try:
-        with open("/dev/tty", "r+", encoding="utf-8", errors="replace") as tty:
+        with open(tty_path, "w", encoding="utf-8", errors="replace") as tty:
             tty.write(prompt)
             tty.flush()
-            line = tty.readline()
+        with open(tty_path, "r", encoding="utf-8", errors="replace") as tty:
+            line = tty.readline(MAX_ANSWER_BYTES)
     except (OSError, ValueError):
         return None
+    if len(line) >= MAX_ANSWER_BYTES and not line.endswith("\n"):
+        return ""
     return line.strip()
 
 

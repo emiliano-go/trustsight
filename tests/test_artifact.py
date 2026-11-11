@@ -115,3 +115,51 @@ def test_a_normal_artifact_fires_no_a_rule():
         "built_install_text": "post_install() {\n  echo ok\n}\n",
     }
     assert _ids(manifest, declared) == set()
+
+
+def test_verify_build_without_a_manifest_names_the_handoff(monkeypatch):
+    """The lane is unavailable because nothing built the package, not because
+    a container happened to be missing."""
+    monkeypatch.setattr(
+        "trustsight.config.load_config", lambda: {"verify": {"enabled": True}})
+    from trustsight.api import TrustSight
+
+    result = TrustSight(auto_import_seed=False).verify_build("demo")
+    assert result["status"] == "l9_unavailable"
+    assert "manifest" in result["reason"]
+    assert "build" in result["reason"]
+
+
+def test_read_manifest_rejects_a_non_array(tmp_path):
+    import pytest as _pytest
+
+    from trustsight.cli.inspect.commands import _read_manifest
+
+    path = tmp_path / "manifest.json"
+    path.write_text('{"path": "/usr/bin/x"}', encoding="utf-8")
+    with _pytest.raises(Exception):
+        _read_manifest(str(path))
+
+
+def test_verify_build_cli_passes_a_manifest(monkeypatch, tmp_path):
+    import json as _json
+
+    from typer.testing import CliRunner
+
+    from trustsight.cli import app
+
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(_json.dumps([{"path": "/usr/bin/x", "setuid": True}]))
+    monkeypatch.setattr(
+        "trustsight.config.load_config",
+        lambda: {"verify": {"enabled": True}})
+    monkeypatch.setattr(
+        "trustsight.cli.inspect.commands.analyze_package",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("offline")))
+
+    result = CliRunner().invoke(
+        app, ["verify-build", "demo", "--manifest", str(manifest), "--json"])
+    assert result.exit_code == 0, result.stdout
+    payload = _json.loads(result.stdout)
+    assert payload["status"] == "l9_analyzed"
+    assert any(f["rule_id"] == "A001" for f in payload["findings"])

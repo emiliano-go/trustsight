@@ -1113,28 +1113,30 @@ ladder (`FATAL`/`CRITICAL` → `error`, `HIGH`/`MEDIUM` → `warning`, else
 
 ## trustsight verify-build
 
-Run the optional L9 build lane. Off by default; with
-`[verify] enabled = false` or no sandbox container it reports
-`l9_unavailable` - a weight-0 boundary, never a clean or malicious verdict.
-The static core never executes package code.
+Inspect an external build's artifact manifest. TrustSight does not build the
+package: the build runs outside the static core and its manifest is the
+handoff. Off by default; with `[verify] enabled = false` or no manifest it
+reports `l9_unavailable` - a weight-0 boundary, never a clean or malicious
+verdict. Nothing is executed here.
 
 ```
-trustsight verify-build <package> [--json]
+trustsight verify-build <package> [--manifest PATH] [--json]
 ```
 
 | Argument | Required | Description |
 |----------|----------|-------------|
 | `package` | Yes | Package name. |
+| `--manifest PATH` | No | JSON array of built-file records (`path`, `mode`, `setuid`, `setgid`, `unit`, `links`, `caps`, `bpf`, `world_writable`) produced by an external build. Without it the lane is unavailable. |
 | `--json` | No | Emit the result as JSON. |
 
-It reviews the diff (L1-L8) first, then offers the L9 lane. When enabled
-(and the container supplies a manifest) it inspects the artifact with the
-A-series rules (`A001`-`A008`); those findings are L9 evidence and are never
-blended into the static score. When the artifact and the static analysis
-disagree, the result carries `l9_divergence` and both profiles stand.
+It reviews the diff (L1-L8) first, then offers the L9 lane. When enabled and
+given a manifest, it inspects the artifact with the A-series rules
+(`A001`-`A008`); those findings are L9 evidence and are never blended into
+the static score. When the artifact and the static analysis disagree, the
+result carries `l9_divergence` and both profiles stand.
 
-The static core never executes package code: there is no batch build lane,
-and the L9 lane inspects only a manifest a caller supplies.
+The static core never executes package code, and there is no automatic
+build lane: the manifest a caller supplies is the whole handoff.
 
 ---
 

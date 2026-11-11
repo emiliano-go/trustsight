@@ -429,7 +429,10 @@ class TrustSight:
         if manifest is None:
             return {
                 "package": package, "status": "l9_unavailable",
-                "reason": "no artifact manifest was supplied and no sandbox ran",
+                "reason": (
+                    "no artifact manifest was supplied: TrustSight does not "
+                    "build the package, so the lane inspects only a manifest "
+                    "an external build produced"),
                 "findings": [],
             }
         findings = inspect_manifest(manifest, declared)

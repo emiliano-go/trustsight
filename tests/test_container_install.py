@@ -17,6 +17,7 @@ collects the suite.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -52,6 +53,20 @@ def _exec(container: str, *command: str, user: str | None = None) -> str:
     if user is not None:
         prefix += ["-u", user]
     return _run(*prefix, container, *command).stdout
+
+
+def _as_trustsight(container: str, *command: str) -> str:
+    """Run *command* as the documented isolated account."""
+    return _exec(
+        container, "runuser", "-u", "trustsight", "--", "env",
+        "HOME=/home/trustsight",
+        "XDG_CONFIG_HOME=/home/trustsight/.config",
+        "XDG_CACHE_HOME=/home/trustsight/.cache",
+        "PATH=/usr/bin:/bin",
+        "TRUSTSIGHT_OFFLINE=1",
+        "TRUSTSIGHT_NO_UPDATE_CHECK=1",
+        *command,
+    )
 
 
 def _version() -> str:
@@ -135,3 +150,66 @@ def test_pkgbuild_builds_and_installs(arch_container: str, tmp_path: Path) -> No
 
     entry = _exec(arch_container, "trustsight", "--version")
     assert version in entry, f"installed entry point reports {entry.strip()!r}"
+
+    # The setup documented in docs/guides/reducing-blast-radius.md: a
+    # dedicated nologin account owns its state, and the first run after an
+    # update adds missing rules and opens the database without root-owned
+    # leftovers.
+    _exec(arch_container, "useradd", "--create-home", "--shell",
+          "/usr/bin/nologin", "trustsight")
+
+    assert version in _as_trustsight(arch_container, "trustsight", "--version")
+    status = json.loads(_as_trustsight(
+        arch_container, "trustsight", "status", "--json"))
+    assert status["missing_shipped_rules"] == []
+    assert status["stale_rule_patterns"] == []
+    checked = json.loads(_as_trustsight(
+        arch_container, "trustsight", "db", "check", "--json"))
+    assert checked == {"status": "ok", "errors": []}
+    linted = json.loads(_as_trustsight(
+        arch_container, "trustsight", "lint-rules", "--json"))
+    assert linted["errors"] == 0
+
+    # The tokenizer is the sandboxed hostile parser. It must start under the
+    # unprivileged account, not only under root.
+    probe = _as_trustsight(
+        arch_container, "python3", "-c",
+        "from trustsight.tokenizer import split_lines;"
+        "assert split_lines('a\\nb') == ['a', 'b'];"
+        "print('tokenizer-ok')")
+    assert "tokenizer-ok" in probe
+
+    for path in (
+        "/home/trustsight/.config/trustsight",
+        "/home/trustsight/.local/share/trustsight",
+        "/home/trustsight/.cache/trustsight/repos",
+    ):
+        owner = _exec(arch_container, "stat", "-c", "%U:%G %a", path).strip()
+        assert owner == "trustsight:trustsight 700", (path, owner)
+    db_owner = _exec(
+        arch_container, "stat", "-c", "%U:%G",
+        "/home/trustsight/.local/share/trustsight/trustsight.db").strip()
+    assert db_owner == "trustsight:trustsight", db_owner
+    _exec(arch_container, "bash", "-lc",
+          "test ! -e /root/.config/trustsight "
+          "&& test ! -e /root/.local/share/trustsight")
+
+    # Simulate the package being replaced in place, the update path the
+    # account has to survive. A reinstall must not need a write to root's
+    # home or change the ownership of the existing state.
+    _exec(arch_container, "bash", "-lc",
+          "pacman -U --noconfirm /tmp/pkg/trustsight-*.pkg.tar.zst")
+    synced = json.loads(_as_trustsight(
+        arch_container, "trustsight", "config", "sync-rules", "--update",
+        "--json"))
+    assert synced["added"] == []
+    assert synced["updated"] == []
+    backup = json.loads(_as_trustsight(
+        arch_container, "trustsight", "db", "backup", "--json"))
+    assert backup["status"] == "ok"
+    assert json.loads(_as_trustsight(
+        arch_container, "trustsight", "status", "--json")
+    )["missing_shipped_rules"] == []
+    assert json.loads(_as_trustsight(
+        arch_container, "trustsight", "db", "check", "--json")
+    )["status"] == "ok"

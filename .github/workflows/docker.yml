@@ -84,6 +84,56 @@ jobs:
           docker run --rm "ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}" --version
           docker run --rm "ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}" lint-rules
 
+      # The read-only recipe in docs/guides/reducing-blast-radius.md.  Two
+      # passes against the same volumes: a recreated container must stay
+      # writable with the state the first run wrote, and a change to the image
+      # UID or required paths must fail here before the image is published.
+      # Docker's built-in seccomp profile blocks the unshare the parser
+      # workers need; the workers still apply their own seccomp allowlist and
+      # namespace floor.
+      - uses: ./.github/actions/enable-userns
+
+      - name: Exercise the documented isolated container
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -eu
+          image="ghcr.io/${GITHUB_REPOSITORY}:${VERSION}"
+          suffix="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          data="ts-smoke-data-${suffix}"
+          config="ts-smoke-config-${suffix}"
+          for volume in "$data" "$config"; do
+            docker volume create "$volume" >/dev/null
+          done
+          cleanup() {
+            for volume in "$data" "$config"; do
+              docker volume rm "$volume" >/dev/null 2>&1 || true
+            done
+          }
+          trap cleanup EXIT
+
+          run_ts() {
+            docker run --rm --read-only \
+              --tmpfs /tmp:rw,size=64m,mode=1777 \
+              --tmpfs /home/ts/.cache:size=64m \
+              --user 1000:1000 \
+              --cap-drop=all \
+              --security-opt=no-new-privileges \
+              --security-opt=seccomp=unconfined \
+              --pids-limit=512 --memory=2g --cpus=2 \
+              -e TRUSTSIGHT_OFFLINE=1 \
+              -e TRUSTSIGHT_NO_UPDATE_CHECK=1 \
+              -v "$data:/home/ts/.local/share/trustsight" \
+              -v "$config:/home/ts/.config/trustsight" \
+              "$image" "$@"
+          }
+
+          for pass in 1 2; do
+            run_ts status --json >/dev/null
+            run_ts db check --json >/dev/null
+            run_ts lint-rules --json >/dev/null
+          done
+
       - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
         with:
           registry: ghcr.io

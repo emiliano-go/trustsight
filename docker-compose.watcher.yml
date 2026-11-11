@@ -38,6 +38,10 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
+      # Docker's built-in seccomp profile denies the unshare the parser
+      # workers need to enter their user and network namespaces.  The workers
+      # still apply their own seccomp allowlist and namespace floor.
+      - seccomp=unconfined
     pids_limit: 512
     mem_limit: 2g
     cpus: 2.0

@@ -1,4 +1,4 @@
-<!-- description: Task-oriented guides for everyday TrustSight work: auditing before an update, gating CI, investigating a flag, configuring rules, and tuning false positives. -->
+<!-- description: Task-oriented guides for everyday TrustSight work: auditing before an update, gating CI, investigating a flag, configuring rules, tuning false positives, and reducing the tool's blast radius. -->
 
 # Guides
 
@@ -14,6 +14,7 @@ These pages cover common tasks you'll perform with TrustSight. Each guide is foc
 | [Configuring Rules and Weights](configuring-rules-and-weights.md) | You need to edit `rules.toml` or `config.toml` to match your threat model. |
 | [Tuning False Positives](tuning-false-positives.md) | A rule is firing too often on your package set : how to identify and fix it. |
 | [Watching the AUR Continuously](watching-the-aur.md) | You want an always-on scanner over the whole AUR : the watch loop, service setups, and webhook alerts. |
+| [Reducing Blast Radius](reducing-blast-radius.md) | You want the auditor itself contained: a dedicated unprivileged account or an ephemeral container around the process. |
 
 ## Reference
 

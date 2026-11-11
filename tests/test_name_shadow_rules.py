@@ -90,10 +90,9 @@ def test_pkgname_does_not_shadow_itself_without_official_membership(monkeypatch)
     of its own name.  That arm now requires exact repository membership; the
     dependency-name arms keep the fallback.
     """
-    import trustsight.db as db
-    import trustsight.db._dependencies as deps
+    import trustsight.analysis.dependencies as deps
 
-    monkeypatch.setattr(db, "official_package_names", lambda: frozenset())
+    monkeypatch.setattr(deps._db, "official_package_names", lambda: frozenset())
     monkeypatch.setattr(deps, "dependency_observation_count", lambda name: 100)
 
     assert name_shadow_findings(_recipe("lotti-bin"), "lotti-bin") == []

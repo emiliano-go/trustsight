@@ -73,8 +73,12 @@ def launch_args(module: str, role: str | None = None,
 
 def spawn_isolated(module: str, cwd: str = "/", role: str | None = None,
                    extra_argv: tuple = (),
-                   pass_fds: tuple = ()) -> subprocess.Popen:
+                   pass_fds: tuple = (),
+                   extra_env: dict | None = None) -> subprocess.Popen:
     """Start worker *module* with stdio piped, a minimal env, own session."""
+    env = minimal_env()
+    if extra_env:
+        env.update({str(k): str(v) for k, v in extra_env.items()})
     return subprocess.Popen(
         launch_args(module, role, extra_argv),
         stdin=subprocess.PIPE,
@@ -84,5 +88,5 @@ def spawn_isolated(module: str, cwd: str = "/", role: str | None = None,
         pass_fds=pass_fds,
         start_new_session=True,
         cwd=cwd,
-        env=minimal_env(),
+        env=env,
     )

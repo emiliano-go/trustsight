@@ -106,8 +106,9 @@ Continue with demo-bin? [y/N]
 
 The report goes to stderr and the prompt is read from the controlling
 terminal, so it still works when the manager's output is piped. A long verdict
-is collapsed to one line, INFO findings stay in the full report, and a stale
-`rules.toml` prints the `config sync-rules --update` next step.
+is collapsed to one line, INFO findings stay in the full report, a stale
+`rules.toml` prints the `config sync-rules --update` next step, and the risk,
+severity and coverage lines are coloured when the hook's stderr is a terminal.
 
 ## Exit codes
 

@@ -128,6 +128,28 @@ def test_render_shows_the_decision_facts():
     assert "1.1-1 (from 1.0-1)" in text
 
 
+def test_render_colors_only_a_terminal(monkeypatch):
+    class Terminal(io.StringIO):
+        def isatty(self):
+            return True
+
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
+    monkeypatch.delenv("TRUSTSIGHT_FORCE_RICH", raising=False)
+    terminal = Terminal()
+    gate.render(gate.summarize(_body()), terminal)
+    assert "\x1b[" in terminal.getvalue()
+
+    plain = io.StringIO()
+    gate.render(gate.summarize(_body()), plain)
+    assert "\x1b[" not in plain.getvalue()
+
+    monkeypatch.setenv("NO_COLOR", "1")
+    disabled = Terminal()
+    gate.render(gate.summarize(_body()), disabled)
+    assert "\x1b[" not in disabled.getvalue()
+
+
 def test_render_one_lines_a_long_verdict_and_skips_info():
     long_verdict = "This analysis was incomplete: " + "reason " * 80
     out = io.StringIO()

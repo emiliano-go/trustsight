@@ -81,7 +81,11 @@ jobs:
     needs: classify
     if: needs.classify.outputs.is_software_release == 'true'
     runs-on: ubuntu-latest
-    container: archlinux:latest@sha256:b1c2fe6e717bfd5673af8fc217e1e1c3ce0dcbb1d53c3414c8425e7ce79fc6d9
+    container:
+      image: archlinux:latest@sha256:b1c2fe6e717bfd5673af8fc217e1e1c3ce0dcbb1d53c3414c8425e7ce79fc6d9
+      # The package check() runs the sandboxed suite, whose workers need an
+      # unprivileged user namespace; Docker's default profile blocks it.
+      options: --privileged
     steps:
       # git is required so that actions/checkout performs a real checkout:
       # the container's fallback downloads the source archive, which honours
@@ -93,6 +97,13 @@ jobs:
         with:
           ref: ${{ needs.classify.outputs.tag }}
           fetch-depth: 0
+
+      - name: Enable unprivileged user namespaces for the sandboxed suite
+        run: |
+          sysctl -w kernel.unprivileged_userns_clone=1 || true
+          sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          sysctl -w user.max_user_namespaces=28633 || true
+          unshare -Ur true
 
       - name: Rebuild the tarball from the tag
         id: rebuild

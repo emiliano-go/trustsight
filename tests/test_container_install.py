@@ -105,7 +105,15 @@ def test_pkgbuild_builds_and_installs(arch_container: str, tmp_path: Path) -> No
     tarball = tmp_path / f"trustsight-{version}.tar.gz"
     tarball.write_bytes(blob)
     for name in (".SRCINFO", f"trustsight-{version}.tar.gz.sig"):
-        shutil.copy(PKG_DIR / name, tmp_path / name)
+        source = PKG_DIR / name
+        if source.exists():
+            shutil.copy(source, tmp_path / name)
+        else:
+            # A release-prep branch has no tag and no signed asset yet.
+            # makepkg still requires every declared source file to exist even
+            # with --skippgpcheck, so stage an empty placeholder; the tagged
+            # pkgbuild.yml job verifies the real signature.
+            (tmp_path / name).write_bytes(b"")
 
     # This test proves the package installs; the checksum *record* is pinned
     # by pkgbuild.yml and test_pkgbuild.py.  Checksum the freshly built

@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -100,34 +99,14 @@ def test_pkgbuild_builds_and_installs(arch_container: str, tmp_path: Path) -> No
     # so the container needs no network beyond the Arch repositories.
     sys.path.insert(0, str(ROOT / "scripts"))
     import build_release_tarball as brt
+    import prepare_pkgbuild_sources as prepare
 
     blob, digest = brt.build("WORKTREE", version)
     tarball = tmp_path / f"trustsight-{version}.tar.gz"
     tarball.write_bytes(blob)
-    for name in (".SRCINFO", f"trustsight-{version}.tar.gz.sig"):
-        source = PKG_DIR / name
-        if source.exists():
-            shutil.copy(source, tmp_path / name)
-        else:
-            # A release-prep branch has no tag and no signed asset yet.
-            # makepkg still requires every declared source file to exist even
-            # with --skippgpcheck, so stage an empty placeholder; the tagged
-            # pkgbuild.yml job verifies the real signature.
-            (tmp_path / name).write_bytes(b"")
-
-    # This test proves the package installs; the checksum *record* is pinned
-    # by pkgbuild.yml and test_pkgbuild.py.  Checksum the freshly built
-    # tarball into the temp PKGBUILD so a tree mid-edit still exercises the
-    # build instead of failing on a stale recorded hash.  The committed
-    # `.sig` needs no change: it describes the tarball, and only the tarball
-    # is rebuilt here.
-    pkgbuild = (PKG_DIR / "PKGBUILD").read_text()
-    rewritten, count = re.subn(
-        r"sha256sums=\('[0-9a-f]{64}'",
-        f"sha256sums=('{digest}'", pkgbuild, count=1,
-    )
-    assert count == 1, "PKGBUILD has no sha256sums entry to rewrite"
-    (tmp_path / "PKGBUILD").write_text(rewritten)
+    # The helper drops the .sig source when this is a pre-tag branch: makepkg
+    # validates every declared source even with --skippgpcheck.
+    prepare.stage_sources(PKG_DIR, tmp_path, version, digest)
 
     # Seed the container's pacman and install the build tooling.
     _exec(arch_container, "pacman", "-Syu", "--noconfirm")

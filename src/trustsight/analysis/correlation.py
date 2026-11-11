@@ -116,7 +116,7 @@ def _maintainer_first_seen_ts(maintainer: str):
     ``None`` (``unknown``), never an established account, so a cold or
     unreadable database cannot manufacture novelty.
     """
-    from ..db import maintainer_first_seen
+    from ..sandbox.store_client import maintainer_first_seen
     from ..db._history import _parse_ts
 
     try:

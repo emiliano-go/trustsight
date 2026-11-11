@@ -1,7 +1,7 @@
 import time
 
 from ..coverage import note_stage_failure
-from ..db import get_package
+from ..sandbox.store_client import get_package
 from ..findings import stamp
 from ..maintainer_email import split_maintainer
 from ..sandbox.git_client import GitOpError, GitSandboxUnavailable
@@ -21,7 +21,7 @@ def t_key_findings(change: dict, config) -> list[dict]:
     ``[thresholds] t_key.min_observations`` keys, default 1) declines to
     avoid firing on every key a fresh install sees.
     """
-    from ..db import key_observed_before, observed_key_count
+    from ..sandbox.store_client import key_observed_before, observed_key_count
 
     gained = list((change or {}).get("pgp_keys", {}).get("gained", ()) or ())
     if not gained:
@@ -74,7 +74,7 @@ def t_domain_findings(maintainer: str, config) -> list[dict]:
     one first seen this week is as novel as brand new.  Cold index declines
     (see T001).
     """
-    from ..db import domain_first_seen, domain_seen_within, observed_domain_count
+    from ..sandbox.store_client import domain_first_seen, domain_seen_within, observed_domain_count
     from ..maintainer_email import maintainer_domain
 
     domain = maintainer_domain(maintainer)

@@ -22,8 +22,12 @@ def get_db_path() -> Path:
     """Return the path to the SQLite database file.
 
     ``DATA_DIR`` is resolved on the ``trustsight.db`` package at call time so
-    callers can redirect storage by patching ``trustsight.db.DATA_DIR``.
+    callers can redirect storage by patching ``trustsight.db.DATA_DIR``.  A
+    store worker receives the exact file through ``TRUSTSIGHT_DB_PATH``.
     """
+    override = os.environ.get("TRUSTSIGHT_DB_PATH")
+    if override:
+        return Path(override)
     from . import DATA_DIR
     return DATA_DIR / "trustsight.db"
 
@@ -78,7 +82,84 @@ def _busy_timeout_ms() -> int:
         return _BUSY_TIMEOUT_DEFAULT_MS
     return value if value >= 0 else _BUSY_TIMEOUT_DEFAULT_MS
 
-def _new_connection(db_path: Path) -> sqlite3.Connection:
+def _make_authorizer(allow_attach: bool):
+    """Build the connection authorizer.
+
+    Values are already bound, so this is not SQL-injection defence: it is a
+    second boundary for a corrupted database file or a future code path that
+    composes SQL.  ``allow_attach`` is reserved for the legacy seed importer,
+    which attaches a verified local seed file as ``seed``; every other
+    connection refuses it.
+    """
+    denied_actions = {
+        getattr(sqlite3, "SQLITE_CREATE_VIRTUAL_TABLE", -1),
+    }
+    if not allow_attach:
+        denied_actions.add(getattr(sqlite3, "SQLITE_ATTACH", -1))
+
+    def authorizer(action, arg1, arg2, dbname, trigger):
+        if action in denied_actions:
+            return sqlite3.SQLITE_DENY
+        # A read (arg2 is None) is allowed; assigning one of these is not.
+        if action == sqlite3.SQLITE_PRAGMA and arg2 is not None \
+                and str(arg1).lower() in {"writable_schema", "trusted_schema"}:
+            return sqlite3.SQLITE_DENY
+        return sqlite3.SQLITE_OK
+
+    return authorizer
+
+
+def _harden_connection(conn: sqlite3.Connection, *, read_only: bool,
+                       allow_attach: bool = False) -> None:
+    """Apply SQLite's defensive configuration to *conn*.
+
+    SQLite is C in the trusted computing base.  This does not make it safe,
+    but it removes the schema-corruption and extension-loading paths an
+    injected statement could use, and caps the inputs SQLite will accept.
+    ``setconfig`` is Python 3.12+; on 3.11 the SQL-level pragmas still apply
+    ``trusted_schema`` and ``writable_schema``, and extension loading is off
+    by default.
+    """
+    if hasattr(conn, "setconfig"):
+        for option, value in (
+            (getattr(sqlite3, "SQLITE_DBCONFIG_DEFENSIVE", None), True),
+            (getattr(sqlite3, "SQLITE_DBCONFIG_TRUSTED_SCHEMA", None), False),
+            (getattr(sqlite3, "SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION", None), False),
+        ):
+            if option is None:
+                continue
+            try:
+                conn.setconfig(option, value)
+            except (AttributeError, sqlite3.Error, ValueError):
+                pass
+    try:
+        conn.enable_load_extension(False)
+    except (AttributeError, sqlite3.Error):
+        pass
+    if hasattr(conn, "setlimit"):
+        for option, value in (
+            (getattr(sqlite3, "SQLITE_LIMIT_LENGTH", None), 100 * 1024 * 1024),
+            (getattr(sqlite3, "SQLITE_LIMIT_SQL_LENGTH", None), 4 * 1024 * 1024),
+            (getattr(sqlite3, "SQLITE_LIMIT_COLUMN", None), 2000),
+            (getattr(sqlite3, "SQLITE_LIMIT_VARIABLE_NUMBER", None), 999),
+            (getattr(sqlite3, "SQLITE_LIMIT_ATTACHED", None), 1 if allow_attach else 0),
+        ):
+            if option is None:
+                continue
+            try:
+                conn.setlimit(option, value)
+            except (AttributeError, sqlite3.Error, ValueError):
+                pass
+    try:
+        conn.execute("PRAGMA trusted_schema=OFF")
+        if not read_only:
+            conn.execute("PRAGMA writable_schema=OFF")
+    except sqlite3.Error:
+        pass
+    conn.set_authorizer(_make_authorizer(allow_attach))
+
+
+def _new_connection(db_path: Path, *, allow_attach: bool = False) -> sqlite3.Connection:
     # The parent may not exist yet on a path that never went through
     # `config.ensure_dirs` (a first import, or a test that points DATA_DIR at
     # a fresh tmpdir).  Create it owner-only rather than let SQLite fail with
@@ -103,6 +184,7 @@ def _new_connection(db_path: Path) -> sqlite3.Connection:
     except OSError:
         pass
     conn.row_factory = sqlite3.Row
+    _harden_connection(conn, read_only=False, allow_attach=allow_attach)
     # journal_mode is a persistent property of the file, so this only does
     # real work the first time a database is created; foreign_keys and
     # synchronous are per-connection and have to be set on every one.
@@ -143,6 +225,7 @@ def get_read_only_connection():
     # error rather than a short wait.  The connect `timeout` sets it.
     conn = sqlite3.connect(uri, uri=True, timeout=_busy_timeout_ms() / 1000)
     conn.row_factory = sqlite3.Row
+    _harden_connection(conn, read_only=True)
     try:
         yield conn
     finally:
@@ -163,6 +246,9 @@ def close_connections() -> None:
 def get_connection():
     """Yield the cached connection for the current database path.
 
+    In a read-only store worker the same call sites get a read-only handle;
+    the worker's filesystem is read-only, so a writer would fail closed.
+
     The connection is reused rather than closed on exit, so callers must
     still ``commit()`` their writes exactly as before.  Exactly one is kept
     per thread: a process only ever works against one database, and closing
@@ -176,6 +262,10 @@ def get_connection():
     writes the batch has already deferred, and a best-effort writer that
     catches its own error is expected to continue in the same transaction.
     """
+    if os.environ.get("TRUSTSIGHT_STORE_READ_ONLY") == "1":
+        with get_read_only_connection() as conn:
+            yield conn
+        return
     conn = _cached_connection()
     try:
         yield conn

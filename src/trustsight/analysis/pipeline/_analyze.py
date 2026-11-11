@@ -6,14 +6,14 @@ from ...config import (
     load_config,
     load_rules,
 )
-from ...db import (
+from ...db import get_aur_orphan_state
+from ...sandbox.store_client import (
     get_last_analysis,
     get_package,
     get_package_id,
     insert_analysis,
     record_dependency_names,
     update_package_maintainer,
-    get_aur_orphan_state,
     update_aur_orphan_state,
     update_package_version,
     upsert_package,
@@ -546,7 +546,7 @@ def analyze_package(
         # Keep the added encoded literals so G002 can join across packages
         # at cycle end, the same feed the corpus path records.
         from ..entropy import added_literals, added_text
-        from ...db import record_added_literals
+        from ...sandbox.store_client import record_added_literals
 
         record_added_literals(pkg_name, added_literals(added_text(diff_text)))
     return fact

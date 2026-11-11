@@ -590,3 +590,11 @@ Defined in `release.offline()`.
 ## Default configuration
 
 The full default config is embedded in `src/trustsight/config/_default_config.py` as `DEFAULT_CONFIG` and written to `~/.config/trustsight/config.toml` on first invocation. Users may edit it freely.
+
+
+## Store worker
+
+| Variable | Meaning |
+|---|---|
+| `TRUSTSIGHT_DB_PATH` | Exact SQLite file the analysis store worker opens. Set by the parent; not normally set by hand. |
+| `TRUSTSIGHT_STORE_READ_ONLY` | Internal mode flag; the store worker sets it for read operations so the connection is opened read-only. |

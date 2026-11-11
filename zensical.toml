@@ -106,6 +106,7 @@ Guides = [
   {"Configuring Rules and Weights" = "guides/configuring-rules-and-weights.md"},
   {"Tuning False Positives" = "guides/tuning-false-positives.md"},
   {"Watching the AUR Continuously" = "guides/watching-the-aur.md"},
+  {"Reducing Blast Radius" = "guides/reducing-blast-radius.md"},
 ]
 
 [[project.nav]]

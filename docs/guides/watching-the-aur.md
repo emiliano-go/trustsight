@@ -247,9 +247,11 @@ back into it (the directory must be writable by the container's `ts` user,
 uid 1000). A read-only or unwritable mount logs `ruleset sync skipped:
 Permission denied` and keeps the rules the volume was created with, unless you
 set `TRUSTSIGHT_NO_SYNC_RULES=1` to skip the sync deliberately. The
-tokenizer's network-namespace isolation is not available in a default
-container; the process resource limits still apply, and the analysis itself
-needs no privileges.
+container runtime must allow unprivileged user namespaces: if it does not, the
+parser workers refuse and the package is reported as not vetted rather than
+analysed with weaker confinement. The process needs no privileges. See
+[Reducing Blast Radius](reducing-blast-radius.md) for the boundary around the
+auditor and what it does not cover.
 
 A compose file with the same settings - a fixed container name, log
 rotation, the timestamped log format, a read-only root filesystem, dropped

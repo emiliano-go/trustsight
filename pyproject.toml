@@ -35,6 +35,10 @@ dependencies = [
     "tldextract>=5.0",
     "rich>=13.0",
     "typer>=0.12",
+    # Typer 0.29 imports its pydantic-backed adapters lazily when a typed
+    # parameter is coerced, so a packaged CLI fails at the first command
+    # without it.  Declared here so a resolver cannot pick typer without it.
+    "pydantic>=2.0",
     # Ed25519 signature verification for baseline and seed imports (A13).
     # The floor is the release that made Ed25519 non-provisional; the module
     # that enforces a trust boundary should not resolve to anything older.

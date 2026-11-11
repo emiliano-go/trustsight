@@ -33,6 +33,7 @@ _PYPI_TO_ARCH = {
     "tldextract": "python-tldextract",
     "rich": "python-rich",
     "typer": "python-typer",
+    "pydantic": "python-pydantic",
     "cryptography": "python-cryptography",
     "pyyaml": "python-yaml",
 }

@@ -67,16 +67,35 @@ The account does not need a password. A nologin shell prevents interactive
 login; you run commands as the UID with `sudo -u`, `runuser` or a transient
 systemd unit. The account itself gets no sudo rights from this.
 
-Use `-H` (or `runuser`'s environment handling) so `HOME` points at the new
-account, which is what TrustSight's `Path.home()` paths resolve against:
+Set the environment explicitly. `sudo -H` fixes `HOME`, which is what
+TrustSight's config and data paths use, but the document cache reads
+`XDG_CACHE_HOME`, and that variable can survive the switch from your session.
+A wrapper keeps every path inside the account:
 
 ```bash
-sudo -u trustsight -H trustsight --version
-sudo -u trustsight -H pacman -Qm >/dev/null && echo "pacman database readable"
-sudo -u trustsight -H trustsight review
-sudo -u trustsight -H trustsight inspect PACKAGE_NAME \
+run_as_trustsight() {
+  sudo -u trustsight -H env \
+    HOME=/home/trustsight \
+    XDG_CONFIG_HOME=/home/trustsight/.config \
+    XDG_CACHE_HOME=/home/trustsight/.cache \
+    "$@"
+}
+```
+
+Then use it for every command:
+
+```bash
+run_as_trustsight trustsight --version
+run_as_trustsight pacman -Qm >/dev/null && echo "pacman database readable"
+run_as_trustsight trustsight review
+run_as_trustsight trustsight inspect PACKAGE_NAME \
   --allow-uninstalled --full-recipe
 ```
+
+Do not make the first invocation as root. `ensure_dirs()` creates the config,
+data and cache directories with the UID that runs the command; root-owned
+directories make the account's next run fail to sync rules and migrate the
+database.
 
 If the pacman probe fails, grant read-only access rather than adding the
 account to a privileged group. On a default Arch install the paths are already
@@ -123,40 +142,90 @@ in TrustSight.
 ## Option 2: an ephemeral container
 
 The published image is the reference container. It runs as a non-root `ts`
-user, ships no pacman, and is built for the corpus and watcher workflows. You
-can also use it for a one-off remote inspection with a disposable or named
-volume for state:
+user with UID 1000, ships no pacman, and is built for the corpus and watcher
+workflows. You can also use it for a one-off remote inspection with a
+disposable or named volume for state:
 
 ```bash
-podman run --rm -it \
+docker run --rm -it \
   --read-only \
   --tmpfs /tmp:rw,size=64m,mode=1777 \
+  --tmpfs /home/ts/.cache:size=64m \
+  --user 1000:1000 \
   --cap-drop=all \
   --security-opt=no-new-privileges \
+  --security-opt=seccomp=unconfined \
   --pids-limit=512 --memory=2g --cpus=2 \
   -v trustsight-data:/home/ts/.local/share/trustsight \
   -v trustsight-config:/home/ts/.config/trustsight \
-  -v trustsight-cache:/home/ts/.cache \
+  --pull=always \
   ghcr.io/emiliano-go/trustsight:latest \
   inspect PACKAGE_NAME --allow-uninstalled --full-recipe
 ```
 
-The three named volumes are the only writable paths; the root filesystem stays
-read-only, and nothing from your home directory is mounted. `review` of your
-installed packages and `trustsight-gate` are not container workflows: the
-image has no pacman database, and the gate needs the installing user's
-terminal and AUR helper config. Use the dedicated account for those.
+Podman accepts the same flags; rootless Podman usually needs no seccomp
+override. The data and config volumes and the two tmpfs mounts (`/tmp` and
+`/home/ts/.cache`) are the writable paths; the root filesystem stays
+read-only, and nothing from your home directory is mounted. `--user
+1000:1000` matches the image and the watcher compose file, so a volume
+created by one run is writable by the next. `--pull=always` keeps a floating
+`:latest` from staying at the image first pulled; if you pin a digest instead,
+update it deliberately.
 
-Two container details matter:
+`review` of your installed packages and `trustsight-gate` are not container
+workflows: the image has no pacman database, and the gate needs the installing
+user's terminal and AUR helper config. Use the dedicated account for those.
 
-- The parser workers need unprivileged user namespaces inside the container.
-  If the runtime blocks them, the workers refuse and the package is reported
-  as not vetted rather than analysed with weaker confinement. That is the
-  intended fail-closed behaviour. If every run reports a sandbox refusal,
-  allow unprivileged user namespaces or use the account route instead.
+Container details that matter:
+
+- Docker's built-in seccomp profile denies `unshare`, which the parser workers
+  need to enter their user and network namespaces. `--security-opt
+  seccomp=unconfined` removes that outer filter; the workers still install
+  their own seccomp allowlist, drop every capability and enter the namespaces
+  themselves. Without the flag the workers refuse and the package is reported
+  as not vetted. If you cannot relax the outer filter, use a custom profile
+  that permits `unshare`, or the account route instead.
+- The container kernel must also allow unprivileged user namespaces. On a
+  kernel with the AppArmor restriction, allow them for the container or use
+  the account route.
 - The container needs AUR egress. If your threat model requires a network
   allowlist, enforce it at the container network layer; TrustSight cannot do
   it from inside.
+
+## After an update
+
+An update replaces the installed program; it does not touch the account's
+state. Run the first command after an update as the account, because that run
+adds missing shipped rules and migrates the database. Back up first if the
+update crosses a major version:
+
+```bash
+run_as_trustsight trustsight db backup
+run_as_trustsight trustsight status
+run_as_trustsight trustsight db check
+```
+
+`status` names rules that are stale or absent. Missing rules are added on any
+run. A shipped pattern fix reaches `rules.toml` only through an explicit sync,
+which is safe because rules you edited are not replaced:
+
+```bash
+run_as_trustsight trustsight config sync-rules --update
+```
+
+For the container, pull the new image, rerun the read-only command above with
+the same data and config volumes, and repeat `status` and `db check` inside
+it:
+
+```bash
+docker pull ghcr.io/emiliano-go/trustsight:latest
+```
+
+If a future image changes the `ts` UID, keep the documented `--user 1000:1000` and
+verify the volumes are still writable by that UID, or recreate the volumes.
+The CI smoke test runs this recipe twice against one set of volumes, so a
+change that breaks persistence fails the release before the image is
+published.
 
 ## What this boundary does not cover
 
@@ -176,9 +245,11 @@ Two container details matter:
 
 ```bash
 id trustsight                     # no wheel, no docker, no extra groups
-sudo -u trustsight -H trustsight --version
-sudo -u trustsight -H pacman -Qm >/dev/null && echo ok
-sudo -u trustsight -H ls -la ~    # only the account's own files
+run_as_trustsight trustsight --version
+run_as_trustsight pacman -Qm >/dev/null && echo ok
+run_as_trustsight trustsight status
+run_as_trustsight trustsight db check
+run_as_trustsight ls -la /home/trustsight    # only the account's own files
 ```
 
 If any of those show access you did not intend, fix the account before

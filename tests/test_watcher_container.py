@@ -45,6 +45,7 @@ def test_the_watcher_container_is_hardened_and_health_checked():
     assert service["stop_grace_period"] == "2m"
     assert service["cap_drop"] == ["ALL"]
     assert "no-new-privileges:true" in service["security_opt"]
+    assert "seccomp=unconfined" in service["security_opt"]
     assert service["pids_limit"] == 512
     assert service["healthcheck"]["test"][-1] == "--optional"
     assert "full-aur" in service["healthcheck"]["test"]

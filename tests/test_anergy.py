@@ -114,3 +114,35 @@ def test_anergic_temporal_rules_stay_weight_zero():
     row = next(entry for entry in breakdown if entry.rule_id == "T008")
     assert row.weight == 0
     assert row.evidence.get("anergic") is True
+
+
+def test_the_shipped_ledger_marks_c001_conditional():
+    row = anergy.entry("C001")
+    assert row is not None
+    assert row.status == anergy.CONDITIONAL
+    assert "upstream_hash" in row.signal
+    assert not anergy.is_anergic("C001")
+
+
+def test_a_conditional_entry_scores_normally(monkeypatch):
+    monkeypatch.setattr(
+        anergy, "_ENTRIES", {"C001": _entry("C001", anergy.CONDITIONAL)},
+        raising=False)
+    finding = {
+        "rule_id": "C001", "name": "probe", "severity": "HIGH",
+        "category": "integrity", "match": "probe",
+    }
+    _, breakdown, _ = calculate_score(
+        [finding], {}, NoveltyContext())
+    rows = [row for row in breakdown if row.rule_id == "C001"]
+    assert rows and rows[0].weight > 0
+
+
+def test_conditional_and_anergic_entries_share_the_weekly_review(monkeypatch):
+    entries = {
+        "C001": _entry("C001", anergy.CONDITIONAL),
+        "H009": _entry("H009"),
+    }
+    monkeypatch.setattr(anergy, "_ENTRIES", entries, raising=False)
+    assert anergy.review_ids() == ["C001", "H009"]
+    assert anergy.anergic_ids() == ["H009"]

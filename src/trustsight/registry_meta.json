@@ -76,7 +76,7 @@
     "capability": null,
     "name": "Checksum Changed Without Source Change With Stable Version",
     "severity": "HIGH",
-    "severity_text": "HIGH (weight 25)",
+    "severity_text": "HIGH (weight 25); INFO (weight 0) when a signed upstream_hash entry corroborates the triple",
     "target": null,
     "uid": "TS-0009"
   },

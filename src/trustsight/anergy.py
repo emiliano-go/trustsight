@@ -1,9 +1,15 @@
-"""The standing anergy ledger: rules held at weight 0 pending a second signal.
+"""The standing anergy ledger: rules whose weight needs a second signal.
 
 A new detection ships report-only until the benign corpus calibrates it
 (``docs/standards.md``).  This module is that state made explicit: a shipped
-rule listed here contributes weight 0 whatever severity it declares, and the
-release gate refuses to score it silently.
+rule listed as ``anergic`` contributes weight 0 whatever severity it declares,
+and the release gate refuses to score it silently.
+
+A ``conditional`` entry is the narrower case: the rule is scored normally
+except where a signed corroboration applies (C001 is weighted 0 only for a
+checksum the signed ``upstream_hash`` baseline names).  It is *not* muted
+globally, so it stays out of ``is_anergic`` and out of the never-score gate,
+but it appears in the weekly calibration table for review.
 
 An entry is removed only by promotion.  Promotion records the release and the
 changelog bullet that carried the measured outcome, so ``trustsight admin
@@ -22,6 +28,7 @@ from importlib.resources import files
 
 __all__ = [
     "ANERGIC",
+    "CONDITIONAL",
     "PROMOTED",
     "AnergyEntry",
     "anergic_ids",
@@ -30,11 +37,13 @@ __all__ = [
     "is_anergic",
     "ledger_section",
     "promoted_entries",
+    "review_ids",
 ]
 
 ANERGIC = "anergic"
+CONDITIONAL = "conditional"
 PROMOTED = "promoted"
-_STATUSES = frozenset({ANERGIC, PROMOTED})
+_STATUSES = frozenset({ANERGIC, CONDITIONAL, PROMOTED})
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,6 +137,12 @@ def is_anergic(rule_id: str | None) -> bool:
 def anergic_ids() -> list[str]:
     """Sorted ids currently held at weight 0."""
     return sorted(rid for rid, row in entries().items() if row.status == ANERGIC)
+
+
+def review_ids() -> list[str]:
+    """Sorted ids the weekly calibration reviews (anergic or conditional)."""
+    return sorted(rid for rid, row in entries().items()
+                  if row.status in (ANERGIC, CONDITIONAL))
 
 
 def promoted_entries() -> list[AnergyEntry]:

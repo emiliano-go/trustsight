@@ -94,7 +94,7 @@ jobs:
       - name: Sync the harness against this checkout
         run: |
           cd ../trustsight-harness
-          uv sync --all-extras
+          uv sync --all-extras  # lock-exempt: consumer
 
       - name: Replay every committed bypass
         # `shell: bash` is not cosmetic: GitHub's explicit bash shell enables

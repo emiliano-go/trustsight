@@ -69,3 +69,20 @@ def test_lock_gate_allows_locked_install_and_check_only(tmp_path, monkeypatch):
     monkeypatch.setattr(gates_core, "ROOT", tmp_path)
     gate = sg.gate_ci_installs_from_the_lock()
     assert gate.passed, gate.detail
+
+
+def test_lock_gate_still_rejects_an_unmarked_unlocked_install(
+        tmp_path, monkeypatch):
+    gate = _lock_gate(tmp_path, monkeypatch,
+                      "uv sync --all-extras  # a normal comment")
+    assert not gate.passed
+    assert any("without --locked" in problem for problem in gate.measured)
+
+
+def test_lock_gate_allows_a_marked_consumer_sync(tmp_path, monkeypatch):
+    """A consumer pins this core as a path dependency, so its own lock cannot
+    track this project's graph; the marker is explicit at the call site."""
+    gate = _lock_gate(
+        tmp_path, monkeypatch,
+        "uv sync --all-extras  # lock-exempt: consumer")
+    assert gate.passed, gate.detail

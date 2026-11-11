@@ -84,7 +84,7 @@ jobs:
           # dependency graph, and this job exists to test the harness against
           # *this* checkout.  A core dependency change would otherwise fail
           # here before the consumer ran.  The harness's own CI keeps the lock.
-          uv sync --extra dev
+          uv sync --extra dev  # lock-exempt: consumer
           uv run pytest tests/test_core_contract.py -q
 
       # 4. The harness pin is meant to lag a release, but it must stay an

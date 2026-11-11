@@ -199,6 +199,7 @@ Explanation = [
   {"Why Static Analysis" = "explanation/why-static-analysis.md"},
   {"Seed Provenance" = "explanation/seed-provenance.md"},
   {"Benchmarks and Methodology" = "explanation/benchmarks-and-methodology.md"},
+  {"Implicit State Machines" = "explanation/implicit-state-machines.md"},
   {"Sandboxing the Tokenizer" = "explanation/sandboxing-the-tokenizer.md"},
   {"Sandboxing the Parser Stack" = "explanation/sandboxing-the-parsers.md"},
   {"Recipe-Targeted User Rules" = "explanation/structural-user-rules.md"},

@@ -137,8 +137,11 @@ enabled = false
 
 [notify]
 # With `full-aur --watch`, a cycle that produced new alerts POSTs one JSON
-# document (cycle counts plus the package/rule_id pairs) to this URL.  Any
-# receiver that accepts a JSON POST works; ntfy shows the document as the
+# document to this URL.  It carries counts, package names, rule ids, scores,
+# maintainers and finding reasons - and the analysed PKGBUILD diff, which is
+# package-controlled recipe content.  Point it at a destination you trust
+# with that content; the separate `trustsight.scans` stream has no diff.
+# Any receiver that accepts a JSON POST works; ntfy shows the document as the
 # message text.  Empty means no notifications.  A dead receiver is logged
 # and swallowed, so a webhook outage cannot kill the watch loop.
 # webhook = "https://ntfy.sh/your-topic"

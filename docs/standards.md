@@ -44,6 +44,8 @@ A new detection ships at weight 0 (INFO) until the benign corpus calibrates it. 
 
 A report-only rule is listed in the shipped anergy ledger. The ledger names the signal that is missing, and scoring reads it: an anergic rule reports its findings at weight 0 whatever severity it declares. Promotion removes the entry and names the release and the changelog bullet that records the measured outcome. A release cannot silently score a rule that is still anergic.
 
+A `conditional` entry records the narrower case: the rule scores normally except where a signed corroboration applies (C001 is weight 0 only for a checksum the signed `upstream_hash` baseline names). It is reviewed by the weekly calibration and is never globally muted.
+
 **Enforced by:** `trustsight.anergy`, `scripts/gates/_process.py` and `trustsight admin anergic`.
 
 ### Scored rules pass the fire-rate gate

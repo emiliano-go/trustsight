@@ -403,7 +403,9 @@ Operator state that is not a package command.
 List the rules currently held at weight 0 pending their second signal. A
 rule in this state still reports its findings; it cannot contribute to a
 score until the calibration signal named in the ledger arrives and the
-promotion is recorded in the changelog.
+promotion is recorded in the changelog. Conditional entries (C001's
+corroborated downgrade) are reviewed by the weekly calibration rather than
+listed here, because they still score when the corroboration does not apply.
 
 ```
 trustsight admin anergic [--json]

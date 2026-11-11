@@ -171,7 +171,30 @@ def _normalize_value(type_: str, value: str) -> str | None:
         return canonical if canonical and compile_ioc_pattern(canonical) else None
     if type_ == "upstream_repo":
         return normalize_ioc("upstream_repo", value)
+    if type_ == "upstream_hash":
+        return _normalize_upstream_hash(value)
     return None
+
+
+def _normalize_upstream_hash(value: str) -> str | None:
+    """Canonicalise a ``url|version|checksum`` corroboration triple.
+
+    The baseline is signed, so the value it carries is a precise claim: an
+    exact source URL, the version it was observed at, and the digest.  A
+    malformed triple is refused rather than stored and silently never
+    matched.  The checksum is lowercased (hex is case-insensitive) so a
+    differently-spelled digest in a recipe still matches.
+    """
+    parts = value.split("|")
+    if len(parts) != 3:
+        return None
+    url, version, checksum = (part.strip() for part in parts)
+    if not url or not version:
+        return None
+    checksum = checksum.lower()
+    if not _is_hex_digest(checksum):
+        return None
+    return f"{url}|{version}|{checksum}"
 
 
 def _normalize_domain(value: str) -> str | None:
@@ -846,6 +869,18 @@ def match_upstream_repo(repo: str) -> list[IocMatch]:
     must name exactly.  A miss is uninformative, as for every other type.
     """
     return match_ioc("upstream_repo", repo)
+
+
+def match_upstream_hash(value: str) -> list[IocMatch]:
+    """Return active ``upstream_hash`` matches for one corroboration triple.
+
+    *value* is ``url|version|checksum`` as the structural engine built it from
+    the current recipe; a match means a signed feed observed that exact
+    artifact at the vendor.  An expired entry no longer corroborates anything.
+    A miss is uninformative, as for every other type.
+    """
+    return [match for match in match_ioc("upstream_hash", value)
+            if not match.expired]
 
 
 def active_patterns(source: str | None = None, expired: bool = False):

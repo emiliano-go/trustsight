@@ -109,7 +109,7 @@ a top-level flag-set replacement is [H079](#h079).
 
 ### C001: Checksum Changed Without Source Change With Stable Version {#c001}
 
-- **Severity:** HIGH (weight 25)
+- **Severity:** HIGH (weight 25); INFO (weight 0) when a signed upstream_hash entry corroborates the triple
 
 - **Condition:** `sha256sums` value changed (added or modified) and **no** source URLs were added or removed, and either `pkgver`, `pkgrel` and `epoch` did not change, **or** the same diff adds a new code capability in a critical function: a network fetch, or an execution of a script-like file that is not a declared source or a benign build artifact.
 - **Description:** A checksum changed with no corresponding version or source change is anomalous. It suggests the tarball content changed without an upstream version bump, which is a red flag for supply-chain compromise. A version move alone no longer stands the signal down when the bump is used as cover: a routine bump that also starts downloading or running something keeps the HIGH finding. Gated by `[thresholds] c001.require_capability_signal` (default true); set it false to restore the historical "every bump is C002" rule.

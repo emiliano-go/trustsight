@@ -27,6 +27,11 @@ workflow committed beside the package, and U010 reads the access mode of a
 source the diff gained: SSH, `file://`, a private-network literal, or an
 embedded credential.
 
+The same signed channel carries `upstream_hash`: an exact
+`url|version|checksum` triple a scanner observed at the vendor. C001 reads
+it to corroborate a checksum change the local source cannot explain: a
+match reports the change at weight 0, a miss leaves the HIGH weight alone.
+
 The spec's flagship, a release re-tagged under an unchanged URL and
 version, is already [C001 Checksum Changed Without Source
 Change](../rules/integrity.md). This family does not file it twice. On the

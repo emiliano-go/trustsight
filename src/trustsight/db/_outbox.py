@@ -12,6 +12,11 @@ import json
 from datetime import datetime, timedelta, timezone
 
 from ._connection import get_connection
+from ._lifecycles import (
+    AlertOutboxState,
+    format_stamp,
+    parse_stamp,
+)
 
 #: Attempts before a document is parked.  A parked document is visible in
 #: ``full-aur health`` and the logs; it is never silently discarded.
@@ -30,17 +35,27 @@ def _now() -> datetime:
 
 
 def _stamp(moment: datetime) -> str:
-    return moment.isoformat()
+    return format_stamp(moment)
 
 
 def _parse(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    try:
-        moment = datetime.fromisoformat(value)
-    except (TypeError, ValueError):
-        return None
-    return moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
+    return parse_stamp(value)
+
+
+def _state_from_row(row) -> AlertOutboxState:
+    created = _parse(row["created_at"])
+    if created is None:
+        created = datetime.now(timezone.utc)
+    return AlertOutboxState(
+        created_at=created,
+        attempts=int(row["attempts"] or 0),
+        next_attempt_at=_parse(row["next_attempt_at"]),
+        ntfy_delivered=bool(row["ntfy_delivered"]),
+        feed_delivered=bool(row["feed_delivered"]),
+        parked_at=_parse(row["parked_at"]),
+        feed_only=bool(row["feed_only"]),
+        last_error=str(row["last_error"] or ""),
+    )
 
 
 def enqueue_alert_payload(
@@ -104,20 +119,20 @@ def mark_alert_sink(row_id: int, sink: str) -> None:
     if sink not in ("ntfy", "feed"):
         raise ValueError(f"unknown alert sink: {sink!r}")
     with get_connection() as conn:
-        if sink == "ntfy":
-            conn.execute(
-                "UPDATE alert_outbox SET ntfy_delivered = 1 WHERE id = ?",
-                (row_id,),
-            )
-        else:
-            conn.execute(
-                "UPDATE alert_outbox SET feed_delivered = 1 WHERE id = ?",
-                (row_id,),
-            )
+        row = conn.execute(
+            "SELECT created_at, attempts, next_attempt_at, ntfy_delivered, "
+            "feed_delivered, parked_at, feed_only, last_error "
+            "FROM alert_outbox WHERE id = ?", (row_id,),
+        ).fetchone()
+        if row is None:
+            return
+        state = _state_from_row(row).with_sink(sink)
         conn.execute(
-            "UPDATE alert_outbox SET next_attempt_at = NULL "
-            "WHERE id = ? AND ntfy_delivered = 1 AND feed_delivered = 1",
-            (row_id,),
+            "UPDATE alert_outbox SET ntfy_delivered = ?, feed_delivered = ?, "
+            "next_attempt_at = ? WHERE id = ?",
+            (int(state.ntfy_delivered), int(state.feed_delivered),
+             _stamp(state.next_attempt_at) if state.next_attempt_at else None,
+             row_id),
         )
         conn.commit()
 
@@ -131,36 +146,37 @@ def mark_alert_attempt(
     moment = now or _now()
     with get_connection() as conn:
         row = conn.execute(
-            "SELECT created_at, attempts FROM alert_outbox WHERE id = ?",
-            (row_id,),
+            "SELECT created_at, attempts, next_attempt_at, ntfy_delivered, "
+            "feed_delivered, parked_at, feed_only, last_error "
+            "FROM alert_outbox WHERE id = ?", (row_id,),
         ).fetchone()
         if row is None:
             return False
-        attempts = int(row["attempts"] or 0) + 1
-        created = _parse(row["created_at"]) or moment
-        expired = moment - created >= MAX_AGE
-        park = expired or attempts >= MAX_ATTEMPTS
-        if park:
-            conn.execute(
-                "UPDATE alert_outbox SET attempts = ?, parked_at = ?, "
-                "last_error = ? WHERE id = ?",
-                (attempts, _stamp(moment), str(error)[:1000], row_id),
-            )
-        else:
-            delay = min(
-                _BACKOFF_BASE_SECONDS * (2 ** (attempts - 1)),
-                _BACKOFF_MAX_SECONDS,
-            )
-            conn.execute(
-                "UPDATE alert_outbox SET attempts = ?, next_attempt_at = ?, "
-                "last_error = ? WHERE id = ?",
-                (
-                    attempts,
-                    _stamp(moment + timedelta(seconds=delay)),
-                    str(error)[:1000],
-                    row_id,
-                ),
-            )
+        current = _state_from_row(row)
+        if current.parked:
+            # A caller retrying a row that another path already parked is a
+            # no-op, not an error: the terminal state is the answer.
+            return True
+        if current.delivered:
+            return False
+        state, park = current.failed(
+            moment, error,
+            max_attempts=MAX_ATTEMPTS,
+            max_age=MAX_AGE,
+            backoff_base_seconds=_BACKOFF_BASE_SECONDS,
+            backoff_max_seconds=_BACKOFF_MAX_SECONDS,
+        )
+        conn.execute(
+            "UPDATE alert_outbox SET attempts = ?, next_attempt_at = ?, "
+            "parked_at = ?, last_error = ? WHERE id = ?",
+            (
+                state.attempts,
+                _stamp(state.next_attempt_at) if state.next_attempt_at else None,
+                _stamp(state.parked_at) if state.parked_at else None,
+                state.last_error,
+                row_id,
+            ),
+        )
         conn.commit()
     return park
 

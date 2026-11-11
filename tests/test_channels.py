@@ -58,6 +58,34 @@ def test_a_corrupt_record_is_a_miss_not_an_error(tmp_path):
     assert channel_state.pulled(channel_state.BASELINE) is None
 
 
+def test_a_pull_matches_only_the_channel_it_came_from():
+    channel_state.record_pull(channel_state.BASELINE, "baseline-2026-01-01",
+                              "someone/else")
+    assert channel_state.pulled_matches(
+        channel_state.BASELINE, "baseline-2026-01-01", "someone/else")
+    assert not channel_state.pulled_matches(
+        channel_state.BASELINE, "baseline-2026-01-01", "emiliano-go/trustsight")
+    assert not channel_state.pulled_matches(
+        channel_state.BASELINE, "baseline-2026-02-02", "someone/else")
+
+
+def test_an_older_record_without_a_channel_still_matches_any_channel():
+    channel_state.record_pull(channel_state.BASELINE, "baseline-2026-01-01")
+    assert channel_state.pulled_channel(channel_state.BASELINE) is None
+    assert channel_state.pulled_matches(
+        channel_state.BASELINE, "baseline-2026-01-01", "someone/else")
+
+
+def test_ioc_pulls_are_tracked_per_feed():
+    channel_state.record_pull(
+        channel_state.IOC, "ioc-2026-01-01", "someone/else", feed="alpha")
+    assert channel_state.pulled_matches(
+        channel_state.IOC, "ioc-2026-01-01", "someone/else", feed="alpha")
+    assert not channel_state.pulled_matches(
+        channel_state.IOC, "ioc-2026-01-01", "someone/else", feed="beta")
+    assert channel_state.pulled_tag(channel_state.IOC) is None
+
+
 # --- channel identity -----------------------------------------------------
 
 
@@ -318,6 +346,41 @@ def test_pending_channels_is_silent_once_pulled(monkeypatch):
     monkeypatch.delenv("TRUSTSIGHT_NO_PENDING_CHECK", raising=False)
 
     assert updates.pending_channels() == []
+
+
+def test_pending_channels_reports_the_same_tag_on_a_new_channel(monkeypatch):
+    from trustsight.cli import updates
+
+    channel_state.record_pull(channel_state.BASELINE, "baseline-2026-03-03",
+                              "emiliano-go/trustsight")
+    monkeypatch.setattr(updates, "_channel_tags", lambda: {
+        "baseline": "baseline-2026-03-03",
+        "baseline_channel": "someone/else",
+        "ioc": None,
+    })
+    monkeypatch.delenv("TRUSTSIGHT_NO_UPDATE_CHECK", raising=False)
+    monkeypatch.delenv("TRUSTSIGHT_NO_PENDING_CHECK", raising=False)
+
+    assert updates.pending_channels() == [
+        ("baseline", "baseline-2026-03-03", "someone/else")]
+
+
+def test_auto_pull_refetches_the_same_tag_from_a_new_channel(monkeypatch):
+    channel_state.record_pull(channel_state.BASELINE, "baseline-2026-02-02",
+                              "emiliano-go/trustsight")
+    monkeypatch.setattr(release, "resolve_baseline_tag",
+                        lambda channel=None: "baseline-2026-02-02")
+    monkeypatch.setattr(release, "clear_tag_cache", lambda: None)
+    monkeypatch.setattr(release, "active_baseline_channel",
+                        lambda *a, **k: _channel())
+    calls = []
+    monkeypatch.setattr(
+        channels, "pull_baseline_seed",
+        lambda **kwargs: calls.append(kwargs) or {
+            "tag": "baseline-2026-02-02", "channel": "someone/else"})
+
+    channels.auto_pull(baselines=True)
+    assert len(calls) == 1
 
 
 def test_the_master_switch_silences_the_pending_notice(monkeypatch, capsys):

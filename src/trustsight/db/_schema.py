@@ -266,10 +266,12 @@ def init_db():
                 payload_json TEXT NOT NULL,
                 webhook_id TEXT NOT NULL,
                 webhook_timestamp INTEGER NOT NULL,
-                attempts INTEGER NOT NULL DEFAULT 0,
+                attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
                 next_attempt_at TEXT,
-                ntfy_delivered INTEGER NOT NULL DEFAULT 0,
-                feed_delivered INTEGER NOT NULL DEFAULT 0,
+                ntfy_delivered INTEGER NOT NULL DEFAULT 0
+                    CHECK (ntfy_delivered IN (0, 1)),
+                feed_delivered INTEGER NOT NULL DEFAULT 0
+                    CHECK (feed_delivered IN (0, 1)),
                 parked_at TEXT,
                 last_error TEXT
             );
@@ -568,6 +570,49 @@ def _migrate(conn: sqlite3.Connection) -> None:
     _migrate_observed_domains(conn)
     _migrate_observed_domains_from_packages(conn)
     _migrate_observed_keys_from_history(conn)
+    _ensure_alert_outbox_guards(conn)
+
+
+def _ensure_alert_outbox_guards(conn: sqlite3.Connection) -> None:
+    """Enforce the outbox invariants that a CHECK cannot add in place.
+
+    A table created by an older release has no CHECK constraints and SQLite
+    cannot add one with ALTER TABLE. Triggers are additive, apply to every
+    existing row, and refuse the same writes: negative attempts, a sink flag
+    outside 0/1, and any attempt to move a parked row back to pending.
+    """
+    existing = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='alert_outbox'"
+    ).fetchone()
+    if existing is None:
+        return
+    conn.executescript("""
+        CREATE TRIGGER IF NOT EXISTS alert_outbox_insert_guard
+        BEFORE INSERT ON alert_outbox
+        WHEN NEW.attempts < 0
+          OR NEW.ntfy_delivered NOT IN (0, 1)
+          OR NEW.feed_delivered NOT IN (0, 1)
+          OR NEW.feed_only NOT IN (0, 1)
+        BEGIN
+            SELECT RAISE(ABORT, 'alert_outbox: invalid lifecycle state');
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS alert_outbox_update_guard
+        BEFORE UPDATE ON alert_outbox
+        WHEN NEW.attempts < 0
+          OR NEW.ntfy_delivered NOT IN (0, 1)
+          OR NEW.feed_delivered NOT IN (0, 1)
+          OR NEW.feed_only NOT IN (0, 1)
+          OR (OLD.parked_at IS NOT NULL AND NEW.parked_at IS NULL)
+          OR (OLD.parked_at IS NOT NULL AND NEW.attempts <> OLD.attempts)
+          OR (OLD.parked_at IS NOT NULL AND
+              NEW.ntfy_delivered <> OLD.ntfy_delivered)
+          OR (OLD.parked_at IS NOT NULL AND
+              NEW.feed_delivered <> OLD.feed_delivered)
+        BEGIN
+            SELECT RAISE(ABORT, 'alert_outbox: illegal lifecycle transition');
+        END;
+    """)
 
 _SCHEMA_VERSION = 1
 

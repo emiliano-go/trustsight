@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from trustsight.schema import (
     DiffSummary,
     ExecutionChanges,
@@ -322,3 +324,109 @@ def test_shape_fingerprint_and_techniques_round_trip():
     assert restored is not None
     assert restored.diff_shape_fp == "sha256:0123456789abcdef"
     assert restored.score_breakdown[0].techniques == ("X002:partial-quote",)
+
+
+@pytest.fixture
+def outbox_db(tmp_path, monkeypatch):
+    from trustsight.db import init_db
+
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+    init_db()
+    yield
+    (tmp_path / "trustsight.db").unlink(missing_ok=True)
+
+
+def _insert_outbox(conn, **overrides):
+    values = {
+        "created_at": "2026-11-11T00:00:00+00:00",
+        "payload_json": "{}",
+        "webhook_id": "",
+        "webhook_timestamp": 0,
+        "attempts": 0,
+        "ntfy_delivered": 0,
+        "feed_delivered": 0,
+        "parked_at": None,
+    }
+    values.update(overrides)
+    columns = ", ".join(values)
+    marks = ", ".join("?" for _ in values)
+    return conn.execute(
+        f"INSERT INTO alert_outbox ({columns}) VALUES ({marks})",
+        tuple(values.values()),
+    )
+
+
+def test_outbox_rejects_negative_attempts(outbox_db):
+    import sqlite3
+
+    from trustsight.db import get_connection
+
+    with get_connection() as conn:
+        with pytest.raises(sqlite3.IntegrityError):
+            _insert_outbox(conn, attempts=-1)
+
+
+def test_outbox_rejects_non_boolean_sink_flags(outbox_db):
+    import sqlite3
+
+    from trustsight.db import get_connection
+
+    with get_connection() as conn:
+        with pytest.raises(sqlite3.IntegrityError):
+            _insert_outbox(conn, ntfy_delivered=2)
+
+
+def test_outbox_parked_state_is_terminal_in_sql(outbox_db):
+    import sqlite3
+
+    from trustsight.db import get_connection
+
+    with get_connection() as conn:
+        row_id = _insert_outbox(
+            conn, attempts=10, parked_at="2026-11-11T00:00:00+00:00"
+        ).lastrowid
+        conn.commit()
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                "UPDATE alert_outbox SET parked_at = NULL WHERE id = ?",
+                (row_id,),
+            )
+
+
+def test_an_old_outbox_table_gets_the_guards_on_migration(tmp_path, monkeypatch):
+    """CHECK cannot be added in place; the migration must still enforce it."""
+    import sqlite3
+
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+    path = tmp_path / "trustsight.db"
+    old = sqlite3.connect(path)
+    old.execute(
+        "CREATE TABLE alert_outbox ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "created_at TEXT NOT NULL,"
+        "payload_json TEXT NOT NULL,"
+        "webhook_id TEXT NOT NULL,"
+        "webhook_timestamp INTEGER NOT NULL,"
+        "attempts INTEGER NOT NULL DEFAULT 0,"
+        "next_attempt_at TEXT,"
+        "ntfy_delivered INTEGER NOT NULL DEFAULT 0,"
+        "feed_delivered INTEGER NOT NULL DEFAULT 0,"
+        "parked_at TEXT,"
+        "last_error TEXT)"
+    )
+    old.commit()
+    old.close()
+
+    from trustsight.db import get_connection, init_db
+
+    init_db()
+    with get_connection() as conn:
+        row_id = _insert_outbox(
+            conn, attempts=10, parked_at="2026-11-11T00:00:00+00:00"
+        ).lastrowid
+        conn.commit()
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                "UPDATE alert_outbox SET parked_at = NULL WHERE id = ?",
+                (row_id,),
+            )

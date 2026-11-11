@@ -13,6 +13,24 @@ def _pipeline():
     return pipeline
 
 
+def _backfill_day(cursor: int, now: int, meta: dict, day_seconds: int):
+    """The next AUR day with changes: ``(start, end, names)``.
+
+    Empty days are skipped in one bounded walk. The returned ``start`` is
+    the cursor the cycle should persist until the day is drained; ``end``
+    is the boundary that tells the caller when the replay has caught up.
+    """
+    while True:
+        end = cursor + day_seconds
+        bucket = sorted(
+            name for name, entry in meta.items()
+            if cursor <= (entry.get("LastModified") or 0) < end
+        )
+        if bucket or end >= now:
+            return cursor, end, bucket
+        cursor = end
+
+
 def _run_baseline_build(
     resume: bool = False,
     export_path: Optional[str] = None,
@@ -133,15 +151,8 @@ def _run_baseline_build(
         # Backfill: one day of AUR time per cycle.  Days with no changes are
         # skipped inside the cycle, so an empty stretch costs nothing.
         now = int(time.time())
-        while True:
-            backfill_day_end = cursor + _SINCE_DAY_SECONDS
-            bucket = sorted(
-                name for name, m in new_meta.items()
-                if cursor <= (m.get("LastModified") or 0) < backfill_day_end
-            )
-            if bucket or backfill_day_end >= now:
-                break
-            cursor = backfill_day_end
+        cursor, backfill_day_end, bucket = _backfill_day(
+            cursor, now, new_meta, _SINCE_DAY_SECONDS)
         _set_since_cursor(cursor)
         to_process = bucket
         added, removed = [], []

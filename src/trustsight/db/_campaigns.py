@@ -17,6 +17,7 @@ import json
 from typing import Optional
 
 from ._connection import get_connection
+from ._lifecycles import CampaignState
 from ._metadata import observation_seq
 
 __all__ = [
@@ -136,18 +137,43 @@ def _row_int(row, name: str, default: int = 0) -> int:
         return default
 
 
+def _state_from_row(row) -> CampaignState:
+    return CampaignState(
+        campaign_id=str(row["campaign_id"]),
+        activated_at_obs=int(row["activated_at_obs"]),
+        ttl_obs=int(row["ttl_obs"]),
+        expiry_announced=bool(row["expiry_announced"] or 0),
+        activation_count=_row_int(row, "activation_count", 1),
+        first_activated_at_obs=_row_int(row, "first_activated_at_obs"),
+        last_activated_at_obs=_row_int(row, "last_activated_at_obs"),
+    )
+
+
+def _state_from_dict(campaign: dict) -> CampaignState:
+    return CampaignState(
+        campaign_id=str(campaign.get("campaign_id") or ""),
+        activated_at_obs=int(campaign.get("activated_at_obs") or 0),
+        ttl_obs=max(1, int(campaign.get("ttl_obs") or 1)),
+        expiry_announced=bool(campaign.get("expiry_announced")),
+        activation_count=max(1, int(campaign.get("activation_count") or 1)),
+        first_activated_at_obs=int(campaign.get("first_activated_at_obs") or 0),
+        last_activated_at_obs=int(campaign.get("last_activated_at_obs") or 0),
+    )
+
+
 def _row_to_dict(row) -> dict:
+    state = _state_from_row(row)
     return {
-        "campaign_id": row["campaign_id"],
+        "campaign_id": state.campaign_id,
         "scope": _read_scope(row["scope_json"], row["source"] or ""),
         "source": row["source"] or "",
-        "activated_at_obs": int(row["activated_at_obs"]),
-        "ttl_obs": int(row["ttl_obs"]),
-        "expires_at_obs": int(row["activated_at_obs"]) + int(row["ttl_obs"]),
-        "expiry_announced": int(row["expiry_announced"] or 0),
-        "activation_count": _row_int(row, "activation_count", 1),
-        "first_activated_at_obs": _row_int(row, "first_activated_at_obs"),
-        "last_activated_at_obs": _row_int(row, "last_activated_at_obs"),
+        "activated_at_obs": state.activated_at_obs,
+        "ttl_obs": state.ttl_obs,
+        "expires_at_obs": state.expires_at_obs,
+        "expiry_announced": int(state.expiry_announced),
+        "activation_count": state.activation_count,
+        "first_activated_at_obs": state.first_activated_at_obs,
+        "last_activated_at_obs": state.last_activated_at_obs,
     }
 
 
@@ -186,16 +212,10 @@ def active_campaigns(now_obs: Optional[int] = None) -> list[dict]:
     sweep is needed to retire one.
     """
     now = observation_seq() if now_obs is None else _safe_int(now_obs, observation_seq())
-    try:
-        with get_connection() as conn:
-            rows = conn.execute(
-                "SELECT * FROM campaign_alerts WHERE activated_at_obs + ttl_obs > ?"
-                " ORDER BY campaign_id",
-                (now,),
-            ).fetchall()
-    except Exception:  # noqa: BLE001 - an unreadable table has no campaigns
-        return []
-    return [_row_to_dict(row) for row in rows]
+    return [
+        campaign for campaign in all_campaigns()
+        if _state_from_dict(campaign).is_active(now)
+    ]
 
 
 def expired_unannounced(now_obs: Optional[int] = None) -> list[dict]:
@@ -206,14 +226,10 @@ def expired_unannounced(now_obs: Optional[int] = None) -> list[dict]:
     indicator is reported rather than dropped.
     """
     now = observation_seq() if now_obs is None else _safe_int(now_obs, observation_seq())
-    with get_connection() as conn:
-        rows = conn.execute(
-            "SELECT * FROM campaign_alerts"
-            " WHERE activated_at_obs + ttl_obs <= ? AND expiry_announced = 0"
-            " ORDER BY campaign_id",
-            (now,),
-        ).fetchall()
-    return [_row_to_dict(row) for row in rows]
+    return [
+        campaign for campaign in all_campaigns()
+        if _state_from_dict(campaign).is_expired_unannounced(now)
+    ]
 
 
 def mark_expiry_announced(campaign_id: str) -> None:
@@ -251,15 +267,17 @@ def activate_campaign(
             "SELECT * FROM campaign_alerts WHERE campaign_id = ?", (campaign_id,)
         ).fetchone()
         if existing is not None:
+            state = _state_from_row(existing).reactivated(now, ttl)
             conn.execute(
                 "UPDATE campaign_alerts SET scope_json = ?, source = ?,"
-                " activated_at_obs = ?, ttl_obs = ?, expiry_announced = 0,"
-                " activation_count = activation_count + 1,"
-                " first_activated_at_obs = CASE WHEN first_activated_at_obs = 0"
-                "   THEN activated_at_obs ELSE first_activated_at_obs END,"
+                " activated_at_obs = ?, ttl_obs = ?, expiry_announced = ?,"
+                " activation_count = ?, first_activated_at_obs = ?,"
                 " last_activated_at_obs = ?"
                 " WHERE campaign_id = ?",
-                (payload, source, now, ttl, now, campaign_id),
+                (payload, source, state.activated_at_obs, state.ttl_obs,
+                 int(state.expiry_announced), state.activation_count,
+                 state.first_activated_at_obs, state.last_activated_at_obs,
+                 campaign_id),
             )
             conn.commit()
             return True

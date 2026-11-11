@@ -218,23 +218,24 @@ def pending_channels() -> list[tuple[str, str, str]]:
     from .. import channel_state
 
     pending: list[tuple[str, str, str]] = []
+    baseline_channel = str(tags.get("baseline_channel") or "official")
     baseline_tag = tags.get("baseline")
-    if baseline_tag and baseline_tag != channel_state.pulled_tag(
-            channel_state.BASELINE):
-        pending.append(("baseline", str(baseline_tag),
-                        str(tags.get("baseline_channel") or "official")))
+    if baseline_tag and not channel_state.pulled_matches(
+            channel_state.BASELINE, str(baseline_tag), baseline_channel):
+        pending.append(("baseline", str(baseline_tag), baseline_channel))
     ioc_tag = tags.get("ioc")
-    if ioc_tag and ioc_tag != channel_state.pulled_tag(channel_state.IOC):
+    if ioc_tag:
         from .. import release
 
         # IOC discovery always resolves the official ``ioc-*`` channel, so the
         # notice names it by slug rather than the vague word "official".
-        pending.append(("ioc", str(ioc_tag), release.OFFICIAL_REPO))
+        if not channel_state.pulled_matches(
+                channel_state.IOC, str(ioc_tag), release.OFFICIAL_REPO):
+            pending.append(("ioc", str(ioc_tag), release.OFFICIAL_REPO))
     watchlist_tag = tags.get("watchlist")
-    if watchlist_tag and watchlist_tag != channel_state.pulled_tag(
-            channel_state.WATCHLIST):
-        pending.append(("watchlist", str(watchlist_tag),
-                        str(tags.get("baseline_channel") or "official")))
+    if watchlist_tag and not channel_state.pulled_matches(
+            channel_state.WATCHLIST, str(watchlist_tag), baseline_channel):
+        pending.append(("watchlist", str(watchlist_tag), baseline_channel))
     return pending
 
 

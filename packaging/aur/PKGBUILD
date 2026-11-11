@@ -48,7 +48,7 @@ source=("$pkgname-$pkgver.tar.gz::$url/releases/download/v$pkgver/$pkgname-$pkgv
         "$pkgname-$pkgver.tar.gz.sig::$url/releases/download/v$pkgver/$pkgname-$pkgver.tar.gz.sig")
 
 sha256sums=('bd0d88feca98ab9c484a43823d97fa0f782806d28f1af31252ace8f305eaf526'
-            'ed984f73ff71ed06e8c48a5241c591b4332fa65255c5caef0270be4e0befead8')
+            'c31bc4885bbd429f460fa0e5fa364cd1df5a34132b6805d708d2c5d8a5ebf222')
 
 build() {
   cd "$pkgname-$pkgver"

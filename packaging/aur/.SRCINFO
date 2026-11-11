@@ -18,6 +18,7 @@ pkgbase = trustsight
 	depends = python-tldextract>=5.0
 	depends = python-rich>=13.0
 	depends = python-typer>=0.12
+	depends = python-pydantic>=2.0
 	depends = python-cryptography>=42.0
 	depends = python-yaml>=6.0
 	optdepends = pyalpm: native version comparison (faster discovery)
@@ -25,6 +26,6 @@ pkgbase = trustsight
 	source = trustsight-0.28.0.tar.gz.sig::https://github.com/emiliano-go/trustsight/releases/download/v0.28.0/trustsight-0.28.0.tar.gz.sig
 	validpgpkeys = F759D6D49B0A395AB922414A5CC3B4C50D37E793
 	sha256sums = bd0d88feca98ab9c484a43823d97fa0f782806d28f1af31252ace8f305eaf526
-	sha256sums = ed984f73ff71ed06e8c48a5241c591b4332fa65255c5caef0270be4e0befead8
+	sha256sums = c31bc4885bbd429f460fa0e5fa364cd1df5a34132b6805d708d2c5d8a5ebf222
 
 pkgname = trustsight

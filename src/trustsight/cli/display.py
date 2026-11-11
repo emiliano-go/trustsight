@@ -3,11 +3,9 @@ import logging
 import os
 import sys
 from contextlib import contextmanager
-from typing import TYPE_CHECKING
 
 from ..coverage import GAP_REASONS
 from ..safe_text import clean
-from ..scoring import risk_level
 
 # Fact-to-text helpers live in ``verdict`` so the review engine and the API
 # can render a version line without importing anything CLI-shaped.  They are
@@ -26,42 +24,8 @@ from ..verdict import (  # noqa: F401
 # pattern the command modules already follow for `Table` and `Text`.
 HAS_RICH = importlib.util.find_spec("rich") is not None
 
-#: Rich objects re-exported for the command modules.  Resolved on first
-#: access, so a module can name one in an import list without paying for
-#: rich at import time.  A bare global lookup inside *this* module does not
-#: consult `__getattr__`, so the functions below import what they need.
-_RICH_EXPORTS = {
-    "SIMPLE_HEAD": "rich.box",
-    "Console": "rich.console",
-    "Panel": "rich.panel",
-    "Rule": "rich.rule",
-    "Table": "rich.table",
-    "Text": "rich.text",
-    "BarColumn": "rich.progress",
-    "DownloadColumn": "rich.progress",
-    "Progress": "rich.progress",
-    "SpinnerColumn": "rich.progress",
-    "TextColumn": "rich.progress",
-    "TimeElapsedColumn": "rich.progress",
-    "TransferSpeedColumn": "rich.progress",
-}
-
-
-def __getattr__(name: str):
-    module = _RICH_EXPORTS.get(name)
-    if module is None:
-        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-    value = getattr(importlib.import_module(module), name)
-    globals()[name] = value
-    return value
-
-if TYPE_CHECKING:  # annotations only; never imported at runtime
-    from rich.console import Console
-    from rich.text import Text
-
 log = logging.getLogger(__name__)
 _console = None
-_err_console = None
 
 
 def _isatty(stream) -> bool:
@@ -116,37 +80,23 @@ def download_progress(description: str, *, enabled: bool = True):
     if not enabled:
         yield lambda pos, total: None
         return
-    from rich.progress import (
-        BarColumn,
-        DownloadColumn,
-        Progress,
-        TextColumn,
-        TimeElapsedColumn,
-        TransferSpeedColumn,
-    )
+    from ..sandbox import render_client
 
-    progress = Progress(
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        DownloadColumn(),
-        TransferSpeedColumn(),
-        TimeElapsedColumn(),
-        console=err_console(),
-        transient=False,
-    )
-    state: dict = {"task": None}
+    state: dict = {"started": False}
 
     def on_progress(pos: int, total: int | None) -> None:
-        if state["task"] is None:
-            progress.start()
-            state["task"] = progress.add_task(description, total=None)
-        progress.update(state["task"], total=total, completed=pos, refresh=True)
+        if not state["started"]:
+            render_client.start_progress(
+                "download", description, kind="download")
+            state["started"] = True
+        render_client.update_progress(
+            "download", completed=pos, total=total)
 
     try:
         yield on_progress
     finally:
-        if state["task"] is not None:
-            progress.stop()
+        if state["started"]:
+            render_client.stop_progress("download")
 
 
 def band_colour(label: str) -> str:
@@ -176,52 +126,6 @@ SEVERITY_COLORS = {
     "INFO": "dim",
 }
 
-def console() -> "Console":
-    if not HAS_RICH:
-        raise RuntimeError("rich is not available")
-    from rich.console import Console
-
-    global _console
-    if _console is None:
-        _console = Console()
-    return _console
-
-
-def err_console() -> "Console":
-    """The Rich console for diagnostics and progress, on stderr."""
-    if not HAS_RICH:
-        raise RuntimeError("rich is not available")
-    from rich.console import Console
-
-    global _err_console
-    if _err_console is None:
-        _err_console = Console(stderr=True)
-    return _err_console
-
-
-def _severity_text(severity: str) -> "Text":
-    from rich.text import Text
-
-    return Text(severity, style=SEVERITY_COLORS.get(severity, "white"))
-
-
-def _weight_text(weight: int) -> "Text":
-    from rich.text import Text
-
-    if weight > 0:
-        return Text(f"+{weight}", style="red")
-    if weight < 0:
-        return Text(str(weight), style="green")
-    return Text("0", style="dim")
-
-
-def _score_text(score: int, risk: str | None = None) -> "Text":
-    from rich.text import Text
-
-    risk = risk or risk_level(score)
-    return Text(f"{score}/100", style=RISK_COLORS.get(risk, "white"))
-
-
 def _fmt_bytes(n: int) -> str:
     for unit in ("B", "KB", "MB", "GB"):
         if n < 1024:
@@ -245,16 +149,33 @@ def finding_where(file: str, line: "int | None") -> str:
     return file_part
 
 
-def _print_colored(msg: str, color: str = "", stderr: bool = False):
-    if HAS_RICH:
-        from rich.markup import escape
+def emit(text: str) -> None:
+    """Write render-sandbox text where the owning console would have written."""
+    con = _console
+    stream = getattr(con, "file", None) if con is not None else None
+    target = stream if stream is not None else sys.stdout
+    target.write(text)
+    target.flush()
 
-        style = f"[{color}]" if color else ""
-        target = err_console() if stderr else console()
-        target.print(f"{style}{escape(msg)}[/]")
-    else:
-        kwargs = {"file": sys.stderr} if stderr else {}
-        print(msg, **kwargs)
+
+def _print_colored(msg: str, color: str = "", stderr: bool = False):
+    if HAS_RICH and use_rich():
+        from ..sandbox.render_client import RenderUnavailable, render
+        try:
+            text = render("print_colored", {
+                "msg": msg, "color": color, "stderr": stderr,
+            })
+        except RenderUnavailable:
+            raise
+        con = _console
+        stream = getattr(con, "file", None) if con is not None else None
+        target = stream if stream is not None else (
+            sys.stderr if stderr else sys.stdout)
+        target.write(text)
+        target.flush()
+        return
+    kwargs = {"file": sys.stderr} if stderr else {}
+    print(msg, **kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -293,53 +214,6 @@ def _dep_fields(dep):
         bool(get("failed", False)),
         str(get("error", "") or ""),
     )
-
-
-def dependency_cards_rich(dependencies, *, show_score=False, show_risk=False):
-    """A Rich renderable holding one mini-card per analysed dependency.
-
-    The band is withheld unless it was asked for, like everywhere else. It
-    used to be shown whenever it was known, so a plain `review` that
-    withheld the band on the package itself printed `Risk (High)` for its
-    dependency - and `--risk` changed nothing, because the flag was never
-    passed down here at all.
-    """
-    from rich.panel import Panel
-    from rich.table import Table
-    from rich.text import Text
-
-    from ..review_policy import review_policy
-
-    policy = review_policy()
-    cards = []
-    for dep in dependencies:
-        name, depth, score, label, findings, gaps, failed, error = _dep_fields(dep)
-        inner = Table.grid(padding=(0, 1))
-        inner.add_column(style="dim", justify="right", no_wrap=True)
-        inner.add_column()
-
-        if failed:
-            inner.add_row("Status", Text(f"NOT vetted: {clean(error)}", style="yellow"))
-        else:
-            inner.add_row("Findings", Text(str(findings)))
-            if show_score:
-                inner.add_row("Score", Text(f"{score}/100 ({clean(label)})"))
-            elif show_risk and label:
-                # No parentheses: they belong to the score line, where they
-                # qualify a number. Alone they read as an aside.
-                inner.add_row("Risk", Text(clean(label)))
-        for gap in gaps:
-            inner.add_row("Not vetted", Text(clean(GAP_REASONS.get(gap, gap)), style="yellow"))
-
-        border = "yellow" if failed else (
-            "red" if policy.flagged(score) else "blue")
-        cards.append(Panel(
-            inner,
-            title=Text(f"L{depth}  {clean(name)}"),
-            border_style=border,
-            padding=(0, 1),
-        ))
-    return cards
 
 
 def dependency_lines_plain(dependencies, *, show_score=False, show_risk=False):

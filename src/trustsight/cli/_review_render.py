@@ -1,12 +1,9 @@
 import typer
 
 from ..coverage import GAP_REASONS
-from ..safe_text import clean, safe_markup
+from ..safe_text import clean
 from .display import (
     DEPTH_TRUNCATED_NOTE,
-    RISK_COLORS,
-    console,
-    dependency_cards_rich,
     dependency_lines_plain,
     display_version,
     finding_where,
@@ -260,181 +257,62 @@ def _render_results_plain(results, total_installed, all_packages, show_score, sh
         typer.echo(hint)
 
 
+def _plain(value):
+    """Project a review row to JSON-safe plain data."""
+    if hasattr(value, "to_dict"):
+        return _plain(value.to_dict())
+    if isinstance(value, dict):
+        return {str(k): _plain(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_plain(v) for v in value]
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    return str(value)
+
+
 def _render_results_rich(results, total_installed, all_packages, show_score, show_risk, verbose, outdated_total=0, deps_only=False):
-    from rich.panel import Panel
-    from rich.text import Text
-
-    con = console()
-    for r in results:
-        if verbose and not r.get("failed") and r.get("_verbose_fact"):
-            from .inspect import _inspect_rich as _render_inspect
-            _render_inspect(
-                r["_verbose_fact"],
-                verbose=verbose,
-                show_score=show_score,
-                show_risk=show_risk,
-            )
-            continue
-
-        from rich.table import Table
-        table = Table(show_header=False, box=None, padding=(0, 1))
-        table.add_column(no_wrap=True)
-        table.add_column()
-
-        table.add_row("Version", Text(_render_version_cell(r)))
-
-        if r.get("failed"):
-            table.add_row("Status", Text(clean(r["verdict"])))
-            panel = Panel(table, title=Text(clean(r["package"])), border_style="red")
-            con.print(panel)
-            continue
-
-        if r.get("aur_note"):
-            table.add_row("Status", Text(clean(r["aur_note"])))
-        elif r.get("first_seen"):
-            table.add_row("Status", "First analysis. No prior history for this package.")
-        elif r.get("is_trivial"):
-            table.add_row("Status", "Only pkgver and sha256sums changed. Review the diff before building.")
-        else:
-            table.add_row("Status", "The update is not trivial. Review it.")
-
-        # Findings are rendered independently of that status line. The
-        # no-change and trivial branches describe the *diff*; a finding they
-        # would not show is still a finding. H029 (name typosquat), H003,
-        # SOURCE_BUCKET and NOVELTY are computed from the head recipe and the
-        # database, so a package whose commit has not moved still fires them -
-        # and the dependency card and `inspect` have always printed them.
-        # Nesting this loop in the `else` made the status a claim that nothing
-        # was found, which is not what the status says.
-        from ..reporting import render_cap
-
-        _findings = r.get("findings", [])
-        _cap = render_cap()
-        _shown = _findings if _cap <= 0 else _findings[:_cap]
-        for f in _shown:
-            # The description already ends with `[R001]` - `verdict._render`
-            # puts it there, and the JSON body and the plain renderer both
-            # carry it that way. Adding a second copy in front printed
-            # every finding as
-            #   `PKGBUILD line 4 [R001]  Remote Script Execution: ... [R001]`
-            # and made this renderer disagree with the plain one about the
-            # same finding.
-            table.add_row("", Text(clean(_finding_line(f))))
-        if _cap > 0 and len(_findings) > _cap:
-            table.add_row(
-                "", f"  [dim]... and {len(_findings) - _cap} more finding(s) "
-                    "(see --json)[/]")
-
-        file_changes = r.get("file_changes", [])
-        if file_changes:
-            table.add_row("", "")
-            table.add_row("Files changed", "")
-            for fc in file_changes:
-                status = fc.get("status", "")
-                path = fc.get("path", "")
-                prefix = {"added": "[green]+[/]", "removed": "[red]-[/]", "modified": "[yellow]~[/]"}.get(status, " ")
-                table.add_row("", f"  {prefix} {safe_markup(path)}")
-
-        # The Contact Ledger panel: weight 0, warm-only.  A cold replay shows
-        # the standing note so an empty panel is never read as a clean one.
-        contacts = r.get("contacts") or {}
-        if contacts.get("available") is False:
-            table.add_row("First contact", Text(clean(contacts.get("note", ""))))
-        elif contacts.get("records"):
-            table.add_row("First contact", "weight 0")
-            for c in contacts["records"]:
-                table.add_row("", Text(
-                    f"  {clean(c.get('kind', ''))} {clean(c.get('value', ''))} "
-                    f"({clean(c.get('basis', ''))})"))
-
-        changes = r.get("changes", [])
-        if changes:
-            table.add_row("Changed", Text(clean(changes[0])))
-            for entry in changes[1:]:
-                table.add_row("", Text(clean(entry)))
-
-        # `--deps`: the subject of this panel is a dependency, so the
-        # relationship worth naming is the reverse one. A dependency nobody
-        # in the reviewed set requires is not what was asked for; one that
-        # three packages require is the reason to read it first.
-        required_by_names = r.get("required_by") or []
-        for position, name in enumerate(required_by_names):
-            table.add_row("Required by" if position == 0 else "", Text(clean(name)))
-
-        # Dependency mini-cards: each is its own analysis, so it gets its
-        # own card nested in this one rather than a line in this package's
-        # finding list.
-        deps = r.get("dependencies", [])
-        if deps:
-            table.add_row("", "")
-            table.add_row("Dependencies", "")
-            for card in dependency_cards_rich(deps, show_score=show_score,
-                                       show_risk=show_risk):
-                table.add_row("", card)
-            if r.get("depth_truncated"):
-                table.add_row("", Text(DEPTH_TRUNCATED_NOTE, style="yellow"))
-
-        # B5: a suppression a reader cannot see is one they cannot audit.
-        # This render carried it in the JSON body and nowhere on screen, so
-        # a rule switched off by an override looked, to anyone reading the
-        # terminal, exactly like one that never matched.
-        suppressed = r.get("suppressed_rules", [])
-        if suppressed:
-            table.add_row("Suppressed", "")
-            for entry in suppressed:
-                rule_id = entry.get("rule_id", "")
-                scope = entry.get("override_package") or "ALL packages"
-                reason = entry.get("override_reason", "")
-                corroborated = ("  (indicator corroborated)"
-                                if entry.get("indicator_corroborated") else "")
-                table.add_row("", Text(
-                    f"  {clean(rule_id)}  ({clean(scope)})  {clean(reason)}"
-                    f"{corroborated}"))
-
-        expired_overrides = r.get("overrides_expired", [])
-        if expired_overrides:
-            table.add_row("Overrides expired", "")
-            for rid in expired_overrides:
-                table.add_row("", Text(
-                    f"  {clean(str(rid))}  no longer suppressing"))
-
-        ioc_matches = r.get("ioc_matches", [])
-        if ioc_matches:
-            table.add_row("IOC matches", "")
-            for m in ioc_matches:
-                expired = " [EXPIRED]" if m.expired else ""
-                line = f" line {m.line}" if m.line is not None else ""
-                table.add_row("", Text(
-                    f"  [{clean(m.source)}] {clean(m.type)}={clean(m.value)}"
-                    f"{line} ({clean(m.surface)}){expired}"
-                ))
-
-        for gap in r.get("coverage_gaps", []):
-            table.add_row("Not vetted", GAP_REASONS.get(gap, gap))
-
-        risk = r.get("risk", "")
-        label = r.get("risk_label") or risk
-        score_val = r.get("score", 0)
-        border = RISK_COLORS.get(risk, "blue") if (show_score or show_risk) else "blue"
-
-        if show_score and not r.get("failed"):
-            table.add_row("Score", f"{score_val}/100 ({label})")
-        elif show_risk and not r.get("failed"):
-            table.add_row("Risk", clean(label))
-
-        panel = Panel(table, title=Text(clean(r["package"])), border_style=border)
-        con.print(panel)
-
-    from ..review_policy import review_policy
-    policy = review_policy()
-    flagged = sum(1 for r in results if policy.flagged(r["score"] or 0))
-    failed = sum(1 for r in results if r.get("failed"))
-    reviewed = len(results) - failed
-    caption = _summary_caption(
-        reviewed, failed, flagged, total_installed, all_packages,
-        outdated_total, show_score, deps_only,
+    """Send the review rows to the render sandbox and emit its text."""
+    import sys
+    from ..sandbox import render_client
+    from . import display
+    from .inspect._render import (
+        _layers_and_boundaries_line,
+        _status_text,
     )
-    con.print(caption)
-    hint = _deps_hint(results, deps_only)
-    if hint:
-        con.print(f"[dim]{hint}[/]")
+    from ..contacts import contact_panel, panel_lines
+    from ..schema import fact_to_dict
+    from ..reporting import render_cap
+    from ..review_policy import review_policy
+
+    policy = review_policy()
+    payload_results = []
+    for r in results:
+        item = dict(r)
+        item.pop("fact", None)
+        item["version_text"] = _version_cell(r)
+        fact = item.pop("_verbose_fact", None)
+        if verbose and fact is not None and not item.get("failed"):
+            item["verbose_fact"] = fact_to_dict(fact)
+            item["verbose_layers_line"] = _layers_and_boundaries_line(fact) or ""
+            item["verbose_contact_lines"] = panel_lines(contact_panel(fact))
+            item["verbose_status_text"] = _status_text(fact)
+        payload_results.append(_plain(item))
+
+    text = render_client.render("review_results", {
+        "results": payload_results,
+        "total_installed": total_installed,
+        "all_packages": all_packages,
+        "show_score": show_score,
+        "show_risk": show_risk,
+        "verbose": verbose,
+        "outdated_total": outdated_total,
+        "deps_only": deps_only,
+        "render_cap_value": render_cap(),
+        "policy_threshold": policy.threshold,
+        "policy_name": policy.name,
+    })
+    con = display._console
+    stream = getattr(con, "file", None) if con is not None else None
+    target = stream if stream is not None else sys.stdout
+    target.write(text)
+    target.flush()

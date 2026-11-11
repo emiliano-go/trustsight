@@ -195,9 +195,8 @@ def test_ttl_of_zero_disables_the_refresh(
 
 
 @patch("trustsight.cli.review._discover_packages")
-@patch("trustsight.cli.display.console")
 def test_review_first_run_skips_no_outdated_message(
-    mock_console, mock_disc, tmp_path, monkeypatch
+    mock_disc, tmp_path, monkeypatch
 ):
     """review() must not print 'No outdated packages found' on first metadata fetch."""
     monkeypatch.setattr("trustsight.config.DATA_DIR", tmp_path)

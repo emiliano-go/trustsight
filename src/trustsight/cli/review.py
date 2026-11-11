@@ -6,7 +6,6 @@ from contextlib import contextmanager
 import typer
 
 from ..config import CONFIG_DIR, ensure_default_configs, load_config
-from ..safe_text import clean
 from ..db import (
     get_db_path,
     init_db,
@@ -24,8 +23,6 @@ from ._review_render import (
 from .display import (
     HAS_RICH,
     _print_colored,
-    console,
-    err_console,
     use_rich,
     use_rich_progress,
 )
@@ -111,27 +108,19 @@ def _discover_packages(repos, include_foreign, all_repos_flag, all_packages, _wa
     """Engine discovery plus the download progress bar it cannot draw."""
     on_download = None
     progress_state = {}
+    show_download = use_rich_progress() and not json_output
 
-    if use_rich_progress() and not json_output:
-        from rich.progress import BarColumn, DownloadColumn, Progress, TextColumn, TimeElapsedColumn, TransferSpeedColumn
+    if show_download:
+        from ..sandbox import render_client
 
         def on_download(pos, total):
-            progress = progress_state.get("progress")
-            if progress is None:
-                con = err_console()
-                columns = [
-                    TextColumn("[progress.description]{task.description}"),
-                    BarColumn(),
-                    DownloadColumn(),
-                    TransferSpeedColumn(),
-                    TimeElapsedColumn(),
-                ]
-                progress = Progress(*columns, console=con, transient=False)
-                progress.start()
-                progress_state["progress"] = progress
-                progress_state["task"] = progress.add_task(
-                    "Downloading AUR metadata...", total=None)
-            progress.update(progress_state["task"], total=total, completed=pos, refresh=True)
+            if not progress_state.get("started"):
+                render_client.start_progress(
+                    "review-download", "Downloading AUR metadata...",
+                    kind="download")
+                progress_state["started"] = True
+            render_client.update_progress(
+                "review-download", completed=pos, total=total)
 
     try:
         with _suppress_logging():
@@ -146,9 +135,10 @@ def _discover_packages(repos, include_foreign, all_repos_flag, all_packages, _wa
                 force_refresh=force_refresh,
             )
     finally:
-        progress = progress_state.get("progress")
-        if progress is not None:
-            progress.stop()
+        if progress_state.get("started"):
+            from ..sandbox import render_client
+
+            render_client.stop_progress("review-download")
 
     return discovered
 
@@ -187,31 +177,29 @@ def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_
     has_progress = use_rich_progress() and not json_output and not quiet
 
     if has_progress:
-        from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
-        con = err_console()
-        progress_columns = [
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-            TimeElapsedColumn(),
-        ]
-        with Progress(*progress_columns, console=con, transient=False) as progress, _suppress_logging():
-            task = progress.add_task("Connecting to AUR...", total=len(limited))
-            progress.refresh()
+        from ..sandbox import render_client
 
-            def on_progress(_current, total, description):
-                if not has_progress:
-                    return
-                if _current < 0:
-                    progress.update(task, total=None, description=description, refresh=True)
-                elif total:
-                    progress.update(task, total=total, completed=_current, description=description, refresh=True)
-                else:
-                    progress.update(task, description=description, refresh=True)
+        render_client.start_progress(
+            "review-analysis", "Connecting to AUR...", total=len(limited))
 
-            results = _analyze_outdated_batch(limited, on_progress, verbose, depth=depth, record=record)
-            progress.update(task, visible=False)
+        def on_progress(_current, total, description):
+            if _current < 0:
+                render_client.update_progress(
+                    "review-analysis", total=None, description=description)
+            elif total:
+                render_client.update_progress(
+                    "review-analysis", total=total, completed=_current,
+                    description=description)
+            else:
+                render_client.update_progress(
+                    "review-analysis", description=description)
+
+        try:
+            with _suppress_logging():
+                results = _analyze_outdated_batch(
+                    limited, on_progress, verbose, depth=depth, record=record)
+        finally:
+            render_client.stop_progress("review-analysis")
     elif json_output:
         def on_progress(_current, total, description):
             import json as _json
@@ -262,7 +250,18 @@ def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_
         return
 
     if use_rich() and not json_output:
-        _render_results_rich(results, total_installed, all_packages, show_score, show_risk, verbose, outdated_total, deps_only)
+        from ..sandbox.render_client import render as _sandbox_render
+        _text = _sandbox_render("review_results", {
+            "results": results,
+            "total_installed": total_installed,
+            "all_packages": all_packages,
+            "show_score": show_score,
+            "show_risk": show_risk,
+            "verbose": verbose,
+            "outdated_total": outdated_total,
+            "deps_only": deps_only,
+        })
+        typer.echo(_text, nl=False)
     else:
         _render_results_plain(results, total_installed, all_packages, show_score, show_risk, verbose, outdated_total, deps_only)
 
@@ -313,18 +312,27 @@ def register_commands(app: typer.Typer):
         has_progress = use_rich_progress() and not json_output and not quiet
         init_progress = None
         if has_progress:
-            from rich.progress import Progress, SpinnerColumn, TextColumn
-            init_progress = Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                console=err_console(), transient=True,
-            )
+            from ..sandbox import render_client
+
+            class _InitProgress:
+                def start(self):
+                    render_client.start_progress(
+                        "review-init", "Loading config...",
+                        kind="spinner", transient=True)
+
+                def update(self, _task, description):
+                    render_client.update_progress(
+                        "review-init", description=description)
+
+                def stop(self):
+                    render_client.stop_progress("review-init")
+
+            init_progress = _InitProgress()
             init_progress.start()
-            init_task = init_progress.add_task("Loading config...", total=None)
 
         def _step(msg: str):
             if init_progress is not None:
-                init_progress.update(init_task, description=msg)
+                init_progress.update(None, msg)
 
         try:
             _step("Loading config...")
@@ -411,12 +419,7 @@ def register_commands(app: typer.Typer):
                 if not HAS_RICH:
                     print(f"Warning: {msg}")
                     return
-                from rich.text import Text
-                con = console()
-                # Text, not markup interpolation: msg carries --repo values
-                # and paths, and Rich reads a bare str as markup, so a
-                # bracketed substring would be eaten or abort the render.
-                con.print(Text(f"Warning: {clean(msg)}", style="yellow"))
+                _print_colored(f"Warning: {msg}", "yellow")
 
             if all_repos_flag:
                 from ..discovery import get_local_repos_from_pacman_conf
@@ -431,10 +434,7 @@ def register_commands(app: typer.Typer):
                         elif not HAS_RICH:
                             print(f"Error: {exc}")
                         else:
-                            from rich.text import Text
-                            # Same markup hazard as _warn above: str(exc)
-                            # carries user-supplied paths and repo names.
-                            console().print(Text(f"Error: {clean(exc)}", style="red"))
+                            _print_colored(f"Error: {exc}", "red")
                         raise typer.Exit(code=2)
 
             try:

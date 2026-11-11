@@ -14,12 +14,7 @@ from ..config import (
     set_config,
     sync_rules,
 )
-from .display import (
-    _print_colored,
-    _weight_text,
-    console,
-    use_rich,
-)
+from .display import _print_colored, emit, use_rich
 
 log = logging.getLogger(__name__)
 
@@ -56,33 +51,16 @@ def config_show(
         return
 
     if use_rich():
-        from rich.box import SIMPLE_HEAD
-        from rich.table import Table
-        from rich.text import Text
+        from ..sandbox.render_client import render
 
-        table = Table(title="TrustSight configuration", box=SIMPLE_HEAD)
-        table.add_column("Key", style="cyan")
-        table.add_column("Value", overflow="fold")
-        for k, v in rows:
-            table.add_row(k, v)
-        console().print(table)
-
-        weights = Table(title="Scoring weights", box=SIMPLE_HEAD)
-        weights.add_column("Group", style="dim")
-        weights.add_column("Key", style="cyan")
-        weights.add_column("Weight", justify="right")
+        weights = []
         for group in (
             "severity_weights", "source_bucket_weights",
             "novelty_weights",
         ):
             for key, value in (cfg.get(group) or {}).items():
-                try:
-                    weight_int = int(value)
-                except (TypeError, ValueError):
-                    weights.add_row(group, key, Text(str(value), style="dim"))
-                else:
-                    weights.add_row(group, key, _weight_text(weight_int))
-        console().print(weights)
+                weights.append([group, key, value])
+        emit(render("config_tables", {"rows": rows, "weights": weights}))
     else:
         for k, v in rows:
             print(f"  {k}: {v}")
@@ -157,7 +135,11 @@ def config_sync_rules(
 
     if nothing_to_do:
         if use_rich():
-            console().print("[green]rules.toml is already up to date.[/green]")
+            from ..sandbox.render_client import render
+
+            emit(render("print_colored", {
+                "msg": "rules.toml is already up to date.", "color": "green",
+            }))
         else:
             print("rules.toml is already up to date.")
         return
@@ -207,8 +189,9 @@ def _print_sync_result(title: str, added: list[str], updated: list[str], drift: 
         lines.append(f"{len(drift)} drifted field(s) still differ (edit rules.toml manually).")
     body = "\n".join(lines) if lines else "Nothing to do."
     if use_rich():
-        from rich.panel import Panel as RichPanel
-        console().print(RichPanel(body, title=title, border_style="green"))
+        from ..sandbox.render_client import render
+
+        emit(render("sync_result", {"title": title, "body": body}))
     else:
         print(f"{title}: {body}")
 
@@ -216,47 +199,27 @@ def _print_sync_result(title: str, added: list[str], updated: list[str], drift: 
 def _print_sync_wizard(target: Path, missing: list[str], outdated: list[str], drift: list[tuple]):
     """Interactive wizard: show changes, let user choose how to sync."""
     if use_rich():
-        from rich.panel import Panel as RichPanel
-        from rich.table import Table as RichTable
+        from ..sandbox.render_client import render
 
-        # Summary
-        parts = []
-        if missing:
-            parts.append(f"[bold]{len(missing)}[/bold] new rule(s)")
-        if outdated:
-            parts.append(f"[bold]{len(outdated)}[/bold] outdated pattern(s)")
-        if drift:
-            parts.append(f"[bold]{len(drift)}[/bold] drifted field(s)")
-        console().print(RichPanel(
-            f"Your rules.toml is out of date: {', '.join(parts)}.",
-            title=str(target), border_style="yellow",
-        ))
-
-        # Detail table
-        table = RichTable(show_header=True, header_style="bold")
-        table.add_column("Rule", style="cyan", width=8)
-        table.add_column("Type", width=12)
-        table.add_column("Detail")
-
+        table_rows = []
         for rid in missing:
-            table.add_row(rid, "new", "Not in rules.toml; will be added")
+            table_rows.append([rid, "new", "Not in rules.toml; will be added"])
         for rid in outdated:
-            table.add_row(rid, "outdated", "Pattern is a superseded shipped version")
+            table_rows.append([rid, "outdated", "Pattern is a superseded shipped version"])
         for rid, field, on_disk, shipped in drift:
-            table.add_row(rid, "drifted", f"{field}: {on_disk!r} (shipped: {shipped!r})")
-
-        console().print(table)
+            table_rows.append([rid, "drifted", f"{field}: {on_disk!r} (shipped: {shipped!r})"])
+        emit(render("sync_wizard_summary", {
+            "target": str(target), "missing": missing,
+            "outdated": outdated, "drift": drift, "table_rows": table_rows,
+        }))
     else:
         print(f"rules.toml is out of date: {len(missing)} new, {len(outdated)} outdated, {len(drift)} drifted.")
 
     # Wizard prompt
     if use_rich():
-        console().print()
-        console().print("[bold]How would you like to sync?[/bold]")
-        console().print("  [cyan]1[/cyan]  Full update    (overwrite all rules with shipped defaults)")
-        console().print("  [cyan]2[/cyan]  Safe update    (add missing + update superseded patterns only)")
-        console().print("  [cyan]3[/cyan]  Skip           (don't change anything)")
-        console().print()
+        from ..sandbox.render_client import render
+
+        emit(render("sync_menu", {}))
     else:
         print("1) Full update  - overwrite all rules with shipped defaults")
         print("2) Safe update  - add missing + update superseded patterns only")
@@ -276,7 +239,11 @@ def _print_sync_wizard(target: Path, missing: list[str], outdated: list[str], dr
                 text += "\n" + block
         target.write_text(text)
         if use_rich():
-            console().print("[green]Full sync complete.[/green]")
+            from ..sandbox.render_client import render
+
+            emit(render("print_colored", {
+                "msg": "Full sync complete.", "color": "green",
+            }))
         else:
             print("Full sync complete.")
     elif choice == 2:
@@ -284,7 +251,11 @@ def _print_sync_wizard(target: Path, missing: list[str], outdated: list[str], dr
         _print_sync_result("Safe sync complete", added, updated)
     else:
         if use_rich():
-            console().print("[yellow]Skipped.[/yellow]")
+            from ..sandbox.render_client import render
+
+            emit(render("print_colored", {
+                "msg": "Skipped.", "color": "yellow",
+            }))
         else:
             print("Skipped.")
 

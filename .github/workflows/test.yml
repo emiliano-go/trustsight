@@ -32,6 +32,7 @@ jobs:
           python-version: ${{ matrix.python }}
           allow-prereleases: true
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - uses: ./.github/actions/enable-userns
       - run: uv sync --locked --extra dev --python ${{ matrix.python }}
       - run: uv run --extra dev python scripts/verify_fixtures.py
       # `pyproject.toml` sets `-n 4 --dist loadfile` for every pytest run:
@@ -50,6 +51,7 @@ jobs:
         with:
           python-version: "3.13"
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - uses: ./.github/actions/enable-userns
       - run: uv sync --locked --extra dev --python 3.13
       - run: uv run --extra dev ruff check
 
@@ -64,6 +66,7 @@ jobs:
         with:
           python-version: "3.13"
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - uses: ./.github/actions/enable-userns
       - run: uv sync --locked --extra docs --python 3.13
       - run: uv run --extra docs zensical build
       - run: uv run --extra docs python scripts/build_llms_txt.py
@@ -81,6 +84,7 @@ jobs:
         with:
           python-version: "3.13"
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - uses: ./.github/actions/enable-userns
       - run: uv sync --locked --extra dev --python 3.13
       - run: uv run python scripts/gen_historical_holdout_fixtures.py
       - run: uv run python scripts/gen_evasion_fixtures.py

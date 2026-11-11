@@ -97,11 +97,17 @@ __all__ = ["__version__", "api", *sorted(_API_NAMES)]
 def __getattr__(name: str):
     if name == "__version__":
         import importlib.metadata
+        import os
 
         try:
             version = importlib.metadata.version("trustsight")
         except importlib.metadata.PackageNotFoundError:
             version = "0.0.0"
+        # packaging/dev installs a wrapper that sets this.  The released
+        # package does not, so a stable command beside the dev package keeps
+        # reporting the stable version.
+        if os.environ.get("TRUSTSIGHT_DEV_BUILD") == "1":
+            version += "-dev"
         globals()["__version__"] = version
         return version
     if name == "api" or name in _API_NAMES:

@@ -17,6 +17,10 @@
 - **`trustsight-gate` adds a per-package approval step to yay and paru.** The gate runs `trustsight inspect --allow-uninstalled --depth 1` for every target in the package manager's pre-build hook, prints the report, and asks for a yes/no per package. It is a hard gate: a refusal, an analysis failure, or an unavailable terminal aborts the whole transaction, because neither manager can drop one package at that stage and an AUR package may be a pulled dependency. Includes yay `AURPreInstall` and paru `PreBuildCommand` examples, an explicit `TRUSTSIGHT_GATE_DISABLE=1` bypass, and stable exit codes.
 - **The isolated-account and container boundary is documented and exercised.** [Reducing Blast Radius](guides/reducing-blast-radius.md) describes running the CLI under a dedicated unprivileged account or a read-only container, with explicit `XDG` paths, post-update `status`/`db check` and rule-sync steps, and the Docker seccomp detail the parser workers need. CI now runs the account recipe inside the disposable Arch container, including a simulated package reinstall, and exercises the documented read-only container twice against persistent volumes.
 
+### Changed
+
+- **The in-tree packaging is now `trustsight-dev`.** `packaging/dev` builds the checkout as a package that installs beside `trustsight` under `/opt/trustsight-dev`, adds `trustsight-dev` and `trustsight-gate-dev` wrappers, warns in `prepare()` and in the install script, and makes the dev commands print a `-dev` version suffix. The release package, its version and its contract are unchanged.
+
 ### Fixed
 
 - **The yay/paru gate can prompt again, and its report is compact.** Opening `/dev/tty` in `r+` mode builds a seekable buffered stream, which fails on a terminal character device before the prompt is written, so every hook run reported "no terminal for approval" and aborted. The gate now opens the write and read sides separately; a pty regression covers it. The prompt also one-lines a long verdict, hides INFO findings, names the `config sync-rules --update` step when the ruleset is stale, and colours the risk, severity and coverage line when stderr is a terminal.
@@ -674,7 +678,7 @@
 - `inspect`'s installed gate checks the local pacman set instead of trustsight's own database, so a package that is installed but not yet recorded is no longer reported as "not installed".
 - The novelty signals consult the seed before reporting a maintainer or a source URL as "first seen". An established maintainer the seed already knows no longer charges the per-package weight on a package's first review, and a URL the seed knows no longer charges the per-package weight. `sourceforge.net` and `freedesktop.org` join the trusted forge list, so their artifacts no longer fall into the `unknown` bucket.
 - The AUR `pkgdesc` is trimmed to the 80-character packaging guideline. The previous text was 131 characters and wrapped in package browsers.
-- `packaging/local`'s `check()` installs the built wheel into a `--system-site-packages` venv with `python -m installer` instead of `pip install`, so it no longer fetches dependencies from PyPI as the builder and finds the declared `python-pytest`.
+- `packaging/dev`'s `check()` installs the built wheel into a `--system-site-packages` venv with `python -m installer` instead of `pip install`, so it no longer fetches dependencies from PyPI as the builder and finds the declared `python-pytest`.
 - The test suite pins `LC_ALL=C`, so a non-English locale no longer fails `check()` where git localises its messages.
 - `review` and `review --deps` no longer hide a package's findings behind its status line. The `No changes in the AUR since last review` and trivial-update statuses describe the *diff*, but findings such as H029 (name typosquat), H003, `SOURCE_BUCKET` and `NOVELTY` are computed from the head recipe and the database, so an unchanged commit still fires them. They are now rendered after the status on both the Rich and plain renderers, matching the dependency card and `inspect`.
 - `inspect`'s text output names the file and line of a finding (`PKGBUILD line 4`) on both renderers, so locating a finding no longer takes a trip to `--json`. (#18)
@@ -745,7 +749,7 @@ and a database written by 0.16.0 is read unchanged.
 - **Installation no longer clones a moving branch.** The instructions pinned
   nothing, so `git clone .../master` met a PKGBUILD that names one released
   version. They now check out the latest release tag, and offer
-  `packaging/local/PKGBUILD` to build the checkout in place. Reported in #9.
+  `packaging/dev/PKGBUILD` to build the checkout in place. Reported in #9.
 - **`build()` no longer downloads an unpinned build backend.** `python -m
   build --wheel` built in an isolated venv and fetched hatchling from PyPI
   with no version and no hash; it now uses `--no-isolation`, so the declared

@@ -594,7 +594,7 @@ def gate_libgit2_is_not_the_vulnerable_version() -> Gate:
     floors = (
         ("pyproject.toml", "pygit2>=1.20.1"),
         ("packaging/aur/PKGBUILD", "python-pygit2>=1.20.1"),
-        ("packaging/local/PKGBUILD", "python-pygit2>=1.20.1"),
+        ("packaging/dev/PKGBUILD", "python-pygit2>=1.20.1"),
         ("packaging/aur/.SRCINFO", "python-pygit2>=1.20.1"),
     )
     problems: list[str] = []

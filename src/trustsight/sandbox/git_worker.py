@@ -17,8 +17,9 @@ Confinement, all fixed constants from :mod:`trustsight.sandbox.git_bounds`:
 * :mod:`trustsight.sandbox._linux_sandbox` adds the OS sandbox: a user and
   network namespace, Landlock over the filesystem, a seccomp allowlist and no
   capabilities.  The ``read`` role has no network path at all; the ``fetch``
-  role reaches the AUR only through a loopback bridge to a parent CONNECT
-  proxy pinned to ``aur.archlinux.org:443``.
+  role speaks plain HTTP over a loopback bridge to a parent reverse proxy
+  that accepts only two Git smart-HTTP endpoints for the one package and
+  owns TLS to ``aur.archlinux.org``.
 * The remote URL is built here from a validated package name, never received.
 * libgit2 is configured with no user home, strict object creation and strict
   hash verification, and a fixed pack object ceiling.
@@ -36,6 +37,7 @@ import os
 import re
 import resource
 import shutil
+import stat
 import sys
 import tempfile
 import time
@@ -234,6 +236,8 @@ def _harden_libgit2() -> list[str]:
              lambda: pygit2.settings.enable_strict_object_creation(True))
     _attempt("strict hash verification",
              lambda: pygit2.settings.enable_strict_hash_verification(True))
+    _attempt("http expect-continue disabled",
+             lambda: pygit2.settings.enable_http_expect_continue(False))
     return failures
 
 
@@ -277,9 +281,23 @@ def _head_commit_id(repo) -> str:
 
 
 def _last_fetch_time(repo):
+    path = Path(repo.path) / _FETCH_MARKER
     try:
-        return int((Path(repo.path) / _FETCH_MARKER).read_text().strip())
-    except (OSError, ValueError):
+        descriptor = os.open(
+            path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    except OSError:
+        return None
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            return None
+        raw = os.read(descriptor, 64)
+    except OSError:
+        return None
+    finally:
+        os.close(descriptor)
+    try:
+        return int(raw.strip())
+    except ValueError:
         return None
 
 
@@ -289,8 +307,19 @@ def _marker_path(repo):
 
 def _record_fetch(repo):
     stamp = int(time.time())
+    path = _marker_path(repo)
     try:
-        _marker_path(repo).write_text(str(stamp))
+        try:
+            os.unlink(path)
+        except FileNotFoundError:
+            pass
+        descriptor = os.open(
+            path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+            | os.O_CLOEXEC, 0o600)
+        try:
+            os.write(descriptor, str(stamp).encode("ascii"))
+        finally:
+            os.close(descriptor)
     except OSError:
         return None
     return stamp
@@ -381,11 +410,67 @@ def _transfer_aborted(callbacks: "_Callbacks",
         str(exc), callbacks.received_bytes, isinstance(exc, _TransferTooLarge))
 
 
+def _origin_url(pkg: str) -> str:
+    return f"{_AUR_HOST}/{pkg}.git"
+
+
+def _is_loopback_proxy_url(url: str) -> bool:
+    if not isinstance(url, str):
+        return False
+    try:
+        parts = urlsplit(url)
+        port = parts.port
+    except ValueError:
+        return False
+    return (
+        parts.scheme == "http"
+        and parts.hostname == "127.0.0.1"
+        and port is not None
+        and parts.username is None
+        and parts.password is None
+        and parts.path in ("", "/")
+        and not parts.query
+        and not parts.fragment
+    )
+
+
+def _fetch_url(pkg: str) -> str:
+    """The URL libgit2 uses for the network operation.
+
+    The fetch role speaks plain HTTP to the worker's loopback bridge; the
+    parent proxy owns TLS and validates the request.  Direct in-process
+    tests and the read role fall back to the canonical AUR URL, which the
+    existing safety check already covers.
+    """
+    if _ROLE != "fetch":
+        return _origin_url(pkg)
+    base = (_PROXY_URL or "").rstrip("/")
+    if not _is_loopback_proxy_url(base):
+        raise _OpError("fetch proxy is not a loopback HTTP endpoint")
+    return f"{base}/{pkg}.git"
+
+
+def _set_canonical_origin(repo, pkg: str) -> None:
+    """Store the AUR URL even when the clone used the local proxy."""
+    canonical = _origin_url(pkg)
+    if not _is_safe_aur_url(canonical):
+        raise _OpError("refusing a non-HTTPS AUR remote")
+    try:
+        repo.remotes.set_url("origin", canonical)
+    except (KeyError, pygit2.GitError):
+        try:
+            repo.remotes.create("origin", canonical)
+        except (pygit2.GitError, ValueError):
+            pass
+
+
 def _open_fetch(payload: dict) -> dict:
     pkg = payload.get("pkg", "")
     cache_dir = payload.get("cache_dir", "")
     upstream_mtime = payload.get("upstream_mtime")
     offline = payload.get("offline") is True
+    force = payload.get("force") is True
+    previous_head = payload.get("previous_head") or ""
     # The configured timeouts cannot exceed the transfer deadline the
     # callback enforces, so the two cannot silently disagree.
     connect = min(_positive_int(payload.get("connect_timeout"), 10),
@@ -417,8 +502,11 @@ def _open_fetch(payload: dict) -> dict:
             if not _is_safe_aur_url(origin_url):
                 raise _OpError(
                     "cached repository's origin is not the AUR HTTPS endpoint")
-            if upstream_mtime is not None and _is_current(cached, upstream_mtime):
-                return {"path": str(path), "head": _head_commit_id(cached),
+            cached_head = _head_commit_id(cached)
+            if not force and upstream_mtime is not None \
+                    and _is_current(cached, upstream_mtime) \
+                    and (not previous_head or cached_head == previous_head):
+                return {"path": str(path), "head": cached_head,
                         "fetched": False, "marker_time": _last_fetch_time(cached),
                         "received_bytes": 0}
             if offline:
@@ -426,9 +514,14 @@ def _open_fetch(payload: dict) -> dict:
                         "fetched": False, "marker_time": _last_fetch_time(cached),
                         "received_bytes": 0}
             callbacks = _Callbacks(GIT_TRANSFER_DEADLINE_SECONDS)
+            fetch_url = _fetch_url(pkg)
+            if _ROLE != "fetch" and not _is_safe_aur_url(fetch_url):
+                raise _OpError("refusing a non-HTTPS AUR remote")
             try:
-                cached.remotes["origin"].fetch(
-                    callbacks=callbacks, proxy=_PROXY_URL or None)
+                remote = cached.remotes.create_anonymous(fetch_url)
+                remote.fetch(
+                    refspecs=["+refs/heads/*:refs/remotes/origin/*"],
+                    callbacks=callbacks)
                 _advance_to_fetched_head(cached)
             except (pygit2.GitError, _OpError) as exc:
                 raise _transfer_aborted(callbacks, exc) from exc
@@ -442,14 +535,14 @@ def _open_fetch(payload: dict) -> dict:
             f"{pkg!r}: refusing to clone from the AUR"
         )
     os.makedirs(path.parent, exist_ok=True)
-    url = f"{_AUR_HOST}/{pkg}.git"
-    if not _is_safe_aur_url(url):
+    url = _fetch_url(pkg)
+    if _ROLE != "fetch" and not _is_safe_aur_url(url):
         raise _OpError("refusing a non-HTTPS AUR remote")
     callbacks = _Callbacks(GIT_TRANSFER_DEADLINE_SECONDS)
     try:
         repo = pygit2.clone_repository(
-            url, str(path), bare=True, callbacks=callbacks,
-            proxy=_PROXY_URL or None)
+            url, str(path), bare=True, callbacks=callbacks)
+        _set_canonical_origin(repo, pkg)
     except (pygit2.GitError, _OpError) as exc:
         raise _transfer_aborted(callbacks, exc) from exc
     return {"path": str(path), "head": _head_commit_id(repo),
@@ -748,8 +841,9 @@ def _inline_tokenizer() -> None:
     filter forbids process creation.  Spawning the tokenizer child from here
     would therefore fail; importing ``expand_worker`` and calling its
     dispatch directly keeps the same parsing code inside the confinement that
-    is already in force.  The git worker's ``RLIMIT_AS`` bounds the engine's
-    expansion just as the tokenizer worker's own limit does.
+    is already in force.  The engine's own expansion bounds still apply; its
+    address space is bounded by the git worker's larger ``RLIMIT_AS`` rather
+    than the tokenizer worker's tighter one.
     """
     from trustsight import tokenizer
     from trustsight.sandbox import expand_worker
@@ -778,16 +872,24 @@ def _sandbox_or_error(body: bytes) -> dict | None:
     try:
         request = json.loads(body.decode("utf-8"))
         cache_dir = request.get("cache_dir")
+        pkg = request.get("pkg")
     except (UnicodeDecodeError, ValueError, AttributeError):
         cache_dir = None
+        pkg = None
     if not isinstance(cache_dir, str) or not cache_dir:
         return {"error": "missing cache directory before sandbox startup"}
+    if not isinstance(pkg, str) or not pkg:
+        return {"error": "missing package name before sandbox startup"}
     try:
         resolved = str(Path(cache_dir).resolve())
-    except OSError:
-        return {"error": "invalid cache directory before sandbox startup"}
+        repo_path = _contained_repo_path(cache_dir, pkg)
+        if _ROLE == "fetch":
+            os.makedirs(repo_path, exist_ok=True)
+    except (_OpError, OSError):
+        return {"error": "invalid repository path before sandbox startup"}
     failures, proxy_url = _linux_sandbox.apply(
-        _ROLE, resolved, home_dir=_GIT_HOME, proxy_fds=_PROXY_FDS)
+        _ROLE, str(repo_path), home_dir=_GIT_HOME,
+        proxy_fds=_PROXY_FDS)
     core = core_sandbox_failures(failures)
     if core:
         print(

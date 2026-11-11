@@ -4,26 +4,29 @@ The git worker is the boundary between attacker-authored repository data and
 libgit2, which is C this project consumes but does not audit.  Resource limits
 and ``PR_SET_NO_NEW_PRIVS`` bound the *spend* of a defect there, but they do
 not stop it from executing with the operator's own filesystem and network
-access.  This module adds the confinement the old A16 explicitly lacked: a
-separate user and network namespace, Landlock over the filesystem, a seccomp
-allowlist, and no capabilities.
+access.  This module adds the confinement the old A16 explicitly lacked: separate
+user, network and mount namespaces, a minimal pivoted root with read-only
+trusted binds, Landlock over the filesystem, a seccomp allowlist, and no
+capabilities.  The mount namespace is what closes metadata syscalls Landlock
+cannot mediate: host paths do not exist in the worker's root.
 
 The worker runs in one of two roles:
 
 ``fetch``
-    It may reach the AUR, but only through a loopback bridge to a
-    parent-owned CONNECT proxy that accepts exactly ``aur.archlinux.org:443``.
-    The bridge uses inherited, already-connected Unix socketpairs; the
-    seccomp filter permits only ``AF_INET``/``AF_INET6`` socket creation, so
-    code execution in the worker cannot open a new Unix socket to a host
-    service.  Its network namespace has no route off the machine.  The
-    filesystem is restricted to the cache (read/write during fetch) and the
-    interpreter/source trees (read-only).
+    It never originates TLS.  It speaks plain HTTP over a loopback bridge to a
+    parent-owned reverse proxy that accepts only two Git smart-HTTP endpoints
+    for the one package and owns TLS to ``aur.archlinux.org``.  The bridge
+    uses inherited, already-connected Unix socketpairs; the seccomp filter
+    permits only ``AF_INET``/``AF_INET6`` socket creation, so code execution
+    in the worker cannot open a new Unix socket to a host service.  Its
+    network namespace has no route off the machine.  The filesystem is
+    restricted to the one repository being fetched (read/write during fetch)
+    and the interpreter/source trees (read-only).
 
 ``read``
     No proxy descriptors are passed, loopback is left down and the seccomp
     filter has no socket syscalls.  The worker parses the downloaded
-    repository with no network path at all and a read-only cache.
+    repository with no network path at all and a read-only repository.
 
 Every protection is applied before the first request is served.  A protection
 that cannot be applied is returned to the parent and refuses the worker: a
@@ -44,7 +47,15 @@ import socket
 import struct
 import sys
 import threading
+import uuid
 from pathlib import Path
+
+from .git_bounds import (
+    GIT_WORKER_HOME_BYTES,
+    GIT_WORKER_HOME_FILES,
+    GIT_WORKER_ROOT_BYTES,
+    GIT_WORKER_ROOT_FILES,
+)
 
 __all__ = ["apply"]
 
@@ -61,6 +72,19 @@ _SECCOMP_RET_ERRNO = 0x00050000
 
 _CLONE_NEWUSER = 0x10000000
 _CLONE_NEWNET = 0x40000000
+_CLONE_NEWNS = 0x00020000
+
+_MS_NOSUID = 2
+_MS_NODEV = 4
+_MS_BIND = 4096
+_MS_REC = 16384
+_MS_PRIVATE = 1 << 18
+_MNT_DETACH = 2
+_AT_FDCWD = -100
+_AT_RECURSIVE = 0x8000
+_MOUNT_ATTR_RDONLY = 1
+_MOUNT_ATTR_NOSUID = 2
+_MOUNT_ATTR_NODEV = 4
 
 _LANDLOCK_CREATE_RULESET_VERSION = 1
 _LANDLOCK_RULE_PATH_BENEATH = 1
@@ -73,6 +97,7 @@ _NR = {
     "landlock_add_rule": (445, 445),
     "landlock_restrict_self": (446, 446),
     "seccomp": (317, 277),
+    "mount_setattr": (442, 442),
 }
 
 #: audit(4) architecture identifiers.
@@ -95,6 +120,10 @@ _ACCESS_MAKE_SYM = 1 << 12
 _ACCESS_REFER = 1 << 13
 _ACCESS_TRUNCATE = 1 << 14
 _ACCESS_IOCTL_DEV = 1 << 15
+_ACCESS_RESOLVE_UNIX = 1 << 16
+
+_SCOPE_ABSTRACT_UNIX_SOCKET = 1 << 0
+_SCOPE_SIGNAL = 1 << 1
 
 _READ_ONLY = _ACCESS_READ_FILE | _ACCESS_READ_DIR
 _WRITABLE = (
@@ -147,7 +176,7 @@ copy_file_range sendfile splice tee
 #: repository walk has no legitimate socket, and refusing them closes the
 #: path-based Unix-socket escape Landlock does not mediate.
 _NETWORK_SYSCALLS = frozenset("""
-socket bind listen accept accept4 connect getsockname getpeername
+socket accept accept4 connect getsockname getpeername
 sendto recvfrom sendmsg recvmsg shutdown getsockopt setsockopt
 """.split())
 
@@ -172,17 +201,17 @@ _X86_64 = {
     "msync": 26, "sigaltstack": 131, "sigprocmask": 14, "getsid": 124,
     "getpid": 39, "getppid": 110, "gettid": 186, "getuid": 102,
     "geteuid": 107, "getgid": 104, "getegid": 108, "getpgid": 121,
-    "getpgrp": 111, "tgkill": 234, "kill": 62, "tkill": 200, "exit": 60,
+    "getpgrp": 111, "exit": 60,
     "exit_group": 231, "uname": 63, "sysinfo": 99, "prctl": 157,
     "prlimit64": 302, "getrlimit": 97, "setrlimit": 160, "setitimer": 38,
     "getitimer": 36, "timer_create": 222, "timer_settime": 223,
     "timer_gettime": 224, "timer_getoverrun": 225, "timer_delete": 226,
     "timerfd_create": 283, "timerfd_settime": 286, "timerfd_gettime": 287,
-    "capget": 125, "capset": 126, "socket": 41, "socketpair": 53,
-    "bind": 49, "listen": 50, "accept": 43, "accept4": 288, "connect": 42,
+    "capget": 125, "capset": 126, "socket": 41,
+    "accept": 43, "accept4": 288, "connect": 42,
     "getsockname": 51, "getpeername": 52, "sendto": 44, "recvfrom": 45,
     "sendmsg": 46, "recvmsg": 47, "shutdown": 48, "getsockopt": 55,
-    "setsockopt": 54, "clone": 56, "clone3": 435, "fork": 57, "vfork": 58,
+    "setsockopt": 54, "clone": 56, "clone3": 435,
     "wait4": 61, "waitid": 247, "umask": 95, "utimensat": 280,
     "getrusage": 98, "membarrier": 324, "mincore": 27, "fadvise64": 221,
     "sync": 162, "syncfs": 306, "truncate": 76, "close_range": 436,
@@ -195,7 +224,7 @@ _X86_64 = {
     "symlink": 88, "symlinkat": 266, "readlink": 89, "readlinkat": 267,
     "chmod": 90, "fchmod": 91,
     "fchmodat": 268, "chown": 92, "fchown": 93, "fchownat": 260,
-    "ftruncate": 77, "utime": 132, "utimes": 235, "futimesat": 261,
+    "ftruncate": 77,
     "fallocate": 285, "fsync": 74, "fdatasync": 75, "flock": 73,
     "fcntl": 72, "lseek": 8,
 }
@@ -220,19 +249,19 @@ _AARCH64 = {
     "mlockall": 230, "munlockall": 231, "msync": 227, "sigaltstack": 132,
     "sigprocmask": 135, "getsid": 156, "getpid": 172, "getppid": 173,
     "gettid": 178, "getuid": 174, "geteuid": 175, "getgid": 176,
-    "getegid": 177, "getpgid": 155, "getpgrp": 155, "tgkill": 131,
-    "kill": 129, "tkill": 130, "exit": 93, "exit_group": 94, "uname": 160,
+    "getegid": 177, "getpgid": 155, "getpgrp": 155,
+    "exit": 93, "exit_group": 94, "uname": 160,
     "sysinfo": 179, "prctl": 167, "prlimit64": 261, "getrlimit": 163,
     "setrlimit": 164, "setitimer": 103, "getitimer": 102,
     "timer_create": 107, "timer_settime": 110, "timer_gettime": 108,
     "timer_getoverrun": 109, "timer_delete": 111, "timerfd_create": 85,
     "timerfd_settime": 86, "timerfd_gettime": 87, "capget": 90,
-    "capset": 91, "socket": 198, "socketpair": 199, "bind": 200,
-    "listen": 201, "accept": 202, "accept4": 242, "connect": 203,
+    "capset": 91, "socket": 198,
+    "accept": 202, "accept4": 242, "connect": 203,
     "getsockname": 204, "getpeername": 205, "sendto": 206, "recvfrom": 207,
     "sendmsg": 211, "recvmsg": 212, "shutdown": 210, "getsockopt": 209,
-    "setsockopt": 208, "clone": 220, "clone3": 435, "fork": 220,
-    "vfork": 58, "wait4": 260, "waitid": 95, "umask": 166,
+    "setsockopt": 208, "clone": 220, "clone3": 435,
+    "wait4": 260, "waitid": 95, "umask": 166,
     "utimensat": 88, "getrusage": 165, "membarrier": 283, "mincore": 232,
     "fadvise64": 223, "sync": 81, "syncfs": 267, "truncate": 45,
     "close_range": 436, "copy_file_range": 285, "sendfile": 71,
@@ -244,7 +273,7 @@ _AARCH64 = {
     "link": 37, "linkat": 37, "symlink": 36, "symlinkat": 36,
     "readlink": 78, "readlinkat": 78, "chmod": 53, "fchmod": 52,
     "fchmodat": 53, "chown": 54, "fchown": 55, "fchownat": 54,
-    "ftruncate": 46, "utime": 88, "utimes": 88, "futimesat": 88,
+    "ftruncate": 46,
     "fallocate": 47, "fsync": 82, "fdatasync": 83, "flock": 32,
     "fcntl": 25, "lseek": 62,
 }
@@ -297,6 +326,184 @@ def _enter_network_namespace() -> None:
     libc = _libc()
     if libc.unshare(_CLONE_NEWNET) != 0:
         raise OSError(ctypes.get_errno(), "unshare(CLONE_NEWNET) failed")
+
+
+def _mount_libc():
+    libc = _libc()
+    libc.mount.restype = ctypes.c_int
+    libc.mount.argtypes = [
+        ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p,
+        ctypes.c_ulong, ctypes.c_void_p,
+    ]
+    libc.umount2.restype = ctypes.c_int
+    libc.umount2.argtypes = [ctypes.c_char_p, ctypes.c_int]
+    libc.pivot_root.restype = ctypes.c_int
+    libc.pivot_root.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+    return libc
+
+
+def _mount(source, target, filesystem, flags: int, data=None) -> None:
+    libc = _mount_libc()
+    result = libc.mount(
+        None if source is None else os.fsencode(source),
+        os.fsencode(target),
+        None if filesystem is None else os.fsencode(filesystem),
+        flags,
+        None if data is None else os.fsencode(data),
+    )
+    if result != 0:
+        raise OSError(ctypes.get_errno(), f"mount({target}) failed: {os.strerror(ctypes.get_errno())}")
+
+
+def _mkdir_p(root: str, relative: str) -> None:
+    """Create *relative* under *root* using mkdirat, not legacy mkdir.
+
+    A tmpfs mounted in a user namespace returns EOVERFLOW for the legacy
+    ``mkdir`` syscall used by ``os.makedirs``.  The *at* form is the one the
+    kernel path handles correctly, and it is also what the worker's seccomp
+    policy permits.
+    """
+    descriptor = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+    try:
+        for component in relative.split(os.sep):
+            if not component:
+                continue
+            try:
+                os.mkdir(component, 0o755, dir_fd=descriptor)
+            except FileExistsError:
+                pass
+            next_descriptor = os.open(
+                component, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC,
+                dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = next_descriptor
+    finally:
+        os.close(descriptor)
+
+
+def _make_mount_target(root: str, path: str, is_directory: bool) -> str:
+    target = os.path.join(root, path.lstrip("/"))
+    if os.path.lexists(target):
+        return target
+    relative = path.lstrip("/")
+    if is_directory:
+        _mkdir_p(root, relative)
+    else:
+        _mkdir_p(root, os.path.dirname(relative))
+        with open(target, "ab"):
+            pass
+    return target
+
+
+class _MountAttr(ctypes.Structure):
+    _fields_ = [
+        ("attr_set", ctypes.c_uint64),
+        ("attr_clr", ctypes.c_uint64),
+        ("propagation", ctypes.c_uint64),
+        ("userns_fd", ctypes.c_uint64),
+    ]
+
+
+def _mount_readonly(source: str, target: str, is_directory: bool) -> None:
+    _mount(source, target, None, _MS_BIND | _MS_REC, None)
+    libc = _libc()
+    libc.syscall.restype = ctypes.c_long
+    attributes = _MountAttr(
+        _MOUNT_ATTR_RDONLY | _MOUNT_ATTR_NOSUID | _MOUNT_ATTR_NODEV,
+        0, 0, 0)
+    flags = _AT_RECURSIVE if is_directory else 0
+    if libc.syscall(_syscall_number("mount_setattr"), _AT_FDCWD,
+                    os.fsencode(target), flags,
+                    ctypes.byref(attributes),
+                    ctypes.sizeof(attributes)) != 0:
+        raise OSError(ctypes.get_errno(),
+                      f"mount_setattr({target}) failed")
+
+
+def _enter_mount_namespace(repo_path: str, home_dir: str,
+                          repo_writable: bool) -> None:
+    """Build a minimal root so host paths simply do not exist.
+
+    Landlock cannot mediate metadata calls such as ``chmod``, ``chown`` or
+    ``stat``.  Rather than trying to enumerate every dangerous syscall, this
+    hides the host filesystem behind a private mount namespace: the only
+    paths the worker can name are the interpreter, the source tree, the one
+    repository it serves, its private home, and the few files the runtime
+    needs.  A read-only bind mount makes the trusted trees immutable; the
+    repository and home are the only writable trees.
+    """
+    libc = _mount_libc()
+    if libc.unshare(_CLONE_NEWNS) != 0:
+        raise OSError(ctypes.get_errno(), "unshare(CLONE_NEWNS) failed")
+    _mount(None, "/", None, _MS_REC | _MS_PRIVATE, None)
+
+    # Do not use tempfile.mkdtemp here: it probes a candidate directory by
+    # creating a file, and a worker started with RLIMIT_FSIZE=0 would fail
+    # that probe even though mounting the root needs no file write.
+    root = os.path.join("/tmp", "trustsight-root-" + uuid.uuid4().hex)
+    os.mkdir(root, 0o700)
+    _mount("tmpfs", root, "tmpfs", _MS_NOSUID,
+           f"size={GIT_WORKER_ROOT_BYTES},"
+           f"nr_inodes={GIT_WORKER_ROOT_FILES},mode=0755")
+
+    # Arch's /lib, /lib64, /bin and /sbin are symlinks into /usr.  Preserve
+    # them after /usr is bind-mounted so the loader's usual paths still work.
+    aliases = ("/lib", "/lib64", "/bin", "/sbin")
+    for alias in aliases:
+        try:
+            link = os.readlink(alias)
+        except OSError:
+            continue
+        target = os.path.join(root, alias.lstrip("/"))
+        _mkdir_p(root, os.path.dirname(alias.lstrip("/")))
+        if not os.path.lexists(target):
+            os.symlink(link, target)
+
+    bound: list[str] = []
+    for path in sorted(_read_paths(), key=len):
+        if path in aliases:
+            continue
+        try:
+            source = os.path.realpath(path)
+        except OSError:
+            continue
+        if source == "/" or not os.path.exists(source):
+            continue
+        target = os.path.join(root, path.lstrip("/"))
+        if any(target == parent or target.startswith(parent + os.sep)
+               for parent in bound):
+            continue
+        is_directory = os.path.isdir(source)
+        _make_mount_target(root, path, is_directory)
+        _mount_readonly(source, target, is_directory)
+        bound.append(target)
+
+    if repo_path:
+        target = _make_mount_target(root, repo_path, True)
+        _mount(repo_path, target, None, _MS_BIND | _MS_REC, None)
+        if not repo_writable:
+            _mount_readonly(repo_path, target, True)
+
+    if home_dir:
+        target = _make_mount_target(root, home_dir, True)
+        _mount("tmpfs", target, "tmpfs", _MS_NOSUID | _MS_NODEV,
+               f"size={GIT_WORKER_HOME_BYTES},"
+               f"nr_inodes={GIT_WORKER_HOME_FILES},mode=0700")
+        try:
+            os.rmdir(home_dir)
+        except OSError:
+            pass
+
+    old_root = os.path.join(root, "oldroot")
+    _mkdir_p(root, "oldroot")
+    if libc.pivot_root(os.fsencode(root), os.fsencode(old_root)) != 0:
+        raise OSError(ctypes.get_errno(), "pivot_root failed")
+    os.chdir("/")
+    libc.umount2(b"/oldroot", _MNT_DETACH)
+    try:
+        os.rmdir("/oldroot")
+    except OSError:
+        pass
 
 
 def _loopback_up() -> None:
@@ -400,6 +607,10 @@ class _RulesetAttr(ctypes.Structure):
     _fields_ = [
         ("handled_access_fs", ctypes.c_uint64),
         ("handled_access_net", ctypes.c_uint64),
+        ("scoped", ctypes.c_uint64),
+        ("quiet_access_fs", ctypes.c_uint64),
+        ("quiet_access_net", ctypes.c_uint64),
+        ("quiet_scoped", ctypes.c_uint64),
     ]
 
 
@@ -465,11 +676,7 @@ def _read_paths() -> list[str]:
     paths.extend([
         sys.base_prefix, sys.exec_prefix,
         "/usr", "/usr/local", "/lib", "/lib64", "/bin", "/sbin",
-        "/etc/ssl", "/etc/ca-certificates", "/etc/pki", "/etc/ld.so.cache",
-        "/etc/gitconfig", "/etc/gitattributes",
-        "/etc/localtime", "/etc/hosts", "/etc/resolv.conf",
-        "/etc/nsswitch.conf",
-        "/dev/null", "/dev/zero", "/dev/urandom", "/dev/random",
+        "/etc/ld.so.cache", "/etc/localtime",
     ])
     unique: list[str] = []
     for path in paths:
@@ -478,14 +685,14 @@ def _read_paths() -> list[str]:
     return unique
 
 
-def _apply_landlock(libc, cache_dir: str, home_dir: str,
-                    cache_is_writable: bool) -> None:
+def _apply_landlock(libc, repo_path: str, home_dir: str,
+                    repo_is_writable: bool) -> None:
     abi = _landlock_abi(libc)
-    # The parser hardening design requires the strongest kernel floor, not
-    # a best-effort fallback.  ABI 6 (Linux 6.12+) carries the IPC/signal
-    # scoping and the later filesystem rights this policy was reviewed
-    # against; an older kernel refuses the worker instead of quietly
-    # providing a weaker sandbox than the verdict claims.
+    # ABI 6 is the floor this policy was reviewed against: it carries the
+    # scoped signal/abstract-Unix-socket controls used below, alongside the
+    # filesystem rights (REFER, TRUNCATE, IOCTL_DEV) the rules grant.  An
+    # older kernel refuses the worker rather than providing a weaker sandbox
+    # than the verdict claims.
     if abi < 6:
         raise OSError(errno.ENOSYS, "landlock ABI 6 or newer is required")
 
@@ -502,8 +709,11 @@ def _apply_landlock(libc, cache_dir: str, home_dir: str,
         handled |= _ACCESS_TRUNCATE
     if abi >= 5:
         handled |= _ACCESS_IOCTL_DEV
+    if abi >= 9:
+        handled |= _ACCESS_RESOLVE_UNIX
 
-    attributes = _RulesetAttr(handled, 0)
+    scoped = (_SCOPE_ABSTRACT_UNIX_SOCKET | _SCOPE_SIGNAL) if abi >= 6 else 0
+    attributes = _RulesetAttr(handled, 0, scoped, 0, 0, 0)
     ruleset = libc.syscall(_syscall_number("landlock_create_ruleset"),
                            ctypes.byref(attributes),
                            ctypes.sizeof(attributes), 0)
@@ -512,10 +722,10 @@ def _apply_landlock(libc, cache_dir: str, home_dir: str,
     try:
         for path in _read_paths():
             _add_landlock_rule(libc, ruleset, path, _READ_ONLY)
-        if cache_dir:
+        if repo_path:
             _add_landlock_rule(
-                libc, ruleset, cache_dir,
-                _WRITABLE if cache_is_writable else _READ_ONLY)
+                libc, ruleset, repo_path,
+                _WRITABLE if repo_is_writable else _READ_ONLY)
         if home_dir:
             _add_landlock_rule(libc, ruleset, home_dir, _WRITABLE)
         if libc.syscall(_syscall_number("landlock_restrict_self"),
@@ -689,7 +899,7 @@ def _apply_secondary_limits() -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-def apply(role: str, cache_dir: str, home_dir: str = "",
+def apply(role: str, repo_path: str, home_dir: str = "",
           proxy_fds=()) -> tuple[list[str], str]:
     """Confine the calling process; return ``(failures, proxy_url)``.
 
@@ -718,6 +928,16 @@ def apply(role: str, cache_dir: str, home_dir: str = "",
             f"OS sandbox not applied: network namespace unavailable "
             f"({exc.strerror})"], ""
 
+    try:
+        resolved = str(Path(repo_path).resolve()) if repo_path else ""
+        _enter_mount_namespace(
+            resolved, home_dir,
+            repo_writable=role in ("fetch", "store"))
+    except OSError as exc:
+        return failures + [
+            f"OS sandbox not applied: mount namespace unavailable "
+            f"({exc.strerror or exc})"], ""
+
     libc = _libc()
     try:
         if role == "fetch":
@@ -726,8 +946,9 @@ def apply(role: str, cache_dir: str, home_dir: str = "",
             _loopback_up()
             proxy_url = _start_fetch_bridge(proxy_fds)
         _apply_landlock(
-            libc, str(Path(cache_dir).resolve()), home_dir,
-            cache_is_writable=role in ("fetch", "store"),
+            libc, str(Path(repo_path).resolve()) if repo_path else "",
+            home_dir,
+            repo_is_writable=role in ("fetch", "store"),
         )
         _install_seccomp(libc, role)
         _drop_capabilities(libc)

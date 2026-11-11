@@ -108,7 +108,7 @@ class FakeGitProject:
         return git_project.binary_metadata_paths(self._repo, old, new)
 
     def last_fetch_time(self):
-        return git_project.last_fetch_time(self._repo)
+        return 0
 
     def close(self):
         self.closed = True

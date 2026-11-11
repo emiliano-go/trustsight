@@ -22,6 +22,7 @@ import logging
 import os
 import select
 import signal
+import stat
 import threading
 import time
 import weakref
@@ -37,7 +38,10 @@ from .git_bounds import (
     GIT_COMMIT_META_MAX_OIDS,
     GIT_FETCH_TIMEOUT_SECONDS,
     GIT_OP_TIMEOUT_SECONDS,
+    GIT_WORKER_MAX_FILES,
+    GIT_WORKER_MONITOR_SECONDS,
     GIT_WORKER_RETIRE_CPU_SECONDS,
+    GIT_WORKER_WRITE_BYTES,
 )
 
 _log = logging.getLogger(__name__)
@@ -46,6 +50,8 @@ _WORKER_MODULE = "trustsight.sandbox.git_worker"
 
 _live: set["GitSession"] = set()
 _live_lock = threading.Lock()
+_roots_cleaned = False
+_roots_lock = threading.Lock()
 
 
 class GitSandboxUnavailable(RuntimeError):
@@ -98,6 +104,87 @@ def _worker_cpu_seconds(pid: int) -> float:
     return ticks / os.sysconf("SC_CLK_TCK")
 
 
+def _cleanup_stale_sandbox_roots() -> None:
+    """Remove empty root directories left by crashed workers.
+
+    The worker creates a host-visible mount-namespace root under /tmp and
+    pivots into it.  When the worker exits, the mount namespace disappears but
+    the empty host directory remains; clean old ones once per process.
+    """
+    global _roots_cleaned
+    with _roots_lock:
+        if _roots_cleaned:
+            return
+        _roots_cleaned = True
+    cutoff = time.time() - 3600
+    try:
+        entries = os.scandir("/tmp")
+    except OSError:
+        return
+    with entries:
+        for entry in entries:
+            if not entry.name.startswith("trustsight-root-"):
+                continue
+            try:
+                if not entry.is_dir(follow_symlinks=False):
+                    continue
+                if entry.stat(follow_symlinks=False).st_mtime > cutoff:
+                    continue
+                os.rmdir(entry.path)
+            except OSError:
+                pass
+
+
+def _worker_write_bytes(pid: int) -> int:
+    """Kernel-accounted bytes this worker has written to storage."""
+    try:
+        with open(f"/proc/{pid}/io", "rb") as handle:
+            for line in handle:
+                if line.startswith(b"write_bytes:"):
+                    return int(line.split(b":", 1)[1])
+    except (OSError, ValueError, IndexError):
+        return 0
+    return 0
+
+
+def _repo_usage(cache_dir: str, pkg: str | None, cap: int) -> tuple[int, int]:
+    """``(entries, bytes)`` under the package repository, stopping at *cap*."""
+    if not pkg:
+        return 0, 0
+    root = Path(cache_dir) / pkg
+    try:
+        info = os.lstat(root)
+    except OSError:
+        return 0, 0
+    if not stat.S_ISDIR(info.st_mode):
+        return 0, 0
+    stack = [root]
+    entries = 0
+    total = 0
+    while stack and entries <= cap:
+        directory = stack.pop()
+        try:
+            iterator = os.scandir(directory)
+        except OSError:
+            continue
+        with iterator:
+            for entry in iterator:
+                entries += 1
+                if entries > cap:
+                    return entries, total
+                try:
+                    info = entry.stat(follow_symlinks=False)
+                    total += max(info.st_size, info.st_blocks * 512)
+                except OSError:
+                    pass
+                try:
+                    if entry.is_dir(follow_symlinks=False):
+                        stack.append(Path(entry.path))
+                except OSError:
+                    pass
+    return entries, total
+
+
 class GitSession:
     """One isolated worker, exclusive to a package's requests.
 
@@ -114,6 +201,7 @@ class GitSession:
         self._closed = False
         self._role = None
         self._cache_dir = None
+        self._pkg = None
         self._proxy: AurFetchProxy | None = None
         #: Why this worker was retired, so the refusal names the cause.
         self._retired = ""
@@ -122,20 +210,24 @@ class GitSession:
         self.degraded: list = []
         self._degraded_reported = False
         self._stderr_thread = None
+        self._monitor_stop = threading.Event()
+        self._monitor_thread = None
+        _cleanup_stale_sandbox_roots()
         with _live_lock:
             _live.add(self)
 
-    def _start(self, role: str, cache_dir: str) -> None:
+    def _start(self, role: str, cache_dir: str, pkg: str) -> None:
         """Replace any current worker with one confined for *role*."""
         self._teardown_worker()
         self._role = role
         self._cache_dir = cache_dir
+        self._pkg = pkg
         self._retired = ""
         proxy_fds: tuple = ()
         proxy_argument = ""
         if role == "fetch":
             try:
-                self._proxy = AurFetchProxy()
+                self._proxy = AurFetchProxy(pkg)
             except Exception as exc:  # no proxy means no fetch
                 self._proxy = None
                 raise GitSandboxUnavailable(
@@ -147,7 +239,7 @@ class GitSession:
                 _WORKER_MODULE, role=role,
                 extra_argv=(proxy_argument,), pass_fds=proxy_fds,
             )
-        except OSError as exc:
+        except Exception as exc:
             self._close_proxy()
             raise GitSandboxUnavailable(
                 f"git worker could not start: {exc}") from exc
@@ -160,14 +252,23 @@ class GitSession:
             target=self._drain_stderr, daemon=True
         )
         self._stderr_thread.start()
+        self._monitor_stop = threading.Event()
+        self._monitor_thread = threading.Thread(
+            target=self._monitor_resources,
+            args=(self.proc.pid,),
+            daemon=True,
+        )
+        self._monitor_thread.start()
 
-    def _ensure_worker(self, role: str, cache_dir: str) -> None:
+    def _ensure_worker(self, role: str, cache_dir: str, pkg: str) -> None:
         current_role = getattr(self, "_role", None)
         current_cache = getattr(self, "_cache_dir", None)
+        current_pkg = getattr(self, "_pkg", None)
         if self.proc is not None and current_role in (None, role) \
-                and current_cache in (None, cache_dir):
+                and current_cache in (None, cache_dir) \
+                and current_pkg in (None, pkg):
             return
-        self._start(role, cache_dir)
+        self._start(role, cache_dir, pkg)
 
     def _close_proxy(self) -> None:
         proxy = getattr(self, "_proxy", None)
@@ -178,6 +279,10 @@ class GitSession:
     def _teardown_worker(self) -> None:
         proc = self.proc
         self.proc = None
+        monitor = getattr(self, "_monitor_thread", None)
+        stop = getattr(self, "_monitor_stop", None)
+        if stop is not None:
+            stop.set()
         if proc is not None:
             try:
                 os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
@@ -196,7 +301,52 @@ class GitSession:
                         pipe.close()
                     except OSError:
                         pass
+        if monitor is not None and monitor is not threading.current_thread():
+            monitor.join(timeout=1)
+        self._monitor_thread = None
         self._close_proxy()
+
+    def _monitor_resources(self, pid: int) -> None:
+        """Kill a worker that exceeds its disk/inode budget.
+
+        ``RLIMIT_FSIZE`` is per file, so it cannot stop a defect from filling
+        the disk with many files.  The parent owns the repository path and can
+        read the kernel's write accounting; this watchdog is the aggregate
+        bound the worker cannot forge.
+        """
+        interval = GIT_WORKER_MONITOR_SECONDS
+        scan_every = max(1, int(1.0 / interval))
+        iteration = 0
+        while not self._monitor_stop.wait(interval):
+            proc = self.proc
+            if proc is None or proc.poll() is not None:
+                return
+            if _worker_write_bytes(pid) > GIT_WORKER_WRITE_BYTES:
+                self._retire_for_budget(
+                    "git worker exceeded its disk write budget")
+                return
+            if iteration % scan_every == 0:
+                entries, size = _repo_usage(
+                    self._cache_dir, self._pkg, GIT_WORKER_MAX_FILES)
+                if entries > GIT_WORKER_MAX_FILES \
+                        or size > GIT_WORKER_WRITE_BYTES:
+                    self._retire_for_budget(
+                        "git worker exceeded its repository write budget")
+                    return
+            iteration += 1
+
+    def _retire_for_budget(self, reason: str) -> None:
+        self._retired = reason
+        proc = self.proc
+        if proc is None:
+            return
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except (ProcessLookupError, PermissionError, OSError):
+            try:
+                proc.kill()
+            except OSError:
+                pass
 
     def _drain_stderr(self) -> None:
         proc = self.proc
@@ -216,8 +366,11 @@ class GitSession:
         cache_dir = payload.get("cache_dir")
         if not isinstance(cache_dir, str) or not cache_dir:
             raise GitSandboxUnavailable("request has no cache directory")
+        pkg = payload.get("pkg")
+        if not isinstance(pkg, str) or not pkg:
+            raise GitSandboxUnavailable("request has no package name")
         role = "fetch" if op == "open_fetch" else "read"
-        self._ensure_worker(role, cache_dir)
+        self._ensure_worker(role, cache_dir, pkg)
         if self.proc is None or self.proc.stdin is None \
                 or self.proc.stdout is None:
             raise GitSandboxUnavailable(self._retired or "session is not running")
@@ -296,13 +449,23 @@ class GitSession:
 
     def open_fetch(self, pkg: str, cache_dir: str, upstream_mtime,
                    offline: bool, connect_timeout: int,
-                   transfer_timeout: int) -> dict:
+                   transfer_timeout: int, force: bool = False,
+                   previous_head: str = "") -> dict:
         return self.request("open_fetch", {
             "pkg": pkg, "cache_dir": cache_dir,
             "upstream_mtime": upstream_mtime, "offline": offline,
             "connect_timeout": connect_timeout,
-            "transfer_timeout": transfer_timeout,
+            "transfer_timeout": transfer_timeout, "force": force,
+            "previous_head": previous_head,
         }, timeout=GIT_FETCH_TIMEOUT_SECONDS)
+
+    def advertised_head(self) -> str | None:
+        proxy = self._proxy
+        return proxy.advertised_head if proxy is not None else None
+
+    def received_bytes(self) -> int:
+        proxy = self._proxy
+        return proxy.received_bytes if proxy is not None else 0
 
     def head(self, pkg: str, cache_dir: str) -> str:
         return self.request("head", {"pkg": pkg, "cache_dir": cache_dir})["head"]
@@ -388,11 +551,6 @@ _Commit = namedtuple(
     "committer_name committer_email",
 )
 
-#: The fetch marker filename.  Repeated here rather than imported from
-#: ``git_project`` so the parent never pulls libgit2 into the process.
-_FETCH_MARKER = "trustsight-last-fetch"
-
-
 class GitProject:
     """A ``GitSession`` bound to one package: the parent's read handle.
 
@@ -401,17 +559,15 @@ class GitProject:
     request to the isolated child.
     """
 
-    def __init__(self, session: "GitSession", pkg: str, cache_dir: str) -> None:
+    def __init__(self, session: "GitSession", pkg: str, cache_dir: str,
+                 fetch_time: int | None = None) -> None:
         self._session = session
         self.pkg = pkg
         self.cache_dir = cache_dir
+        self._fetch_time = fetch_time
         # Retire the worker when this handle is collected, so a caller that
         # forgets ``close()`` cannot accumulate children over a long walk.
         self._finalizer = weakref.finalize(self, session.close)
-
-    @property
-    def path(self) -> str:
-        return str(Path(self.cache_dir) / self.pkg)
 
     def _commit(self, record: dict) -> "_Commit":
         return _Commit(
@@ -507,10 +663,7 @@ class GitProject:
         return self._session.binary_meta(self.pkg, self.cache_dir, old, new)
 
     def last_fetch_time(self):
-        try:
-            return int((Path(self.path) / _FETCH_MARKER).read_text().strip())
-        except (OSError, ValueError):
-            return None
+        return self._fetch_time
 
     def close(self) -> None:
         self._session.close()
@@ -523,7 +676,15 @@ class GitProject:
 
 
 def run_op(op: str, payload: dict, timeout: float = GIT_OP_TIMEOUT_SECONDS):
-    """One operation in a fresh, exclusive worker (short-lived callers)."""
+    """One operation in a fresh, exclusive worker (short-lived callers).
+
+    ``open_fetch`` is deliberately excluded: a fetch that bypasses
+    ``fetcher.clone_or_fetch`` would skip parent state and advertised-HEAD
+    verification, so it must go through the verified path.
+    """
+    if op == "open_fetch":
+        raise ValueError(
+            "open_fetch must go through fetcher.clone_or_fetch")
     session = GitSession()
     try:
         return session.request(op, payload, timeout=timeout)

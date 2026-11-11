@@ -674,6 +674,29 @@ configuration choice.
 
 ---
 
+### X03a. Module caches and memoization
+
+The small caches are state machines too: a hit and a miss must answer the same,
+and a miss must never be mistaken for "no data".
+
+| Cache | Location | Key and bound |
+|-------|----------|---------------|
+| Tokenizer memo | `_tokenizer_engine/_common.py` | thread-local `_memo`, per-call |
+| Variable table | `_tokenizer_engine/_variables.py` | `lru_cache(maxsize=8)` |
+| Heredoc indices | `analysis/delivery/__init__.py`, `line_lex.py` | `lru_cache` per line tuple |
+| Build resolution | `analysis/buildfetch.py` | `lru_cache(maxsize=4)` |
+| Refusal patterns | `analysis/refusals.py` | `lru_cache(maxsize=256)` |
+| Path trust | `analysis/_path_trust.py` | `lru_cache(maxsize=256)` |
+| TOML/shipped rules | `config/__init__.py` | process-lifetime, explicit refresh |
+| Registry metadata | `registry.py` | process-lifetime |
+| Parsed documents | `doc_cache.py` | content hash, 16 MiB |
+| AUR RPC results | `db/_history.py`, `discovery.py` | DB rows, TTL 60 minutes |
+| History snapshot | `full_aur/temporal_engine.py` | `_HISTORY_CACHE`, explicit `refresh` |
+
+The rule for all of them: the cache key includes every input that can change the
+answer (content hash, parser/state version, configuration), and a stale or
+oversize entry is ignored rather than used.
+
 ## 7. Where to look next
 
 - The state vocabulary is most concentrated in `db/_schema.py`,

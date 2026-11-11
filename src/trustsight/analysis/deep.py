@@ -4,9 +4,11 @@
 
 * deep mode on (config, or an explicit ``--deep``) analyses the full AUR
   dependency closure instead of the default one level; and
-* when the static score reaches ``[deep].threshold`` and the optional L9 build
-  lane is enabled (``[verify].enabled``), the L9 lane runs and its result is
-  reported separately - it never changes the static score.
+* when the static score reaches ``[deep].threshold`` and the optional L9 lane
+  is enabled (``[verify].enabled``), the L9 lane is *requested* and its result
+  is reported separately - it never changes the static score.  TrustSight does
+  not build the package, so the lane inspects only a manifest an external
+  build produced; with no manifest the caller reports ``l9_unavailable``.
 
 Nothing here executes package code.  The L9 lane's own container policy
 applies; when it is unavailable the caller reports ``l9_unavailable``.

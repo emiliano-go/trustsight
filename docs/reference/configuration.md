@@ -319,9 +319,11 @@ must never kill the watch loop. Overridden per run by `--notify`.
 
 Deep analysis mode. When enabled, `trustsight inspect` analyses the full AUR
 dependency closure (as if `--depth -1`), and for a package whose static score
-reaches `threshold` it runs the optional L9 build lane when `[verify] enabled`
+reaches `threshold` it requests the optional L9 lane when `[verify] enabled`
 is true. The L9 result is reported separately and never changes the static
-score; when the lane is unavailable the report says `l9_unavailable`.
+score; because TrustSight does not build the package, the lane reports
+`l9_unavailable` unless a manifest is supplied (see `trustsight verify-build
+--manifest`).
 `--deep` / `--no-deep` override the config for one run.
 
 | Key | Type | Default | Description |
@@ -355,7 +357,7 @@ If none of these settings are explicitly configured, the tool scans foreign pack
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `enabled` | bool | `false` | Enable the optional L9 build lane. When false, `trustsight verify-build` reports `l9_unavailable`. When true, the lane may build the package inside the project's rootless, networkless container and inspect the artifact; L9 findings are never blended into the static score. |
+| `enabled` | bool | `false` | Enable the optional L9 artifact-inspection lane. When false, `trustsight verify-build` reports `l9_unavailable`. When true, the lane inspects a manifest supplied with `--manifest`; TrustSight does not build the package, so with no manifest the result is still `l9_unavailable`. L9 findings are never blended into the static score. |
 
 ### `[layers]`
 

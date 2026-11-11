@@ -315,14 +315,19 @@ def register_commands(app: typer.Typer):
     @app.command("verify-build")
     def verify_build_cmd(
         package: str = typer.Argument(..., help="Package name"),
+        manifest: Optional[str] = typer.Option(
+            None, "--manifest",
+            help="JSON artifact manifest produced by an external build; "
+                 "without it the lane reports l9_unavailable"),
         json_output: bool = typer.Option(False, "--json", help="Output JSON"),
     ):
-        """Run the optional L9 build lane.
+        """Inspect an external build's artifact manifest (the L9 lane).
 
-        Off by default.  With ``[verify] enabled = false`` or no sandbox
-        container, this reports ``l9_unavailable`` - a weight-0 boundary,
-        never a clean or malicious verdict.  The lane never runs package
-        code in the static core.
+        TrustSight does not build the package: the build runs outside the
+        static core and its manifest is the handoff.  Off by default; with
+        ``[verify] enabled = false`` or no manifest this reports
+        ``l9_unavailable`` - a weight-0 boundary, never a clean or malicious
+        verdict.  Nothing is executed here.
         """
         from ...api import TrustSight
         from ...config import ensure_default_configs
@@ -340,7 +345,9 @@ def register_commands(app: typer.Typer):
                 for e in fact.score_breakdown)
         except Exception:
             static_clean = None
-        result = TrustSight().verify_build(package, static_clean=static_clean)
+        loaded = _read_manifest(manifest) if manifest else None
+        result = TrustSight().verify_build(
+            package, manifest=loaded, static_clean=static_clean)
         if json_output:
             typer.echo(json.dumps(result, indent=2))
             return
@@ -353,6 +360,33 @@ def register_commands(app: typer.Typer):
         if result.get("l9_divergence"):
             typer.echo("L9 divergence: the artifact and the static analysis "
                        "disagree; both profiles stand.")
+
+#: A manifest is operator-supplied JSON, not package input, but it is still
+#: read under a cap: the inspection half must not be turned into an unbounded
+#: allocation by a mistaken path.
+_MAX_MANIFEST_BYTES = 8 * 1024 * 1024
+
+
+def _read_manifest(path: str) -> list:
+    """Read an artifact manifest: a JSON array of file records."""
+    from pathlib import Path
+
+    data = Path(path).read_bytes()
+    if len(data) > _MAX_MANIFEST_BYTES:
+        raise typer.BadParameter(
+            f"manifest is {len(data)} bytes; the cap is {_MAX_MANIFEST_BYTES}")
+    try:
+        parsed = json.loads(data)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise typer.BadParameter(f"manifest is not valid JSON: {exc}") from exc
+    if not isinstance(parsed, list):
+        raise typer.BadParameter("a manifest is a JSON array of file records")
+    records = [entry for entry in parsed if isinstance(entry, dict)]
+    if len(records) != len(parsed):
+        raise typer.BadParameter(
+            "every manifest record must be a JSON object")
+    return records
+
 
 def _inspect_history(
     *,

@@ -46,9 +46,11 @@ strict = 10
 
 [deep]
 # Deep analysis. ``inspect`` analyses the full AUR dependency closure when the
-# mode is on, and runs the optional L9 build lane for a package whose static
+# mode is on, and requests the optional L9 lane for a package whose static
 # score reaches ``threshold`` - only when ``[verify] enabled`` is set.  The
-# L9 result is reported separately and never changes the static score.
+# L9 result is reported separately and never changes the static score;
+# TrustSight does not build the package, so the lane inspects only a manifest
+# an external build supplied.
 enabled = false
 threshold = 80
 
@@ -119,12 +121,12 @@ campaign_ttl_observations = 40
 campaign_min_reactivation_observations = 5
 
 [verify]
-# The optional L9 build lane. When enabled, `trustsight
-# verify-build` may build the package inside the project's rootless,
-# networkless container and inspect the artifact (A001-A005).  Off by
-# default, explicit, and never blended into the static score.  When it is
-# disabled or the container is unavailable, the run reports `l9_unavailable`
-# - a weight-0 boundary, never a clean or malicious verdict.
+# The optional L9 artifact-inspection lane.  TrustSight does not
+# build packages: `trustsight verify-build --manifest PATH` inspects a
+# manifest an external build produced (A001-A008).  Off by default, explicit,
+# and never blended into the static score.  When it is disabled or no manifest
+# is supplied, the run reports `l9_unavailable` - a weight-0 boundary, never a
+# clean or malicious verdict.
 enabled = false
 
 [layers]

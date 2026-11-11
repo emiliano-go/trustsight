@@ -67,6 +67,47 @@ _ARCH_SCOPED_ADDED_SUMS = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 
+def _upstream_hash_key(current_text: str) -> str:
+    """The corroboration key: source URL, version, checksum.
+
+    A signed ``upstream_hash`` baseline names exactly this triple, so the key
+    is only usable when the recipe has one source and one checksum for it.
+    A multi-source recipe, a ``SKIP`` checksum or an unparsable recipe yields
+    no key and therefore no corroboration.
+    """
+    if not current_text:
+        return ""
+    from ...recipedoc import parse_recipe
+
+    try:
+        recipe = parse_recipe(current_text)
+    except Exception:  # noqa: BLE001 - an unparsable recipe cannot corroborate
+        return ""
+    sources = recipe.arrays.get("source", ())
+    sums = recipe.arrays.get("sha256sums", ())
+    version = recipe.scalars.get("pkgver", "")
+    if len(sources) != 1 or len(sums) != 1 or not version:
+        return ""
+    url = str(sources[0]).strip().split("::", 1)[-1].strip().strip("'").strip('"')
+    checksum = str(sums[0]).strip().strip("'").strip('"')
+    if not url or checksum in ("", "SKIP"):
+        return ""
+    return f"{url}|{version}|{checksum}"
+
+
+def _upstream_hash_corroborated(current_text: str) -> bool:
+    key = _upstream_hash_key(current_text)
+    if not key:
+        return False
+    try:
+        from ...ioc_baseline import match_upstream_hash
+
+        return bool(match_upstream_hash(key))
+    except Exception:  # noqa: BLE001 - a broken store never raises a finding
+        return False
+
+
+
 def _backup_array_finding(scope_pre, scope_post, add) -> None:
     """C029: a backup=() array gained an entry."""
     if scope_pre is None or scope_post is None:
@@ -421,8 +462,15 @@ def _structural_findings_from_request(request: ScanRequest) -> list[dict]:
                 else "checksum updated with a version bump that also adds "
                      f"{capability}"
             )
+            # A signed upstream_hash baseline that names this exact
+            # url|version|sha256 triple is the vendor's own statement of the
+            # artifact, so the checksum change is corroborated rather than
+            # unexplained: report it, never score it.  An uncorroborated swap
+            # keeps the HIGH weight.
+            corroborated = _upstream_hash_corroborated(current_text)
             add("C001", "Checksum Changed Without Source Change With Stable Version",
-                "HIGH", "integrity", match,
+                "INFO" if corroborated else "HIGH", "integrity", match,
+                weight_override=0 if corroborated else None,
                 line=find_line_in_diff(diff_text, r"""sha256sums\s*=\s*\('"""))
         else:
             add("C002", "Checksum Updated With Version Bump", "INFO", "integrity",

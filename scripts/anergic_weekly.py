@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Weekly calibration data for every anergic rule.
+"""Weekly calibration data for every weight-review rule (anergic or conditional).
 
-For each rule currently held at weight 0 in the anergy ledger this collects:
+For each rule the anergy ledger marks ``anergic`` or ``conditional`` this collects:
 
 * the live trigger count over the window from the watcher feed
   (``/api/triggers`` summary), with the top packages it fired on; and
@@ -137,7 +137,7 @@ def build_report(rule_ids: list[str], feed_base: str, since: int, until: int,
 def render_markdown(report: dict) -> str:
     rows = report.get("rules") or []
     lines = [
-        "Weekly calibration data for rules held at weight 0 (anergic).",
+        "Weekly calibration data for rules under weight review (anergic or conditional).",
         "",
         f"Window: {report['window']['since']} to {report['window']['until']} "
         f"(unix). Feed: {report['feed']}",
@@ -169,6 +169,9 @@ def render_markdown(report: dict) -> str:
         "",
         "- **Keep report-only:** `status: promoted` with `weight: 0` and "
         "`decided_in: <release>`; the rule stays visible and never scores.",
+        "- **Keep the conditional downgrade:** leave `status: conditional` while "
+        "the signed corroboration covers the corpus; it is reviewed again next "
+        "week.",
         "- **Promote with a weight:** `status: promoted` with `weight: N` "
         "(N > 0) and `decided_in: <release>`; scoring uses N.",
         "",
@@ -188,9 +191,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--markdown", type=Path)
     args = parser.parse_args(argv)
 
-    from trustsight.anergy import anergic_ids
+    from trustsight.anergy import review_ids
 
-    rule_ids = anergic_ids()
+    rule_ids = review_ids()
     now = int(datetime.now(UTC).timestamp())
     since = now - max(1, args.days) * 86400
     report = build_report(rule_ids, args.feed_base, since, now, args.timeout)

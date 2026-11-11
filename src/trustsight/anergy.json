@@ -1,5 +1,12 @@
 {
   "rules": {
+    "C001": {
+      "changelog": "c001-upstream-hash-corroboration",
+      "promotion": "keep conditional while the signed baseline covers the corpus; promote the corroboration path into ordinary HIGH reporting or retire the baseline once it stops paying for itself",
+      "signal": "conditional weight 0 only when the signed upstream_hash baseline names the exact (url|version|sha256) triple; an uncorroborated checksum change keeps its HIGH weight",
+      "since": "0.28.0",
+      "status": "conditional"
+    },
     "C033": {
       "changelog": "missing-self-axis",
       "promoted_in": "0.27.0",

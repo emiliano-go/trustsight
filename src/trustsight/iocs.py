@@ -37,9 +37,14 @@ log = logging.getLogger(__name__)
 # naming an upstream repository (``host/owner/repo``) a scanner with
 # legitimate access observed gaining a CI exfil or history-sweep workflow.
 # It is matched against a recipe's declared ``url=``, never fetched.
+#
+# `upstream_hash` is the same federation channel carrying an exact
+# ``url|version|checksum`` triple a scanner observed at the vendor.  C001
+# uses it to corroborate a checksum change that a local source cannot
+# explain; a match downgrades C001 to report-only, it never raises one.
 IOC_TYPES = frozenset({
     "package", "domain", "hash", "file_path", "pkgbuild_pattern",
-    "upstream_repo",
+    "upstream_repo", "upstream_hash",
 })
 
 #: Types the corpus pivot understands.  `file_path` and `pkgbuild_pattern`

@@ -61,3 +61,11 @@ def test_no_anergic_rules_renders_an_empty_report():
     assert report["rules"] == []
     text = anergic_weekly.render_markdown(report)
     assert "(none)" in text
+
+
+def test_conditional_rules_are_reviewed_weekly():
+    from trustsight.anergy import anergic_ids, review_ids
+
+    ids = review_ids()
+    assert "C001" in ids
+    assert "C001" not in anergic_ids()

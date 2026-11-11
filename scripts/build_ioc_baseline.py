@@ -13,7 +13,7 @@ primary-sourced input file; the script only normalises, signs and packages it.
 
 Input file (`--from-file`): a JSON array of entries, each at minimum::
 
-    {"type": "domain|hash|package|upstream_repo", "value": "evil.example",
+    {"type": "domain|hash|package|upstream_repo|upstream_hash", "value": "evil.example",
      "shape": "exfil|history_sweep (upstream_repo only)",
      "confidence": "confirmed", "provenance": "ASA-2026-06",
      "campaign": "some-incident", "expires_at": "2026-12-31T00:00:00Z"}

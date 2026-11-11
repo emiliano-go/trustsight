@@ -68,8 +68,41 @@ adversarial-only rule points at its attack fixtures. The `coverage ledger is
 complete` gate fails when an id is missing, a state is outside the closed set,
 or a non-measured rule has no reason.
 
-`strata.toml` carries `expected_rules` per stratum. After a rebase, audit the
-ledger delta against those names with `calibration._ledger.ledger_audit`.
+The ledger also records `benign_sources`, `benign_strata`, `benign_state`,
+`expected_met`, and the reviewed `disposition` for each id. `benign_state`
+separates a rule that fired on a benign source from one measured only by the
+malicious fixtures.
+
+`strata.toml` carries `expected_rules` per stratum. A rule not yet exercised
+by a benign source must have an entry in
+`tests/fixtures/coverage-dispositions.json`:
+
+- `deferred` with a plan such as `add_benign_shape`, `add_history_or_warm`,
+  `attack_only`, `not_measurable`, or `known_false_positive`;
+- `resolved` once the plan has been applied. A resolved `attack_only` or
+  `not_measurable` plan must not still appear in `strata.toml` as a benign
+  expectation.
+
+The `coverage expectations are met or dispositioned` gate is a ratchet. It
+passes while current gaps are deferred, and fails when an expected rule
+appears without a disposition. When the debt is paid down, remove the
+deferred entries and the gate becomes strict.
+
+Run the coverage gates after building the ledger:
+
+```bash
+uv run python scripts/calibration_gates.py --coverage-only \
+  --coverage-ledger tests/fixtures/coverage-ledger.json
+```
+
+`coverage_ledger.py --check` rebuilds the ledger and fails when the committed
+file is stale. `--check-existing` compares an already-built ledger and is what
+CI uses, so it does not replay the corpus twice.
+
+`ledger_audit` remains the before/after corpus-delta view. It does not check
+whether the current ledger meets expectations; use `unmet_expectations` or the
+coverage gate for that.
+
 A stratum that moves no expected row is either redundant or its predicate is
 wrong; both are findings, not a reason to add a rule-targeted package.
 

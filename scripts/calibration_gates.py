@@ -201,7 +201,32 @@ def main() -> int:
     parser.add_argument("--merge-dir", type=Path,
                         help="Evaluate the shard-*.json artifacts in this "
                              "directory instead of scanning the corpus")
+    parser.add_argument("--coverage-only", action="store_true",
+                        help="Evaluate only the coverage-ledger gates, with no "
+                             "corpus scan. Requires --coverage-ledger or uses "
+                             "the committed ledger.")
+    parser.add_argument("--coverage-ledger", type=Path,
+                        help="The ledger to evaluate in --coverage-only mode")
     args = parser.parse_args()
+
+    if args.coverage_only:
+        ledger_path = args.coverage_ledger or (FIXTURES / "coverage-ledger.json")
+        gates = [
+            gate_coverage_ledger_complete(ledger_path),
+            gate_coverage_expectations(ledger_path),
+        ]
+        width = max(len(g.name) for g in gates)
+        for gate in gates:
+            status = "PASS" if gate.passed else "FAIL"
+            print(f"{status}  {gate.name:<{width}}  measured={gate.measured}")
+            if gate.detail:
+                print(f"        {gate.detail}")
+        if args.json:
+            args.json.write_text(
+                json.dumps([g.as_dict() for g in gates], indent=2, default=str) + "\n")
+        failed = [g for g in gates if not g.passed]
+        print(f"\n{len(gates) - len(failed)}/{len(gates)} coverage gates passed")
+        return 1 if failed else 0
 
     if not args.merge_dir and not args.corpus.exists():
         print(f"Corpus not found: {args.corpus}", file=sys.stderr)
@@ -300,6 +325,7 @@ from scripts.calibration._gates import (
     gate_benign_fire_rates,
     gate_artifact_corpus,
     gate_cluster_rate_below_members,
+    gate_coverage_expectations,
     gate_coverage_ledger_complete,
     gate_d_series_warm,
     gate_h035_position,
@@ -319,7 +345,7 @@ from scripts.calibration._gates import (
     gate_x_series_rate_stability,
 )
 
-__all__ = ['CLASS_C_RULES', 'CLASS_D_RULES', 'CRITICAL_MIN_SCORE', 'Counter', 'FIXTURES', 'Gate', 'MANIFEST_CORPUS', 'MAX_BENIGN_FIRE_RATE', 'MAX_SCORE_SIZE_CORRELATION', 'MAX_X_RATE_DRIFT', 'Path', 'ProcessPoolExecutor', 'ROOT', 'X_RULES', '_GAP_PRIOR_RULES', '_GLOBAL_URL_KEY', '_META_ESCALATORS', '_NOT_RULES', '_S_RULES', '_WORKER_CONFIG', '_WORKER_INCLUDE_LOCATION', '_WORKER_RULES', '_benign_plan', '_benign_row', '_diff_line_count', '_evaluate', '_fixture_failures', '_gap_detected_by_another_rule', '_init_worker', '_is_attack_fixture', '_malicious_row', '_ordered_benign_packages', '_precompile_patterns', '_resolve_jobs', '_scan_corpus_parallel', '_scan_corpus_serial', '_scan_malicious_task', '_scan_package_task', 'argparse', 'config_module', 'contextmanager', 'db_module', 'default_jobs', 'defaultdict', 'ensure_default_configs', 'gate_benign_fire_rates', 'gate_cluster_rate_below_members', 'gate_d_series_warm', 'gate_h035_position', 'gate_homograph_single_script', 'gate_ioc_exact_match', 'gate_known_gaps_unchanged', 'gate_malicious_recall', 'gate_manifest_benign_corpus', 'gate_meta_escalation_below_cap', 'gate_published_figures', 'gate_s_series_fixture_pairs', 'gate_s_series_last_fired_coverage', 'gate_score_not_size', 'gate_separation', 'gate_stateful_rules_stay_out', 'gate_weight_zero_annotations', 'gate_x_series_rate_stability', 'json', 'load_config', 'load_rules', 'main', 'math', 'multiprocessing', 'normalize_url', 'os', 'pearson', 'percentile', 'precompile_patterns', 'precompile_structural_patterns', 'reset_after_fork', 'reset_git_after_fork', 'resolve_generated_patterns', 'merge_shard_rows', 'run_gates', 'run_gates_from_rows', 'scan_corpus', 'scan_corpus_tasks', 'scan_diff', 'scan_malicious', 'scan_shard', 'scored_source_urls', 'shipped_config', 'shutil', 'sys', 'tempfile', 'warm_dependency_corpus']
+__all__ = ['CLASS_C_RULES', 'CLASS_D_RULES', 'CRITICAL_MIN_SCORE', 'Counter', 'FIXTURES', 'Gate', 'MANIFEST_CORPUS', 'MAX_BENIGN_FIRE_RATE', 'MAX_SCORE_SIZE_CORRELATION', 'MAX_X_RATE_DRIFT', 'Path', 'ProcessPoolExecutor', 'ROOT', 'X_RULES', '_GAP_PRIOR_RULES', '_GLOBAL_URL_KEY', '_META_ESCALATORS', '_NOT_RULES', '_S_RULES', '_WORKER_CONFIG', '_WORKER_INCLUDE_LOCATION', '_WORKER_RULES', '_benign_plan', '_benign_row', '_diff_line_count', '_evaluate', '_fixture_failures', '_gap_detected_by_another_rule', '_init_worker', '_is_attack_fixture', '_malicious_row', '_ordered_benign_packages', '_precompile_patterns', '_resolve_jobs', '_scan_corpus_parallel', '_scan_corpus_serial', '_scan_malicious_task', '_scan_package_task', 'argparse', 'config_module', 'contextmanager', 'db_module', 'default_jobs', 'defaultdict', 'ensure_default_configs', 'gate_benign_fire_rates', 'gate_cluster_rate_below_members', 'gate_coverage_expectations', 'gate_d_series_warm', 'gate_h035_position', 'gate_homograph_single_script', 'gate_ioc_exact_match', 'gate_known_gaps_unchanged', 'gate_malicious_recall', 'gate_manifest_benign_corpus', 'gate_meta_escalation_below_cap', 'gate_published_figures', 'gate_s_series_fixture_pairs', 'gate_s_series_last_fired_coverage', 'gate_score_not_size', 'gate_separation', 'gate_stateful_rules_stay_out', 'gate_weight_zero_annotations', 'gate_x_series_rate_stability', 'json', 'load_config', 'load_rules', 'main', 'math', 'multiprocessing', 'normalize_url', 'os', 'pearson', 'percentile', 'precompile_patterns', 'precompile_structural_patterns', 'reset_after_fork', 'reset_git_after_fork', 'resolve_generated_patterns', 'merge_shard_rows', 'run_gates', 'run_gates_from_rows', 'scan_corpus', 'scan_corpus_tasks', 'scan_diff', 'scan_malicious', 'scan_shard', 'scored_source_urls', 'shipped_config', 'shutil', 'sys', 'tempfile', 'warm_dependency_corpus']
 
 
 if __name__ == "__main__":

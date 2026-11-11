@@ -42,12 +42,37 @@ A “no” aborts the whole install or update. This is deliberate:
 If you need a softer workflow for updates, inspect first with
 `trustsight review`, then use yay's exclude menu or `--ignore` explicitly.
 
+## Automatic setup
+
+`trustsight hook` writes the hook, or removes it, without touching the rest of
+the manager's configuration:
+
+```bash
+trustsight hook paru   # [bin] PreBuildCommand in ~/.config/paru/paru.conf
+trustsight hook yay    # AURPreInstall in ~/.config/yay/init.lua
+```
+
+| Flag | Effect |
+|------|--------|
+| `--config PATH` | Write another file instead of the XDG default. |
+| `--print` | Show the snippet and change nothing. |
+| `--dry-run` | Report the action and change nothing. |
+| `--force` | Replace a conflicting setting or a foreign yay `init.lua`, after a timestamped backup. |
+| `--remove` | Remove only the TrustSight block. |
+
+The command is idempotent and preserves comments and other keys in
+`paru.conf`. It refuses a symlink target, a non-regular file and an explicit
+path outside `$HOME`/`$XDG_CONFIG_HOME` unless `--force` is given. A yay
+`init.lua` that TrustSight did not create is never edited silently: the
+command refuses and prints the block, or `--force` backs it up and replaces it.
+
 ## yay
 
-Copy [`packaging/hooks/yay-init.lua`](https://github.com/emiliano-go/trustsight/blob/master/packaging/hooks/yay-init.lua)
-to `~/.config/yay/init.lua` (or `require` it from an existing file).
-The hook calls `trustsight-gate` with the package base, the build directory and
-every target package of that base.
+`trustsight hook yay` writes `~/.config/yay/init.lua`. To merge by hand, the
+source is [`src/trustsight/hooks/yay-init.lua`](https://github.com/emiliano-go/trustsight/blob/master/src/trustsight/hooks/yay-init.lua):
+add it to an existing `init.lua` with `require`/`dofile`. The hook calls
+`trustsight-gate` with the package base, the build directory and every target
+package of that base.
 
 The optional `AURPostDownload` block in the same file re-runs the gate after
 `makepkg --verifysource`; uncomment it when the downloaded source surface is
@@ -55,14 +80,16 @@ the concern.
 
 ## paru
 
-Merge [`packaging/hooks/paru.conf`](https://github.com/emiliano-go/trustsight/blob/master/packaging/hooks/paru.conf)
-into `~/.config/paru/paru.conf`:
+`trustsight hook paru` adds this to `~/.config/paru/paru.conf`:
 
 ```ini
 [bin]
+# trustsight-hook:v1
 PreBuildCommand = trustsight-gate --base "$PKGBASE" --dir "$PWD"
 ```
 
+The source snippet (with the longer explanation) is
+[`src/trustsight/hooks/paru.conf`](https://github.com/emiliano-go/trustsight/blob/master/src/trustsight/hooks/paru.conf).
 paru sets the working directory to the checked-out PKGBUILD, so the gate reads
 the split package names from `.SRCINFO`.
 

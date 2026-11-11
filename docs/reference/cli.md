@@ -245,6 +245,31 @@ yay/paru use [`trustsight-gate`](../guides/gating-yay-paru.md) instead.
 
 ---
 
+## trustsight hook
+
+Install or remove the yay and paru approval hooks that call
+`trustsight-gate`. Idempotent; a backup is written before any replacement.
+
+```
+trustsight hook paru [--config PATH] [--print] [--dry-run] [--force] [--remove]
+trustsight hook yay  [--config PATH] [--print] [--dry-run] [--force] [--remove]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--config PATH` | Target file. Default: `$XDG_CONFIG_HOME/paru/paru.conf` or `$XDG_CONFIG_HOME/yay/init.lua`. |
+| `--print` | Print the hook snippet and change nothing. |
+| `--dry-run` | Report the action and change nothing. |
+| `--force` | Replace a conflicting `PreBuildCommand`, or a yay `init.lua` TrustSight did not create (backup first). |
+| `--remove` | Remove only the TrustSight block. |
+
+`paru` gets `PreBuildCommand` under the `bin` section; `yay` gets an
+`AURPreInstall` handler in `init.lua`. Exit 0 when configured, already
+configured or printed; 2 when refused or unreadable. See
+[Gating yay and paru](../guides/gating-yay-paru.md).
+
+---
+
 ## trustsight history
 
 Show analysis history for a package.

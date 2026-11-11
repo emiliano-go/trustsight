@@ -1,4 +1,5 @@
 -- TrustSight gate for yay.
+-- trustsight-hook:v1
 --
 -- Drop this file at ~/.config/yay/init.lua (or require it from an existing
 -- init.lua).  AURPreInstall runs per package base after yay has cloned and

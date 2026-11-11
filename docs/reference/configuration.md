@@ -300,11 +300,16 @@ webhook = "https://example.invalid/hooks/aur"
 ```
 
 Where `full-aur --watch` pushes new alert clusters. With `webhook` set, a
-cycle that produced new alerts POSTs one JSON document (the cycle counts
-plus the `package`/`rule_id` pairs) to the URL; a quiet cycle sends nothing.
-Any receiver that accepts a JSON POST works, and ntfy shows the document as
-the message text. A dead receiver is logged and swallowed: a notification
-must never kill the watch loop. Overridden per run by `--notify`.
+cycle that produced new alerts POSTs one JSON document to the URL; a quiet
+cycle sends nothing. The document carries counts, package names, rule ids,
+scores, version transitions, maintainer identities, finding reasons and the
+analysed PKGBUILD diff. The diff and finding text are package-controlled
+recipe content, so point this at a destination you trust with that content;
+the separate `trustsight.scans` stream carries no diff or prose. A
+pathologically large cycle sheds the diff first (`diff_truncated`). Any
+receiver that accepts a JSON POST works, and ntfy shows the document as the
+message text. A dead receiver is logged and swallowed: a notification must
+never kill the watch loop. Overridden per run by `--notify`.
 
 ### `[alerts]`
 

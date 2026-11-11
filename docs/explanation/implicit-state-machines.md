@@ -262,12 +262,13 @@ counter that changes what the next run does.
 ### A02. Layer status derivation
 
 - **Files:** `layers.py` (`_layer_status`, `layer_profile`), `reporting.py`.
-- **States per layer:** fired, clear, not-applicable, blinded by a coverage gap,
-  or incomplete because the layer's analysis did not run.
+- **States per layer:** `fired`, `passed`, `not_exercised` (L8 outside a
+  correlation run), `unreadable` (a coverage gap blinded it). The values are
+  derived in `_layer_status`.
 - **Transitions:** derived after the evidence record is assembled; a layer's
   status is a statement about *this run*, not a global property of the rule.
-- **Hazards:** rendering an unread layer as clear. A coverage gap blinds the
-  layer instead.
+- **Hazards:** rendering an unread layer as `passed`. A coverage gap maps to
+  `unreadable` instead.
 
 ### A03. Meta-rule gating
 

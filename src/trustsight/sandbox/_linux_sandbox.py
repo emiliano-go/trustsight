@@ -727,7 +727,7 @@ def apply(role: str, cache_dir: str, home_dir: str = "",
             proxy_url = _start_fetch_bridge(proxy_fds)
         _apply_landlock(
             libc, str(Path(cache_dir).resolve()), home_dir,
-            cache_is_writable=role == "fetch",
+            cache_is_writable=role in ("fetch", "store"),
         )
         _install_seccomp(libc, role)
         _drop_capabilities(libc)

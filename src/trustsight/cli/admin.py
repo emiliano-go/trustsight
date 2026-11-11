@@ -36,11 +36,7 @@ from ..lint import (
     lint_structural_rules,
 )
 from ..safe_text import clean
-from .display import (
-    _print_colored,
-    console,
-    use_rich,
-)
+from .display import _print_colored, emit, use_rich
 
 log = logging.getLogger(__name__)
 
@@ -126,24 +122,11 @@ def _print_property_transitions(
         return
 
     if use_rich():
-        from rich.table import Table
-        from rich.text import Text
+        from ..sandbox.render_client import render
 
-        con = console()
-        table = Table(title=Text(f"Property transitions: {clean(package)}"))
-        table.add_column("Date", style="dim")
-        table.add_column("Property")
-        table.add_column("Old")
-        table.add_column("-> New")
-        for r in rows:
-            old = r.get("old_value")
-            table.add_row(
-                Text((r.get("observed_at") or "")[:10]),
-                Text(clean(r.get("property_key", ""))),
-                Text(clean(old) if old is not None else "(none)"),
-                Text(clean(r.get("new_value") or "")),
-            )
-        con.print(table)
+        emit(render("property_transitions_table", {
+            "package": package, "rows": rows,
+        }))
         return
 
     for r in rows:
@@ -206,30 +189,16 @@ def _register_anergic(admin_app: typer.Typer) -> None:
         from ..registry import REGISTRY
 
         if use_rich():
-            from rich.table import Table
-            from rich.text import Text
+            from ..sandbox.render_client import render
 
-            con = console()
-            table = Table(title="Anergic rules (weight 0 pending signal)")
-            table.add_column("Rule")
-            table.add_column("Status")
-            table.add_column("Signal")
-            table.add_column("Since")
-            table.add_column("Promotion")
-            table.add_column("Weight")
+            payload_rows = []
             for row in rows:
                 rule = REGISTRY.resolve(row["rule_id"])
-                label = f"{row['rule_id']} {rule.name or ''}".strip()
-                table.add_row(
-                    Text(clean(label)),
-                    Text(clean(row["status"])),
-                    Text(clean(row["signal"])),
-                    Text(clean(row["since"])),
-                    Text(clean(row["promotion"])),
-                    Text("-" if row.get("weight") is None
-                         else str(row["weight"])),
-                )
-            con.print(table)
+                payload_rows.append({
+                    **row,
+                    "label": f"{row['rule_id']} {rule.name or ''}".strip(),
+                })
+            emit(render("anergic_table", {"rows": payload_rows}))
             return
 
         for row in rows:
@@ -283,15 +252,22 @@ def _register_seed(app: typer.Typer) -> None:
             if json_output:
                 typer.echo(json.dumps({"status": "already_imported", "observations": already}))
             elif use_rich():
-                console().print(msg)
+                _print_colored(msg)
             else:
                 print(msg)
             return
 
         try:
             if use_rich() and not json_output:
-                with console().status(f"Importing seed from {seed.name}...", spinner="dots"):
+                from ..sandbox import render_client
+
+                render_client.start_progress(
+                    "seed-import", f"Importing seed from {seed.name}...",
+                    kind="spinner", transient=True)
+                try:
                     stats = import_seed(seed)
+                finally:
+                    render_client.stop_progress("seed-import")
             else:
                 if not json_output:
                     print(f"Importing seed from {seed}...")
@@ -310,21 +286,11 @@ def _register_seed(app: typer.Typer) -> None:
             return
 
         if use_rich():
-            from rich.box import SIMPLE_HEAD
-            from rich.table import Table
-            table = Table(title="Novelty seed imported", box=SIMPLE_HEAD)
-            table.add_column("Item", style="dim")
-            table.add_column("Count", justify="right")
-            table.add_row("Source URLs added", f"{stats['urls_added']:,}")
-            table.add_row("Source URLs total", f"{stats['urls_total']:,}")
-            table.add_row("Maintainers", f"{stats['maintainers']:,}")
-            table.add_row("Bootstrap observations", f"{stats['observations']:,}")
-            table.add_row("Effective observations", f"{effective_observation_count():,}")
-            console().print(table)
-            console().print(
-                "[dim]Maturity now reflects a warm database, so Medium verdicts are "
-                "no longer downgraded to INCONCLUSIVE.[/]"
-            )
+            from ..sandbox.render_client import render
+
+            emit(render("seed_imported_table", {
+                "stats": stats, "effective": effective_observation_count(),
+            }))
         else:
             print(f"Imported seed from {seed}")
             print(f"  source URLs added : {stats['urls_added']}")
@@ -395,28 +361,21 @@ def _register_lint_rules(app: typer.Typer) -> None:
             return
 
         if use_rich():
-            from rich.table import Table
-            from rich.text import Text
+            from ..sandbox.render_client import render
 
-            con = console()
-            if not findings:
-                con.print(f"[green]\u2713[/] {total_rules} rules, no issues.")
-            else:
-                table = Table(title=f"Rule Lint: {source}")
-                table.add_column("Rule", style="cyan")
-                table.add_column("Level")
-                table.add_column("Check", style="dim")
-                table.add_column("Message")
-                for f in findings:
-                    style = "red" if f.level == SEVERITY_ERROR else "yellow"
-                    table.add_row(Text(clean(f.rule_id)),
-                                  Text(f.level, style=style),
-                                  Text(clean(f.check)), Text(clean(f.message)))
-                con.print(table)
-                con.print(
-                    f"\n{total_rules} rules checked: "
-                    f"[red]{len(errors)} error(s)[/], [yellow]{len(warnings)} warning(s)[/]"
-                )
+            emit(render("lint_table", {
+                "source": source,
+                "findings": [
+                    {"rule_id": f.rule_id, "level": f.level,
+                     "check": f.check, "message": f.message}
+                    for f in findings
+                ],
+                "total_rules": total_rules,
+                "errors": [f.rule_id for f in errors],
+                "warnings": [f.rule_id for f in warnings],
+                "missing": missing,
+                "outdated": outdated,
+            }))
         else:
             for f in findings:
                 print(f"{f.level.upper():<8} {f.rule_id:<8} {f.check:<20} {f.message}")
@@ -432,7 +391,7 @@ def _register_lint_rules(app: typer.Typer) -> None:
                 f"(additive; your edits are preserved)."
             )
             if use_rich():
-                console().print(f"\n[yellow]{msg}[/]")
+                _print_colored(msg, "yellow")
             else:
                 print(f"\n{msg}")
 
@@ -442,7 +401,7 @@ def _register_lint_rules(app: typer.Typer) -> None:
                 f"These were corrected upstream. Run 'trustsight config sync-rules --update'."
             )
             if use_rich():
-                console().print(f"\n[red]{msg}[/]")
+                _print_colored(msg, "red")
             else:
                 print(f"\n{msg}")
 
@@ -500,37 +459,27 @@ def _register_status(app: typer.Typer) -> None:
             return
 
         if use_rich():
-            from rich.table import Table
-            from rich.text import Text
+            from ..sandbox.render_client import render
 
-            con = console()
-            table = Table(title="TrustSight Status")
-            table.add_column("Metric", style="dim")
-            table.add_column("Value", justify="right")
-            table.add_row("Packages tracked", str(len(all_pkgs)))
-            table.add_row("Total analyses", f"{total_analyses:,}")
-            table.add_row("Effective observations", f"{effective_obs:,}")
-            table.add_row("Seed observations", f"{seed_obs:,}")
-            table.add_row(
-                "Dependency corpus",
-                Text("Loaded", style="green") if deps_loaded else Text("Not loaded", style="yellow"),
-            )
-            table.add_row(
-                "Rule patterns",
-                Text("Up to date", style="green") if not stale_patterns
-                else Text(f"{len(stale_patterns)} stale", style="yellow"),
-            )
-            con.print(table)
-            if not deps_loaded:
-                con.print(_dependency_corpus_note())
-            if stale_patterns or missing:
-                con.print(_stale_rules_note(stale_patterns, missing))
-            if age_drift:
-                con.print(
-                    "[yellow]Your rules.toml is more than one release behind "
+            emit(render("status_table", {
+                "data": {
+                    "packages_tracked": len(all_pkgs),
+                    "total_analyses": total_analyses,
+                    "effective_observations": effective_obs,
+                    "seed_observations": seed_obs,
+                    "dependency_corpus_loaded": deps_loaded,
+                    "stale_rule_patterns": stale_patterns,
+                },
+                "dependency_note": "" if deps_loaded else _dependency_corpus_note(),
+                "rules_note": "" if not (stale_patterns or missing)
+                else _stale_rules_note(stale_patterns, missing),
+                "age_note": (
+                    "Your rules.toml is more than one release behind "
                     "the shipped rule set. Run 'trustsight config sync-rules' "
-                    "to reconcile it.[/]"
-                )
+                    "to reconcile it." if age_drift else ""
+                ),
+            }))
+            if age_drift:
                 set_metadata("ruleset_age_prompted", str(SHIPPED_RULESET_VERSION))
         else:
             print(f"Packages tracked      : {len(all_pkgs)}")

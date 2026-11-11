@@ -5,9 +5,9 @@ import contextlib
 import io
 import re
 import time
-from scripts.gates._core import Gate, HOSTILE, SRC, _ARTIFACT_MODULES, _ARTIFACT_READ_EXEMPT, _BOUNDED_IO_MODULE, _ENDPOINT_HOST, _FORBIDDEN_CALLS, _MIRROR_HOSTS, _MIRROR_MODULES, _NETWORK_CALLS, _NETWORK_MODULES, _PATH_READ_MODULES, _RELEASE_HOSTS, _RELEASE_MODULES, _URL_LITERAL_RE, _call_name, _enclosing_functions, _hostile_fact, _hostile_result, _python_files, _rel, _render_forget_list
+from scripts.gates._core import Gate, HOSTILE, SRC, _ARTIFACT_MODULES, _ARTIFACT_READ_EXEMPT, _BOUNDED_IO_MODULE, _ENDPOINT_HOST, _FORBIDDEN_CALLS, _MIRROR_HOSTS, _MIRROR_MODULES, _NETWORK_CALLS, _NETWORK_MODULES, _PATH_READ_MODULES, _RELEASE_HOSTS, _RELEASE_MODULES, _URL_LITERAL_RE, _call_name, _enclosing_functions, _hostile_fact, _hostile_result, _python_files, _rel, _render_forget_list, _render_list_rows
 
-__all__ = ['gate_artifact_reads_are_bounded', 'gate_dead_tokenizer_child_fails_the_package', 'gate_every_child_process_gets_an_explicit_environment', 'gate_every_live_regex_is_audited', 'gate_every_stream_read_is_bounded', 'gate_expansion_is_bounded', 'gate_freshness_uses_local_marker', 'gate_git_worker_limit_failures_are_reported', 'gate_git_worker_runs_in_an_os_sandbox', 'gate_git_worker_startup_is_isolated', 'gate_network_is_confined', 'gate_network_reads_are_bounded', 'gate_no_interpreter_calls', 'gate_no_path_based_archive_extraction', 'gate_regex_patterns_pass_adversarial_audit', 'gate_sandbox_core_limit_failure_refuses', 'gate_sandbox_responses_are_capped_before_framing', 'gate_single_network_host', 'gate_sql_is_parameterised', 'gate_terminal_output_is_inert', 'gate_tokenizer_module_is_isolated', 'gate_tokenizer_pool_wait_is_bounded', 'gate_tokenizer_request_writes_are_bounded', 'gate_tokenizer_smoke_is_deterministic', 'gate_tokenizer_worker_limit_failures_are_reported', 'gate_tokenizer_worker_startup_is_isolated', 'gate_untrusted_text_is_sanitised_where_it_is_rendered']
+__all__ = ['gate_artifact_reads_are_bounded', 'gate_dead_tokenizer_child_fails_the_package', 'gate_every_child_process_gets_an_explicit_environment', 'gate_every_live_regex_is_audited', 'gate_every_stream_read_is_bounded', 'gate_expansion_is_bounded', 'gate_freshness_uses_local_marker', 'gate_git_worker_limit_failures_are_reported', 'gate_git_worker_runs_in_an_os_sandbox', 'gate_git_worker_startup_is_isolated', 'gate_network_is_confined', 'gate_network_reads_are_bounded', 'gate_no_interpreter_calls', 'gate_no_path_based_archive_extraction', 'gate_regex_patterns_pass_adversarial_audit', 'gate_rich_is_only_in_the_render_worker', 'gate_sandbox_core_limit_failure_refuses', 'gate_sandbox_responses_are_capped_before_framing', 'gate_single_network_host', 'gate_sql_is_parameterised', 'gate_terminal_output_is_inert', 'gate_tokenizer_module_is_isolated', 'gate_tokenizer_pool_wait_is_bounded', 'gate_tokenizer_request_writes_are_bounded', 'gate_tokenizer_smoke_is_deterministic', 'gate_tokenizer_worker_limit_failures_are_reported', 'gate_tokenizer_worker_startup_is_isolated', 'gate_untrusted_text_is_sanitised_where_it_is_rendered']
 
 def gate_no_interpreter_calls() -> Gate:
     """No path turns text into code, and nothing is unpickled."""
@@ -379,6 +379,35 @@ def gate_manifest_parsing_is_sandboxed() -> Gate:
                 problems or "parent -> client -> read-role worker")
 
 
+def gate_sqlite_connection_is_hardened() -> Gate:
+    """A9: SQLite is opened defensively, not with default settings.
+
+    Values are parameterised, but SQLite is still C in the trusted computing
+    base.  Every connection must disable schema corruption and extension
+    loading, cap its inputs, and refuse ATTACH except for the seed importer.
+    """
+    import inspect
+
+    from trustsight.db import _connection
+
+    source = inspect.getsource(_connection._harden_connection)
+    problems: list[str] = []
+    for required in ("SQLITE_DBCONFIG_DEFENSIVE",
+                     "SQLITE_DBCONFIG_TRUSTED_SCHEMA",
+                     "SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION",
+                     "PRAGMA trusted_schema=OFF",
+                     "SQLITE_LIMIT_ATTACHED",
+                     "set_authorizer"):
+        if required not in source:
+            problems.append(f"connection hardening omits {required}")
+    if "_harden_connection(conn, read_only=False, allow_attach=allow_attach)" not in inspect.getsource(_connection._new_connection):
+        problems.append("_new_connection does not harden its connection")
+    if "_harden_connection(conn, read_only=True)" not in inspect.getsource(_connection.get_read_only_connection):
+        problems.append("the read-only connection is not hardened")
+    return Gate("sqlite connections are hardened", not problems,
+                problems or "defensive, trusted_schema=off, limits, authorizer")
+
+
 def gate_terminal_output_is_inert() -> Gate:
     """No renderer lets a hostile package write escapes to the terminal.
 
@@ -550,6 +579,10 @@ def gate_terminal_output_is_inert() -> Gate:
         # prints attacker-influenced text belongs here, not the three that
         # were convenient to construct.
         "forget list": lambda: plain(lambda: _render_forget_list([HOSTILE])),
+        "list table": lambda: rich(lambda: _render_list_rows([{
+            "name": HOSTILE, "version": "1.0", "last_checked": "2026-01-01",
+            "score": 40, "risk": "Medium", "maintainer": HOSTILE,
+        }])),
         "corpus pivot": lambda: rich(lambda: corpus_cli._render_pivot({
             "indicator": HOSTILE, "type": "host", "listed": True,
             "confidence": HOSTILE, "sources": ["corpus"],
@@ -969,8 +1002,11 @@ def gate_git_worker_startup_is_isolated() -> Gate:
     leaked = sorted(k for k in minimal_env() if k.startswith("PYTHON"))
     if leaked:
         problems.append(f"the git worker environment carries PYTHON* vars: {leaked}")
-    if "env=minimal_env()" not in inspect.getsource(_spawn.spawn_isolated):
+    spawn_source = inspect.getsource(_spawn.spawn_isolated)
+    if "minimal_env()" not in spawn_source:
         problems.append("the git worker does not get a minimal environment")
+    if "env.update(" in spawn_source and "minimal_env()" not in spawn_source:
+        problems.append("the git worker environment can bypass minimal_env()")
     return Gate("git worker startup is isolated", not problems,
                 problems or "isolated (-I), minimal env")
 
@@ -1299,3 +1335,47 @@ def gate_dead_tokenizer_child_fails_the_package() -> Gate:
     return Gate("a dead tokenizer child fails the package", not problems,
                 problems or "raises TokenizerUnavailable")
 
+def gate_rich_is_only_in_the_render_worker() -> Gate:
+    """Rich runs only in the render sandbox, and the worker imports no I/O."""
+    allowed = {
+        (SRC / "sandbox" / "render_worker.py").resolve(),
+    }
+    render_dir = (SRC / "render").resolve()
+    rich_calls = {"Console", "Table", "Panel", "Text"}
+    problems: list[str] = []
+    for path in _python_files():
+        resolved = path.resolve()
+        if resolved in allowed or render_dir in resolved.parents:
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name == "rich" or alias.name.startswith("rich."):
+                        problems.append(f"{_rel(path)}:{node.lineno} imports {alias.name}")
+            elif isinstance(node, ast.ImportFrom):
+                module = node.module or ""
+                if module == "rich" or module.startswith("rich."):
+                    problems.append(f"{_rel(path)}:{node.lineno} imports {module}")
+            elif isinstance(node, ast.Call):
+                name = _call_name(node).split(".")[-1]
+                if name in rich_calls:
+                    problems.append(f"{_rel(path)}:{node.lineno} calls {name}()")
+
+    worker = SRC / "sandbox" / "render_worker.py"
+    tree = ast.parse(worker.read_text(encoding="utf-8"))
+    forbidden = ("trustsight.cli", "trustsight.db", "trustsight.fetcher", "socket")
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            names = [alias.name for alias in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            names = [node.module or ""]
+        else:
+            continue
+        for name in names:
+            if any(name == item or name.startswith(item + ".")
+                   for item in forbidden):
+                problems.append(f"render_worker.py imports {name}")
+
+    return Gate("Rich runs only in the render worker", not problems,
+                problems or "no Rich outside render/; worker imports no DB, CLI or network")

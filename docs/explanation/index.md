@@ -172,6 +172,7 @@ The score, evidence breakdown, and verification metadata are rendered into a str
 | [Seed Provenance](seed-provenance.md) | How the novelty seed is built, signed on the release channel, and audited |
 | [Benchmarks and Methodology](benchmarks-and-methodology.md) | Per-class separation, CI gates, reproducible eval |
 | [Sandboxing the Tokenizer](sandboxing-the-tokenizer.md) | Why the tokenizer is the component worth isolating, and the conditions for doing it |
+| [Sandboxing the Parser Stack](sandboxing-the-parsers.md) | Committed manifests are parsed in a read-role Linux sandbox, not the analysis process |
 | [Why Static Analysis](why-static-analysis.md) | SAST by design, customization surface |
 | [Recipe-Targeted User Rules](structural-user-rules.md) | A second rule kind that matches typed recipe structure, its five primitives, and the HIGH cap |
 | [Cross-File Consistency](cross-file-consistency.md) | How the recipe is compared against `.SRCINFO`, the committed tree and shipped hooks |

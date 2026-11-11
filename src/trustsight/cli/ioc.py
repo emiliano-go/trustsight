@@ -17,8 +17,8 @@ from ..config import ensure_default_configs, load_config
 from ..db import init_db
 from .display import (
     _print_colored,
-    console,
     download_progress,
+    emit,
     use_rich,
     use_rich_progress,
 )
@@ -83,30 +83,12 @@ def ioc_sources(
         return
 
     if use_rich():
-        from rich.box import SIMPLE_HEAD
-        from rich.table import Table
-        table = Table(title="IOC baseline sources", box=SIMPLE_HEAD)
-        table.add_column("Kind", style="dim")
-        table.add_column("Name")
-        table.add_column("Status")
-        from rich.text import Text
-        for source in configured:
-            table.add_row("configured", Text(clean(source)),
-                          "enabled" if enabled else "disabled")
-        for source in imported:
-            table.add_row("imported", Text(clean(source)), "")
-        for feed in feeds:
-            table.add_row(
-                "feed",
-                str(feed.get("name", "")),
-                "enabled" if feed.get("enabled", False) else "disabled",
-            )
-        console().print(table)
-        if not configured and not imported:
-            console().print(
-                "[dim]No sources configured; imported baselines are all "
-                "shown unless a configured source restricts them.[/]"
-            )
+        from ..sandbox.render_client import render
+
+        emit(render("ioc_sources_table", {
+            "configured": configured, "imported": imported,
+            "feeds": feeds, "enabled": enabled,
+        }))
     else:
         print(f"IOC baseline stage: {'enabled' if enabled else 'disabled'}")
         print("Configured sources:")
@@ -415,30 +397,19 @@ def ioc_list(
         return
 
     if use_rich():
-        from rich.box import SIMPLE_HEAD
-        from rich.table import Table
-        table = Table(title="IOC baseline entries", box=SIMPLE_HEAD)
-        table.add_column("Type", style="dim")
-        table.add_column("Value")
-        table.add_column("Source")
-        table.add_column("Confidence", style="dim")
-        from rich.text import Text
+        from ..sandbox.render_client import render
+        from ..ioc_baseline import _is_expired
+
+        payload_entries = []
         for e in entries:
-            label = f"{e.type}"
-            value = e.value
-            if e.expires_at:
-                from ..ioc_baseline import _is_expired
-                if _is_expired(e.expires_at):
-                    value += " [EXPIRED]"
-            # Every field here comes from an imported baseline, and IOC
-            # federation means third parties supply them by design. Passed
-            # as bare strings, Rich reads them as markup: a value holding
-            # `[/]` raises MarkupError and aborts the whole table, so one
-            # hostile indicator makes `ioc list` unusable.
-            table.add_row(Text(clean(label)), Text(clean(value)),
-                          Text(clean(e.source)),
-                          Text(clean(e.confidence or "-")))
-        console().print(table)
+            payload_entries.append({
+                "type": e.type,
+                "value": e.value,
+                "source": e.source,
+                "confidence": e.confidence,
+                "expired": bool(e.expires_at and _is_expired(e.expires_at)),
+            })
+        emit(render("ioc_list_table", {"entries": payload_entries}))
     else:
         for e in entries:
             line = f"{e.type:<8} {e.value:<40} {e.source:<20}"

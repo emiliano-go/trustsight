@@ -7,11 +7,9 @@ from ..db import get_all_packages, get_last_analysis, init_db
 from ..safe_text import clean
 from ..scoring import stored_band
 from .display import (
-    band_colour,
     _print_colored,
-    _score_text,
-    console,
     display_version,
+    emit,
     use_rich,
 )
 
@@ -107,38 +105,9 @@ def register_commands(app: typer.Typer):
             return
 
         if use_rich():
-            from rich.table import Table
-            from rich.text import Text
+            from ..sandbox.render_client import render
 
-            con = console()
-            table = Table(title=f"Tracked packages ({len(rows)} total)")
-            table.add_column("Package", style="cyan", no_wrap=True)
-            table.add_column("Version")
-            table.add_column("Maintainer", overflow="ellipsis")
-            table.add_column("Last Checked")
-            table.add_column("Score", justify="right")
-            table.add_column("Risk")
-            for r in rows:
-                score = r["score"]
-                version = r["version"]
-                risk = r["risk"]
-                if score is not None:
-                    score_cell = _score_text(score, risk)
-                else:
-                    score_cell = Text("-", style="dim")
-                if risk == "-" or risk == "Inconclusive":
-                    risk_obj = Text(risk, style="yellow")
-                else:
-                    risk_obj = Text(risk, style=band_colour(risk))
-                table.add_row(
-                    Text(clean(r["name"])),
-                    Text(version),
-                    Text(clean(r["maintainer"])) if r["maintainer"] else "[dim]-[/]",
-                    r["last_checked"][:10] if r["last_checked"] else "[dim]-[/]",
-                    score_cell,
-                    risk_obj,
-                )
-            con.print(table)
+            emit(render("list_table", {"rows": rows}))
         else:
             print(f"{'Package':<20} {'Version':<15} {'Score':<8} {'Risk':<12} Last Checked")
             print("-" * 75)

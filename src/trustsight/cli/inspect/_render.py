@@ -3,22 +3,11 @@
 from ...config import load_config
 from ...contacts import contact_panel, panel_lines
 from ...coverage import GAP_REASONS
-from ...scoring import (
-    DECLARED_CAVEAT,
-    DECLARED_DEFAULT,
-    verdict_label,
-    verdict_level,
-)
-from ...safe_text import clean, safe_markup
-from ...unicode import describe_fatal_codepoints
+from ...scoring import verdict_label
+from ...safe_text import clean
 from ..display import (
     DEPTH_TRUNCATED_NOTE,
-    dependency_cards_rich,
     dependency_lines_plain,
-    RISK_COLORS,
-    _severity_text,
-    _weight_text,
-    console,
     finding_where,
     no_aur_change_note,
     version_transition,
@@ -52,247 +41,43 @@ def _layers_and_boundaries_line(fact) -> str | None:
         parts.append(f"{forbidding} boundary(ies) forbid a clean verdict")
     return "; ".join(parts) or None
 
+def _inspect_payload(fact, *, verbose=False, show_score=False, show_risk=False):
+    from ...contacts import contact_panel, panel_lines
+    from ...schema import fact_to_dict
+    from ...reporting import render_cap
+    from ...review_policy import review_policy
+
+    policy = review_policy()
+    return {
+        "fact": fact_to_dict(fact),
+        "layers_line": _layers_and_boundaries_line(fact) or "",
+        "contact_lines": panel_lines(contact_panel(fact)),
+        "status_text": _status_text(fact),
+        "verbose": verbose,
+        "show_score": show_score,
+        "show_risk": show_risk,
+        "render_cap_value": render_cap(),
+        "policy_threshold": policy.threshold,
+    }
+
+
+def _emit_render(op: str, payload: dict) -> None:
+    import sys
+    from ...sandbox import render_client
+    from .. import display
+
+    text = render_client.render(op, payload)
+    con = display._console
+    stream = getattr(con, "file", None) if con is not None else None
+    target = stream if stream is not None else sys.stdout
+    target.write(text)
+    target.flush()
+
+
 def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
-    from rich.panel import Panel
-    from rich.table import Table
-    from rich.text import Text
+    _emit_render("inspect_panel", _inspect_payload(
+        fact, verbose=verbose, show_score=show_score, show_risk=show_risk))
 
-    con = console()
-    risk = verdict_level(fact)
-    label = verdict_label(fact)
-    border = RISK_COLORS.get(risk, "white") if (show_score or show_risk) else "blue"
-
-    rows: list[tuple[str, object]] = []
-    # The transition carries pkgver values from the recipe, so it is cleaned
-    # like every other package-derived cell: a plain str cell is markup-
-    # parsed by Rich and can carry ESC.
-    rows.append(("Version", Text(clean(version_transition(fact)))))
-
-    # B2: the gap is shown whether or not a band is.  It used to ride the
-    # band label alone, and the default output withholds the band, so
-    # `inspect` with no flags said nothing at all about a partial read -
-    # the one light that must never be suppressible.
-    carried = set(getattr(fact, "carried_coverage_gaps", ()))
-    for gap in fact.coverage_gaps:
-        reason = GAP_REASONS.get(gap, gap)
-        # #19: a gap the previous review already carried says so, instead of
-        # reading as a shortfall this diff introduced.
-        if gap in carried:
-            reason += " (unchanged since the previous review)"
-        rows.append(("Not vetted", f"[yellow]{safe_markup(reason)}[/]"))
-
-    # No first-seen row here: the Status row at the foot of the panel is
-    # unconditional and `_status_text` returns the same sentence, so this
-    # printed it twice.  It also closed its markup with `[]` rather than
-    # `[/]`, which Rich renders literally - the report showed
-    # "First analysis.[] No prior history for this package."
-    if fact.diff_summary.lines_added or fact.diff_summary.lines_removed:
-        rows.append(("Lines", f"[green]+{fact.diff_summary.lines_added}[/] [red]-{fact.diff_summary.lines_removed}[/]"))
-    if fact.maintainer_changed:
-        rows.append(("Maintainer", f"[yellow]{safe_markup(fact.previous_maintainer or '?')} -> {safe_markup(fact.current_maintainer or '?')}[/]"))
-    elif fact.current_maintainer:
-        rows.append(("Maintainer", Text(clean(fact.current_maintainer))))
-    cs = fact.source_changes.checksum_behavior
-    if cs and cs != "unchanged":
-        rows.append(("Checksum", f"[yellow]{safe_markup(cs)}[/]"))
-
-    inside = Table.grid(padding=(0, 2))
-    inside.add_column(style="dim", justify="right", no_wrap=True)
-    inside.add_column()
-    for row_label, row_value in rows:
-        inside.add_row(row_label, row_value)
-
-    if fact.changes:
-        inside.add_row("", "")
-        inside.add_row("[underline]What changed[/]", "")
-        for entry in fact.changes:
-            inside.add_row("", Text("  " + clean(entry)))
-
-    # the boundary of analysis, named. An assignment the
-    # tokenizer refused is "not seen" to every rule, and the reader must
-    # see where that boundary sits rather than only a generic gap.
-    unresolved = list(getattr(fact, "unresolved_assignments", ()) or ())
-    if unresolved:
-        inside.add_row("", "")
-        inside.add_row("[underline]Unresolved constructs[/]", "")
-        for row in unresolved[:5]:
-            where = f" ({clean(row.get('file', ''))})" if row.get("file") else ""
-            inside.add_row("", Text(
-                f"  {clean(row.get('name', ''))}: {clean(row.get('line', ''))}{where}"))
-
-    declared = [e for e in fact.score_breakdown if e.rule_id.startswith("P")
-                and e.rule_id[1:].isdigit()]
-    # B10: the default set is the practices a reader would find surprising
-    # by their *absence*.  Listing every one of them on every package
-    # buries the risk findings, which is the opposite of the point.
-    hidden = 0
-    if not verbose:
-        shown = [e for e in declared if e.rule_id in DECLARED_DEFAULT]
-        hidden = len(declared) - len(shown)
-        declared = shown
-    if declared:
-        inside.add_row("", "")
-        inside.add_row("[underline]Declared verification[/]", "")
-        for entry in declared:
-            prefix = f"PKGBUILD:{entry.line}  " if entry.line is not None else ""
-            inside.add_row("", Text(f"  {prefix}{clean(entry.reason)}"))
-        if hidden:
-            inside.add_row("", Text(
-                f"  {hidden} more declared practice(s); --verbose to list them",
-                style="dim"))
-        inside.add_row("", Text("  " + DECLARED_CAVEAT, style="dim"))
-
-    if fact.diff_summary.file_changes:
-        inside.add_row("", "")
-        inside.add_row("[underline]Files changed[/]", "")
-        for fc in fact.diff_summary.file_changes:
-            status = fc.get("status", "")
-            path = fc.get("path", "")
-            prefix = {"added": "[green]+[/]", "removed": "[red]-[/]", "modified": "[yellow]~[/]"}.get(status, " ")
-            inside.add_row("", f"  {prefix} {safe_markup(path)}")
-
-    if fact.source_changes.added_urls:
-        inside.add_row("", "")
-        inside.add_row("[underline]Source URLs added[/]", "")
-        for url in fact.source_changes.added_urls:
-            bucket = fact.source_buckets.get(url, "unknown")
-            style = "red" if bucket in ("homograph_attack", "unknown") else "dim"
-            inside.add_row("", Text(f"  [{bucket}] ", style=style) + Text(clean(url)))
-
-    if fact.execution_changes.resolved_commands:
-        inside.add_row("", "")
-        inside.add_row("[underline]Resolved commands[/]", "")
-        for cmd in fact.execution_changes.resolved_commands[:20]:
-            inside.add_row("", Text("  " + clean(cmd.strip())))
-        extra = len(fact.execution_changes.resolved_commands) - 20
-        if extra > 0:
-            inside.add_row("", f"  [dim]... {extra} more[/]")
-
-    if fact.execution_changes.resolved_recipe:
-        inside.add_row("", "")
-        inside.add_row("[underline]Resolved recipe values[/]", "")
-        for value in fact.execution_changes.resolved_recipe[:20]:
-            inside.add_row("", Text("  " + clean(value.strip())))
-        extra = len(fact.execution_changes.resolved_recipe) - 20
-        if extra > 0:
-            inside.add_row("", f"  [dim]... {extra} more[/]")
-
-    if fact.score_breakdown:
-        inside.add_row("", "")
-        inside.add_row("[underline]Rules Triggered[/]", "")
-        from ...reporting import render_cap
-
-        _cap = render_cap()
-        _shown = fact.score_breakdown if _cap <= 0 else fact.score_breakdown[:_cap]
-        for entry in _shown:
-            # Declared practices have their own group above; repeating them
-            # here would undo the point of showing a default subset.
-            if entry.rule_id.startswith("P") and entry.rule_id[1:].isdigit():
-                continue
-            rid = entry.rule_id or ""
-            segs = [Text(clean(rid) + " ", style="cyan")]
-            if show_score:
-                segs.append(str(_weight_text(entry.weight)) + " ")
-            if show_risk:
-                segs.append(str(_severity_text(entry.severity)) + " ")
-            # Where the finding is, flag or no flag: naming the rule without
-            # the location sent the reader to --json to find it (#18).
-            where = finding_where(entry.file, entry.line)
-            if where:
-                segs.append(Text(where + "  "))
-            segs.append(Text(clean(entry.reason)))
-            inside.add_row("", Text.assemble(*segs))
-
-        _grouped = len(fact.score_breakdown) - len(_shown)
-        if _grouped > 0:
-            inside.add_row(
-                "", f"  [dim]... and {_grouped} more finding(s) (see --json)[/]")
-
-        if show_risk:
-            for entry in fact.score_breakdown:
-                if entry.severity == "FATAL":
-                    found = describe_fatal_codepoints(entry.reason)
-                    if found:
-                        inside.add_row("", "")
-                        inside.add_row("[red]Deceptive codepoints[/]", "")
-                        for offset, name in found:
-                            inside.add_row("", f"  offset {offset}: [red]{name}[/]")
-
-    if fact.ioc_matches:
-        inside.add_row("", "")
-        inside.add_row("[underline]IOC baseline matches[/]", "")
-        for m in fact.ioc_matches:
-            expired = " [EXPIRED]" if m.expired else ""
-            line = f" line {m.line}" if m.line is not None else ""
-            text = f"  [{clean(m.source)}] {clean(m.type)}={clean(m.value)}{line} ({clean(m.surface)}){expired}"
-            inside.add_row("", Text(text))
-
-    if getattr(fact, "dependencies", None):
-        inside.add_row("", "")
-        inside.add_row("[underline]Dependencies[/]", "")
-        for card in dependency_cards_rich(fact.dependencies, show_score=show_score,
-                                   show_risk=show_risk):
-            inside.add_row("", card)
-        if getattr(fact, "depth_truncated", False):
-            inside.add_row("", Text(DEPTH_TRUNCATED_NOTE, style="yellow"))
-
-    if fact.suppressed_rules:
-        inside.add_row("", "")
-        inside.add_row("[yellow]Suppressed by override[/]", "")
-        for r in fact.suppressed_rules:
-            scope = r.get("override_package") or "ALL packages"
-            corroborated = ("  (indicator corroborated)"
-                            if r.get("indicator_corroborated") else "")
-            inside.add_row("", Text(
-                f"  {clean(r['rule_id'])}  ({clean(scope)})  "
-                f"{clean(r.get('override_reason', ''))}{corroborated}"))
-
-    if getattr(fact, "overrides_expired", None):
-        inside.add_row("", "")
-        inside.add_row("[yellow]Overrides expired[/]", "")
-        for rid in fact.overrides_expired:
-            inside.add_row("", Text(f"  {clean(str(rid))}  no longer suppressing"))
-
-    if getattr(fact, "acknowledged_urls", None):
-        inside.add_row("", "")
-        inside.add_row("[yellow]Acknowledged source URLs[/]", "")
-        for r in fact.acknowledged_urls:
-            inside.add_row("", Text(
-                f"  {clean(r.get('url', ''))}  {clean(r.get('reason', ''))}"))
-
-    if show_score:
-        inside.add_row("", "")
-        total = sum(e.weight for e in fact.score_breakdown) if fact.score_breakdown else 0
-        inside.add_row("[bold]Score[/]", f"{fact.final_score}/100  ({label})")
-        inside.add_row("", f"[dim]sum: {total:+d}, clamped to {fact.final_score}/100[/]")
-    elif show_risk:
-        inside.add_row("", "")
-        inside.add_row("[bold]Risk[/]", Text(clean(label)))
-
-    inside.add_row("", "")
-    inside.add_row("[bold]Status[/]", _status_text(fact))
-    if fact.comparison_base == "parent":
-        inside.add_row(
-            "[bold]Compared[/]",
-            "The parent commit only; no recorded baseline, so earlier "
-            "history was not examined.",
-        )
-
-    con.print()
-    con.print(Panel(inside, title=Text(f"TrustSight Inspect: {clean(fact.package_name)}"), border_style=border))
-    # Printed after the panel rather than as a table row: a long row would
-    # widen the grid's value column past the terminal and push every other
-    # cell off-width.
-    if verbose:
-        layer_line = _layers_and_boundaries_line(fact)
-        if layer_line:
-            con.print("  " + layer_line, style="dim")
-    # The Contact Ledger panel: weight 0, warm-only.  Shown on every run so a
-    # cold replay's standing note is visible rather than silently absent.
-    # Wrapped in Text() so a package-derived value is printed, not parsed as
-    # Rich markup (panel_lines cleans control characters but keeps brackets).
-    for line in panel_lines(contact_panel(fact)):
-        con.print(Text(line), style="dim")
 
 def _status_text(fact) -> str:
     note = no_aur_change_note(fact)
@@ -457,60 +242,11 @@ def _inspect_plain(fact, verbose=False, show_score=False, show_risk=False):
         print(f"  Risk: {verdict_label(fact)}")
 
 def _render_history_panel_rich(row: dict, show_score: bool, show_risk: bool, verbose: bool):
-    """Render one history result as a Rich panel with commit info."""
-    from rich.panel import Panel
-    from rich.table import Table
-    from rich.text import Text
+    _emit_render("inspect_history_panel", {
+        "row": row, "show_score": show_score, "show_risk": show_risk,
+        "verbose": verbose,
+    })
 
-    con = console()
-    risk = row.get("risk", "")
-    label = row.get("risk_label") or risk
-    border = RISK_COLORS.get(risk, "blue") if (show_score or show_risk) else "blue"
-
-    table = Table(show_header=False, box=None, padding=(0, 1))
-    table.add_column(no_wrap=True)
-    table.add_column()
-
-    commit_id = row.get("commit", "")[:8]
-    commit_msg = row.get("commit_message", "")
-    # The AUR commit subject is package-controlled; Rich's Text strips BEL,
-    # BS, VT, FF and CR but not ESC, so it is cleaned like every other field.
-    table.add_row("Commit", Text(clean(f"{commit_id}  {commit_msg}"), style="dim"))
-
-    findings = row.get("findings", [])
-    if row.get("failed"):
-        table.add_row("Status", Text(
-            clean(f"not analysed: {row.get('error', '')}"), style="red"))
-    elif findings:
-        for f in findings:
-            table.add_row("", Text(clean(_finding_line(f))))
-    elif row.get("coverage_gaps"):
-        # An empty finding list on an incomplete run is "nothing was found
-        # in the part that was read", not "nothing is there".
-        table.add_row("Status", Text(
-            "No findings (incomplete: part of the change was not analysed)",
-            style="yellow",
-        ))
-    else:
-        table.add_row("Status", "No findings")
-
-    for gap in row.get("coverage_gaps", []):
-        table.add_row("Not vetted", Text(
-            clean(GAP_REASONS.get(gap, gap)), style="yellow"))
-
-    changes = row.get("changes", [])
-    if changes:
-        table.add_row("Changed", Text(clean(changes[0])))
-        for entry in changes[1:]:
-            table.add_row("", Text(clean(entry)))
-
-    if show_score and not row.get("failed"):
-        table.add_row("Score", f"{row.get('score', 0)}/100 ({label})")
-    elif show_risk and not row.get("failed"):
-        table.add_row("Risk", clean(label))
-
-    panel = Panel(table, title=Text(clean(row.get("package", ""))), border_style=border)
-    con.print(panel)
 
 def _render_history_panel_plain(row: dict, show_score: bool, show_risk: bool):
     """Render one history result as plain text."""

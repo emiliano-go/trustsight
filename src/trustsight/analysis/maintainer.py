@@ -1,6 +1,6 @@
 import re
 
-from ..db import effective_observation_count, is_maintainer_globally_novel
+from ..sandbox.store_client import effective_observation_count, is_maintainer_globally_novel
 from ..findings import stamp
 
 

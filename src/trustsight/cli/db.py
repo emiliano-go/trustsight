@@ -81,7 +81,25 @@ def db_vacuum(
 
     with get_connection() as conn:
         before = get_db_path().stat().st_size
-        conn.execute("VACUUM")
+        # VACUUM rebuilds the file through a temporary database, which the
+        # defensive authorizer sees as ATTACH/DETACH.  This is an explicit
+        # operator maintenance command, so its own connection may suspend
+        # the authorizer for the one statement; the next statement restores
+        # the default deny.
+        conn.set_authorizer(None)
+        previous_limit = None
+        try:
+            import sqlite3 as _sqlite3
+            if hasattr(conn, "setlimit"):
+                previous_limit = conn.setlimit(
+                    _sqlite3.SQLITE_LIMIT_ATTACHED, 1)
+            conn.execute("VACUUM")
+        finally:
+            if previous_limit is not None and hasattr(conn, "setlimit"):
+                conn.setlimit(
+                    _sqlite3.SQLITE_LIMIT_ATTACHED, previous_limit)
+            from ..db._connection import _make_authorizer
+            conn.set_authorizer(_make_authorizer(False))
         after = get_db_path().stat().st_size
 
     if json_output:

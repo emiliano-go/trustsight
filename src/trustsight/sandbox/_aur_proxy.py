@@ -464,6 +464,7 @@ class AurFetchProxy:
         if not os.path.exists(_CA_BUNDLE):
             raise _UpstreamError("explicit CA bundle is unavailable")
         context = ssl.create_default_context(cafile=_CA_BUNDLE)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
         raw = socket.create_connection(
             (_AUR_HOST, _AUR_PORT), timeout=self._timeout)
         try:

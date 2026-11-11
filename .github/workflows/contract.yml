@@ -80,7 +80,11 @@ jobs:
         run: |
           # pytest is an optional `dev` extra in the harness, not a default
           # group, so it must be asked for or `uv run pytest` cannot spawn.
-          uv sync --locked --extra dev
+          # Not `--locked`: the harness lock freezes the `../trustsight`
+          # dependency graph, and this job exists to test the harness against
+          # *this* checkout.  A core dependency change would otherwise fail
+          # here before the consumer ran.  The harness's own CI keeps the lock.
+          uv sync --extra dev
           uv run pytest tests/test_core_contract.py -q
 
       # 4. The harness pin is meant to lag a release, but it must stay an

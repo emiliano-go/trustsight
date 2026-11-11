@@ -86,14 +86,15 @@ jobs:
         # against.
         run: cp ../trustsight-harness/regression/report.json baseline-report.json
 
-      # The harness's committed lock already names this core version as an
-      # editable path dependency, so `--locked` is enough and no resolver
-      # runs here: an unpinned `uv lock` would add a live PyPI resolve to the
-      # job that certifies the security model (see docs/security.md).
+      # The harness lock freezes the `../trustsight` dependency graph, so a
+      # core dependency change invalidates it for this checkout.  Sync without
+      # `--locked`: this job measures the harness against *this* core, and the
+      # harness's own CI keeps its lock checked against its pinned core.  The
+      # resolve is small and the harness still pins its own tools.
       - name: Sync the harness against this checkout
         run: |
           cd ../trustsight-harness
-          uv sync --locked --all-extras
+          uv sync --all-extras
 
       - name: Replay every committed bypass
         # `shell: bash` is not cosmetic: GitHub's explicit bash shell enables

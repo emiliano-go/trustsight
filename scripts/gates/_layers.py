@@ -407,6 +407,39 @@ def gate_manifest_parses_are_bounded_and_refusing() -> Gate:
     if time.monotonic() - start > 2.0:
         hits.append("yaml anchor cycle was not bounded")
 
+    # Merge keys (``<<``) with repeated anchors expand exponentially inside
+    # PyYAML's flatten_mapping, before any post-load walk.  PyYAML 6.0.3 is
+    # the latest release and does not contain the upstream fix, so this is
+    # the regression that matters until a release does.
+    merge_bomb = ["L0: &L0 {k0: v0}"]
+    for level in range(1, 19):
+        previous = level - 1
+        merge_bomb.append(
+            f"L{level}: &L{level} {{<<: [*L{previous}, *L{previous}]}}"
+        )
+    merge_bomb.append("target: {<<: [*L18, *L18]}")
+    start = time.monotonic()
+    try:
+        load_yaml("\n".join(merge_bomb) + "\n")
+    except ManifestSyntaxError:
+        pass
+    if time.monotonic() - start > 2.0:
+        hits.append("yaml merge-key bomb was not bounded")
+
+    start = time.monotonic()
+    try:
+        load_yaml(
+            "base: &base {x: 1}\n"
+            "a: {<<: *base}\n"
+            "b: {<<: *base}\n"
+            "c: {<<: *base}\n"
+            "d: {<<: *base}\n"
+        )
+    except ManifestSyntaxError:
+        pass
+    if time.monotonic() - start > 2.0:
+        hits.append("yaml repeated merge keys were not bounded")
+
     xml_bomb = ('<!DOCTYPE l [<!ENTITY e "x"><!ENTITY e2 "&e;&e;&e;">]><l>&e2;</l>')
     try:
         load_xml(xml_bomb)

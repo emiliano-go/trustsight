@@ -9,9 +9,9 @@ from ..manifest_syntax import (
 from ._common import MAX_MANIFEST_BYTES, ManifestDoc, manifest_format
 from ._formats_d import _text_parser_for
 
-__all__ = ['parse_manifest']
+__all__ = ['parse_manifest_local']
 
-def parse_manifest(path: str, text: str) -> ManifestDoc | None:
+def parse_manifest_local(path: str, text: str) -> ManifestDoc | None:
     """Parse *path*'s committed bytes into a :class:`ManifestDoc`.
 
     Returns None when *path* is not a manifest.  A malformed or oversized

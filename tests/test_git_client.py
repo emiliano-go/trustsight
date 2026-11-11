@@ -195,4 +195,4 @@ def test_a_worker_that_exits_at_startup_is_a_refusal(monkeypatch):
     with pytest.raises(
         git_client.GitSandboxUnavailable, match="exited during startup"
     ):
-        session.request("head", {})
+        session.request("head", {"cache_dir": "/tmp"})

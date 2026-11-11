@@ -301,7 +301,8 @@ def test_a_dependency_card_withholds_the_band_like_everything_else():
     `--risk` changed nothing either way, because the flag was never passed
     down to the card at all.
     """
-    from trustsight.cli.display import dependency_cards_rich, dependency_lines_plain
+    from trustsight.render.display import dependency_cards as dependency_cards_rich
+    from trustsight.cli.display import dependency_lines_plain
 
     dep = [{"name": "libhelper", "depth": 1, "score": 55, "risk": "High",
             "finding_count": 2, "coverage_gaps": []}]

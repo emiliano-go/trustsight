@@ -2,6 +2,7 @@
 
 import difflib
 import hashlib
+import importlib.util
 import logging
 import re
 import time
@@ -9,12 +10,6 @@ from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
-
-try:
-    import rich  # noqa: F401
-    _HAS_RICH = True
-except ImportError:  # pragma: no cover - rich is a dependency, but degrade gracefully
-    _HAS_RICH = False
 
 from ..config import load_config, load_naming
 from ..db import (
@@ -31,6 +26,8 @@ from ..db import (
 )
 from ..safe_text import clean, clean_log
 from ..scoring import risk_level
+
+_HAS_RICH = importlib.util.find_spec("rich") is not None
 
 log = logging.getLogger("trustsight.full_aur.pipeline")
 

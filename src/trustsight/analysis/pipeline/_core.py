@@ -28,7 +28,7 @@ from ...coverage import (
     resolution_coverage,
     stage_failures,
 )
-from ...db import effective_observation_count
+from ...sandbox.store_client import effective_observation_count
 from ...differ import detect_gpg_verification_removed, extract_urls_from_diff, map_diff_lines
 from ...diffdoc import diff_shape_fp
 from ...novelty import build_novelty_context
@@ -547,7 +547,7 @@ def record_observed_identity(change: dict, maintainer: str) -> None:
     both producers (git and corpus), and only when the caller asked for a
     recording run: a review must not warm the ledger (A15).
     """
-    from ...db import record_observed_domain, record_observed_key
+    from ...sandbox.store_client import record_observed_domain, record_observed_key
     from ...maintainer_email import maintainer_domain
 
     pgp = (change or {}).get("pgp_keys", {}) or {}

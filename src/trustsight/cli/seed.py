@@ -22,8 +22,8 @@ from ..db import (
 from ..safe_text import clean
 from .display import (
     _print_colored,
-    console,
     download_progress,
+    emit,
     use_rich,
     use_rich_progress,
 )
@@ -73,21 +73,12 @@ def seed_info(
         return
 
     if use_rich():
-        from rich.box import SIMPLE_HEAD
-        from rich.table import Table
-        table = Table(title="TrustSight seed", box=SIMPLE_HEAD)
-        table.add_column("Key", style="cyan")
-        table.add_column("Value", overflow="fold")
-        table.add_row("Seeded", "Yes" if data["seeded"] else "No")
-        from rich.text import Text
-        table.add_row("Salt", Text(clean(salt or "-")))
-        table.add_row("Hash algorithm", Text(clean(algorithm or "-")))
-        table.add_row("Hashed maintainers", f"{maint_count:,}")
-        table.add_row("Seed observations", f"{data['seed_observations']:,}")
-        table.add_row("Seed version", Text(clean(data["seed_version"] or "-")))
-        table.add_row("Seed hash", Text(clean(data["seed_hash"] or "-")))
-        table.add_row("Seed origin", Text(clean(data["seed_origin"] or "-")))
-        console().print(table)
+        from ..sandbox.render_client import render
+
+        emit(render("seed_info_table", {
+            "data": data, "salt": salt, "algorithm": algorithm,
+            "maint_count": maint_count,
+        }))
     else:
         print(f"Seeded             : {'Yes' if data['seeded'] else 'No'}")
         print(f"Salt               : {clean(salt or '-')}")
@@ -217,23 +208,13 @@ def seed_stats(
         return
 
     if use_rich():
-        from rich.box import SIMPLE_HEAD
-        from rich.table import Table
-        table = Table(title="Hashed maintainer corpus", box=SIMPLE_HEAD)
-        table.add_column("Metric", style="cyan")
-        table.add_column("Value", justify="right")
-        table.add_row("Total maintainers", f"{total:,}")
-        table.add_row("With email hash", f"{with_email:,}")
-        table.add_row("Total package count", f"{int(total_packages):,}")
-        console().print(table)
-        if sources:
-            src_table = Table(title="By source", box=SIMPLE_HEAD)
-            src_table.add_column("Source", style="dim")
-            src_table.add_column("Count", justify="right")
-            for r in sources:
-                from rich.text import Text
-                src_table.add_row(Text(clean(r["source"] or "(none)")), f"{r['n']:,}")
-            console().print(src_table)
+        from ..sandbox.render_client import render
+
+        emit(render("seed_stats_tables", {
+            "total": total, "with_email": with_email,
+            "total_packages": int(total_packages),
+            "sources": [{"source": r["source"], "count": r["n"]} for r in sources],
+        }))
     else:
         print(f"Total maintainers   : {total}")
         print(f"With email hash     : {with_email}")

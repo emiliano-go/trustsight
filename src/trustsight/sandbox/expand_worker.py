@@ -32,8 +32,7 @@ import os
 import resource
 import sys
 
-from trustsight import _tokenizer_engine as engine
-from trustsight.sandbox import protocol
+from trustsight.sandbox import _linux_sandbox, protocol
 from trustsight.sandbox._spawn import core_sandbox_failures
 
 #: Address-space ceiling.  The engine's own bounds are 64 KiB for a line,
@@ -53,10 +52,6 @@ _CLONE_NEWNET = 0x40000000
 
 
 _DEGRADED: list[str] = []
-
-
-class _UnknownOp(Exception):
-    """The request named an operation the worker does not implement."""
 
 
 def _apply_limits() -> list[str]:
@@ -89,7 +84,6 @@ def _apply_limits() -> list[str]:
     no_new_privs = _no_new_privs()
     if not no_new_privs:
         failures.append("PR_SET_NO_NEW_PRIVS not applied: prctl failed")
-    _report_isolation(no_new_privs, _drop_network())
     return failures
 
 
@@ -102,85 +96,11 @@ def _no_new_privs() -> bool:
         return False
 
 
-def _drop_network() -> bool:
-    """Best-effort network-namespace removal; return whether it took effect."""
-    try:
-        libc = ctypes.CDLL(None, use_errno=True)
-        return libc.unshare(_CLONE_NEWNET) == 0
-    except (OSError, AttributeError):
-        return False
-
-
-def _report_isolation(no_new_privs: bool, network_dropped: bool) -> None:
-    """State whether the hardening took effect, on stderr.
-
-    The parent drains this and logs it.  Both are best-effort by design, so
-    a failure is not fatal, but a run that silently lost its network
-    namespace should not look identical to one that kept it.
-    """
-    print(
-        "trustsight-tokenizer-isolation "
-        f"no_new_privs={no_new_privs} network_dropped={network_dropped}",
-        file=sys.stderr,
-        flush=True,
-    )
-
-
 def _dispatch(op: str, payload: object) -> object:
     """Run one engine operation and return a JSON-serialisable result."""
-    if op == "lines":
-        return engine.split_lines(payload)
-    if op == "join":
-        return engine.join_line_continuations(payload)
-    if op == "joined_indexed":
-        return engine._joined_indexed(payload)
-    if op == "resolve_added":
-        return engine.resolve_added_lines(payload)
-    if op == "resolve_removed":
-        return engine.resolve_removed_lines(payload)
-    if op == "indexed":
-        resolved, unresolved, indices = engine.tokenize_and_resolve_indexed(payload)
-        return [resolved, unresolved, indices]
-    if op == "variable_table":
-        variables, arrays = engine._variable_table(payload)
-        return [variables, arrays]
-    if op == "variable_table_spans":
-        variables, arrays, spans = engine._variable_table_with_spans(payload)
-        return [variables, arrays, spans]
-    if op == "clean_lines":
-        return [
-            engine.collapse_traversal(engine.strip_leading_bom(line))
-            for line in payload
-        ]
-    if op == "strip_boms":
-        return [engine.strip_leading_bom(line) for line in payload]
-    if op == "reconstruct_literals":
-        return list(engine.reconstruct_literals(payload))
-    if op == "reconstruct_lines":
-        from ..line_lex import QuoteState
-        from .._tokenizer_engine._quotes import reconstruct_literals_stateful
+    from trustsight.sandbox.tokenizer_ops import dispatch
 
-        state = QuoteState()
-        out = []
-        for line in payload:
-            rebuilt, fully, state, _quoted = reconstruct_literals_stateful(
-                line, state,
-            )
-            out.append([rebuilt, fully])
-        return out
-    if op == "reconstruct_lines_stateful":
-        from ..line_lex import QuoteState
-        from .._tokenizer_engine._quotes import reconstruct_literals_stateful
-
-        state = QuoteState()
-        out = []
-        for line in payload:
-            rebuilt, fully, state, quoted = reconstruct_literals_stateful(
-                line, state,
-            )
-            out.append([rebuilt, fully, quoted])
-        return out
-    raise _UnknownOp(f"unknown op: {op!r}")
+    return dispatch(op, payload)
 
 
 def _handle(body: bytes) -> dict:
@@ -190,9 +110,10 @@ def _handle(body: bytes) -> dict:
         request = json.loads(body.decode("utf-8"))
         result = _dispatch(request.get("op"), request.get("input"))
         return {"result": result}
-    except _UnknownOp as exc:
-        return {"error": str(exc)}
-    except Exception as exc:  # a defect in the engine is a refusal, not a crash
+    except Exception as exc:
+        from trustsight.sandbox.tokenizer_ops import UnknownOp
+        if isinstance(exc, UnknownOp):
+            return {"error": str(exc)}
         return {"error": f"{type(exc).__name__}: {exc}"}
 
 
@@ -217,6 +138,8 @@ def _encode_response(response: dict) -> bytes:
 def main() -> int:
     global _DEGRADED
     failures = _apply_limits()
+    sandbox_failures, _proxy_url = _linux_sandbox.apply("read", "")
+    failures.extend(sandbox_failures)
     core = core_sandbox_failures(failures)
     if core:
         print(

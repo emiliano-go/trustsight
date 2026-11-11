@@ -15,7 +15,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: archlinux:latest@sha256:b1c2fe6e717bfd5673af8fc217e1e1c3ce0dcbb1d53c3414c8425e7ce79fc6d9
+    container:
+      image: archlinux:latest@sha256:b1c2fe6e717bfd5673af8fc217e1e1c3ce0dcbb1d53c3414c8425e7ce79fc6d9
+      options: --privileged
     steps:
       # The container ships no git, so actions/checkout falls back to
       # downloading the source archive, which honours .gitattributes
@@ -52,6 +54,13 @@ jobs:
           useradd -m builder
           echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
           chown -R builder:builder "$GITHUB_WORKSPACE"
+
+      - name: Enable unprivileged user namespaces for the sandboxed suite
+        run: |
+          sysctl -w kernel.unprivileged_userns_clone=1 || true
+          sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          sysctl -w user.max_user_namespaces=28633 || true
+          su builder -c 'unshare -Ur true'
 
       - name: Verify the recorded checksum against the deterministic tarball
         run: |
@@ -139,6 +148,7 @@ jobs:
           fetch-depth: 0
 
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - uses: ./.github/actions/enable-userns
 
       - name: Build and install in a disposable Arch container
         env:

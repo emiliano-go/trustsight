@@ -13,10 +13,6 @@ from ...config import (
     load_rules,
 )
 from ...db import (
-    effective_observation_count,
-    get_last_analysis,
-    get_package,
-    get_package_id,
     insert_analysis,
     record_dependency_names,
     update_package_maintainer,
@@ -24,6 +20,12 @@ from ...db import (
     update_aur_orphan_state,
     update_package_version,
     upsert_package,
+)
+from ...sandbox.store_client import (
+    effective_observation_count,
+    get_last_analysis,
+    get_package,
+    get_package_id,
 )
 from ...diffdoc import parse_diff_lines
 from ...differ import (

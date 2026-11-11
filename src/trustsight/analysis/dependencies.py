@@ -6,10 +6,9 @@ from ..config import (
     load_thresholds,
 )
 from .. import db as _db
-from ..db import (
+from ..sandbox.store_client import (
     dependency_observation_count,
     dependency_table_populated,
-    is_established_package,
     top_dependency_names,
 )
 from ..coverage import note_stage_failure
@@ -55,6 +54,14 @@ def _network_tools(config: dict) -> frozenset:
         return frozenset(tools)
     tools = config.get("tools", {}).get("network_makedepends")
     return frozenset(tools) if tools else frozenset(DEFAULT_NETWORK_TOOLS)
+
+
+def is_established_package(name: str) -> bool:
+    """Official-repo membership first, observation count as the fallback."""
+    official = _db.official_package_names()
+    if official:
+        return name in official
+    return len(name) >= 4 and dependency_observation_count(name) >= 10
 
 
 def _widely_provided_threshold(config: dict) -> int:

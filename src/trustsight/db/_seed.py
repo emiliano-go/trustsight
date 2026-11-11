@@ -487,7 +487,9 @@ def _import_v2_maintainers(conn: sqlite3.Connection, path: Path) -> None:
 
 def _import_sqlite_seed(path: Path, origin: str, digest: str) -> dict:
     """Import a legacy SQLite seed and hash its maintainer counts."""
-    conn = _new_connection(get_db_path())
+    # The legacy importer attaches the verified seed file as ``seed``; this
+    # is the one connection allowed to ATTACH.
+    conn = _new_connection(get_db_path(), allow_attach=True)
     try:
         conn.execute(
             "INSERT OR IGNORE INTO packages (id, name) VALUES (0, '__seed__')"

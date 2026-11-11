@@ -40,10 +40,32 @@ def test_yaml_alias_bomb_stays_bounded():
         lines.append(f"a{i}: &a{i} [*a{i-1}, *a{i-1}, *a{i-1}, *a{i-1}, *a{i-1}]")
     text = "\n".join(lines) + "\n"
     start = time.perf_counter()
-    doc = load_yaml(text)
+    try:
+        doc = load_yaml(text)
+    except ManifestSyntaxError:
+        # An alias budget refusal is as bounded as a bounded walk.
+        assert time.perf_counter() - start < 2.0
+        return
     pairs = list(deep_items(doc))
     assert time.perf_counter() - start < 2.0
     assert pairs  # bounded, not expanded
+
+
+def test_yaml_merge_key_bomb_is_bounded():
+    lines = ["L0: &L0 {k0: v0}"]
+    for level in range(1, 19):
+        lines.append(
+            f"L{level}: &L{level} {{<<: [*L{level - 1}, *L{level - 1}]}}"
+        )
+    lines.append("target: {<<: [*L18, *L18]}")
+    start = time.perf_counter()
+    load_yaml("\n".join(lines) + "\n")
+    assert time.perf_counter() - start < 2.0
+
+
+def test_yaml_duplicate_keys_are_refused():
+    with pytest.raises(ManifestSyntaxError):
+        load_yaml("a: 1\na: 2\n")
 
 
 def test_yaml_unsafe_tag_is_refused():

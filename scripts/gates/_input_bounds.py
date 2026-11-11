@@ -7,7 +7,7 @@ import re
 import time
 from scripts.gates._core import Gate, HOSTILE, SRC, _ARTIFACT_MODULES, _ARTIFACT_READ_EXEMPT, _BOUNDED_IO_MODULE, _ENDPOINT_HOST, _FORBIDDEN_CALLS, _MIRROR_HOSTS, _MIRROR_MODULES, _NETWORK_CALLS, _NETWORK_MODULES, _PATH_READ_MODULES, _RELEASE_HOSTS, _RELEASE_MODULES, _URL_LITERAL_RE, _call_name, _enclosing_functions, _hostile_fact, _hostile_result, _python_files, _rel, _render_forget_list, _render_list_rows
 
-__all__ = ['gate_artifact_reads_are_bounded', 'gate_dead_tokenizer_child_fails_the_package', 'gate_every_child_process_gets_an_explicit_environment', 'gate_every_live_regex_is_audited', 'gate_every_stream_read_is_bounded', 'gate_expansion_is_bounded', 'gate_freshness_uses_local_marker', 'gate_git_worker_limit_failures_are_reported', 'gate_git_worker_runs_in_an_os_sandbox', 'gate_git_worker_startup_is_isolated', 'gate_network_is_confined', 'gate_network_reads_are_bounded', 'gate_no_interpreter_calls', 'gate_no_path_based_archive_extraction', 'gate_regex_patterns_pass_adversarial_audit', 'gate_rich_is_only_in_the_render_worker', 'gate_sandbox_core_limit_failure_refuses', 'gate_sandbox_responses_are_capped_before_framing', 'gate_single_network_host', 'gate_sql_is_parameterised', 'gate_terminal_output_is_inert', 'gate_tokenizer_module_is_isolated', 'gate_tokenizer_pool_wait_is_bounded', 'gate_tokenizer_request_writes_are_bounded', 'gate_tokenizer_smoke_is_deterministic', 'gate_tokenizer_worker_limit_failures_are_reported', 'gate_tokenizer_worker_startup_is_isolated', 'gate_untrusted_text_is_sanitised_where_it_is_rendered']
+__all__ = ['gate_artifact_reads_are_bounded', 'gate_dead_tokenizer_child_fails_the_package', 'gate_every_child_process_gets_an_explicit_environment', 'gate_every_live_regex_is_audited', 'gate_every_stream_read_is_bounded', 'gate_expansion_is_bounded', 'gate_freshness_uses_local_marker', 'gate_git_worker_limit_failures_are_reported', 'gate_git_worker_runs_in_an_os_sandbox', 'gate_fetch_state_is_parent_owned', 'gate_git_worker_startup_is_isolated', 'gate_network_is_confined', 'gate_network_reads_are_bounded', 'gate_no_interpreter_calls', 'gate_no_path_based_archive_extraction', 'gate_regex_patterns_pass_adversarial_audit', 'gate_rich_is_only_in_the_render_worker', 'gate_sandbox_core_limit_failure_refuses', 'gate_sandbox_responses_are_capped_before_framing', 'gate_single_network_host', 'gate_sql_is_parameterised', 'gate_terminal_output_is_inert', 'gate_tokenizer_module_is_isolated', 'gate_tokenizer_pool_wait_is_bounded', 'gate_tokenizer_request_writes_are_bounded', 'gate_tokenizer_smoke_is_deterministic', 'gate_tokenizer_worker_limit_failures_are_reported', 'gate_tokenizer_worker_startup_is_isolated', 'gate_untrusted_text_is_sanitised_where_it_is_rendered']
 
 def gate_no_interpreter_calls() -> Gate:
     """No path turns text into code, and nothing is unpickled."""
@@ -627,12 +627,12 @@ def gate_terminal_output_is_inert() -> Gate:
 def gate_freshness_uses_local_marker() -> Gate:
     """A11: a package-supplied timestamp cannot override a local freshness marker.
 
-    ``_is_current`` in ``sandbox/git_project.py`` must read the local marker
-    (``last_fetch_time``) before consulting the HEAD commit time.
+    ``_is_current`` in ``sandbox/git_worker.py`` must read the local marker
+    (``_last_fetch_time``) before consulting the HEAD commit time.
     The commit-time path is a fallback for clones that predate the marker
     and must only execute when the marker is absent.
     """
-    fetcher = SRC / "sandbox" / "git_project.py"
+    fetcher = SRC / "sandbox" / "git_worker.py"
     tree = ast.parse(fetcher.read_text(encoding="utf-8"))
     problems: list[str] = []
 
@@ -644,13 +644,14 @@ def gate_freshness_uses_local_marker() -> Gate:
             break
     if is_current is None:
         return Gate("freshness uses local marker", False,
-                    "_is_current not found in git_project.py")
+                    "_is_current not found in git_worker.py")
 
     # The function body must reference last_fetch_time.
     has_marker = False
     has_commit_time = False
     for node in ast.walk(is_current):
-        if isinstance(node, ast.Call) and _call_name(node) == "last_fetch_time":
+        if isinstance(node, ast.Call) and _call_name(node) in (
+                "last_fetch_time", "_last_fetch_time"):
             has_marker = True
         if isinstance(node, ast.Attribute) and node.attr == "commit_time":
             has_commit_time = True
@@ -682,7 +683,8 @@ def gate_freshness_uses_local_marker() -> Gate:
                     and isinstance(stmt.targets[0], ast.Name)):
                 call = stmt.value
                 if (isinstance(call, ast.Call)
-                        and _call_name(call) == "last_fetch_time"):
+                        and _call_name(call) in (
+                            "last_fetch_time", "_last_fetch_time")):
                     marker_var = stmt.targets[0].id
                     # Check that the next statement is an If guarding on this var.
                     if i + 1 < len(body) and isinstance(body[i + 1], ast.If):
@@ -702,7 +704,7 @@ def gate_freshness_uses_local_marker() -> Gate:
             )
 
     return Gate("freshness uses local marker", not problems,
-                problems or ["last_fetch_time guards commit_time"])
+                problems or ["_last_fetch_time guards commit_time"])
 
 def gate_expansion_is_bounded() -> Gate:
     """Variable expansion terminates, stays small, and refuses indirection.
@@ -1053,11 +1055,11 @@ def gate_git_worker_limit_failures_are_reported() -> Gate:
                          return_value="/tmp/trustsight-gate-home"), \
             patch.object(git_worker.atexit, "register"):
         hardened = git_worker._harden_libgit2()
-    if len(hardened) != 4:
+    if len(hardened) != 5:
         problems.append(
-            f"expected four reported libgit2 failures, got {len(hardened)}")
+            f"expected five reported libgit2 failures, got {len(hardened)}")
     for name in ("pack object ceiling", "strict object creation",
-                 "strict hash verification"):
+                 "strict hash verification", "http expect-continue"):
         if not any(name in f for f in hardened):
             problems.append(f"a libgit2 setting failure was not named: {name}")
     return Gate("git worker limit failures are reported", not problems,
@@ -1075,7 +1077,8 @@ def gate_git_worker_runs_in_an_os_sandbox() -> Gate:
     """
     import inspect
 
-    from trustsight.sandbox import _linux_sandbox, _spawn, expand_worker, git_worker
+    from trustsight.sandbox import (
+        _aur_proxy, _linux_sandbox, _spawn, git_client, git_worker)
 
     problems: list[str] = []
     if "OS sandbox" not in _spawn.CORE_SANDBOX_FAILURES:
@@ -1090,23 +1093,94 @@ def gate_git_worker_runs_in_an_os_sandbox() -> Gate:
         problems.append("main never invokes the OS sandbox")
     apply_source = inspect.getsource(_linux_sandbox.apply)
     for required in ("_enter_user_namespace", "_enter_network_namespace",
-                     "_apply_landlock", "_install_seccomp",
-                     "_drop_capabilities"):
+                     "_enter_mount_namespace", "_apply_landlock",
+                     "_install_seccomp", "_drop_capabilities"):
         if required not in apply_source:
             problems.append(f"the OS sandbox does not call {required}")
+    mount_source = inspect.getsource(_linux_sandbox._enter_mount_namespace)
+    for required in ("pivot_root", "_mount_readonly", "_mkdir_p"):
+        if required not in mount_source:
+            problems.append(f"the mount sandbox lacks {required}")
+    landlock_source = inspect.getsource(_linux_sandbox._apply_landlock)
+    for required in ("_SCOPE_SIGNAL", "_SCOPE_ABSTRACT_UNIX_SOCKET",
+                     "_ACCESS_RESOLVE_UNIX"):
+        if required not in landlock_source:
+            problems.append(f"the Landlock policy lacks {required}")
+    for table in (_linux_sandbox._X86_64, _linux_sandbox._AARCH64):
+        expected = (set(_linux_sandbox._ALLOWED_SYSCALLS)
+                    | set(_linux_sandbox._NETWORK_SYSCALLS))
+        if set(table) != expected:
+            problems.append("a syscall table disagrees with the allowlist")
+            break
+    client_source = inspect.getsource(git_client)
+    for required in ("_monitor_resources", "GIT_WORKER_WRITE_BYTES",
+                     "_repo_usage", "open_fetch must go through"):
+        if required not in client_source:
+            problems.append(f"the git client lacks {required}")
     proxy_source = inspect.getsource(_linux_sandbox._start_fetch_bridge)
     if "127.0.0.1" not in proxy_source:
         problems.append("the fetch bridge is not loopback-only")
     fetch_source = inspect.getsource(git_worker._open_fetch)
-    if "proxy=_PROXY_URL" not in fetch_source:
+    fetch_url_source = inspect.getsource(git_worker._fetch_url)
+    if "_PROXY_URL" not in fetch_url_source:
         problems.append("the fetch does not go through the loopback proxy")
-    tokenizer_main = inspect.getsource(expand_worker.main)
-    if '_linux_sandbox.apply("read"' not in tokenizer_main:
-        problems.append("the tokenizer worker never applies the OS sandbox")
-    if "core_sandbox_failures(" not in tokenizer_main:
-        problems.append("the tokenizer worker does not refuse a core sandbox failure")
+    if "_fetch_url(" not in fetch_source:
+        problems.append("the fetch does not use the role-aware proxy URL")
+    if "proxy=" in fetch_source:
+        problems.append("the fetch still hands libgit2 a TLS proxy to the AUR")
+    proxy_source = inspect.getsource(_aur_proxy)
+    for required in ("_read_request", "_build_upstream", "_parse_advertisement",
+                     "_read_response_head", "_open_upstream"):
+        if required not in proxy_source:
+            problems.append(f"the fetch proxy lacks {required}")
+    if "_AUR_HOST" not in proxy_source:
+        problems.append("the fetch proxy does not pin the AUR host")
+    if "advertised_oids" not in proxy_source:
+        problems.append("the fetch proxy does not synthesise from the advertisement")
+    if "want {oid}" not in proxy_source:
+        problems.append("the fetch proxy does not build the upload-pack wants")
+    for required in ("GIT_PROXY_HEADER_SECONDS", "GIT_PROXY_BODY_SECONDS",
+                     "_MAX_GETS", "_MAX_POSTS", "_read_response_head"):
+        if required not in proxy_source:
+            problems.append(f"the fetch proxy lacks bound {required}")
     return Gate("git worker runs in an OS sandbox", not problems,
                 problems or "userns, netns, Landlock, seccomp, no caps")
+
+
+def gate_fetch_state_is_parent_owned() -> Gate:
+    """A16: freshness and HEAD verification live outside the worker.
+
+    The worker can write inside its repository, so the parent must not follow
+    a marker from there, and a worker-reported HEAD must be checked against
+    the advertisement and the actual on-disk repository.  State that survives
+    that check is parent-created, symlink-safe and atomic.
+    """
+    import inspect
+
+    from trustsight.sandbox import fetch_state, git_client, git_worker
+
+    problems: list[str] = []
+    state_source = inspect.getsource(fetch_state)
+    for required in ("O_NOFOLLOW", "O_NONBLOCK", "os.replace",
+                     "if not state.verified"):
+        if required not in state_source:
+            problems.append(f"fetch state lacks {required}")
+    project_source = inspect.getsource(git_client.GitProject.last_fetch_time)
+    if "read_text" in project_source or "_FETCH_MARKER" in project_source:
+        problems.append("GitProject still reads a worker-controlled marker")
+    worker_source = inspect.getsource(git_worker._last_fetch_time)
+    for required in ("O_NOFOLLOW", "O_NONBLOCK"):
+        if required not in worker_source:
+            problems.append(f"worker marker read lacks {required}")
+    from trustsight import fetcher
+    fetch_source = inspect.getsource(fetcher.clone_or_fetch)
+    for required in ("fetch_state.load", "advertised_head", "session.head",
+                     "fetch_state.store", "previous.upstream_mtime",
+                     "proxy_received", "force and not fetched"):
+        if required not in fetch_source:
+            problems.append(f"clone_or_fetch lacks {required}")
+    return Gate("fetch state is parent-owned", not problems,
+                problems or "state outside the repo; advertised HEAD verified")
 
 
 def gate_tokenizer_worker_limit_failures_are_reported() -> Gate:

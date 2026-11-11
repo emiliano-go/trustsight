@@ -15,8 +15,6 @@ from __future__ import annotations
 
 import difflib
 import re
-import time
-from pathlib import Path
 
 import pygit2
 from pygit2 import (
@@ -63,16 +61,7 @@ __all__ = [
     "walk_bounded",
     "head_commit_id",
     "parent_commit_id",
-    "marker_path",
-    "record_fetch",
-    "last_fetch_time",
 ]
-
-#: When the last successful fetch happened, recorded next to the repository.
-#: Deliberately not derived from the HEAD commit's timestamp: a commit's date
-#: is chosen by whoever authored it, so a maintainer who dates a commit in the
-#: future would make the clone look permanently current.
-_FETCH_MARKER = "trustsight-last-fetch"
 
 #: Committed files whose *content* is worth more than their magic bytes (see
 #: ``collect_tree_files``).
@@ -762,45 +751,3 @@ def collect_tree_files(
     except (KeyError, AttributeError, TypeError, ValueError):
         complete = False
     return files, complete
-
-
-def marker_path(repo) -> Path:
-    """Location of the last-fetch marker for *repo*."""
-    return Path(repo.path) / _FETCH_MARKER
-
-
-def record_fetch(repo):
-    """Note that *repo* has just been brought up to date."""
-    stamp = int(time.time())
-    try:
-        marker_path(repo).write_text(str(stamp))
-    except OSError:
-        return None
-    return stamp
-
-
-def last_fetch_time(repo):
-    """When this clone was last fetched, or None if that is unknown."""
-    try:
-        return int(marker_path(repo).read_text().strip())
-    except (OSError, ValueError):
-        return None
-
-
-def _is_current(repo, upstream_mtime) -> bool:
-    """True when this clone was fetched after the upstream last changed.
-
-    A clone with no fetch marker falls back to the local HEAD commit time, so
-    an unchanged clone avoids an unnecessary network fetch.
-    """
-    fetched = last_fetch_time(repo)
-    if fetched is not None:
-        try:
-            return fetched >= int(upstream_mtime)
-        except (TypeError, ValueError):
-            return False
-    try:
-        commit = repo.head.peel()
-        return int(commit.commit_time) >= int(upstream_mtime)
-    except (AttributeError, pygit2.GitError, KeyError, TypeError, ValueError):
-        return False

@@ -61,9 +61,10 @@ def test_a_libgit2_setting_that_fails_is_reported(monkeypatch):
     monkeypatch.setattr(git_worker.atexit, "register", lambda *_a, **_k: None)
 
     failures = git_worker._harden_libgit2()
-    assert len(failures) == 4
+    assert len(failures) == 5
     assert any("pack object ceiling" in f for f in failures)
     assert any("strict hash verification" in f for f in failures)
+    assert any("http expect-continue" in f for f in failures)
 
 
 def test_the_response_carries_the_degraded_list(monkeypatch):

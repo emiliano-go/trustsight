@@ -1,6 +1,8 @@
 import re
+import shutil
 import signal
 import threading
+import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
@@ -158,6 +160,22 @@ def repo_path(pkg_name: str) -> Path:
     return path
 
 
+def _discard_cached_repo(pkg_name: str) -> None:
+    """Remove a repo that failed parent-side HEAD verification.
+
+    The next fetch starts from a clone again.  The path is the already
+    validated cache path; rmtree does not follow symlinked directories.
+    """
+    try:
+        path = repo_path(pkg_name)
+        if path.is_symlink() or not path.is_dir():
+            path.unlink()
+        else:
+            shutil.rmtree(path, ignore_errors=True)
+    except (OSError, ValueError):
+        pass
+
+
 def clone_or_fetch(pkg_name: str, upstream_mtime: Optional[int] = None):
     """Clone or update the AUR git repo for *pkg_name*, returning a handle.
 
@@ -169,6 +187,7 @@ def clone_or_fetch(pkg_name: str, upstream_mtime: Optional[int] = None):
     """
     repo_path(pkg_name)  # validate the name and its containment before any child runs
     from .release import offline
+    from .sandbox import fetch_state
     from .sandbox.git_client import (
         GitOpError,
         GitProject,
@@ -177,24 +196,49 @@ def clone_or_fetch(pkg_name: str, upstream_mtime: Optional[int] = None):
         GitTransferTooLargeError,
     )
 
+    offline_mode = offline()
+    try:
+        upstream_value = (None if upstream_mtime is None
+                          else int(upstream_mtime))
+    except (TypeError, ValueError, OverflowError):
+        upstream_value = None
+    previous = fetch_state.load(CACHE_DIR, pkg_name)
+    if offline_mode and previous is None:
+        raise _TimeoutError(
+            f"offline mode has no verified fetch state for {pkg_name!r}; "
+            "refusing to analyse an unverified cache")
+    force = False if offline_mode else (
+        previous is None
+        or previous.upstream_mtime is None
+        or upstream_value is None
+        or previous.upstream_mtime != upstream_value
+    )
+
     connect, transfer = _network_timeout_values()
     session = GitSession()
     try:
         result = session.open_fetch(
-            pkg_name, str(CACHE_DIR), upstream_mtime, offline(), connect, transfer
+            pkg_name, str(CACHE_DIR), upstream_mtime, offline_mode,
+            connect, transfer, force=force,
+            previous_head=(previous.head if previous is not None else ""),
         )
     except GitSandboxUnavailable as exc:
         # A sandbox that cannot answer is the same class as a timed-out
         # fetch: the package was not brought up to date, so callers record a
         # coverage gap rather than analysing a stale or empty tree (B2).
+        proxy_received = getattr(session, "received_bytes", lambda: 0)()
         session.close()
+        if proxy_received > 0:
+            _charge_transfer(proxy_received, 0)
         raise _TimeoutError(f"git sandbox unavailable: {exc}") from exc
     except GitOpError as exc:
         # The worker answered with an error, but a failed transfer may still
-        # have written bytes before it stopped.  Charge them, or repeated
-        # failures walk around MAX_TOTAL_TRANSFER_BYTES.
+        # have written bytes before it stopped.  Charge what the parent proxy
+        # actually relayed; the worker's count is only a fallback.
+        proxy_received = getattr(session, "received_bytes", lambda: 0)()
         session.close()
-        received = getattr(exc, "received_bytes", 0)
+        received = proxy_received if proxy_received > 0 else getattr(
+            exc, "received_bytes", 0)
         if isinstance(received, int) and received > 0:
             _charge_transfer(received, 0)
         if isinstance(exc, GitTransferTooLargeError):
@@ -202,12 +246,59 @@ def clone_or_fetch(pkg_name: str, upstream_mtime: Optional[int] = None):
                 f"git transfer exceeded its byte ceiling: {exc}") from exc
         raise _TimeoutError(f"git fetch did not complete: {exc}") from exc
     except Exception:
+        proxy_received = getattr(session, "received_bytes", lambda: 0)()
         session.close()
+        if proxy_received > 0:
+            _charge_transfer(proxy_received, 0)
         raise
-    received = result.get("received_bytes", 0) if isinstance(result, dict) else 0
+    proxy_received = getattr(session, "received_bytes", lambda: 0)()
+    received = proxy_received if proxy_received > 0 else (
+        result.get("received_bytes", 0) if isinstance(result, dict) else 0)
     if isinstance(received, int) and received > 0:
         _charge_transfer(received, 0)
-    return GitProject(session, pkg_name, str(CACHE_DIR))
+    fetched = isinstance(result, dict) and result.get("fetched") is True
+    if force and not fetched:
+        session.close()
+        raise _TimeoutError(
+            "the isolated worker did not perform a required git fetch")
+    advertised = session.advertised_head() if fetched else (
+        previous.advertised_head if previous is not None else None)
+    try:
+        actual = session.head(pkg_name, str(CACHE_DIR))
+    except (GitSandboxUnavailable, GitOpError) as exc:
+        session.close()
+        raise _TimeoutError(
+            f"git verification did not complete: {exc}") from exc
+    if fetched:
+        if not advertised or actual != advertised:
+            session.close()
+            _discard_cached_repo(pkg_name)
+            raise _TimeoutError(
+                "git fetch HEAD does not match the AUR advertisement")
+        state = fetch_state.FetchState(
+            head=actual,
+            advertised_head=advertised,
+            fetched_at=int(time.time()),
+            upstream_mtime=upstream_value,
+            verified=True,
+        )
+    else:
+        if previous is None or actual != previous.head:
+            session.close()
+            if not offline_mode:
+                _discard_cached_repo(pkg_name)
+            raise _TimeoutError(
+                "cached git repository is not the verified HEAD")
+        state = previous
+    if not offline_mode:
+        try:
+            fetch_state.store(CACHE_DIR, pkg_name, state)
+        except OSError:
+            # The next run will force a fetch; the current result is already
+            # verified against the AUR advertisement.
+            pass
+    return GitProject(session, pkg_name, str(CACHE_DIR),
+                      fetch_time=state.fetched_at)
 
 
 def get_head_commit(project) -> str:
@@ -293,8 +384,3 @@ def get_maintainer_from_commit(project, commit_oid: str) -> Optional[str]:
         project.file_at(commit_oid, "PKGBUILD"),
         project.file_at(commit_oid, ".SRCINFO"),
     )
-
-
-def last_fetch_time(project) -> Optional[int]:
-    """When this clone was last fetched, or None if that is unknown."""
-    return project.last_fetch_time()

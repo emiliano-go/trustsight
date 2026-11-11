@@ -171,6 +171,24 @@ def test_a_stderr_redirected_print_is_still_a_message():
     ) is True
 
 
+def test_echo_with_options_is_still_a_message():
+    """peak-linux-driver-dkms: `echo -e` is a printer, not a command."""
+    from trustsight.rules import _is_message_line
+
+    assert _is_message_line(
+        'echo -e "    sudo modprobe -r peak_usb && sudo modprobe pcan"'
+    ) is True
+
+
+def test_echo_e_printed_sudo_is_not_an_escalation():
+    diff = _install_only([
+        "post_install() {",
+        '    echo -e "    sudo modprobe -r peak_usb && sudo modprobe pcan"',
+        "}",
+    ])
+    assert "H004" not in _ids(diff)
+
+
 def test_a_stderr_redirected_uninstall_hint_is_not_code():
     """whoisthat: the printed curl|sudo instruction is not an execution."""
     diff = _install_only([

@@ -5,8 +5,12 @@ suspicious composition; a pure reformat stands down by default.  The
 SKIP-position move and the arch-suffixed arrays are covered too.
 """
 
+from pathlib import Path
+
 from trustsight.analysis.pipeline import scan_diff
 from trustsight.config import load_config
+
+_FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def _config(require_content_change: bool | None = None):
@@ -162,6 +166,13 @@ _CUT_BY_HUNK_BOUNDARY = """\
 +  echo done
  }
 """
+
+
+def test_a_partial_array_projection_is_not_an_order_change():
+    """pacman-static: removing one zlib patch leaves empty placeholders for
+    entries outside the hunk, so the two projections cannot prove a reorder."""
+    diff = (_FIXTURES / "pacman-static-partial-array.diff").read_text()
+    assert "C014" not in _rule_ids(diff, _config())
 
 
 def test_a_checksum_array_cut_by_a_hunk_boundary_is_not_reordered():

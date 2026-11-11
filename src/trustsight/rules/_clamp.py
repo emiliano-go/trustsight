@@ -22,7 +22,8 @@ _DEP_DECLARATION_RE = re.compile(
 )
 
 _MESSAGE_LINE_RE = re.compile(
-    r'^(?:\+|)\s*(?:echo|printf|note|msg|warning|error|info)\s+["\']'
+    r'^(?:\+|)\s*(?:echo|printf|note|msg|warning|error|info)'
+    r'(?:\s+-{1,2}[A-Za-z][A-Za-z0-9-]*)*\s+["\']'
 )
 
 #: A printer line without the quote requirement of ``_MESSAGE_LINE_RE``.

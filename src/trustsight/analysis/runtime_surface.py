@@ -28,7 +28,6 @@ _SCRIPT_SUFFIXES = (".install", ".sh", ".bash", ".py")
 _EXEC_LINE_RE = re.compile(r"^\s*Exec[A-Za-z]*\s*=", re.MULTILINE)
 _NETWORK_CLIENT_RE = re.compile(
     r"\b(?:curl|wget|nc|ncat|netcat|socat|telnet)\b|/dev/tcp/", re.IGNORECASE)
-_WRITE_MARKERS = (">", "tee")
 _SENSITIVE_PREFIXES = ("/etc/", "/var/", "/run/", "$HOME", "~/", "/root/")
 _ESCALATION_RE = re.compile(r"\b(?:sudo|pkexec|doas|su)\b")
 _TRACE_DETECT_RE = re.compile(r"TracerPid|ptrace\s*\(\s*PTRACE_|\bstrace\s+-p\b")
@@ -46,16 +45,25 @@ def _is_unit(path: str) -> bool:
 
 
 
+def _is_tee(token: str) -> bool:
+    """One shell word is the ``tee`` command, not a word containing "tee"."""
+    word = token.strip("'\"`;|&()<>[]{}")
+    return word == "tee" or word.endswith("/tee")
+
+
 def _sensitive_write(line: str) -> bool:
     """A runtime write to a sensitive path, checked without a regex.
 
     An unanchored ``(?:>>?|tee).{0,80}(?:/etc/|...)`` pattern was 21 ms on the
-    adversarial audit input, over the regex budget; a bounded string scan is
-    linear and needs no audit exemption.
+    adversarial audit input, over the regex budget; a bounded scan is linear
+    and needs no audit exemption.  ``tee`` is matched as a shell word so
+    ``/usr/bin/steep`` or a ``committee`` path is not a write.
     """
-    if not any(marker in line for marker in _WRITE_MARKERS):
+    if not any(prefix in line for prefix in _SENSITIVE_PREFIXES):
         return False
-    return any(prefix in line for prefix in _SENSITIVE_PREFIXES)
+    if ">" in line:
+        return True
+    return any(_is_tee(token) for token in line.split())
 
 
 def _trace_truncate(line: str) -> bool:

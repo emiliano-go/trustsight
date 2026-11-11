@@ -55,3 +55,18 @@ def test_non_runtime_and_test_files_are_ignored():
         ("README.md", b"curl https://example.com\n"),
         ("tests/fixtures/p.service", b"[Service]\nExecStart=/usr/bin/curl x\n"),
     ]) == set()
+
+
+def test_h010_does_not_match_a_word_containing_tee():
+    """`steep`/`committee` are not the `tee` command."""
+    assert "H010" not in _ids(_unit(
+        "[Service]\nExecStart=/usr/bin/steep /etc/steep.conf\n"))
+    assert "H010" not in _ids(_unit(
+        "[Service]\nExecStart=/usr/bin/report --committee /etc/report.conf\n"))
+
+
+def test_h010_matches_tee_as_a_shell_word():
+    assert "H010" in _ids(_unit(
+        "[Service]\nExecStart=/usr/bin/tee /etc/foo.conf\n"))
+    assert "H010" in _ids(_unit(
+        "[Service]\nExecStart=/bin/sh -c 'printf x | tee /var/log/x'\n"))

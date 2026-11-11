@@ -94,3 +94,13 @@ def test_preinstall_is_registered():
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
     assert "preinstall" in result.output
+
+
+def test_a_package_name_cannot_inject_terminal_escapes(isolated, monkeypatch):
+    """The name is echoed back on the not-found path; it must be inert."""
+    import trustsight.discovery as discovery
+
+    monkeypatch.setattr(discovery, "get_aur_package_info", lambda names: {})
+    result = runner.invoke(app, ["preinstall", "evil\x1b[31mPWN"])
+    assert result.exit_code == 2
+    assert "\x1b" not in result.output

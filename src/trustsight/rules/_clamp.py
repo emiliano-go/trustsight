@@ -22,7 +22,8 @@ _DEP_DECLARATION_RE = re.compile(
 )
 
 _MESSAGE_LINE_RE = re.compile(
-    r'^(?:\+|)\s*(?:echo|printf|note|msg|warning|error|info)\s+["\']'
+    r'^(?:\+|)\s*(?:echo|printf|note|msg|warning|error|info)'
+    r'(?:\s+-{1,2}[A-Za-z][A-Za-z0-9-]*)*\s+["\']'
 )
 
 #: A printer line without the quote requirement of ``_MESSAGE_LINE_RE``.
@@ -76,10 +77,33 @@ def _has_unquoted_command_chain(line: str) -> bool:
             # while `echo $(curl ...)` is a substitution.
             i += 2
             continue
+        elif char == "&" and (
+            (i > 0 and line[i - 1] in "<>")
+            or (i + 1 < n and line[i + 1] == ">")
+        ):
+            # ``>&2`` and ``&>file`` are redirections, not command chains;
+            # a file write is caught by the redirect predicate, and a
+            # descriptor duplicate does not make a printer line code.
+            pass
         elif char in ";&|`" or (char == "$" and i + 1 < n and line[i + 1] == "("):
             return True
         i += 1
     return False
+
+def _is_fd_dup(line: str, index: int) -> bool:
+    """True for ``>&2`` or ``>&-``: output routing, not a file write.
+
+    ``echo "run: curl ... | sudo bash" >&2`` still addresses the reader.
+    Treating the stderr redirect as an unquoted redirect classified the
+    line as code, and the printed pipeline then reached R001, R010 and
+    H004 (whoisthat).
+    """
+    return (
+        line.startswith(">&", index)
+        and index + 2 < len(line)
+        and (line[index + 2].isdigit() or line[index + 2] == "-")
+    )
+
 
 def _unquoted_redirect_after(line: str, quote: str) -> bool:
     """True when *line* redirects outside quotes, starting in state *quote*.
@@ -87,15 +111,16 @@ def _unquoted_redirect_after(line: str, quote: str) -> bool:
     Carries *quote* in from a previous line: inside a spanning ``echo "``
     string every ``>`` is literal text (audirvana's hook), while a quote
     that *closes* on this line and is followed by ``>`` (``more" >
-    ~/.bashrc``) is a real write on a message-shaped line.
+    ~/.bashrc``) is a real write on a message-shaped line. A descriptor
+    duplicate (``>&2``) is output, not a write.
     """
-    for char in line:
+    for index, char in enumerate(line):
         if quote:
             if char == quote:
                 quote = ""
         elif char in "\"'":
             quote = char
-        elif char == ">":
+        elif char == ">" and not _is_fd_dup(line, index):
             return True
     return False
 
@@ -110,19 +135,22 @@ def _has_unquoted_redirect(line: str) -> bool:
     printed instructions, and searching the whole line for `>` put that
     false positive back on two benign packages.
 
+    A descriptor duplicate (``>&2``, ``>&-``) is output routing, not a
+    file write, so it does not make a printer line code.
+
     Written as a scan rather than a regex on purpose. The obvious pattern -
     `(?:"[^"]*"|'[^']*'|[^"'>])*>` - is a nested alternation that backtracks
     catastrophically when there is no redirect at all: 942 ms on a
     full-length line, which the regex audit refuses.
     """
     quote = ""
-    for char in line:
+    for index, char in enumerate(line):
         if quote:
             if char == quote:
                 quote = ""
         elif char in "\"'":
             quote = char
-        elif char == ">":
+        elif char == ">" and not _is_fd_dup(line, index):
             return True
     return False
 

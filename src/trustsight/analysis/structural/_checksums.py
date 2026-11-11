@@ -125,6 +125,12 @@ def array_order_changes(diff_text: str, config: dict | None = None,
     for name in sorted(names):
         old = pre_arrays.get(name, ())
         new = post_arrays.get(name, ())
+        # A hunk can show part of a closed array; entries outside it become
+        # empty placeholders. Position is then unknown, and a difference
+        # between two partial projections is not evidence of a reorder
+        # (pacman-static: removing one zlib patch shifted the SKIP slots).
+        if any(not str(entry).strip() for entry in (*old, *new)):
+            continue
         delta = array_diff(old, new)
         if not delta.reordered:
             continue

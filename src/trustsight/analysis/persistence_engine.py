@@ -22,7 +22,7 @@ from ..deps import _strip_comment
 from ..diffdoc import parse_diff_lines
 from ..findings import stamp
 from ..line_lex import strip_shell_cexec_opener
-from ..rules import MAX_RULE_LINE_BYTES, _PRINTER_LINE_RE
+from ..rules import MAX_RULE_LINE_BYTES, _PRINTER_LINE_RE, _blank_quoted
 from ..tokenizer import split_lines
 from .build import (
     _HOOK_ADMIN_RE,
@@ -271,10 +271,14 @@ def emit_install_hook(ctx: GraphContext, add: Callable) -> None:
         # android-emulator's "source /etc/profile" notice read as H017.  A
         # printer that runs a command substitution or pipes to a shell
         # still executes and keeps the finding.
-        if (_PRINTER_LINE_RE.match(body)
-                and not re.search(r"\$\(|`|\|\s*(?:sudo\s+)?(?:ba|z|da|k|)sh\b",
-                                  body)):
-            continue
+        if _PRINTER_LINE_RE.match(body):
+            # Only the text outside quotes is code. A printed instruction
+            # that mentions `| sudo bash` is output, while a real pipe or a
+            # command substitution still executes and keeps the finding.
+            visible = _blank_quoted(body)
+            if not re.search(r"\$\(|`|\|\s*(?:sudo\s+)?(?:ba|z|da|k|)sh\b",
+                             visible):
+                continue
         # A literal `sh -c '<lit>'` re-exec executes the inner literal, so
         # strip the wrapper token and let the inner lines (already in this
         # hook scope) carry the signal.  Debian templates wrap every hook

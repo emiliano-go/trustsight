@@ -58,7 +58,7 @@ def register_commands(app: typer.Typer):
         deep: Optional[bool] = typer.Option(
             None, "--deep/--no-deep",
             help="Deep analysis: full dependency depth, and the L9 build lane "
-                 "when [verify] is enabled. Defaults to the [deep] config.",
+                 "when verify.enabled is set. Defaults to the deep config.",
         ),
         allow_uninstalled: bool = typer.Option(
             False, "--allow-uninstalled",
@@ -325,7 +325,7 @@ def register_commands(app: typer.Typer):
 
         TrustSight does not build the package: the build runs outside the
         static core and its manifest is the handoff.  Off by default; with
-        ``[verify] enabled = false`` or no manifest this reports
+        ``verify.enabled = false`` or no manifest this reports
         ``l9_unavailable`` - a weight-0 boundary, never a clean or malicious
         verdict.  Nothing is executed here.
         """

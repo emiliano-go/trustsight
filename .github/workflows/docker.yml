@@ -86,8 +86,8 @@ jobs:
       - name: Build the image
         run: |
           docker build -t "ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}" .
-          docker run --rm --security-opt seccomp=unconfined "ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}" --version
-          docker run --rm --security-opt seccomp=unconfined "ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}" lint-rules
+          docker run --rm --security-opt seccomp=unconfined --security-opt apparmor=unconfined "ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}" --version
+          docker run --rm --security-opt seccomp=unconfined --security-opt apparmor=unconfined "ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}" lint-rules
 
       # The read-only recipe in docs/guides/reducing-blast-radius.md.  Two
       # passes against the same volumes: a recreated container must stay
@@ -123,6 +123,7 @@ jobs:
               --cap-drop=all \
               --security-opt=no-new-privileges \
               --security-opt=seccomp=unconfined \
+              --security-opt=apparmor=unconfined \
               --pids-limit=512 --memory=2g --cpus=2 \
               -e TRUSTSIGHT_OFFLINE=1 \
               -e TRUSTSIGHT_NO_UPDATE_CHECK=1 \

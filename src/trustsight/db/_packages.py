@@ -3,6 +3,7 @@
 import re
 from typing import Optional
 from ._connection import get_connection
+from ._lifecycles import OrphanState
 from ._metadata import _bump_observation_seq
 
 __all__ = ['_RESERVED_NAMES', '_sanitize_maintainer', 'count_observations', 'get_analysis', 'get_aur_orphan_state', 'get_last_analysis', 'get_package', 'get_package_id', 'get_triggered_rules', 'insert_analysis', 'is_reserved_name', 'update_aur_orphan_state', 'update_package_maintainer', 'update_package_version', 'upsert_package']
@@ -141,7 +142,6 @@ def update_package_maintainer(name: str, maintainer: str):
             (maintainer, name),
         )
         conn.commit()
-
 def get_aur_orphan_state(name: str) -> int:
     """The last recorded AUR orphan state: 1 orphaned, 0 maintained, -1 unknown.
 
@@ -154,9 +154,10 @@ def get_aur_orphan_state(name: str) -> int:
         row = conn.execute(
             "SELECT aur_orphaned FROM packages WHERE name = ?", (name,)
         ).fetchone()
-    if row is None or row["aur_orphaned"] is None:
-        return -1
-    return int(row["aur_orphaned"])
+    if row is None:
+        return int(OrphanState.UNKNOWN)
+    return int(OrphanState.from_db(row["aur_orphaned"]))
+
 
 def update_aur_orphan_state(name: str, orphaned: Optional[bool]) -> None:
     """Record whether the AUR currently reports *name* as orphaned.
@@ -165,7 +166,7 @@ def update_aur_orphan_state(name: str, orphaned: Optional[bool]) -> None:
     as unknown rather than as either state: guessing here would manufacture
     an adoption or hide one.
     """
-    value = -1 if orphaned is None else int(bool(orphaned))
+    value = int(OrphanState.observe(orphaned))
     with get_connection() as conn:
         conn.execute(
             "UPDATE packages SET aur_orphaned = ? WHERE name = ?", (value, name)

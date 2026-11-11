@@ -390,7 +390,8 @@ def _release_channel_feed(feed: dict, prefix: str,
                                  trust_manifest_key=True)
         url = release.asset_url(manifest_asset, tag, channel)
         channel_state.record_pull(
-            channel_state.IOC, release.tag_from_asset_url(url), channel.repo
+            channel_state.IOC, release.tag_from_asset_url(url), channel.repo,
+            feed=feed.get("name") or "",
         )
         return {"status": "ok", "url": url, "channel": channel.repo, **result}
     except (release.ReleaseError, UnsignedBaselineError, InvalidSignatureError,
@@ -523,7 +524,8 @@ def auto_pull(*, baselines: bool = False, iocs: bool = False,
         try:
             channel = release.active_baseline_channel()
             newest = release.resolve_baseline_tag(channel)
-            if newest and newest != channel_state.pulled_tag(channel_state.BASELINE):
+            if newest and not channel_state.pulled_matches(
+                    channel_state.BASELINE, newest, channel.repo):
                 stats = pull_baseline_seed(channel=channel)
                 notes.append(
                     f"baseline seed pulled: {stats['tag']} ({stats['channel']})"
@@ -536,9 +538,15 @@ def auto_pull(*, baselines: bool = False, iocs: bool = False,
         except Exception as exc:  # noqa: BLE001
             newest = None
             notes.append(f"ioc auto-pull skipped: {exc}")
-        if newest and newest != channel_state.pulled_tag(channel_state.IOC):
+        if newest:
             for feed in enabled_feeds():
                 name = feed.get("name") or "(unnamed)"
+                feed_channel = release.channel_for_url(feed.get("url") or "")
+                feed_repo = feed_channel.repo if feed_channel is not None else ""
+                if channel_state.pulled_matches(
+                        channel_state.IOC, newest, feed_repo,
+                        feed=feed.get("name") or ""):
+                    continue
                 result = pull_ioc_feed(feed)
                 if result.get("status") == "ok":
                     notes.append(
@@ -553,8 +561,8 @@ def auto_pull(*, baselines: bool = False, iocs: bool = False,
         try:
             channel = release.active_baseline_channel()
             newest = release.resolve_watchlist_tag(channel)
-            if newest and newest != channel_state.pulled_tag(
-                    channel_state.WATCHLIST):
+            if newest and not channel_state.pulled_matches(
+                    channel_state.WATCHLIST, newest, channel.repo):
                 stats = pull_watchlist(channel=channel)
                 notes.append(
                     f"watchlist pulled: {stats['tag']} "

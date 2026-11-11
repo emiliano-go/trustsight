@@ -204,7 +204,11 @@ def _lex_lines_cached(
         # lexical state, so the character loop is skipped.  A pathological
         # multi-megabyte line otherwise pays that loop in every scope
         # classifier that re-lexes the same diff.
-        if not state.open and not any(ch in line for ch in "{}#'\"\\`<"):
+        if (
+            not state.open
+            and "$(" not in line
+            and not any(ch in line for ch in "{}#'\"\\`<")
+        ):
             if truncated:
                 out.append(LexedLine(
                     line, line, 0, False, False, False,

@@ -17,7 +17,7 @@
     },
     "H009": {
       "changelog": "runtime-surface-lane",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.28.0",
       "promotion": "run the weekly anergic calibration, then set weight and decided_in",
       "signal": "weekly calibration review: assign an explicit weight (0 keeps it report-only, a positive weight promotes it) after a true-positive twin and a quiet benign replay",
       "since": "0.28.0",
@@ -25,7 +25,7 @@
     },
     "H010": {
       "changelog": "runtime-surface-lane",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.28.0",
       "promotion": "run the weekly anergic calibration, then set weight and decided_in",
       "signal": "weekly calibration review: assign an explicit weight (0 keeps it report-only, a positive weight promotes it) after a true-positive twin and a quiet benign replay",
       "since": "0.28.0",
@@ -33,7 +33,7 @@
     },
     "H011": {
       "changelog": "runtime-surface-lane",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.28.0",
       "promotion": "run the weekly anergic calibration, then set weight and decided_in",
       "signal": "weekly calibration review: assign an explicit weight (0 keeps it report-only, a positive weight promotes it) after a true-positive twin and a quiet benign replay",
       "since": "0.28.0",
@@ -41,7 +41,7 @@
     },
     "H012": {
       "changelog": "runtime-surface-lane",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.28.0",
       "promotion": "run the weekly anergic calibration, then set weight and decided_in",
       "signal": "weekly calibration review: assign an explicit weight (0 keeps it report-only, a positive weight promotes it) after a true-positive twin and a quiet benign replay",
       "since": "0.28.0",
@@ -49,7 +49,7 @@
     },
     "H013": {
       "changelog": "runtime-surface-lane",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.28.0",
       "promotion": "run the weekly anergic calibration, then set weight and decided_in",
       "signal": "weekly calibration review: assign an explicit weight (0 keeps it report-only, a positive weight promotes it) after a true-positive twin and a quiet benign replay",
       "since": "0.28.0",
@@ -73,7 +73,7 @@
     },
     "T008": {
       "changelog": "full-aur-history-campaigns",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.28.0",
       "promotion": "remove status or mark promoted after the full-AUR benign replay checkpoint; record the measured rate in the changelog",
       "signal": "full-AUR benign replay fire-rate < 0.30 plus positive delayed-adoption and benign transition twins",
       "since": "0.27.1",
@@ -81,7 +81,7 @@
     },
     "T009": {
       "changelog": "full-aur-history-campaigns",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.28.0",
       "promotion": "remove status or mark promoted after the full-AUR benign replay checkpoint; record the measured rate in the changelog",
       "signal": "full-AUR benign replay fire-rate < 0.30 plus positive dormant-takeover and active/low-exposure transition twins",
       "since": "0.27.1",
@@ -89,7 +89,7 @@
     },
     "T010": {
       "changelog": "full-aur-history-campaigns",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.28.0",
       "promotion": "remove status or mark promoted after the full-AUR benign replay checkpoint; record the measured rate in the changelog",
       "signal": "full-AUR benign replay fire-rate < 0.30 plus positive dependency-redirection and established/related-target twins",
       "since": "0.27.1",
@@ -97,7 +97,7 @@
     },
     "T011": {
       "changelog": "full-aur-history-campaigns",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.28.0",
       "promotion": "remove status or mark promoted after the full-AUR benign replay checkpoint; record the measured rate in the changelog",
       "signal": "full-AUR benign replay fire-rate < 0.30 plus positive reappearance and first-appearance/no-removal twins",
       "since": "0.27.1",
@@ -105,7 +105,7 @@
     },
     "T012": {
       "changelog": "full-aur-history-campaigns",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.28.0",
       "promotion": "remove status or mark promoted after the full-AUR benign replay checkpoint; record the measured rate in the changelog",
       "signal": "full-AUR benign replay fire-rate < 0.30 plus positive trust-erosion and no-precursor/no-terminal twins",
       "since": "0.27.1",

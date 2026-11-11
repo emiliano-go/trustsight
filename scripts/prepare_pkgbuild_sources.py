@@ -27,7 +27,16 @@ __all__ = [
 SIGNATURE_SUFFIX = ".tar.gz.sig"
 
 _SHA_LINE_RE = re.compile(r"sha256sums=\('[0-9a-f]{64}'")
-_SIG_SOURCE_RE = re.compile(r"^.*\.tar\.gz\.sig::.*\n", re.MULTILINE)
+_SIG_SOURCE_RE = re.compile(
+    r"^[ \t]*(?:\"[^\"]*\.tar\.gz\.sig::[^\"]*\"|'[^']*\.tar\.gz\.sig::[^']*')"
+    r"[ \t]*(\))?[ \t]*\n",
+    re.MULTILINE,
+)
+
+
+def _drop_source(match: re.Match) -> str:
+    """Drop the signature source, keeping the array's closing parenthesis."""
+    return ")\n" if match.group(1) else ""
 _TWO_SUMS_RE = re.compile(
     r"sha256sums=\('([0-9a-f]{64})'\s*\n\s*'[0-9a-f]{64}'\)"
 )
@@ -53,7 +62,7 @@ def rewrite_pkgbuild(
     if signed:
         return rewritten
 
-    rewritten, count = _SIG_SOURCE_RE.subn("", rewritten, count=1)
+    rewritten, count = _SIG_SOURCE_RE.subn(_drop_source, rewritten, count=1)
     if count != 1:
         raise ValueError("PKGBUILD has no signature source to drop")
     rewritten, count = _TWO_SUMS_RE.subn(

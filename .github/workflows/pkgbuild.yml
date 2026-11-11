@@ -112,6 +112,21 @@ jobs:
           PY
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
+      - name: Drop the signature source before a pre-tag build
+        run: |
+          set -eu
+          cd "$GITHUB_WORKSPACE"
+          pkgver=$(sed -n 's/^pkgver=//p' packaging/aur/PKGBUILD)
+          if git rev-parse -q --verify "v${pkgver}" >/dev/null; then
+            exit 0
+          fi
+          digest=$(python -c "import pathlib,re; print(re.search(r\"sha256sums=\(\s*'([0-9a-f]{64})'\", pathlib.Path('packaging/aur/PKGBUILD').read_text()).group(1))")
+          python scripts/prepare_pkgbuild_sources.py \
+            --pkgbuild-dir packaging/aur \
+            --output packaging/aur \
+            --version "$pkgver" \
+            --tarball-digest "$digest"
+
       - name: Build and install from the source tarball
         run: |
           set -eu

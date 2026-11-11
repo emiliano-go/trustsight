@@ -395,6 +395,16 @@ def test_cryptography_is_not_in_optdepends():
     )
 
 
+def test_dev_wrappers_isolate_their_home_state():
+    """The dev command must not read or write the stable config or DB."""
+    body = DEV_PKGBUILD.read_text()
+    assert "trustsight-dev/home" in body
+    assert 'HOME="\\$dev_home"' in body
+    assert 'XDG_CONFIG_HOME="\\$dev_home/.config"' in body
+    assert 'XDG_DATA_HOME="\\$dev_home/.local/share"' in body
+    assert 'XDG_CACHE_HOME="\\$dev_home/.cache"' in body
+
+
 def test_dev_check_installs_the_wheel_without_reaching_the_index():
     """packaging/dev check() must not resolve dependencies from PyPI.
 

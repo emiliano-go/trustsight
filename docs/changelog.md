@@ -19,7 +19,7 @@
 
 ### Changed
 
-- **The in-tree packaging is now `trustsight-dev`.** `packaging/dev` builds the checkout as a package that installs beside `trustsight` under `/opt/trustsight-dev`, adds `trustsight-dev` and `trustsight-gate-dev` wrappers, warns in `prepare()` and in the install script, and makes the dev commands print a `-dev` version suffix. The release package, its version and its contract are unchanged.
+- **The in-tree packaging is now `trustsight-dev`.** `packaging/dev` builds the checkout as a package that installs beside `trustsight` under `/opt/trustsight-dev`, adds `trustsight-dev` and `trustsight-gate-dev` wrappers with their config, database and cache under `~/.local/share/trustsight-dev/home`, warns in `prepare()` and in the install script, and makes the dev commands print a `-dev` version suffix. The release package, its version and its contract are unchanged.
 
 ### Fixed
 

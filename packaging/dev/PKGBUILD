@@ -6,6 +6,8 @@
 #  mid-change, unverified, or broken.  It installs beside the packaged
 #  `trustsight` package under /opt/trustsight-dev and adds `trustsight-dev`
 #  and `trustsight-gate-dev` wrappers; it never replaces the stable commands.
+#  The wrappers keep the dev config, database and cache in
+#  ~/.local/share/trustsight-dev/home, separate from the stable state.
 #  Do not use it for everyday installs.
 # ============================================================================
 #
@@ -123,7 +125,13 @@ package() {
   install -d "$pkgdir/usr/bin"
   cat > "$pkgdir/usr/bin/trustsight-dev" <<EOF
 #!/bin/sh
+dev_home="\${HOME:?}/.local/share/trustsight-dev/home"
+(umask 077 && mkdir -p "\$dev_home")
 PYTHONPATH="$site\${PYTHONPATH:+:\$PYTHONPATH}" \
+HOME="\$dev_home" \
+XDG_CONFIG_HOME="\$dev_home/.config" \
+XDG_DATA_HOME="\$dev_home/.local/share" \
+XDG_CACHE_HOME="\$dev_home/.cache" \
 TRUSTSIGHT_DEV_BUILD=1 \
 exec /usr/bin/python -m trustsight "\$@"
 EOF
@@ -131,7 +139,13 @@ EOF
 
   cat > "$pkgdir/usr/bin/trustsight-gate-dev" <<EOF
 #!/bin/sh
+dev_home="\${HOME:?}/.local/share/trustsight-dev/home"
+(umask 077 && mkdir -p "\$dev_home")
 PYTHONPATH="$site\${PYTHONPATH:+:\$PYTHONPATH}" \
+HOME="\$dev_home" \
+XDG_CONFIG_HOME="\$dev_home/.config" \
+XDG_DATA_HOME="\$dev_home/.local/share" \
+XDG_CACHE_HOME="\$dev_home/.cache" \
 TRUSTSIGHT_DEV_BUILD=1 \
 TRUSTSIGHT_BIN=/usr/bin/trustsight-dev \
 exec /usr/bin/python -c 'from trustsight.gate import entrypoint; entrypoint()' "\$@"

@@ -1,7 +1,7 @@
 [project]
 name = "trustsight"
 version = "0.28.1"
-description = "CLI-based AUR package update vetting tool"
+description = "Security analysis and intelligence platform for the AUR ecosystem"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [

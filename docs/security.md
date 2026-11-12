@@ -2,7 +2,7 @@
 
 # Security Model
 
-TrustSight is an **instrument, not a judge**. It reads AUR PKGBUILD diffs, applies published detection rules (the [rules reference](reference/rules/index.md) documents every shipped rule, pattern, and severity), and reports both findings and recorded gaps. It never decides whether a package is safe or authorizes an update; a person does. A quiet result means no monitored condition matched in the material examined, not that the package is safe.
+TrustSight is a security analysis and intelligence platform for the AUR ecosystem, and an **instrument, not a judge**. It reads AUR PKGBUILD diffs, applies published detection rules (the [rules reference](reference/rules/index.md) documents every shipped rule, pattern, and severity), and reports both findings and recorded gaps. It never decides whether a package is safe or authorizes an update; a person does. A quiet result means no monitored condition matched in the material examined, not that the package is safe.
 
 That distinction, **input not verdict**, rests on four statements the rest of this page makes precise:
 

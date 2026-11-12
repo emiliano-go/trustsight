@@ -191,8 +191,17 @@ def _alert_entries(cycle) -> list[dict]:
         if rule_id == "H046" and isinstance(params, dict):
             dep = params.get("dep")
             if isinstance(dep, str) and dep:
+                carried = {"dependency": dep}
+                status = params.get("dependency_status")
+                if status in ("adopted", "orphaned"):
+                    carried["dependency_status"] = status
+                for key in ("dependency_old_maintainer",
+                            "dependency_new_maintainer"):
+                    value = params.get(key)
+                    if isinstance(value, str) and value:
+                        carried[key] = value
                 for member in _member_list(finding, "members"):
-                    dependencies[(str(member), rule_id)] = {"dependency": dep}
+                    dependencies[(str(member), rule_id)] = carried
         extra = _transition(params)
         if not extra:
             continue

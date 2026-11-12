@@ -141,6 +141,13 @@ def _orphan_dependency_findings(
                 severity="MEDIUM",
                 dep=dep,
                 maintainer=new_m,
+                # The feed names the dependency and the maintainer who moved
+                # it, not just the exposed dependent.  For an adoption the
+                # new owner is the actor; for an orphan the previous owner is
+                # who let it go.
+                dependency_status=kind,
+                dependency_old_maintainer=old_m or "",
+                dependency_new_maintainer=new_m or "",
             ))
     return out
 

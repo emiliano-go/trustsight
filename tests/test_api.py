@@ -75,6 +75,17 @@ def test_the_public_names_are_reachable_from_the_package_root():
         assert getattr(trustsight, name) is getattr(api_module, name)
 
 
+def test_a_dev_build_suffixes_the_version(monkeypatch):
+    monkeypatch.setenv("TRUSTSIGHT_DEV_BUILD", "1")
+    trustsight.__dict__.pop("__version__", None)
+    try:
+        assert trustsight.__version__.endswith("-dev")
+    finally:
+        trustsight.__dict__.pop("__version__", None)
+        monkeypatch.delenv("TRUSTSIGHT_DEV_BUILD", raising=False)
+        trustsight.__dict__.pop("__version__", None)
+
+
 def test_importing_the_package_does_not_import_the_cli():
     """A library caller must not pay for typer, rich or the analysis stack.
 

@@ -1,0 +1,24 @@
+_dev_warning() {
+  printf '\n'
+  printf 'WARNING: trustsight-dev is a development build from the checkout.\n'
+  printf 'It is not a signed release. It installs beside trustsight under /opt.\n'
+  printf 'Its state lives in ~/.local/share/trustsight-dev/home.\n'
+  printf 'Remove it with: pacman -R trustsight-dev (state is kept).\n'
+  printf '\n'
+}
+
+pre_install() {
+  _dev_warning
+}
+
+post_install() {
+  _dev_warning
+}
+
+pre_upgrade() {
+  _dev_warning
+}
+
+post_upgrade() {
+  _dev_warning
+}

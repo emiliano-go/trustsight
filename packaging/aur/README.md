@@ -110,7 +110,7 @@ you already cloned them. To build the tree you cloned, offline, use the local
 recipe instead:
 
 ```bash
-cd packaging/local
+cd packaging/dev
 makepkg -si
 ```
 

@@ -92,12 +92,12 @@ def test_the_libgit2_gate_checks_the_declared_floor_too(tmp_path, monkeypatch):
     from scripts.gates import _layers
 
     (tmp_path / "packaging" / "aur").mkdir(parents=True)
-    (tmp_path / "packaging" / "local").mkdir(parents=True)
+    (tmp_path / "packaging" / "dev").mkdir(parents=True)
     (tmp_path / "pyproject.toml").write_text(
         'dependencies = ["pygit2>=1.20.0"]\n')
     (tmp_path / "packaging/aur/PKGBUILD").write_text(
         "depends=('python-pygit2>=1.20.0')\n")
-    (tmp_path / "packaging/local/PKGBUILD").write_text(
+    (tmp_path / "packaging/dev/PKGBUILD").write_text(
         "depends=('python-pygit2')\n")
     (tmp_path / "packaging/aur/.SRCINFO").write_text(
         "depends = python-pygit2>=1.20.0\n")

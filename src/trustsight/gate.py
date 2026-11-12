@@ -45,6 +45,8 @@ MAX_TARGETS = 64
 MAX_FINDINGS = 8
 DEFAULT_DEPTH = 1
 DEFAULT_TIMEOUT = 180
+MAX_ANSWER_BYTES = 64
+VERDICT_LINE_BYTES = 200
 
 _SEVERITY_RANK = {
     "FATAL": 6, "CRITICAL": 5, "HIGH": 4, "MEDIUM": 3, "LOW": 2, "INFO": 1,
@@ -142,7 +144,13 @@ def _as_int(value) -> int | None:
 def _finding_rows(value) -> list[dict]:
     if not isinstance(value, (list, tuple)):
         return []
-    rows = [dict(item) for item in value if isinstance(item, dict)]
+    rows = [
+        dict(item) for item in value
+        if isinstance(item, dict)
+        # INFO is rendered as evidence by inspect; in a yes/no prompt it is
+        # noise beside the scored findings and the coverage gaps.
+        and _as_text(item.get("severity")).upper() != "INFO"
+    ]
     rows.sort(
         key=lambda row: (
             _SEVERITY_RANK.get(_as_text(row.get("severity")).upper(), 0),
@@ -185,6 +193,55 @@ def _version_line(summary: Summary) -> str:
     return new or old or ""
 
 
+def _one_line(text: str, limit: int = VERDICT_LINE_BYTES) -> str:
+    """Collapse a report sentence onto one bounded prompt line."""
+    collapsed = " ".join(clean(text).split())
+    if len(collapsed) <= limit:
+        return collapsed
+    cut = collapsed[:limit]
+    if " " in cut:
+        cut = cut.rsplit(" ", 1)[0]
+    return cut.rstrip() + "..."
+
+
+def _color_enabled(out: TextIO) -> bool:
+    """Whether *out* is a terminal that should receive ANSI colour.
+
+    ``NO_COLOR`` wins over a TTY, and ``FORCE_COLOR`` wins over a pipe, which
+    is the same convention the rest of the CLI uses.  A manager that captures
+    the hook's output gets plain text; a terminal gets the colour.
+    """
+    if os.environ.get("NO_COLOR"):
+        return False
+    if os.environ.get("FORCE_COLOR") or os.environ.get("TRUSTSIGHT_FORCE_RICH"):
+        return True
+    try:
+        return bool(out.isatty())
+    except (AttributeError, OSError, ValueError):
+        return False
+
+
+_RISK_COLORS = {
+    "FATAL": "1;31",
+    "CRITICAL": "1;31",
+    "HIGH": "31",
+    "MEDIUM": "33",
+    "LOW": "32",
+    "INCONCLUSIVE": "35",
+}
+_SEVERITY_COLORS = {
+    "FATAL": "1;31",
+    "CRITICAL": "1;31",
+    "HIGH": "31",
+    "MEDIUM": "33",
+    "LOW": "32",
+}
+
+
+def _paint(text: str, code: str, enabled: bool) -> str:
+    return f"\x1b[{code}m{text}\x1b[0m" if enabled else text
+
+
 def render(summary: Summary, out: TextIO) -> None:
     """Write the short report a human approves from.
 
@@ -192,19 +249,23 @@ def render(summary: Summary, out: TextIO) -> None:
     it, so it is untrusted text at a terminal boundary.  Clean it once, here,
     rather than trusting the child's JSON to be inert.
     """
-    print(f":: TrustSight gate: {clean(summary.package)}", file=out)
+    colour = _color_enabled(out)
+    print(_paint(f":: TrustSight gate: {clean(summary.package)}", "1;36", colour),
+          file=out)
     version = _version_line(summary)
     if version:
         print(f"   version: {clean(version)}", file=out)
     facts = []
-    if summary.verdict:
-        facts.append(f"verdict: {clean(summary.verdict)}")
     if summary.risk:
-        facts.append(f"risk: {clean(summary.risk)}")
+        risk_code = _RISK_COLORS.get(
+            clean(summary.risk).upper(), "36")
+        facts.append(_paint(f"risk: {clean(summary.risk)}", risk_code, colour))
     if summary.score is not None:
         facts.append(f"score: {summary.score}")
     if facts:
         print("   " + "   ".join(facts), file=out)
+    if summary.verdict:
+        print(f"   verdict: {_one_line(summary.verdict)}", file=out)
     for finding in summary.findings:
         rule = clean(_as_text(finding.get("rule_id"), "?"))
         severity = clean(_as_text(finding.get("severity"), ""))
@@ -213,13 +274,21 @@ def render(summary: Summary, out: TextIO) -> None:
         line = _as_int(finding.get("line"))
         location = f" [{where}:{line}]" if where and line else ""
         label = f"{rule} ({severity})" if severity else rule
-        print(f"   - {label}: {description}{location}", file=out)
+        sev_code = _SEVERITY_COLORS.get(severity.upper(), "36")
+        print(f"   - {_paint(label, sev_code, colour)}: "
+              f"{description}{location}", file=out)
     if summary.coverage_gaps:
         gaps = [clean(gap) for gap in summary.coverage_gaps]
         shown = ", ".join(gaps[:4])
         extra = len(gaps) - 4
         suffix = f" (+{extra} more)" if extra > 0 else ""
-        print(f"   coverage gaps: {shown}{suffix}", file=out)
+        print(_paint(f"   coverage gaps: {shown}{suffix}", "33", colour),
+              file=out)
+    if "ruleset_drifted" in summary.coverage_gaps:
+        print(_paint(
+            "   note: rules.toml is behind the shipped set; run "
+            "'trustsight config sync-rules --update'", "33", colour),
+            file=out)
 
 
 def build_inspect_argv(
@@ -390,15 +459,24 @@ def run_inspect(
     return body
 
 
-def _read_answer(prompt: str) -> str | None:
-    """Read one line from the controlling terminal; None when there is none."""
+def _read_answer(prompt: str, tty_path: str = "/dev/tty") -> str | None:
+    """Read one line from the controlling terminal; None when there is none.
+
+    A terminal is a character device, not a seekable file.  Opening it
+    ``r+`` builds a buffered random-access stream, which raises
+    ``UnsupportedOperation`` before the prompt is ever written, so the gate
+    must open the write and read sides separately.
+    """
     try:
-        with open("/dev/tty", "r+", encoding="utf-8", errors="replace") as tty:
+        with open(tty_path, "w", encoding="utf-8", errors="replace") as tty:
             tty.write(prompt)
             tty.flush()
-            line = tty.readline()
+        with open(tty_path, "r", encoding="utf-8", errors="replace") as tty:
+            line = tty.readline(MAX_ANSWER_BYTES)
     except (OSError, ValueError):
         return None
+    if len(line) >= MAX_ANSWER_BYTES and not line.endswith("\n"):
+        return ""
     return line.strip()
 
 
@@ -417,32 +495,36 @@ def run_gate(
     depth: int = DEFAULT_DEPTH,
 ) -> int:
     """The decision loop, with inspection and prompting injected for tests."""
+    colour = _color_enabled(out)
     if not targets:
-        print("trustsight-gate: no target packages", file=out)
+        print(_paint("trustsight-gate: no target packages", "31", colour),
+              file=out)
         return EXIT_ERROR
     for package in targets[:MAX_TARGETS]:
         try:
             summary = summarize(inspect(package), fallback_package=package)
         except GateError as exc:
-            print(f"trustsight-gate: {exc}", file=out)
+            print(_paint(f"trustsight-gate: {exc}", "31", colour), file=out)
             return EXIT_ERROR
         render(summary, out)
         if approve_all:
-            print(f"   approved (--yes): {clean(package)}", file=out)
+            print(_paint(f"   approved (--yes): {clean(package)}", "32", colour),
+                  file=out)
             continue
         if refuse_all:
-            print(f"trustsight-gate: refused (--no): {clean(package)}", file=out)
+            print(_paint(f"trustsight-gate: refused (--no): {clean(package)}",
+                         "31", colour), file=out)
             return EXIT_REFUSED
         reply = answer(f"Continue with {clean(package)}? [y/N] ")
         if reply is None:
-            print(
+            print(_paint(
                 "trustsight-gate: no terminal for approval; aborting "
-                "(set --yes to approve non-interactively)",
-                file=out,
-            )
+                "(set --yes to approve non-interactively)", "31", colour),
+                file=out)
             return EXIT_NONINTERACTIVE
         if not _approved(reply):
-            print(f"trustsight-gate: refused: {clean(package)}", file=out)
+            print(_paint(f"trustsight-gate: refused: {clean(package)}",
+                         "31", colour), file=out)
             return EXIT_REFUSED
     return EXIT_APPROVED
 

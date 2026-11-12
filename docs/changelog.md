@@ -2,6 +2,21 @@
 
 # Changelog
 
+## [0.28.1] - 2026-11-12
+
+### Added
+
+- **A side-by-side `trustsight-dev` recipe.** `packaging/dev` derives its version from `git describe`, builds the parent checkout in place and keeps its state isolated from the released package, so the development build can be installed next to `trustsight` without sharing config, cache or database paths.
+
+### Fixed
+
+- **The AUR watcher runs inside a container again.** The store worker sets private mount propagation with `mount_setattr`, pins `HOME` to its private root and allows 60 seconds for a large store write. The container recipe now documents the AppArmor relaxation that must accompany `seccomp=unconfined`.
+- **A full corpus cycle no longer races its own store worker.** The corpus builder keeps `analyze_package_text` outside the parent write transaction and writes the snapshot and profile after analysis. This removes the `database is locked` failure on large cycles.
+- **Queued watch work continues without the live interval.** A partial cycle or a failed cycle with resume work pauses briefly (a short capped backoff for failures) instead of waiting for the next `--interval` tick.
+- **The gate prompt and output are terminal-safe.** The yay/paru gate prompts on a real terminal, trims and colours the report, and ignores commands inside printed text; the remaining printed-text and partial-array false positives are closed.
+- **H046 names the moved dependency and its new owner.** The finding and alert entry identify which adopted dependency exposed the dependent package, rather than naming only the dependent.
+- **Runtime-surface rules are tightened.** H009 through H013 avoid the false positives found in the 0.28.0 review while keeping the real runtime signals.
+
 ## [0.28.0] - 2026-11-11
 
 ### Added
@@ -5608,7 +5623,8 @@ separate reconciliation.
 - SQLite novelty tracking
 - LLM verdict integration
 - Basic CLI (review, inspect, history, config)
-[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.28.0...HEAD
+[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.28.1...HEAD
+[0.28.1]: https://github.com/emiliano-go/trustsight/releases/tag/v0.28.1
 [0.28.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.28.0
 [0.27.1]: https://github.com/emiliano-go/trustsight/releases/tag/v0.27.1
 [0.27.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.27.0

@@ -1,6 +1,4 @@
-<p align="center">
-  <strong style="font-size: 2.5em;">TrustSight</strong>
-</p>
+<h3 align="center">TrustSight</h3>
 
 <p align="center">
   <em>See beyond the package.</em>

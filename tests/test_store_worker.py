@@ -106,3 +106,14 @@ def test_read_and_write_modes_switch_the_connection():
     assert __import__("os").environ.get("TRUSTSIGHT_STORE_READ_ONLY") == "1"
     store_worker._handle(b'{"op":"set_metadata","args":["k","v"]}')
     assert __import__("os").environ.get("TRUSTSIGHT_STORE_READ_ONLY") is None
+
+
+def test_store_worker_pins_a_private_home_and_allows_a_large_write():
+    """The worker's root is a private tmpfs; a parent HOME path does not exist.
+
+    A real corpus write can also take longer than ten seconds, which used to be
+    reported as a dead worker.
+    """
+    source = inspect.getsource(store_client._Worker.start)
+    assert '"HOME": "/"' in source
+    assert store_client.REQUEST_TIMEOUT_SECONDS >= 60

@@ -420,6 +420,23 @@ def _mount_readonly(source: str, target: str, is_directory: bool) -> None:
                       f"mount_setattr({target}) failed")
 
 
+def _make_mount_tree_private(libc) -> None:
+    """Make the new mount namespace's tree private recursively.
+
+    The legacy ``mount(2)`` propagation change can be refused in a container
+    even after entering an unprivileged user namespace, while the equivalent
+    ``mount_setattr`` request is accepted.  Linux 6.12, the sandbox floor,
+    always provides ``mount_setattr``.
+    """
+    attributes = _MountAttr(0, 0, _MS_PRIVATE, 0)
+    libc.syscall.restype = ctypes.c_long
+    if libc.syscall(_syscall_number("mount_setattr"), _AT_FDCWD,
+                    b"/", _AT_RECURSIVE, ctypes.byref(attributes),
+                    ctypes.sizeof(attributes)) != 0:
+        raise OSError(ctypes.get_errno(),
+                      "mount_setattr(/) private mount propagation failed")
+
+
 def _enter_mount_namespace(repo_path: str, home_dir: str,
                           repo_writable: bool) -> None:
     """Build a minimal root so host paths simply do not exist.
@@ -435,7 +452,7 @@ def _enter_mount_namespace(repo_path: str, home_dir: str,
     libc = _mount_libc()
     if libc.unshare(_CLONE_NEWNS) != 0:
         raise OSError(ctypes.get_errno(), "unshare(CLONE_NEWNS) failed")
-    _mount(None, "/", None, _MS_REC | _MS_PRIVATE, None)
+    _make_mount_tree_private(libc)
 
     # Do not use tempfile.mkdtemp here: it probes a candidate directory by
     # creating a file, and a worker started with RLIMIT_FSIZE=0 would fail

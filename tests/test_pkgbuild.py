@@ -9,7 +9,7 @@ import tomllib
 
 ROOT = Path(__file__).resolve().parent.parent
 PKGBUILD_DIR = ROOT / "packaging" / "aur"
-LOCAL_PKGBUILD = ROOT / "packaging" / "local" / "PKGBUILD"
+DEV_PKGBUILD = ROOT / "packaging" / "dev" / "PKGBUILD"
 PYPROJECT = ROOT / "pyproject.toml"
 SRCINFO = PKGBUILD_DIR / ".SRCINFO"
 
@@ -395,8 +395,18 @@ def test_cryptography_is_not_in_optdepends():
     )
 
 
-def test_local_check_installs_the_wheel_without_reaching_the_index():
-    """packaging/local check() must not resolve dependencies from PyPI.
+def test_dev_wrappers_isolate_their_home_state():
+    """The dev command must not read or write the stable config or DB."""
+    body = DEV_PKGBUILD.read_text()
+    assert "trustsight-dev/home" in body
+    assert 'HOME="\\$dev_home"' in body
+    assert 'XDG_CONFIG_HOME="\\$dev_home/.config"' in body
+    assert 'XDG_DATA_HOME="\\$dev_home/.local/share"' in body
+    assert 'XDG_CACHE_HOME="\\$dev_home/.cache"' in body
+
+
+def test_dev_check_installs_the_wheel_without_reaching_the_index():
+    """packaging/dev check() must not resolve dependencies from PyPI.
 
     It ran ``python -m venv`` then ``pip install dist/*.whl``, which fetched
     the runtime deps from the index as the builder and left no pytest in the
@@ -405,9 +415,9 @@ def test_local_check_installs_the_wheel_without_reaching_the_index():
     depends/makedepends (python-pytest among them) come from the system via
     ``--system-site-packages``.
     """
-    text = LOCAL_PKGBUILD.read_text()
+    text = DEV_PKGBUILD.read_text()
     match = re.search(r"^check\(\) \{(.*?)^\}", text, re.M | re.S)
-    assert match, "packaging/local defines no check()"
+    assert match, "packaging/dev defines no check()"
     body = match.group(1)
     assert "--system-site-packages" in body, (
         "check() must inherit the system site-packages for its dependencies"

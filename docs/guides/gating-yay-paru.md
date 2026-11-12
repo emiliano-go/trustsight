@@ -98,13 +98,17 @@ the split package names from `.SRCINFO`.
 ```text
 :: TrustSight gate: demo-bin
    version: 1.1-1 (from 1.0-1)
-   verdict: review   risk: Medium   score: 35
+   risk: Medium   score: 35
+   verdict: review
    - H017 (HIGH): install hook changed [demo-bin.install:3]
 Continue with demo-bin? [y/N]
 ```
 
 The report goes to stderr and the prompt is read from the controlling
-terminal, so it still works when the manager's output is piped.
+terminal, so it still works when the manager's output is piped. A long verdict
+is collapsed to one line, INFO findings stay in the full report, a stale
+`rules.toml` prints the `config sync-rules --update` next step, and the risk,
+severity and coverage lines are coloured when the hook's stderr is a terminal.
 
 ## Exit codes
 

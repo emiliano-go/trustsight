@@ -4,7 +4,6 @@ import errno
 import json
 import logging
 import random
-import tarfile
 import threading
 import time
 import urllib.request
@@ -14,7 +13,6 @@ from pathlib import Path
 from typing import Optional
 
 from ..bounded_io import ReadTooLarge
-from ..analysis import archive_snapshot as _archive
 
 log = logging.getLogger(__name__)
 
@@ -226,26 +224,6 @@ def fetch_srcinfo(name: str) -> Optional[str]:
     return None
 
 
-def _pkgbuild_from_tarfile(tf: tarfile.TarFile, name: str) -> Optional[str]:
-    """Extract the PKGBUILD text from an open snapshot tarball."""
-    return _archive.pkgbuild_from_tarfile(
-        tf, name, max_members=MAX_TAR_MEMBERS,
-        max_member_bytes=MAX_TAR_MEMBER_BYTES,
-        max_total_bytes=MAX_TAR_TOTAL_BYTES,
-    )
-
-
-def _install_from_tarfile(
-    tf: tarfile.TarFile, name: str,
-) -> Optional[tuple[str, str]]:
-    """The first top-level ``*.install`` scriptlet in the snapshot, or None."""
-    return _archive.install_from_tarfile(
-        tf, name, max_members=MAX_TAR_MEMBERS,
-        max_member_bytes=MAX_TAR_MEMBER_BYTES,
-        max_total_bytes=MAX_TAR_TOTAL_BYTES,
-    )
-
-
 def _pkgbuild_from_snapshot(name: str) -> Optional[str]:
     """Download the snapshot tarball and extract PKGBUILD."""
     url = f"{_SNAPSHOT_URL}/{quote(name, safe='')}.tar.gz"
@@ -269,17 +247,6 @@ def _pkgbuild_from_snapshot(name: str) -> Optional[str]:
         log.warning("error extracting snapshot for %s", name)
         return None
     return parsed.get("pkgbuild")
-
-
-def _snapshot_manifest(
-    tf: tarfile.TarFile, max_members: int = MAX_TAR_MEMBERS,
-) -> tuple[list[tuple[str, bytes]], list[tuple[str, str]], bool]:
-    """Heads, bounded manifest text, and whether the text is complete."""
-    return _archive.snapshot_manifest(
-        tf, max_members=max_members,
-        max_member_bytes=MAX_TAR_MEMBER_BYTES,
-        max_total_bytes=MAX_TAR_TOTAL_BYTES,
-    )
 
 
 def _fetch_snapshot_tarball(name: str) -> Optional[bytes]:
@@ -345,9 +312,9 @@ def fetch_pkgbuild_with_tree(
     if body is not None:
         try:
             parsed = manifest_client.parse_snapshot(
-            name, body, max_members=MAX_TAR_MEMBERS,
-            max_member_bytes=MAX_TAR_MEMBER_BYTES,
-            max_total_bytes=MAX_TAR_TOTAL_BYTES)
+                name, body, max_members=MAX_TAR_MEMBERS,
+                max_member_bytes=MAX_TAR_MEMBER_BYTES,
+                max_total_bytes=MAX_TAR_TOTAL_BYTES)
         except manifest_client.ManifestUnavailable as e:
             log.warning("snapshot for %s refused: %s", name, e)
             refused = True

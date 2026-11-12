@@ -41,11 +41,14 @@ makepkg -si
 ```
 
 To build the checkout you just cloned, with no second download of the same
-sources from GitHub, use the local recipe instead. It derives `pkgver` from
-`git describe` and builds the tree in place:
+sources from GitHub, use the development recipe instead. It installs
+`trustsight-dev` beside the released package and adds `trustsight-dev` and
+`trustsight-gate-dev` wrappers with isolated state under
+`~/.local/share/trustsight-dev/home`, warns that it is not a release, derives
+`pkgver` from `git describe` and builds the tree in place:
 
 ```bash
-cd trustsight/packaging/local
+cd trustsight/packaging/dev
 makepkg -si
 ```
 

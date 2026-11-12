@@ -544,6 +544,7 @@ changes behaviour is a config key or a command flag.
 | `FORCE_COLOR` | Any non-empty value | Forces Rich output even when stdout is not a terminal. |
 | `TRUSTSIGHT_FORCE_RICH` | Any non-empty value | The same as `FORCE_COLOR`, for callers that already use `FORCE_COLOR` for something else. |
 | `TRUSTSIGHT_DOC_CACHE` | A directory path | Overrides where the parsed-document cache stores its JSON entries. Default: `$XDG_CACHE_HOME/trustsight/documents`. |
+| `TRUSTSIGHT_DEV_BUILD` | `1` | Set by the `packaging/dev` wrappers. Appends `-dev` to the `--version` output; the released package does not set it. |
 | `TRUSTSIGHT_BIN` | A path | The `trustsight` executable `trustsight-gate` runs. Default: `trustsight` on `PATH`, else the running interpreter's `-m trustsight` module. |
 | `TRUSTSIGHT_GATE_DISABLE` | `1` | Skip the `trustsight-gate` approval step. It logs that it did; the bypass is for emergencies, not routine use. |
 | `TRUSTSIGHT_GATE_BIN` | A path | The `trustsight-gate` executable the yay `init.lua` hook runs. Default: `trustsight-gate` on `PATH`. |

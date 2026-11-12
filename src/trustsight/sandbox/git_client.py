@@ -20,8 +20,6 @@ import base64
 import json
 import logging
 import os
-import select
-import signal
 import stat
 import threading
 import time
@@ -31,7 +29,7 @@ from pathlib import Path
 
 from ..coverage import note_stage_failure
 from ..schema import DiffSummary
-from . import protocol
+from . import _worker_io, protocol
 from ._aur_proxy import AurFetchProxy
 from ._spawn import spawn_isolated
 from .git_bounds import (
@@ -69,22 +67,6 @@ class GitOpError(RuntimeError):
 
 class GitTransferTooLargeError(GitOpError):
     """The worker aborted a transfer at its per-transfer byte ceiling."""
-
-
-def _read_exact(fd: int, n: int, deadline: float) -> bytes:
-    out = bytearray()
-    while len(out) < n:
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            raise GitSandboxUnavailable("timed out")
-        ready, _, _ = select.select([fd], [], [], remaining)
-        if not ready:
-            raise GitSandboxUnavailable("timed out")
-        chunk = os.read(fd, n - len(out))
-        if not chunk:
-            raise GitSandboxUnavailable("worker closed the channel")
-        out.extend(chunk)
-    return bytes(out)
 
 
 def _worker_cpu_seconds(pid: int) -> float:
@@ -284,23 +266,7 @@ class GitSession:
         if stop is not None:
             stop.set()
         if proc is not None:
-            try:
-                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-            except (ProcessLookupError, PermissionError, OSError):
-                try:
-                    proc.kill()
-                except OSError:
-                    pass
-            try:
-                proc.wait(timeout=2)
-            except Exception:
-                pass
-            for pipe in (proc.stdin, proc.stdout, proc.stderr):
-                if pipe is not None:
-                    try:
-                        pipe.close()
-                    except OSError:
-                        pass
+            _worker_io.stop_process(proc)
         if monitor is not None and monitor is not threading.current_thread():
             monitor.join(timeout=1)
         self._monitor_thread = None
@@ -340,24 +306,13 @@ class GitSession:
         proc = self.proc
         if proc is None:
             return
-        try:
-            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-        except (ProcessLookupError, PermissionError, OSError):
-            try:
-                proc.kill()
-            except OSError:
-                pass
+        _worker_io.kill_process_group(proc)
 
     def _drain_stderr(self) -> None:
-        proc = self.proc
-        if proc is None or proc.stderr is None:
-            return
-        try:
-            for line in proc.stderr:
-                _log.debug("git worker: %s",
-                           line.decode("utf-8", "replace").rstrip())
-        except (OSError, ValueError):
-            pass
+        _worker_io.drain_stderr(
+            self.proc,
+            lambda text: _log.debug("git worker: %s", text),
+        )
 
     def request(self, op: str, payload: dict,
                 timeout: float = GIT_OP_TIMEOUT_SECONDS) -> dict:
@@ -389,14 +344,17 @@ class GitSession:
         deadline = time.monotonic() + timeout
         try:
             protocol.write_frame(self.proc.stdin.fileno(), body, deadline)
-            header = _read_exact(self.proc.stdout.fileno(),
-                                 protocol.HEADER.size, deadline)
+            header = _worker_io.read_exact(
+                self.proc.stdout.fileno(), protocol.HEADER.size, deadline,
+                GitSandboxUnavailable)
             (length,) = protocol.HEADER.unpack(header)
             if length > protocol.MAX_RESPONSE_BYTES:
                 raise GitSandboxUnavailable(
                     f"response of {length} bytes exceeds the "
                     f"{protocol.MAX_RESPONSE_BYTES}-byte cap")
-            raw = _read_exact(self.proc.stdout.fileno(), length, deadline)
+            raw = _worker_io.read_exact(
+                self.proc.stdout.fileno(), length, deadline,
+                GitSandboxUnavailable)
             response = json.loads(raw.decode("utf-8"))
         except GitSandboxUnavailable:
             self.close()

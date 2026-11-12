@@ -1,7 +1,6 @@
 """Extracted from inspect.py: commands."""
 
 import json
-import sys
 from typing import Optional
 import typer
 from ...config import ensure_default_configs, load_config
@@ -372,10 +371,13 @@ def _read_manifest(path: str) -> list:
     """Read an artifact manifest: a JSON array of file records."""
     from pathlib import Path
 
-    data = Path(path).read_bytes()
-    if len(data) > _MAX_MANIFEST_BYTES:
-        raise typer.BadParameter(
-            f"manifest is {len(data)} bytes; the cap is {_MAX_MANIFEST_BYTES}")
+    from ...bounded_io import ReadTooLarge, read_file_capped
+
+    try:
+        data = read_file_capped(
+            Path(path), _MAX_MANIFEST_BYTES, "artifact manifest")
+    except ReadTooLarge as exc:
+        raise typer.BadParameter(str(exc)) from exc
     try:
         parsed = json.loads(data)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -502,11 +504,13 @@ def _inspect_history(
                 record=record,
             )
         except Exception as _exc:
-            import traceback as _tb
-            _tb.print_exc(file=sys.stderr)
-            # Emitted as its own result, not dropped: a crash must not read
-            # as a clean older commit, and it must not be mislabelled as a
-            # truncated walk (the result count stays whole).
+            # A traceback writes ``str(exc)`` unescaped, and the exception can
+            # carry package-controlled text.  Keep the failure visible as one
+            # cleaned line; the result below is still emitted, not dropped.
+            _print_colored(
+                f"analysis of {clean(str(commit.id))} failed: "
+                f"{clean(str(_exc))}",
+                "red", stderr=True)
             results.append(_failed_history_result(commit, f"analysis failed: {_exc}"))
             continue
 

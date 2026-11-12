@@ -660,9 +660,9 @@ def _tar_with_files(files):
 
 
 def test_snapshot_reads_manifest_text_whole_and_keeps_heads_short():
-    from trustsight.full_aur.fetch import _snapshot_manifest
+    from trustsight.analysis import archive_snapshot
 
-    heads, texts, complete = _snapshot_manifest(_tar_with_files([
+    heads, texts, complete = archive_snapshot.snapshot_manifest(_tar_with_files([
         ("demo/PKGBUILD", b"pkgname=demo\n" * 20),
         ("demo/Cargo.toml", CARGO.encode()),
     ]))
@@ -674,11 +674,10 @@ def test_snapshot_reads_manifest_text_whole_and_keeps_heads_short():
 
 
 def test_snapshot_refuses_an_oversize_manifest_and_flags_incomplete(monkeypatch):
-    from trustsight.analysis import manifests
-    from trustsight.full_aur.fetch import _snapshot_manifest
+    from trustsight.analysis import archive_snapshot, manifests
 
     monkeypatch.setattr(manifests, "MAX_UPSTREAM_MANIFEST_BYTES", 8)
-    heads, texts, complete = _snapshot_manifest(
+    heads, texts, complete = archive_snapshot.snapshot_manifest(
         _tar_with_files([("demo/Cargo.toml", CARGO.encode())]))
     assert not complete
     assert texts == []

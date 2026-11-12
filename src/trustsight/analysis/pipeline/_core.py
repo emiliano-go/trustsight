@@ -71,45 +71,6 @@ from ._tree import _deps_not_scanned, _has_noextract, _scriptlet_files_unread
 
 
 @dataclass(frozen=True)
-class AnalysisRequest:
-    """One analysis request, shared by the git and corpus entry points.
-
-    The public functions keep their original signatures; each builds this
-    object once.  A new option is added here instead of in two signatures
-    that were already 12 and 20 parameters long.
-    """
-
-    package: str
-    old_version: str = ""
-    new_version: str = ""
-    old_commit: str = ""
-    new_commit: str = ""
-    installed_version: str | None = None
-    upstream_mtime: int | None = None
-    aur_orphaned: bool | None = None
-    maintainer: str = ""
-    old_maintainer: str = ""
-    temporal: Any = None
-    srcinfo: str | None = None
-    install_text: str | None = None
-    install_name: str | None = None
-    old_install_text: str | None = None
-    tree_manifest: list | None = None
-    archive_trailer_finding: dict | None = None
-    snapshot_refused: bool = False
-    upstream_manifest_incomplete: bool = False
-    popular_candidates: list | None = None
-    package_popularity: int | None = None
-    manifest_deltas: tuple = ()
-    workflow_deltas: tuple = ()
-    depth: int | None = None
-    depth_seen: set | None = None
-    record: bool = False
-    full_recipe: bool = False
-    allow_cached: bool = False
-
-
-@dataclass(frozen=True)
 class ScanInput:
     """Everything the shared scan needs, with path-specific hooks.
 

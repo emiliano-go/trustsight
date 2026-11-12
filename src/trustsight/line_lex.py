@@ -257,9 +257,6 @@ def _scan(line: str, state: QuoteState) -> tuple[str, QuoteState, list[tuple[str
     openers: list[tuple[str, bool]] = []
     quoted = bool(stack)
 
-    def code_context() -> bool:
-        return not stack or stack[-1] in ("$(", "`")
-
     while i < n:
         ch = line[i]
         top = stack[-1] if stack else ""

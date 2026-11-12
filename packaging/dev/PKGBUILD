@@ -1,0 +1,156 @@
+# Maintainer: Emiliano Gandini Outeda <e@emiliano-go.com>
+#
+# ============================================================================
+#  WARNING: trustsight-dev is a DEVELOPMENT build.
+#  It builds the checkout this file sits in, not a signed release.  It can be
+#  mid-change, unverified, or broken.  It installs beside the packaged
+#  `trustsight` package under /opt/trustsight-dev and adds `trustsight-dev`
+#  and `trustsight-gate-dev` wrappers; it never replaces the stable commands.
+#  The wrappers keep the dev config, database and cache in
+#  ~/.local/share/trustsight-dev/home, separate from the stable state.
+#  Do not use it for everyday installs.
+# ============================================================================
+#
+# The release PKGBUILD in packaging/aur/ pins one published tarball so AUR
+# and release builds are reproducible.  This recipe is the other half:
+# `cd packaging/dev && makepkg -si` builds exactly the tree you cloned and
+# reviewed, offline.
+#
+# source=() is intentional.  There is nothing to fetch; the "source" is the
+# parent checkout, and pkgver() derives the version from its tags.
+
+pkgname=trustsight-dev
+pkgver=0.0.0
+pkgrel=1
+pkgdesc='Development build of TrustSight, from the checkout (not a release)'
+arch=('any')
+url='https://github.com/emiliano-go/trustsight'
+license=('MIT')
+depends=(
+  'python'
+  'python-pygit2>=1.20.1'
+  'python-tldextract'
+  'python-rich'
+  'python-typer'
+  'python-pydantic>=2.0'
+  'python-cryptography'
+  'python-yaml'
+)
+makedepends=(
+  'git'
+  'python-build'
+  'python-installer'
+  'python-wheel'
+  'python-hatchling'
+  'python-pytest'
+  'python-pytest-xdist'
+)
+optdepends=(
+  'pyalpm: native version comparison (faster discovery)'
+)
+# The dev tree lives under /opt so it can sit beside the release package: its
+# Python package and commands never share a file with `trustsight`.
+install=trustsight-dev.install
+source=()
+sha256sums=()
+
+pkgver() {
+  cd "$startdir/../.."
+  # A shallow clone of master has no tags, where `git describe` fails and a
+  # bare pipe would yield an empty pkgver and abort makepkg.  Capture it
+  # first so the failure is visible, and fall back to a commit-derived
+  # version.
+  local describe
+  if describe=$(git describe --long --tags --match 'v[0-9]*' 2>/dev/null); then
+    printf '%s\n' "$describe" | sed 's/^v//; s/\([^-]*-g\)/r\1/; s/-/./g'
+  else
+    printf '0.0.0.r%s.g%s\n' \
+      "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+  fi
+}
+
+prepare() {
+  printf '\n==> WARNING: trustsight-dev is a development build from %s.\n' \
+    "$startdir/../.." >&2
+  printf '==> It is not a signed release. It installs beside trustsight under /opt.\n' >&2
+  printf '==> It should not be used for everyday installs.\n\n' >&2
+}
+
+build() {
+  cd "$startdir/../.."
+  mkdir -p "$srcdir/dist"
+  rm -f "$srcdir/dist/"*.whl
+  python -m build --wheel --no-isolation --outdir "$srcdir/dist"
+}
+
+check() {
+  cd "$startdir/../.."
+  # Test the wheel this recipe just built, with the interpreter that will
+  # import it.  The venv inherits the system site-packages, so the declared
+  # depends and makedepends (including python-pytest) come from the system
+  # and nothing is fetched from an index.  Installing the wheel into the
+  # venv's own site-packages puts it ahead of any installed `trustsight` on
+  # sys.path, so the check exercises the build, not a stale package or src/.
+  local venv="$srcdir/_test-env"
+  # A stale user-site package shadows the system python-pygit2 for a
+  # --system-site-packages venv, so the suite would test the builder's user
+  # install rather than the declared dependency.
+  export PYTHONNOUSERSITE=1
+  mkdir -p "$srcdir"
+  rm -rf "$venv"
+  python -m venv --system-site-packages "$venv"
+  # Drop inherited trustsight files so the fresh wheel installs cleanly.
+  find "$venv/lib" -path '*/trustsight*' -exec rm -rf {} + 2>/dev/null || true
+  rm -f "$venv/bin/trustsight"
+  "$venv/bin/python" -m installer "$srcdir"/dist/*.whl
+  # test_fetcher and test_rebaseline need network/corpus; test_contract_artifact
+  # needs the repository-root contract/contract.json, which is not part of the
+  # wheel this check installs.  They are repo gates, not package gates.
+  "$venv/bin/python" -m pytest tests/ -q \
+    --ignore=tests/test_fetcher.py \
+    --ignore=tests/test_rebaseline.py \
+    --ignore=tests/test_contract_artifact.py
+}
+
+package() {
+  cd "$startdir/../.."
+  local pyver site
+  pyver=$(python -c 'import sys; print(f"python{sys.version_info.major}.{sys.version_info.minor}")')
+  site="/opt/trustsight-dev/lib/$pyver/site-packages"
+  python -m installer --destdir="$pkgdir" --prefix=/opt/trustsight-dev \
+    "$srcdir"/dist/*.whl
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+
+  install -d "$pkgdir/usr/bin"
+  cat > "$pkgdir/usr/bin/trustsight-dev" <<EOF
+#!/bin/sh
+dev_home="\${HOME:?}/.local/share/trustsight-dev/home"
+(umask 077 && mkdir -p "\$dev_home")
+PYTHONPATH="$site\${PYTHONPATH:+:\$PYTHONPATH}" \
+HOME="\$dev_home" \
+XDG_CONFIG_HOME="\$dev_home/.config" \
+XDG_DATA_HOME="\$dev_home/.local/share" \
+XDG_CACHE_HOME="\$dev_home/.cache" \
+TRUSTSIGHT_DEV_BUILD=1 \
+exec /usr/bin/python -m trustsight "\$@"
+EOF
+  chmod 755 "$pkgdir/usr/bin/trustsight-dev"
+
+  cat > "$pkgdir/usr/bin/trustsight-gate-dev" <<EOF
+#!/bin/sh
+dev_home="\${HOME:?}/.local/share/trustsight-dev/home"
+(umask 077 && mkdir -p "\$dev_home")
+PYTHONPATH="$site\${PYTHONPATH:+:\$PYTHONPATH}" \
+HOME="\$dev_home" \
+XDG_CONFIG_HOME="\$dev_home/.config" \
+XDG_DATA_HOME="\$dev_home/.local/share" \
+XDG_CACHE_HOME="\$dev_home/.cache" \
+TRUSTSIGHT_DEV_BUILD=1 \
+TRUSTSIGHT_BIN=/usr/bin/trustsight-dev \
+exec /usr/bin/python -c 'from trustsight.gate import entrypoint; entrypoint()' "\$@"
+EOF
+  chmod 755 "$pkgdir/usr/bin/trustsight-gate-dev"
+}
+
+# vim:set ts=2 sw=2 et:

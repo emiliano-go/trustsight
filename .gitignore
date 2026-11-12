@@ -33,9 +33,9 @@ packaging/aur/pkg/
 packaging/aur/src/
 packaging/aur/*.tar.gz
 packaging/aur/*.pkg.tar.*
-packaging/local/pkg/
-packaging/local/src/
-packaging/local/*.pkg.tar.*
+packaging/dev/pkg/
+packaging/dev/src/
+packaging/dev/*.pkg.tar.*
 
 # Local probe-corpus replay output (scratch, not shipped)
 /probe*.json

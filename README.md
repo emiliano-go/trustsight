@@ -62,7 +62,7 @@ git clone --depth 1 --branch "$(git ls-remote --tags --refs --sort=-v:refname \
 cd trustsight/packaging/aur
 makepkg -si
 # Or build the checkout in place, with no second download:
-#   cd trustsight/packaging/local && makepkg -si
+#   cd trustsight/packaging/dev && makepkg -si   # trustsight-dev, not a release
 
 # 3. Scan your outdated AUR packages
 trustsight review

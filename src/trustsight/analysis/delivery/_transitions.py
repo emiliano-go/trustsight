@@ -157,6 +157,7 @@ def install_hook_notice_only(diff_text: str, hook_name: str = "") -> bool:
         printed = _printed_heredoc_body_indices(body_lines)
         quoted = _printer_quote_body_indices(body_lines)
         saw_printer = False
+        continued_print = False
         for index, raw in enumerate(body_lines):
             if index in printed or index in quoted:
                 continue
@@ -165,7 +166,16 @@ def install_hook_notice_only(diff_text: str, hook_name: str = "") -> bool:
                 continue
             if _PRINTER_LINE_RE.match(raw) or _CAT_LINE_RE.match(raw):
                 saw_printer = True
+                continued_print = raw.rstrip().endswith("\\")
                 line = _blank_quoted(line)
+            elif continued_print:
+                # A shell line continuation carries the printer's later
+                # arguments.  Skip a line made only of quoted text and a
+                # trailing backslash; a real command after the quote is
+                # still behaviour and falls through.
+                continued_print = raw.rstrip().endswith("\\")
+                if not _blank_quoted(line).strip().strip("\\").strip():
+                    continue
             if line in ("{", "}") or line in heredoc_delimiters:
                 continue
             if _HOOK_DANGER_RE.search(line):

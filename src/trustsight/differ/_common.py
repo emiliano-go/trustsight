@@ -5,7 +5,7 @@ from ..buckets import _SOURCE_ARRAY_START_RE
 from ..diffdoc import parse_diff_lines
 from ..tokenizer import split_lines
 
-__all__ = ['_SOURCE_ARRAY_START_RE', '_SOURCE_ARRAY_START_RE_TEXT', '_clean_url', '_is_metadata_path', '_post_diff_lines', '_pre_diff_lines']
+__all__ = ['_SOURCE_ARRAY_START_RE', '_SOURCE_ARRAY_START_RE_TEXT', '_clean_url', '_is_metadata_path', '_post_diff_lines', '_pre_diff_lines', 'pre_image_from_post']
 
 def _is_metadata_path(path: str) -> bool:
     """Whether a delta path is one the analysis reads."""
@@ -34,6 +34,39 @@ def _clean_url(token: str) -> str:
     return token
 
 _SOURCE_ARRAY_START_RE_TEXT = re.compile(_SOURCE_ARRAY_START_RE.pattern, re.MULTILINE)
+
+
+def pre_image_from_post(diff_text: str, post_text: str) -> str | None:
+    """Rebuild the PKGBUILD before the change from the post file and diff.
+
+    A hunk can start inside an array, leaving its opener outside the diff.
+    Reconstructing only from the hunk then reads an incomplete array and
+    loses a removed source entry.  Applying the hunks in reverse to the
+    full post text restores the whole pre image.
+
+    Returns ``None`` when the diff has no PKGBUILD hunk or when a hunk does
+    not match *post_text*; callers must keep their diff-only fallback then.
+    """
+    if not post_text:
+        return None
+    doc = parse_diff_lines(split_lines(diff_text))
+    target = next((f for f in doc.files if f.path == "PKGBUILD"), None)
+    if target is None or not target.hunks:
+        return None
+    lines = split_lines(post_text)
+    for hunk in reversed(target.hunks):
+        post_segment = [
+            line.content for line in hunk.lines if line.side != "remove"
+        ]
+        pre_segment = [
+            line.content for line in hunk.lines if line.side != "add"
+        ]
+        start = hunk.new_start - 1
+        end = start + len(post_segment)
+        if start < 0 or end > len(lines) or lines[start:end] != post_segment:
+            return None
+        lines[start:end] = pre_segment
+    return "\n".join(lines)
 
 def _post_diff_lines(diff_text: str) -> list[str]:
     """Reconstruct the post-diff file content lines.

@@ -155,6 +155,7 @@ docker run --rm -it \
   --cap-drop=all \
   --security-opt=no-new-privileges \
   --security-opt=seccomp=unconfined \
+  --security-opt=apparmor=unconfined \
   --pids-limit=512 --memory=2g --cpus=2 \
   -v trustsight-data:/home/ts/.local/share/trustsight \
   -v trustsight-config:/home/ts/.config/trustsight \
@@ -178,11 +179,12 @@ user's terminal and AUR helper config. Use the dedicated account for those.
 
 Container details that matter:
 
-- Docker's built-in seccomp profile denies `unshare`, which the parser workers
-  need to enter their user and network namespaces. `--security-opt
-  seccomp=unconfined` removes that outer filter; the workers still install
+- Docker's built-in seccomp and AppArmor profiles deny `unshare` and `mount`,
+  which the parser workers need to enter their user, network and mount
+  namespaces. `--security-opt seccomp=unconfined --security-opt
+  apparmor=unconfined` removes those outer filters; the workers still install
   their own seccomp allowlist, drop every capability and enter the namespaces
-  themselves. Without the flag the workers refuse and the package is reported
+  and private mount tree themselves. Without the flag the workers refuse and the package is reported
   as not vetted. If you cannot relax the outer filter, use a custom profile
   that permits `unshare`, or the account route instead.
 - The container kernel must also allow unprivileged user namespaces. On a

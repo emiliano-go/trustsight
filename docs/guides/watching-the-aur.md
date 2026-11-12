@@ -196,8 +196,9 @@ For a container, mount the feed key as a secret and point
 `TRUSTSIGHT_FEED_KEY_FILE` at it rather than putting the private key in the
 environment. The shipped compose file runs read-only with a tmpfs for `/tmp`
 and the cache, drops all capabilities, sets `no-new-privileges`, and permits
-the parser workers' `unshare` with `seccomp=unconfined` (the workers still
-apply their own seccomp allowlist and namespace floor).
+the parser workers' `unshare` and mount operations with `seccomp=unconfined`
+and `apparmor=unconfined` (the workers still apply their own seccomp
+allowlist and namespace/mount floor).
 
 ## As a systemd service
 
@@ -235,6 +236,7 @@ The image is published to the GitHub Container Registry on every release:
 docker run -d --name trustsight-watch \
   --user 1000:1000 \
   --security-opt seccomp=unconfined \
+  --security-opt apparmor=unconfined \
   -v trustsight-data:/home/ts/.local/share/trustsight \
   -v $PWD/trustsight-config:/home/ts/.config/trustsight \
   --restart unless-stopped \
@@ -254,8 +256,9 @@ set `TRUSTSIGHT_NO_SYNC_RULES=1` to skip the sync deliberately. The
 container runtime must allow unprivileged user namespaces: if it does not, the
 parser workers refuse and the package is reported as not vetted rather than
 analysed with weaker confinement. With Docker, also pass `--security-opt
-seccomp=unconfined` (or a custom profile that permits `unshare`), because the
-built-in profile denies the namespace syscall. The process needs no
+seccomp=unconfined --security-opt apparmor=unconfined` (or custom profiles
+that permit `unshare` and `mount`), because the built-in profiles deny the
+namespace and mount syscalls. The process needs no
 privileges. See
 [Reducing Blast Radius](reducing-blast-radius.md) for the boundary around the
 auditor and what it does not cover.

@@ -13,7 +13,9 @@ from . import _worker_io, protocol
 from ._spawn import spawn_isolated
 
 WORKER_MODULE = "trustsight.sandbox.store_worker"
-REQUEST_TIMEOUT_SECONDS = 10.0
+#: A full-AUR cycle can queue a large write against a multi-hundred-megabyte
+#: corpus; a shorter deadline turns a slow checkpoint into a false failure.
+REQUEST_TIMEOUT_SECONDS = 60.0
 MAX_REQUESTS_PER_WORKER = 1024
 MAX_REQUEST_BYTES = 16 * 1024 * 1024
 
@@ -34,6 +36,10 @@ class _Worker:
             WORKER_MODULE,
             extra_env={
                 "TRUSTSIGHT_DB_PATH": self.db_path,
+                # The child's root is a private tmpfs; a parent HOME path does
+                # not exist there.  Config constants are derived at import
+                # time, so pin HOME to the sandbox root.
+                "HOME": "/",
             },
         )
         self.requests = 0

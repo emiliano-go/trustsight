@@ -336,6 +336,57 @@ def test_a_raising_fetch_is_tolerated_and_the_cycle_completes(monkeypatch):
     assert saved.get("processed") == ["demo"]
 
 
+def test_corpus_analysis_runs_outside_the_parent_write_transaction(monkeypatch):
+    """A full cycle must not hold a parent write transaction around analysis.
+
+    The store worker owns the analysis writes. Holding the parent transaction
+    while calling into it was the ``database is locked`` race on large cycles.
+    """
+    from types import SimpleNamespace
+
+    import trustsight.full_aur.pipeline as pipeline
+    from trustsight.db import get_connection
+
+    observed: dict = {}
+
+    def _analyze(*args, **kwargs):
+        with get_connection() as conn:
+            observed["in_transaction"] = conn.in_transaction
+        return SimpleNamespace(
+            final_score=0, new_version="1.0", ioc_matches=(),
+            score_breakdown=(), coverage_gaps=(), dependency_changes={},
+            risk="", package_name="demo",
+        )
+
+    monkeypatch.setattr(pipeline, "fetch_metadata",
+                        lambda *a, **k: {"demo": {"Version": "1.0", "Maintainer": "a"}})
+    monkeypatch.setattr(pipeline, "load_metadata",
+                        lambda *a, **k: {"demo": {"Version": "1.0", "Maintainer": "a"}})
+    monkeypatch.setattr(pipeline, "diff_metadata",
+                        lambda old, new: {"demo": "modified"})
+    monkeypatch.setattr(pipeline, "load_resume_state", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline, "fetch_pkgbuild_with_tree",
+                        lambda *a, **k: ("pkgver=1\n", None, None, False,
+                                         None, None, None, True))
+    monkeypatch.setattr(pipeline, "get_pkgbuild_snapshot", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline, "is_reserved_name", lambda _n: False)
+    monkeypatch.setattr(pipeline, "_pkg_or_base", lambda _m: "demo")
+    monkeypatch.setattr(pipeline, "source_repos_from_pkgbuild", lambda *a, **k: [])
+    monkeypatch.setattr(pipeline, "save_pkgbuild_snapshot", lambda **k: None)
+    monkeypatch.setattr(pipeline, "save_package_profile", lambda **k: None)
+    monkeypatch.setattr(pipeline, "clear_resume_state", lambda: None)
+    monkeypatch.setattr(pipeline, "save_metadata", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline, "_run_corpus_sweep", lambda *a, **k: [])
+    monkeypatch.setattr(pipeline, "record_alerts", lambda *a, **k: [])
+    monkeypatch.setattr(pipeline, "save_resume_state", lambda state: None)
+    monkeypatch.setattr(pipeline, "analyze_package_text", _analyze)
+
+    result = pipeline.run_baseline_build()
+
+    assert observed == {"in_transaction": False}
+    assert result.processed == 1
+
+
 def test_a_not_vetted_package_survives_the_cycle_and_is_retried(monkeypatch):
     """A6: the tokenizer sandbox failing one package must not abort the cycle.
 

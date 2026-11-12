@@ -469,6 +469,8 @@ def test_h046_fires_on_dep_adopted_this_cycle(thresholds):
     assert len(findings) == 1
     assert findings[0]["severity"] == "MEDIUM"
     assert findings[0]["params"]["dep"] == "dep"
+    assert findings[0]["params"]["dependency_status"] == "adopted"
+    assert findings[0]["params"]["dependency_new_maintainer"] == "mallory"
 
 
 def test_h046_fires_on_dep_orphaned_this_cycle(thresholds):
@@ -482,6 +484,8 @@ def test_h046_fires_on_dep_orphaned_this_cycle(thresholds):
     findings = _fire("H046", new, old)
     assert len(findings) == 1
     assert "orphaned" in findings[0]["match"]
+    assert findings[0]["params"]["dependency_status"] == "orphaned"
+    assert findings[0]["params"]["dependency_old_maintainer"] == "alice"
 
 
 def test_h046_longstanding_orphan_dep_is_quiet(thresholds):

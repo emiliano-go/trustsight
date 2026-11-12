@@ -132,6 +132,51 @@ def test_dependency_alerts_name_the_adopted_dependency():
     }]
 
 
+def test_dependency_alerts_name_the_adopter_and_the_status():
+    """The feed says which dependency moved and who moved it."""
+    cycle = _cycle(
+        new_alerts=[("dependent", "H046")],
+        cluster_findings=[{
+            "rule_id": "H046",
+            "params": {
+                "members": ["dependent"],
+                "dep": "pyside6",
+                "dependency_status": "adopted",
+                "dependency_old_maintainer": "",
+                "dependency_new_maintainer": "sonicdesktop",
+            },
+        }],
+    )
+    assert alert_payload(cycle)["alerts"] == [{
+        "package": "dependent", "rule_id": "H046",
+        "dependency": "pyside6",
+        "dependency_status": "adopted",
+        "dependency_new_maintainer": "sonicdesktop",
+    }]
+
+
+def test_dependency_alerts_name_the_previous_owner_of_an_orphan():
+    cycle = _cycle(
+        new_alerts=[("dependent", "H046")],
+        cluster_findings=[{
+            "rule_id": "H046",
+            "params": {
+                "members": ["dependent"],
+                "dep": "pyside6",
+                "dependency_status": "orphaned",
+                "dependency_old_maintainer": "oldm",
+                "dependency_new_maintainer": "",
+            },
+        }],
+    )
+    assert alert_payload(cycle)["alerts"] == [{
+        "package": "dependent", "rule_id": "H046",
+        "dependency": "pyside6",
+        "dependency_status": "orphaned",
+        "dependency_old_maintainer": "oldm",
+    }]
+
+
 def test_alerts_fall_back_to_the_cycle_detail_for_a_maintainer_change():
     """H074 names only the adopter; the previous owner is in the detail."""
     cycle = _cycle(

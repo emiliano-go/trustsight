@@ -24,12 +24,11 @@ import logging
 import os
 import queue
 import select
-import signal
 import threading
 import time
 from collections import OrderedDict
 
-from . import protocol
+from . import _worker_io, protocol
 from ._spawn import launch_args, spawn_isolated
 from ..subproc import minimal_env
 
@@ -93,17 +92,10 @@ class _Worker:
         self._stderr_thread.start()
 
     def _drain_stderr(self) -> None:
-        proc = self.proc
-        if proc is None or proc.stderr is None:
-            return
-        try:
-            for line in proc.stderr:
-                _log.debug(
-                    "tokenizer worker: %s",
-                    line.decode("utf-8", "replace").rstrip(),
-                )
-        except (OSError, ValueError):
-            pass
+        _worker_io.drain_stderr(
+            self.proc,
+            lambda text: _log.debug("tokenizer worker: %s", text),
+        )
 
     def alive(self) -> bool:
         return self.proc is not None and self.proc.poll() is None
@@ -111,30 +103,7 @@ class _Worker:
     def stop(self) -> None:
         proc = self.proc
         self.proc = None
-        if proc is None:
-            return
-        try:
-            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-        except (ProcessLookupError, PermissionError, OSError):
-            try:
-                proc.kill()
-            except OSError:
-                pass
-        try:
-            proc.wait(timeout=2)
-        except Exception:
-            pass
-        finally:
-            # Close the pipe handles even when the kill failed.  A retired
-            # worker that leaves stdin/stdout/stderr open leaks descriptors
-            # across a long full-aur run; the child's death does not close
-            # the parent's ends.
-            for pipe in (proc.stdin, proc.stdout, proc.stderr):
-                if pipe is not None:
-                    try:
-                        pipe.close()
-                    except OSError:
-                        pass
+        _worker_io.stop_process(proc)
 
     def request(self, body: bytes) -> bytes:
         if self.proc is None or self.proc.stdin is None or self.proc.stdout is None:

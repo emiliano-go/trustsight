@@ -445,7 +445,7 @@ def test_snapshot_manifest_bounds_total_members():
     A bound on ``len(manifest)`` stays at zero when every member is a
     directory, which lets a tar of directories consume the whole archive.
     """
-    from trustsight.full_aur.fetch import _snapshot_manifest
+    from trustsight.analysis import archive_snapshot
 
     class EndlessTar:
         def __init__(self, n):
@@ -460,7 +460,7 @@ def test_snapshot_manifest_bounds_total_members():
                 yield info
 
     fake = EndlessTar(10_000)
-    assert _snapshot_manifest(fake, max_members=5)[0] == []
+    assert archive_snapshot.snapshot_manifest(fake, max_members=5)[0] == []
     # At most `max_members` processed plus one already yielded by the
     # iterator when the check breaks the loop.
     assert fake.consumed <= 6

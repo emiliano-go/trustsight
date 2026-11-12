@@ -28,6 +28,7 @@ from trustsight.coverage import (
     gaps_from,
     qualified_band,
 )
+from trustsight.analysis import archive_snapshot
 from trustsight.full_aur import fetch as corpus_fetch
 from trustsight.full_aur.export import (
     InvalidSignatureError,
@@ -280,15 +281,15 @@ def _tar_with(members: int) -> tarfile.TarFile:
 
 def test_the_snapshot_manifest_stops_at_its_member_cap():
     """`getmembers()` parses the whole archive first; the walk is lazy now."""
-    manifest, _texts, complete = corpus_fetch._snapshot_manifest(
+    manifest, _texts, complete = archive_snapshot.snapshot_manifest(
         _tar_with(500), max_members=10)
     assert len(manifest) == 10
     assert not complete
 
 
-def test_a_missing_pkgbuild_in_a_large_tar_gives_up(monkeypatch):
-    monkeypatch.setattr(corpus_fetch, "MAX_TAR_MEMBERS", 50)
-    assert corpus_fetch._pkgbuild_from_tarfile(_tar_with(500), "demo") is None
+def test_a_missing_pkgbuild_in_a_large_tar_gives_up():
+    assert archive_snapshot.pkgbuild_from_tarfile(
+        _tar_with(500), "demo", max_members=50) is None
 
 
 def test_package_names_are_url_encoded(monkeypatch):
@@ -491,8 +492,6 @@ def test_a_snapshot_member_declaring_gigabytes_is_refused(monkeypatch):
     tarball well inside the response cap used to be enough to exhaust the
     machine.  The bound is on the read.
     """
-    monkeypatch.setattr(corpus_fetch, "MAX_TAR_MEMBER_BYTES", 4096)
-
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tf:
         payload = b"\0" * 1_000_000  # compresses to about a kilobyte
@@ -504,7 +503,8 @@ def test_a_snapshot_member_declaring_gigabytes_is_refused(monkeypatch):
 
     tf = tarfile.open(fileobj=io.BytesIO(body), mode="r:gz")
     with pytest.raises(ReadTooLarge):
-        corpus_fetch._pkgbuild_from_tarfile(tf, "demo")
+        archive_snapshot.pkgbuild_from_tarfile(
+            tf, "demo", max_member_bytes=4096)
 
 
 def test_a_refused_snapshot_is_reported_as_a_coverage_gap(monkeypatch):
@@ -596,8 +596,6 @@ def test_an_oversized_snapshot_response_is_reported_as_a_coverage_gap(monkeypatc
 
 def test_a_snapshot_member_under_the_bound_still_reads(monkeypatch):
     """The refusal is a ceiling, not a ban: a real PKGBUILD is unaffected."""
-    monkeypatch.setattr(corpus_fetch, "MAX_TAR_MEMBER_BYTES", 4096)
-
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tf:
         payload = b"pkgname=demo\npkgver=1.0\n"
@@ -606,7 +604,8 @@ def test_a_snapshot_member_under_the_bound_still_reads(monkeypatch):
         tf.addfile(info, io.BytesIO(payload))
 
     tf = tarfile.open(fileobj=io.BytesIO(buf.getvalue()), mode="r:gz")
-    assert corpus_fetch._pkgbuild_from_tarfile(tf, "demo") == "pkgname=demo\npkgver=1.0\n"
+    assert archive_snapshot.pkgbuild_from_tarfile(
+        tf, "demo", max_member_bytes=4096) == "pkgname=demo\npkgver=1.0\n"
 
 
 def test_an_oversized_ioc_baseline_is_refused_before_verification(tmp_path, monkeypatch):
@@ -977,14 +976,13 @@ def test_a_declared_size_bomb_is_refused_before_the_pkgbuild(monkeypatch):
     The walker must refuse at the declaration, before ``tarfile`` seeks over
     the body (which is what decompresses it).
     """
-    monkeypatch.setattr(corpus_fetch, "MAX_TAR_TOTAL_BYTES", 1024)
     buf = _tar_with_declared_sizes([4096, 4])
     with tarfile.open(fileobj=buf, mode="r") as tf:
-        assert corpus_fetch._pkgbuild_from_tarfile(tf, "demo") is None
+        assert archive_snapshot.pkgbuild_from_tarfile(
+            tf, "demo", max_total_bytes=1024) is None
 
 
 def test_a_declared_size_bomb_is_refused_before_an_install_body(monkeypatch):
-    monkeypatch.setattr(corpus_fetch, "MAX_TAR_TOTAL_BYTES", 1024)
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w") as tf:
         info = tarfile.TarInfo("demo/huge")
@@ -995,14 +993,15 @@ def test_a_declared_size_bomb_is_refused_before_an_install_body(monkeypatch):
         tf.addfile(info, io.BytesIO(b"x\n"))
     buf.seek(0)
     with tarfile.open(fileobj=buf, mode="r") as tf:
-        assert corpus_fetch._install_from_tarfile(tf, "demo") is None
+        assert archive_snapshot.install_from_tarfile(
+            tf, "demo", max_total_bytes=1024) is None
 
 
 def test_the_snapshot_manifest_refuses_a_declared_size_bomb(monkeypatch):
-    monkeypatch.setattr(corpus_fetch, "MAX_TAR_TOTAL_BYTES", 1024)
     buf = _tar_with_declared_sizes([4096, 4])
     with tarfile.open(fileobj=buf, mode="r") as tf:
-        manifest, _texts, complete = corpus_fetch._snapshot_manifest(tf)
+        manifest, _texts, complete = archive_snapshot.snapshot_manifest(
+            tf, max_total_bytes=1024)
     assert manifest == []
     assert not complete
 

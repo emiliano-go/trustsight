@@ -492,7 +492,6 @@ def run_gate(
     out: TextIO = sys.stderr,
     approve_all: bool = False,
     refuse_all: bool = False,
-    depth: int = DEFAULT_DEPTH,
 ) -> int:
     """The decision loop, with inspection and prompting injected for tests."""
     colour = _color_enabled(out)
@@ -594,7 +593,6 @@ def main(argv: list[str] | None = None, *, out: TextIO = sys.stderr) -> int:
         out=out,
         approve_all=args.yes,
         refuse_all=args.no,
-        depth=args.depth,
     )
 
 

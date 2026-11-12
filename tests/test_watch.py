@@ -509,6 +509,47 @@ def test_the_interval_is_skipped_while_backfilling(monkeypatch):
     assert slept == [2, 3600]
 
 
+def test_a_partial_cycle_does_not_wait_for_the_live_interval(monkeypatch):
+    """A capped cycle has queued packages; continue it immediately."""
+    from trustsight.full_aur.pipeline import CycleResult, run_watch
+
+    outcomes = iter([CycleResult(partial=True), CycleResult(added=1)])
+    monkeypatch.setattr(
+        "trustsight.full_aur.pipeline.run_baseline_build",
+        lambda **kwargs: next(outcomes),
+    )
+    slept: list[float] = []
+    results = run_watch(interval=3600, cycles=2, sleep=slept.append)
+    assert len(results) == 2
+    assert slept == [2]
+
+
+def test_a_failed_queued_cycle_retries_quickly(monkeypatch):
+    """A transient failure during a replay must not idle the queue."""
+    from trustsight.full_aur.pipeline import CycleResult, run_watch
+
+    outcomes = iter([
+        RuntimeError("database is locked"),
+        CycleResult(added=1),
+        CycleResult(added=2),
+    ])
+
+    def _next(**kwargs):
+        item = next(outcomes)
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+    monkeypatch.setattr(
+        "trustsight.full_aur.pipeline.run_baseline_build", _next,
+    )
+    slept: list[float] = []
+    results = run_watch(
+        interval=900, cycles=2, since=1777593600, sleep=slept.append)
+    assert len(results) == 2
+    assert slept[0] == 2
+
+
 def test_a_refused_cycle_during_a_backfill_retries(monkeypatch):
     """A --since replay advances no snapshot until it catches up, so a
     refused cycle during one is transient, not 'no snapshot yet'."""

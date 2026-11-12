@@ -106,6 +106,20 @@ def run_watch(
         else:
             sleep(seconds)
 
+    def _queued() -> bool:
+        """Whether a backfill or resume set still has work to do."""
+        if since is not None:
+            return True
+        try:
+            if _pipeline()._since_cursor() is not None:
+                return True
+            from .fetch import load_resume_state
+
+            state = load_resume_state() or {}
+            return bool(state.get("processed"))
+        except Exception:  # noqa: BLE001 - queue detection is advisory
+            return False
+
     attempts = 0
     try:
         while not stop.is_set():
@@ -139,7 +153,12 @@ def run_watch(
                         _log(f"  failure heartbeat skipped: {notify_exc}")
                 if cycles and attempts >= cycles:
                     break
-                _sleep(delay)
+                # A queued replay should not sit for the full live interval
+                # after a transient failure, but do not hammer either.
+                retry = delay
+                if _queued():
+                    retry = min(delay, max(2, 2 ** min(attempts, 6)))
+                _sleep(retry)
                 continue
             attempts = 0
             if result.refused:
@@ -194,7 +213,7 @@ def run_watch(
                 break
             if cycles and len(results) >= cycles:
                 break
-            _sleep(2 if result.backfilling else delay)
+            _sleep(2 if result.backfilling or result.partial else delay)
     except KeyboardInterrupt:
         stop.set()
     finally:

@@ -98,7 +98,6 @@ def _run_baseline_build(
     save_pkgbuild_snapshot = p.save_pkgbuild_snapshot
     save_resume_state = p.save_resume_state
     set_metadata = p.set_metadata
-    write_batch = p.write_batch
 
     if over_threshold is None:
         over_threshold = _OVER_BENIGN_P95
@@ -322,55 +321,54 @@ def _run_baseline_build(
                 manifest_deltas, workflow_deltas = manifest_state_delta(
                     old_snapshot.get("manifest_state"), manifest_state_json)
         try:
-            with write_batch():
-                fact = analyze_package_text(
-                    pkg_name=name,
-                    old_pkgbuild=old_pkgbuild,
-                    new_pkgbuild=new_pkgbuild,
-                    maintainer=meta.get("Maintainer") or "",
-                    temporal=TemporalContext(
-                        last_modified=meta.get("LastModified"),
-                        first_seen=meta.get("FirstSubmitted"),
-                        previous_modified=prev_last_modified,
-                        source="aur_metadata",
-                    ),
-                    tree_manifest=tree_manifest,
-                    archive_trailer_finding=trailer_finding,
-                    snapshot_refused=snapshot_refused,
-                    depth=analyse_depth,
-                    # The corpus builder is a writer by definition: it exists to
-                    # accumulate the observations the read-only default consumes.
-                    record=True,
-                    popular_candidates=popular,
-                    package_popularity=int((new_meta.get(name) or {}).get("NumVotes", 0) or 0),
-                    install_text=install_text,
-                    install_name=install_name,
-                    old_install_text=(old_snapshot.get("install_text")
-                                      if old_snapshot else None),
-                    upstream_manifest_incomplete=manifest_incomplete,
-                    manifest_deltas=manifest_deltas,
-                    workflow_deltas=workflow_deltas,
-                )
-                save_pkgbuild_snapshot(
-                    package_name=name,
-                    pkgbuild_text=new_pkgbuild,
-                    version=fact.new_version or meta.get("Version", ""),
-                    last_modified=meta.get("LastModified", 0),
-                    install_text=install_text,
-                    manifest_deps=manifest_deps_json,
-                    manifest_state=manifest_state_json,
-                )
-                if manifest_deps_json is not None and prior_deps is not None:
-                    record_upstream_dep_additions(
-                        name, sorted(manifest_pairs - prior_deps))
-                save_package_profile(
-                    package_name=name,
-                    last_score=fact.final_score,
-                    # score_breakdown is a list of ScoreEntry, not a dict: asking it
-                    # for "risk_label" raised AttributeError on the first package of
-                    # every bootstrap.  The label is derived from the score.
-                    last_risk=risk_level(fact.final_score),
-                )
+            fact = analyze_package_text(
+                pkg_name=name,
+                old_pkgbuild=old_pkgbuild,
+                new_pkgbuild=new_pkgbuild,
+                maintainer=meta.get("Maintainer") or "",
+                temporal=TemporalContext(
+                    last_modified=meta.get("LastModified"),
+                    first_seen=meta.get("FirstSubmitted"),
+                    previous_modified=prev_last_modified,
+                    source="aur_metadata",
+                ),
+                tree_manifest=tree_manifest,
+                archive_trailer_finding=trailer_finding,
+                snapshot_refused=snapshot_refused,
+                depth=analyse_depth,
+                # The corpus builder is a writer by definition: it exists to
+                # accumulate the observations the read-only default consumes.
+                record=True,
+                popular_candidates=popular,
+                package_popularity=int((new_meta.get(name) or {}).get("NumVotes", 0) or 0),
+                install_text=install_text,
+                install_name=install_name,
+                old_install_text=(old_snapshot.get("install_text")
+                                  if old_snapshot else None),
+                upstream_manifest_incomplete=manifest_incomplete,
+                manifest_deltas=manifest_deltas,
+                workflow_deltas=workflow_deltas,
+            )
+            save_pkgbuild_snapshot(
+                package_name=name,
+                pkgbuild_text=new_pkgbuild,
+                version=fact.new_version or meta.get("Version", ""),
+                last_modified=meta.get("LastModified", 0),
+                install_text=install_text,
+                manifest_deps=manifest_deps_json,
+                manifest_state=manifest_state_json,
+            )
+            if manifest_deps_json is not None and prior_deps is not None:
+                record_upstream_dep_additions(
+                    name, sorted(manifest_pairs - prior_deps))
+            save_package_profile(
+                package_name=name,
+                last_score=fact.final_score,
+                # score_breakdown is a list of ScoreEntry, not a dict: asking it
+                # for "risk_label" raised AttributeError on the first package of
+                # every bootstrap.  The label is derived from the score.
+                last_risk=risk_level(fact.final_score),
+            )
         except TokenizerUnavailable as exc:
             # The sandboxed tokenizer could not answer (A6).  The package is
             # not analysed and nothing is persisted, so it cannot enter the

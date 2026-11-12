@@ -31,12 +31,10 @@ class _BoundedOutput(io.StringIO):
         super().__init__()
         self._limit = limit
         self._size = 0
-        self._over = False
 
     def write(self, text: str) -> int:
         self._size += len(text)
         if self._size > self._limit:
-            self._over = True
             raise ValueError("render output exceeds its byte cap")
         return super().write(text)
 

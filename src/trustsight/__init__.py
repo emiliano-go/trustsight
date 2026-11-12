@@ -94,15 +94,42 @@ _API_NAMES = frozenset({
 __all__ = ["__version__", "api", *sorted(_API_NAMES)]
 
 
+def _source_version() -> str:
+    """The version a checkout's ``pyproject.toml`` declares, or ``""``.
+
+    An editable install's dist metadata is refreshed only by a reinstall, so
+    it can lag the source tree.  That made the committed contract artifact
+    regenerate with a stale ``tool_version`` on a dev machine.  A source
+    checkout's pyproject is the source of truth; a wheel does not ship one,
+    so an installed package still falls back to the metadata.
+    """
+    import tomllib
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parent.parent.parent / "pyproject.toml"
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ""
+    project = data.get("project") if isinstance(data, dict) else None
+    if not isinstance(project, dict) or project.get("name") != "trustsight":
+        return ""
+    version = project.get("version")
+    return version if isinstance(version, str) else ""
+
+
 def __getattr__(name: str):
     if name == "__version__":
-        import importlib.metadata
         import os
 
-        try:
-            version = importlib.metadata.version("trustsight")
-        except importlib.metadata.PackageNotFoundError:
-            version = "0.0.0"
+        version = _source_version()
+        if not version:
+            import importlib.metadata
+
+            try:
+                version = importlib.metadata.version("trustsight")
+            except importlib.metadata.PackageNotFoundError:
+                version = "0.0.0"
         # packaging/dev installs a wrapper that sets this.  The released
         # package does not, so a stable command beside the dev package keeps
         # reporting the stable version.

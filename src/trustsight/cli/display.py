@@ -99,33 +99,6 @@ def download_progress(description: str, *, enabled: bool = True):
             render_client.stop_progress("download")
 
 
-def band_colour(label: str) -> str:
-    """Colour for a possibly-qualified band such as "High (incomplete analysis)".
-
-    The qualifier is prose appended by coverage.qualified_band; the colour
-    belongs to the band itself, so it is looked up on the bare word.
-    """
-    return RISK_COLORS.get((label or "").split(" (")[0], "white")
-
-
-RISK_COLORS = {
-    "Low": "green",
-    "Medium": "yellow",
-    "High": "red",
-    "Critical": "bold red",
-    "Inconclusive": "dim",
-    "Error": "bold white on red",
-}
-
-SEVERITY_COLORS = {
-    "FATAL": "bold white on red",
-    "CRITICAL": "bold red",
-    "HIGH": "red",
-    "MEDIUM": "yellow",
-    "LOW": "cyan",
-    "INFO": "dim",
-}
-
 def _fmt_bytes(n: int) -> str:
     for unit in ("B", "KB", "MB", "GB"):
         if n < 1024:

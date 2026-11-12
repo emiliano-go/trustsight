@@ -311,21 +311,25 @@ class AurFetchProxy:
                 pass
 
     def _charge(self, method: str, request: bytes) -> None:
+        # Validate every bound before consuming any budget: a refused request
+        # must not spend one of the two allowed GET/POST slots.
         with self._lock:
             if self._requests >= GIT_PROXY_MAX_REQUESTS:
                 raise _BadRequest("too many requests in one fetch session")
             if method == "GET":
-                self._gets += 1
-                if self._gets > _MAX_GETS:
+                if self._gets + 1 > _MAX_GETS:
                     raise _BadRequest("too many info/refs requests")
             else:
                 if self._gets == 0:
                     raise _BadRequest("upload-pack request before info/refs")
-                self._posts += 1
-                if self._posts > _MAX_POSTS:
+                if self._posts + 1 > _MAX_POSTS:
                     raise _BadRequest("too many upload-pack requests")
             if self._request_bytes + len(request) > GIT_PROXY_TOTAL_REQUEST_BYTES:
                 raise _BadRequest("upload-pack request budget exhausted")
+            if method == "GET":
+                self._gets += 1
+            else:
+                self._posts += 1
             self._requests += 1
             self._request_bytes += len(request)
 

@@ -5,13 +5,11 @@ from __future__ import annotations
 import atexit
 import json
 import os
-import select
-import signal
 import threading
 import time
 from pathlib import Path
 
-from . import protocol
+from . import _worker_io, protocol
 from ._spawn import spawn_isolated
 
 WORKER_MODULE = "trustsight.sandbox.store_worker"
@@ -43,41 +41,18 @@ class _Worker:
         threading.Thread(target=self._drain, daemon=True).start()
 
     def _drain(self) -> None:
-        proc = self.proc
-        if proc is None or proc.stderr is None:
-            return
-        try:
-            for line in proc.stderr:
-                text = line.decode("utf-8", "replace").rstrip()
-                if len(self.stderr) < 20:
-                    self.stderr.append(text)
-        except (OSError, ValueError):
-            pass
+        _worker_io.drain_stderr(
+            self.proc,
+            lambda text: self.stderr.append(text)
+            if len(self.stderr) < 20 else None,
+        )
 
     def alive(self) -> bool:
         return self.proc is not None and self.proc.poll() is None
 
     def stop(self) -> None:
         proc, self.proc = self.proc, None
-        if proc is None:
-            return
-        try:
-            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-        except (ProcessLookupError, PermissionError, OSError):
-            try:
-                proc.kill()
-            except OSError:
-                pass
-        try:
-            proc.wait(timeout=2)
-        except Exception:
-            pass
-        for pipe in (proc.stdin, proc.stdout, proc.stderr):
-            if pipe is not None:
-                try:
-                    pipe.close()
-                except OSError:
-                    pass
+        _worker_io.stop_process(proc)
 
     def request(self, body: bytes) -> bytes:
         if self.proc is None or self.proc.stdin is None or self.proc.stdout is None:
@@ -88,33 +63,19 @@ class _Worker:
         deadline = time.monotonic() + REQUEST_TIMEOUT_SECONDS
         try:
             protocol.write_frame(self.proc.stdin.fileno(), body, deadline)
-            header = _read_exact(self.proc.stdout, protocol.HEADER.size, deadline)
+            header = _worker_io.read_exact(
+                self.proc.stdout, protocol.HEADER.size, deadline,
+                StoreUnavailable)
             (length,) = protocol.HEADER.unpack(header)
             if length > protocol.MAX_RESPONSE_BYTES:
                 raise StoreUnavailable("store response exceeds its cap")
-            return _read_exact(self.proc.stdout, length, deadline)
+            return _worker_io.read_exact(
+                self.proc.stdout, length, deadline, StoreUnavailable)
         except (BrokenPipeError, OSError, protocol.FrameError) as exc:
             detail = "; ".join(self.stderr)
             raise StoreUnavailable(
                 f"store worker channel failed: {exc}"
                 + (f" ({detail})" if detail else "")) from exc
-
-
-def _read_exact(fh, n: int, deadline: float) -> bytes:
-    fd = fh.fileno()
-    out = bytearray()
-    while len(out) < n:
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            raise StoreUnavailable("store worker timed out")
-        ready, _, _ = select.select([fd], [], [], remaining)
-        if not ready:
-            raise StoreUnavailable("store worker timed out")
-        chunk = os.read(fd, n - len(out))
-        if not chunk:
-            raise StoreUnavailable("store worker closed the channel")
-        out.extend(chunk)
-    return bytes(out)
 
 
 _lock = threading.Lock()

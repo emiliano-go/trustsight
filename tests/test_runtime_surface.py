@@ -70,3 +70,30 @@ def test_h010_matches_tee_as_a_shell_word():
         "[Service]\nExecStart=/usr/bin/tee /etc/foo.conf\n"))
     assert "H010" in _ids(_unit(
         "[Service]\nExecStart=/bin/sh -c 'printf x | tee /var/log/x'\n"))
+
+
+def test_h010_ignores_a_redirect_character_inside_printed_text():
+    """`/etc/passwd > README` is one quoted echo argument, not a write."""
+    assert "H010" not in _ids(_unit(
+        '[Service]\nExecStart=/bin/echo "see /etc/passwd > README"\n'))
+
+
+def test_h010_reads_a_real_redirect_target():
+    assert "H010" in _ids(_unit(
+        "[Service]\nExecStart=/bin/echo x > /etc/motd\n"))
+
+
+def test_h013_ignores_capturing_strace_output():
+    """`strace ... > /tmp/log` records the trace; it is not truncation."""
+    assert "H013" not in _ids([("usr/bin/run.sh",
+                                b"#!/bin/sh\nstrace -f ./app > /tmp/log\n")])
+
+
+def test_h013_matches_removal_of_the_strace_output_file():
+    assert "H013" in _ids([("usr/bin/run.sh",
+                            b"#!/bin/sh\nstrace -f -o /tmp/t ./app; rm -f /tmp/t\n")])
+
+
+def test_h013_ignores_a_quoted_destructive_looking_string():
+    assert "H013" not in _ids([("usr/bin/run.sh",
+                                b"#!/bin/sh\necho 'rm /var/log/strace.log'\n")])

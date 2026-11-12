@@ -2,7 +2,7 @@
 
 # Acting on a Flag
 
-A **flag** is a prompt to look, not a verdict to obey. TrustSight is a deterministic audit tool, not an authority. When a package scores above 20 or returns INCONCLUSIVE, the right response is investigation, not automatic rejection.
+A **flag** is a prompt to look, not a verdict to obey. TrustSight is a deterministic analysis platform, not an authority. When a package scores above 20 or returns INCONCLUSIVE, the right response is investigation, not automatic rejection.
 
 ## Step 1: Inspect the package
 

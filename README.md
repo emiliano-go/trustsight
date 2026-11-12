@@ -1,7 +1,10 @@
-# TrustSight
+<p align="center">
+  <strong style="font-size: 2.5em;">TrustSight</strong>
+</p>
 
-
-Audits AUR PKGBUILD updates before you install: detects structural changes, suspicious commands, typosquatting, and novelty signals, then produces a deterministic evidence report.
+<p align="center">
+  <em>See beyond the package.</em>
+</p>
 
 <p align="center">
   <a href="https://docs.trustsight.org/">
@@ -22,18 +25,6 @@ Audits AUR PKGBUILD updates before you install: detects structural changes, susp
   <a href="https://pypi.org/project/trustsight/">
     <img src="https://img.shields.io/pypi/v/trustsight?logo=pypi&logoColor=white&style=for-the-badge&cacheSeconds=60" alt="PyPI">
   </a>
-</p>
-
----
-
-## What is TrustSight
-
-TrustSight is a **static security auditing tool** for Arch Linux’s AUR that analyzes package updates across the `PKGBUILD`, `.SRCINFO`, `.install` hooks, Makefiles, and other committed repository files. It **combines** pattern matching, behavioral heuristics, structural checks, dependency analysis, sabotage detection, and cross-file correlation to flag suspicious commands, obfuscation, risky installation behavior, source URL and checksum changes, dependency anomalies, maintainer changes, and previously unseen sources. It compares versions and repository history, producing evidence-linked findings and a deterministic report. TrustSight does not execute build scripts, fetch declared package sources, or inspect downloaded archives, so a clean result cannot guarantee safety.
-
-<p align="center">
-  <a href="https://docs.trustsight.org/">
-    <img src="https://img.shields.io/badge/docs-docs.trustsight.org-2C7BE5?style=for-the-badge&logo=readthedocs&logoColor=white" alt="Documentation">
-  </a>
   <a href="https://watcher.trustsight.org/">
     <img src="https://img.shields.io/badge/watcher-watcher.trustsight.org-8250DF?style=for-the-badge&logo=linux&logoColor=white" alt="Live watcher">
   </a>
@@ -44,6 +35,22 @@ TrustSight is a **static security auditing tool** for Arch Linux’s AUR that an
     <img src="https://img.shields.io/badge/harness-harness.trustsight.org-C2410C?style=for-the-badge&logo=target&logoColor=white" alt="Adversarial harness">
   </a>
 </p>
+
+<p align="center">
+  <strong><a href="https://docs.trustsight.org/">Full documentation</a></strong>
+  &nbsp;|&nbsp;
+  <strong><a href="https://github.com/emiliano-go/trustsight">Source Code</a></strong>
+</p>
+
+---
+
+TrustSight is a security analysis and intelligence platform for the Arch User Repository ecosystem. It combines static analysis, supply-chain intelligence, behavioral heuristics, dependency graph analysis, threat intelligence, and historical correlation to uncover suspicious package updates and emerging threats.
+
+Beyond package analysis, TrustSight tracks ecosystem activity and lifecycle signals, including maintainer histories and changes, package adoptions and orphan status, ownership transitions, release patterns, and dependency relationships. It uses these signals to identify unusual behavior, suspicious takeovers, stale package revivals, and coordinated activity across packages.
+
+It transforms package changes and ecosystem signals into deterministic, evidence-linked security assessments, helping you understand what changed, who is behind it, and what it might mean before you install.
+
+---
 
 ## Setup
 

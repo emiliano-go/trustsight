@@ -3,7 +3,7 @@
 pkgname=trustsight
 pkgver=0.28.1
 pkgrel=1
-pkgdesc='Audits AUR PKGBUILD updates before install: structure, commands, novelty'
+pkgdesc='Security analysis and intelligence platform for the AUR ecosystem'
 arch=('any')
 url='https://github.com/emiliano-go/trustsight'
 license=('MIT')

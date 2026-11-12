@@ -2,7 +2,7 @@
 
 # Contributing to TrustSight
 
-TrustSight is a CLI tool that audits AUR PKGBUILD diffs for supply-chain risk. It
+TrustSight is a security analysis and intelligence platform for the AUR ecosystem. It
 is an **instrument, not a judge**: it reads changes, applies published detection
 rules, and reports what it found and what it could not see. It never decides
 whether a package is safe; a person does. Every contribution is measured against

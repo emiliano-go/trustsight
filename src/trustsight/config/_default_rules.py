@@ -721,6 +721,7 @@ domains = [
     "packages.domicile-desktop.com",  # Domicile's own Arch repository
     "clever-tools.clever-cloud.com",  # Clever Cloud's release CDN
     "kepler-static-artifacts.kepler.labcollab.net",  # Kepler's artifact CDN
+    "download-center.epson.com",      # Epson's own driver download center
 ]
 
 [raw_hosting]

@@ -39,6 +39,7 @@ from ..persistence import (
     _persistence_findings,
 )
 from ..version import _epoch_findings
+from ...differ._common import pre_image_from_post
 from ...findings import stamp
 from ...recipedoc import recipe_states
 from ...rules import find_line_in_diff
@@ -626,12 +627,25 @@ def _checksum_removal_findings(diff_text, current_text, cdelta, added, removed,
         # unchanged".  Keep excluding absolute/system paths and anything
         # carrying a scheme; a `$`-prefixed entry with a path separator is
         # left to the URL/source-change path rather than guessed at.
-        removed_local_sources = [
-            item for item in (cdelta.sources.lost if cdelta else ())
-            if item and "://" not in item
-            and not item.startswith(("/", "~", "{"))
-            and not (item.startswith("$") and "/" in item)
-        ]
+        removed_local_sources = []
+        if current_text:
+            # A hunk can start inside source=(), so the diff-only views see
+            # no array and report no lost local entry.  Rebuild the whole
+            # pre image from the post file before deciding a source left.
+            pre_text = pre_image_from_post(diff_text, current_text)
+            if pre_text is not None:
+                from ...differ import local_source_names
+                removed_local_sources = sorted(
+                    local_source_names(pre_text)
+                    - local_source_names(current_text)
+                )
+        if not removed_local_sources:
+            removed_local_sources = [
+                item for item in (cdelta.sources.lost if cdelta else ())
+                if item and "://" not in item
+                and not item.startswith(("/", "~", "{"))
+                and not (item.startswith("$") and "/" in item)
+            ]
         removed_checksums = (
             len(cdelta.checksums.lost) - len(cdelta.checksums.gained)
             if cdelta else 0

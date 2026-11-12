@@ -2,6 +2,12 @@
 
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- **Three watcher false positives are closed at their detection shape.** C004 rebuilds the pre-change PKGBUILD when a hunk starts inside `source=()`, so a local source removed with its checksum is a deletion, not weakened verification. H100 treats continued `printf`/`echo` arguments as printed text even when the notice uses shell line continuations. SOURCE_BUCKET and C005 accept Epson's exact `download-center.epson.com` host as an official distribution host.
+
 ## [0.28.1] - 2026-11-12
 
 ### Added

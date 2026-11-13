@@ -6,6 +6,7 @@
 
 ### Security
 
+- **One-line notices are cleaned before Rich sees them.** The sandboxed `print_colored` renderer escaped markup but did not remove terminal escape sequences, so a package-derived message passed through a CLI notice could still repaint the terminal. It now runs the message through `clean` first.
 - **Gate targets cannot be option-shaped.** Target names read from `.SRCINFO` are validated before they reach a command line, and the `pacman -Qq` probe now uses `--` so a name beginning with `-` cannot be read as a flag.
 - **Federation URLs are http(s) only.** A signed-feed base URL carrying a `file:` or other scheme, a missing host, or embedded credentials is refused before the download, so a configured feed cannot turn the verifier into a local-file reader.
 

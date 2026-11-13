@@ -254,6 +254,7 @@ NON_CONTENT_RULES = {
     # finding: its evidence names the campaign, not a line.
     "G007": "correlation",
     "G012": "correlation", "G013": "correlation", "G014": "correlation",
+    "G015": "correlation",
     # The missing-self predicates are diff-level facts; a removed line has
     # no post-file location to cite.
     "T004": "temporal", "T005": "temporal",

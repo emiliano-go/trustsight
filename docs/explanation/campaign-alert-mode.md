@@ -30,10 +30,11 @@ agrees that something is a campaign. Today that is the correlation family:
 
 - **G005 - Impersonation Campaign.** One account publishing many name-clones
   of popular packages (`yyay` next to `yay`). This is the strongest trigger.
-- **G001/G002/G003/G004/G008/G011.** Many unrelated packages sharing a gained
-  host, an added literal, an upstream dependency, or an adopter, a first-seen
-  account sweeping dormant packages, or a first-seen account creating many
-  brand-new packages.
+- **G001/G002/G003/G004/G008/G011/G015.** Many unrelated packages sharing a
+  gained host, an added literal, an upstream dependency, or an adopter, a
+  first-seen account sweeping dormant packages, a first-seen account creating
+  many brand-new packages, or a dormant multi-account adoption cohort that
+  reactivates together after a delay.
 
 Only those corroborating rules prime campaign state. The report-only members
 of the family never do: **G006/G007** are context, **G009** is the operator's

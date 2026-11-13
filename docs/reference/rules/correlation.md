@@ -48,6 +48,7 @@ This is a reference page. For how weight and scope work, see
 | [G012](#g012) | Shared Payload Signal | HIGH |
 | [G013](#g013) | Shared Fetch Target | HIGH |
 | [G014](#g014) | Shared Adoption Window | HIGH |
+| [G015](#g015) | Sleeper Adoption Campaign | MEDIUM |
 <!-- /generated: page-index -->
 
 ### G001: Shared Gained Host {#g001}
@@ -229,3 +230,15 @@ This is the build-time complement to G001/G010, which read `source=` host transi
 G003 groups adoptions under one maintainer and G008 watches one first-seen account. This is the multi-account adoption window: different maintainers taking unrelated dormant packages in the same cycle. The dormant-target clause (`g014.min_dormant`, default 2 targets older than `g014.dormant_days`, default 180) keeps the ordinary "a new maintainer adopts an active package they care about" case out, in the same way G008's dormant clause does.
 
 The finding names the members, the maintainer count and the dormant count. Split outputs of one pkgbase and one naming family stand down. It is alert-only: membership does not inflate a member's own score; the campaign state G006/G007 reads is the escalation.
+
+### G015: Sleeper Adoption Campaign {#g015}
+
+- **Target:** programmatic (adoption history and cycle records)
+- **Severity:** MEDIUM (weight 0 on members); HIGH when a curated payload or takeover rule corroborates the push
+- **Category:** `correlation`
+
+- **Condition:** At least `[thresholds] g015.min_packages` (default 3) dormant packages from at least `g015.min_maintainers` (default 2) maintainers were adopted over a long window, and those same accounts then update at least `g015.min_push_share` (default 0.5) of the eligible cohort within `g015.push_window_days` (default 7) days.
+
+G003, G008 and G014 see the adoption wave while it is fresh. This is the delayed counterpart: a multi-account sleeper cohort that waits through the cooling-off period (`g015.min_adoption_age_days`, default 30) and then reactivates most of its dormant packages together. Adoptions older than `g015.max_adoption_age_days` (default 365), cohorts spread over more than `g015.adoption_window_days` (default 180), active-package adoptions, routine checksum or version refreshes, split outputs and naming families stand down.
+
+The base finding is MEDIUM and alert-only: membership does not add to a member's own score, and the campaign state G006/G007 reads is the escalation. A curated payload or takeover rule on a member raises the campaign to HIGH. `g015.orphan_only` (default true) keeps the cohort to orphan adoptions; setting it false includes ordinary ownership transfers.

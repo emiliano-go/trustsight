@@ -144,13 +144,13 @@
       "weight": null
     }
   },
-  "catalog_size": 306,
+  "catalog_size": 307,
   "corpus_content_sha256": "a4cbea4ef14029c97d7746e2be080a2e5c931502429ee261d974810b35f5cafc",
   "counts": {
     "adversarial_only": 18,
     "cold_only": 42,
     "measured": 174,
-    "zero_fire": 72
+    "zero_fire": 73
   },
   "rules": {
     "A001": {
@@ -2498,6 +2498,24 @@
       "state": "cold_only",
       "strata": [],
       "uid": "TS-0277"
+    },
+    "G015": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
+      "expected_strata": [],
+      "expected_strata_met": [],
+      "fires": 0,
+      "id": "G015",
+      "pseudo": false,
+      "reason": "no benign shape in the locked corpus yet; add a shape stratum, never a rule-targeted sample",
+      "series": "G",
+      "sources": {},
+      "state": "zero_fire",
+      "strata": [],
+      "uid": "TS-0295"
     },
     "H001": {
       "benign_sources": [

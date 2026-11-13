@@ -2,6 +2,12 @@
 
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **G015 reports sleeper adoption campaigns.** A multi-account cohort of dormant adopted packages is joined when the same maintainers reactivate most of it after a cooling-off period. The base finding is MEDIUM and alert-only; a curated payload or takeover signal raises it to HIGH. G015 primes campaign state on both severities and never adds its severity to a member's score.
+
 ## [0.28.8] - 2026-11-13
 
 ### Fixed

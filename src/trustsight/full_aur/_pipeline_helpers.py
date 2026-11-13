@@ -73,7 +73,7 @@ _IMPERSONATION_GATED_RULES = frozenset({"H052", "H055"})
 #: family (G006/G007/G009/G010) never prime campaign state.
 _CAMPAIGN_RULES = frozenset(
     {"G001", "G002", "G003", "G004", "G005", "G008", "G011",
-     "G012", "G013", "G014"})
+     "G012", "G013", "G014", "G015"})
 
 #: The analysed diff a notification may carry.  The notification already has
 #: a total payload budget; this is the per-package bound before the total
@@ -416,6 +416,8 @@ def _campaign_identity(finding: dict) -> tuple[str, dict[str, list[str]]] | None
         key = url
     elif rule_id == "G014":
         key = "adoption-window"
+    elif rule_id == "G015":
+        key = "sleeper-adoption"
     else:
         key = (params.get("host") or params.get("literal")
                or params.get("literal_sha256")
@@ -712,6 +714,10 @@ def _correlation_records(
             "rules": list(package_detail.get("rules", ()) or ()),
             # G013: canonical URLs the payload findings reported.
             "payload_urls": list(package_detail.get("payload_urls", ()) or ()),
+            # G015: substantive updates and the score are read from the same
+            # per-package detail the sweep already computed.
+            "score": int(package_detail.get("score", 0) or 0),
+            "routine_only": bool(package_detail.get("routine_only", False)),
         })
     return records
 

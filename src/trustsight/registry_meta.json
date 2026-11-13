@@ -575,6 +575,15 @@
     "target": "programmatic (cycle records)",
     "uid": "TS-0277"
   },
+  "g015": {
+    "canonical": true,
+    "capability": "correlation",
+    "name": "Sleeper Adoption Campaign",
+    "severity": "MEDIUM",
+    "severity_text": "MEDIUM (weight 0 on members); HIGH when a curated payload or takeover rule corroborates the push",
+    "target": "programmatic (adoption history and cycle records)",
+    "uid": "TS-0295"
+  },
   "h001": {
     "canonical": true,
     "capability": "integrity",

@@ -43,6 +43,13 @@ jobs:
       # box makes a safe pattern time out.
       - run: uv run --extra dev pytest tests/
 
+      # The AUR package's check() inherits the environment that invoked
+      # makepkg.  A user who installed with TRUSTSIGHT_GATE_DISABLE=1 made
+      # the gate tests see the bypass and fail.  Run the gate module under
+      # that inherited value so test isolation cannot regress silently.
+      - name: Test the gate under an inherited disable environment
+        run: TRUSTSIGHT_GATE_DISABLE=1 uv run --extra dev pytest tests/test_gate.py -q
+
   lint:
     runs-on: ubuntu-latest
     steps:

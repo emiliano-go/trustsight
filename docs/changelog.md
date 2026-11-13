@@ -2,6 +2,12 @@
 
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- **Incremental AUR fetches complete through the validating proxy.** libgit2 can send several stateless upload-pack POSTs when a cached clone already holds history, but the proxy allowed one and rejected the rest as `too many upload-pack requests`. The proxy now carries validated `have` OIDs and `done` from each request, still rebuilds every `want` line from the advertised refs, and bounds the session at fifteen POSTs plus the ref advertisement. A cumulative response cap keeps repeated negotiation rounds from becoming repeated full packs.
+
 ## [0.28.2] - 2026-11-12
 
 ### Fixed

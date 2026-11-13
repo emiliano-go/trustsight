@@ -6,18 +6,22 @@ to this proxy over one of a small pool of inherited Unix socketpairs.  The
 worker speaks plain HTTP to that listener; it never originates TLS, and it
 never chooses a host.
 
-This parent-side proxy accepts exactly two Git smart-HTTP requests for the one
-package the session serves:
+This parent-side proxy accepts one Git smart-HTTP ref advertisement and a
+bounded sequence of upload-pack requests for the one package the session
+serves:
 
 * ``GET /<pkg>.git/info/refs?service=git-upload-pack``
 * ``POST /<pkg>.git/git-upload-pack``
 
 It ignores the worker's headers, parses the AUR refs advertisement, and
-synthesises a deterministic upload-pack request from the advertised refs.
-Once that request is forwarded it stops reading from the worker and relays the
-upstream response until EOF.  A defect in libgit2 during response parsing
-therefore has no forwardable outbound path: it can write into its own socket
-buffer, but those bytes never reach the AUR.
+synthesises each upload-pack request from the advertised refs.  Client
+``want`` lines are replaced with the advertised OIDs; only validated ``have``
+OIDs and ``done`` are carried over, so a stateless negotiation can complete
+without letting the worker choose what to fetch.  Once a request is forwarded
+the proxy stops reading from the worker and relays the upstream response until
+EOF.  A defect in libgit2 during response parsing therefore has no forwardable
+outbound path: it can write into its own socket buffer, but those bytes never
+reach the AUR.
 """
 
 from __future__ import annotations
@@ -35,6 +39,7 @@ from .git_bounds import (
     GIT_PROXY_DEADLINE_SECONDS,
     GIT_PROXY_HEADER_BYTES,
     GIT_PROXY_HEADER_SECONDS,
+    GIT_PROXY_MAX_HAVES,
     GIT_PROXY_MAX_REFS,
     GIT_PROXY_MAX_REQUESTS,
     GIT_PROXY_MAX_WANTS,
@@ -52,7 +57,7 @@ _MAX_CONNECTIONS = 16
 _RELAY_CHUNK = 65536
 _MAX_HEADERS = 64
 _MAX_GETS = 1
-_MAX_POSTS = 1
+_MAX_POSTS = GIT_PROXY_MAX_REQUESTS - 1
 _HEX = frozenset("0123456789abcdefABCDEF")
 _HEADER_NAME_CHARS = frozenset(
     "!#$%&'*+-.^_`|~0123456789abcdefghijklmnopqrstuvwxyz"
@@ -176,6 +181,48 @@ def _parse_advertisement(data: bytes):
     return head, frozenset(refs.values())
 
 
+def _parse_upload_pack_request(body: bytes):
+    """``(haves, done)`` from a client upload-pack request.
+
+    The worker is untrusted, so only ``have`` lines are retained and every
+    OID is validated.  ``want`` and capability lines are ignored; the proxy
+    rebuilds those from the advertisement.
+    """
+    haves: list[str] = []
+    done = False
+    offset = 0
+    while offset < len(body):
+        if offset + 4 > len(body):
+            raise _BadRequest("truncated upload-pack pkt-line")
+        length = _pkt_line_length(body[offset:offset + 4])
+        offset += 4
+        if length == 0:
+            continue
+        if length < 4 or offset + length - 4 > len(body):
+            raise _BadRequest("upload-pack pkt-line out of range")
+        payload = body[offset:offset + length - 4]
+        offset += length - 4
+        if not payload.endswith(b"\n"):
+            raise _BadRequest("upload-pack pkt-line is not terminated")
+        line = payload[:-1]
+        if line == b"done":
+            done = True
+            continue
+        if not line.startswith(b"have "):
+            continue
+        try:
+            oid = line[5:].decode("ascii")
+        except UnicodeDecodeError as exc:
+            raise _BadRequest("non-ascii have line") from exc
+        if not _is_oid(oid):
+            raise _BadRequest("malformed have line")
+        if oid not in haves:
+            haves.append(oid)
+        if len(haves) > GIT_PROXY_MAX_HAVES:
+            raise _BadRequest("too many have lines")
+    return haves, done
+
+
 class AurFetchProxy:
     """A validating Git reverse proxy for one package's fetch session."""
 
@@ -288,8 +335,8 @@ class AurFetchProxy:
         response_started = [False]
         try:
             connection.settimeout(GIT_PROXY_HEADER_SECONDS)
-            method, target = self._read_request(connection)
-            upstream_request = self._build_upstream(method, target)
+            method, target, body = self._read_request(connection)
+            upstream_request = self._build_upstream(method, target, body)
             self._charge(method, upstream_request)
             self._forward(connection, upstream_request, response_started, method)
         except _BadRequest:
@@ -415,14 +462,15 @@ class AurFetchProxy:
                 if not chunk:
                     raise _BadRequest("truncated request body")
                 body.extend(chunk)
-            return method, target
+            return method, target, bytes(body)
         if length not in (None, 0):
             raise _BadRequest("GET carried a body")
         if body_start:
             raise _BadRequest("GET carried a body")
-        return method, target
+        return method, target, b""
 
-    def _build_upstream(self, method: str, target: str) -> bytes:
+    def _build_upstream(self, method: str, target: str,
+                        request_body: bytes = b"") -> bytes:
         info_target = (f"/{self.package}.git/info/refs"
                        "?service=git-upload-pack")
         post_target = f"/{self.package}.git/git-upload-pack"
@@ -439,12 +487,22 @@ class AurFetchProxy:
                 wants = sorted(self._advertised_oids)
             if not wants or len(wants) > GIT_PROXY_MAX_WANTS:
                 raise _BadRequest("no usable refs advertisement")
+            haves, done = _parse_upload_pack_request(request_body)
+            if not request_body:
+                done = True
+            elif not haves and not done:
+                raise _BadRequest("upload-pack request has no haves or done")
             body = bytearray()
             for index, oid in enumerate(wants):
                 suffix = (" " + _CAPABILITIES) if index == 0 else ""
                 body.extend(_pkt_line(f"want {oid}{suffix}\n".encode("ascii")))
             body.extend(b"0000")
-            body.extend(_pkt_line(b"done\n"))
+            for oid in haves:
+                body.extend(_pkt_line(f"have {oid}\n".encode("ascii")))
+            if done:
+                body.extend(_pkt_line(b"done\n"))
+            else:
+                body.extend(b"0000")
             body = bytes(body)
 
         lines = [
@@ -565,7 +623,6 @@ class AurFetchProxy:
             response_started[0] = True
             connection.sendall(header_block)
             chunk = body_prefix
-            total = 0
             while True:
                 if not chunk:
                     remaining = deadline - time.monotonic()
@@ -578,10 +635,9 @@ class AurFetchProxy:
                         break
                     if not chunk:
                         break
-                total += len(chunk)
-                if total > GIT_PROXY_RESPONSE_BYTES:
-                    raise _UpstreamError("response budget exhausted")
                 with self._lock:
+                    if self._received_bytes + len(chunk) > GIT_PROXY_RESPONSE_BYTES:
+                        raise _UpstreamError("response budget exhausted")
                     self._received_bytes += len(chunk)
                 connection.sendall(chunk)
                 chunk = b""

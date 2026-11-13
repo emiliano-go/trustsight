@@ -18,7 +18,8 @@ Confinement, all fixed constants from :mod:`trustsight.sandbox.git_bounds`:
   network namespace, Landlock over the filesystem, a seccomp allowlist and no
   capabilities.  The ``read`` role has no network path at all; the ``fetch``
   role speaks plain HTTP over a loopback bridge to a parent reverse proxy
-  that accepts only two Git smart-HTTP endpoints for the one package and
+  that accepts the one package's ref advertisement and bounded upload-pack
+  negotiation requests, rebuilds ``want`` lines from the advertisement, and
   owns TLS to ``aur.archlinux.org``.
 * The remote URL is built here from a validated package name, never received.
 * libgit2 is configured with no user home, strict object creation and strict

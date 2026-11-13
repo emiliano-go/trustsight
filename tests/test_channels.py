@@ -177,6 +177,28 @@ def test_a_federation_feed_key_is_hex_or_a_path(monkeypatch, key_value):
             assert str(pubkey_path) == key_value
 
 
+def test_fetch_verified_url_refuses_a_file_url_and_a_traversal_name(monkeypatch):
+    """A federation URL is opened by this process; it may not be a local file."""
+    seen: list[str] = []
+    monkeypatch.setattr(release, "offline", lambda: False)
+
+    def _download(url, *a, **k):
+        seen.append(url)
+        return b"x"
+
+    monkeypatch.setattr(release, "_download_url", _download)
+    key = b"0" * 32
+    with pytest.raises(release.ReleaseFetchError, match="http"):
+        release.fetch_verified_url("file:///etc", "manifest.json", pubkey=key)
+    with pytest.raises(release.ReleaseFetchError, match="https"):
+        release.fetch_verified_url("http://example.test/iocs", "manifest.json",
+                                   pubkey=key)
+    with pytest.raises(release.ReleaseFetchError, match="asset name"):
+        release.fetch_verified_url("https://example.test/iocs", "../manifest.json",
+                                   pubkey=key)
+    assert seen == []
+
+
 def test_fetch_verified_url_requires_a_key(monkeypatch):
     monkeypatch.setattr(release, "offline", lambda: False)
     monkeypatch.setattr(release, "_download_url", lambda *a, **k: b"x")

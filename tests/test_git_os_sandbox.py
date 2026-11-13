@@ -36,6 +36,25 @@ def _run_after_sandbox(script: str, *args: str, cache: str) -> subprocess.Comple
     )
 
 
+def test_the_worker_refuses_to_start_with_a_vulnerable_libgit2(monkeypatch):
+    from trustsight.sandbox import git_worker
+
+    monkeypatch.setattr(git_worker, "_libgit2_version_is_safe", lambda: False)
+    monkeypatch.setattr(git_worker.sys, "argv", ["git_worker", "read"])
+    assert git_worker.main() == 3
+
+
+def test_the_bundled_libgit2_version_floor_is_enforced():
+    from trustsight.sandbox import git_worker
+
+    assert git_worker._libgit2_version_is_safe("1.9.7")
+    assert git_worker._libgit2_version_is_safe("1.8.7")
+    assert git_worker._libgit2_version_is_safe("1.10.0")
+    assert not git_worker._libgit2_version_is_safe("1.9.6")
+    assert not git_worker._libgit2_version_is_safe("1.8.6")
+    assert not git_worker._libgit2_version_is_safe("1.9.4")
+
+
 def _skip_without_userns(result: subprocess.CompletedProcess) -> None:
     stderr = result.stderr.decode("utf-8", "replace")
     if (

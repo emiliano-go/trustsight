@@ -71,6 +71,13 @@ def test_asset_url_refuses_a_tag_that_is_not_a_path_segment():
         release.asset_url("baseline-seed.tar.gz", "../evil")
 
 
+def test_asset_url_refuses_a_name_that_is_not_a_path_segment():
+    with pytest.raises(release.ReleaseFetchError, match="asset name"):
+        release.asset_url("../evil")
+    with pytest.raises(release.ReleaseFetchError, match="asset name"):
+        release.asset_url("a/b")
+
+
 def test_asset_url_discovers_baseline_tag_for_seed(monkeypatch):
     monkeypatch.setattr(release, "_resolve_baseline_tag", lambda channel=None: "baseline-2026-08-10")
     url = release.asset_url("baseline-seed.tar.gz")

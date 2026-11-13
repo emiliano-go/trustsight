@@ -279,6 +279,22 @@ def _tar_with(members: int) -> tarfile.TarFile:
     return tarfile.open(fileobj=buf, mode="r")
 
 
+def test_a_snapshot_symlink_named_pkgbuild_is_not_the_recipe(tmp_path):
+    """A symlink member is a pointer, not the file the recipe committed."""
+    archive = tmp_path / "snapshot.tar.gz"
+    with tarfile.open(archive, "w:gz") as tf:
+        real = tarfile.TarInfo("demo/real")
+        payload = b"pkgname=demo\n"
+        real.size = len(payload)
+        tf.addfile(real, io.BytesIO(payload))
+        link = tarfile.TarInfo("demo/PKGBUILD")
+        link.type = tarfile.SYMTYPE
+        link.linkname = "real"
+        tf.addfile(link)
+    with tarfile.open(archive, "r:gz") as tf:
+        assert archive_snapshot.pkgbuild_from_tarfile(tf, "demo") is None
+
+
 def test_the_snapshot_manifest_stops_at_its_member_cap():
     """`getmembers()` parses the whole archive first; the walk is lazy now."""
     manifest, _texts, complete = archive_snapshot.snapshot_manifest(

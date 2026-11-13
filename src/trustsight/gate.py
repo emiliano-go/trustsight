@@ -290,8 +290,13 @@ def _paint(text: str, code: str, enabled: bool) -> str:
     return f"\x1b[{code}m{text}\x1b[0m" if enabled else text
 
 
-def render(summary: Summary, out: TextIO) -> None:
+def render(summary: Summary, out: TextIO, *, show_score: bool = False,
+           show_risk: bool = False) -> None:
     """Write the short report a human approves from.
+
+    The numeric band and score are withheld unless the caller asks for them.
+    A gate exists to answer "did this change what the recipe will do?", and a
+    score invites a threshold debate at the approval prompt.
 
     Every value here came from the inspected package or from the analysis of
     it, so it is untrusted text at a terminal boundary.  Clean it once, here,
@@ -304,11 +309,11 @@ def render(summary: Summary, out: TextIO) -> None:
     if version:
         print(f"   version: {clean(version)}", file=out)
     facts = []
-    if summary.risk:
+    if show_risk and summary.risk:
         risk_code = _RISK_COLORS.get(
             clean(summary.risk).upper(), "36")
         facts.append(_paint(f"risk: {clean(summary.risk)}", risk_code, colour))
-    if summary.score is not None:
+    if show_score and summary.score is not None:
         facts.append(f"score: {summary.score}")
     if facts:
         print("   " + "   ".join(facts), file=out)
@@ -568,6 +573,8 @@ def run_gate(
     out: TextIO = sys.stderr,
     approve_all: bool = False,
     refuse_all: bool = False,
+    show_score: bool = False,
+    show_risk: bool = False,
 ) -> int:
     """The decision loop, with inspection and prompting injected for tests."""
     colour = _color_enabled(out)
@@ -583,7 +590,7 @@ def run_gate(
         except GateError as exc:
             print(_paint(f"trustsight-gate: {exc}", "31", colour), file=out)
             return EXIT_ERROR
-        render(summary, out)
+        render(summary, out, show_score=show_score, show_risk=show_risk)
         if approve_all:
             print(_paint(f"   approved (--yes): {clean(package)}", "32", colour),
                   file=out)
@@ -637,6 +644,14 @@ def _parser() -> argparse.ArgumentParser:
         "--no", action="store_true",
         help="refuse every package without prompting (test/automation)",
     )
+    parser.add_argument(
+        "--score", action="store_true",
+        help="show the numeric score (hidden by default)",
+    )
+    parser.add_argument(
+        "--risk", action="store_true",
+        help="show the risk band (hidden by default)",
+    )
     return parser
 
 
@@ -664,14 +679,20 @@ def main(argv: list[str] | None = None, *, out: TextIO = sys.stderr) -> int:
             full_recipe=args.full_recipe, directory=args.dir,
         )
 
-    return run_gate(
-        targets,
-        inspect=inspect,
-        answer=_read_answer,
-        out=out,
-        approve_all=args.yes,
-        refuse_all=args.no,
-    )
+    try:
+        return run_gate(
+            targets,
+            inspect=inspect,
+            answer=_read_answer,
+            out=out,
+            approve_all=args.yes,
+            refuse_all=args.no,
+            show_score=args.score,
+            show_risk=args.risk,
+        )
+    except KeyboardInterrupt:
+        print("trustsight-gate: cancelled by user", file=out)
+        return EXIT_REFUSED
 
 
 def entrypoint() -> None:

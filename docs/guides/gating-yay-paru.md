@@ -98,7 +98,6 @@ the split package names from `.SRCINFO`.
 ```text
 :: TrustSight gate: demo-bin
    version: 1.1-1 (from 1.0-1)
-   risk: Medium   score: 35
    verdict: review
    - H017 (HIGH): install hook changed [demo-bin.install:3]
 Continue with demo-bin? [y/N]
@@ -107,8 +106,10 @@ Continue with demo-bin? [y/N]
 The report goes to stderr and the prompt is read from the controlling
 terminal, so it still works when the manager's output is piped. A long verdict
 is collapsed to one line, INFO findings stay in the full report, a stale
-`rules.toml` prints the `config sync-rules --update` next step, and the risk,
+`rules.toml` prints the `config sync-rules --update` next step, and the
 severity and coverage lines are coloured when the hook's stderr is a terminal.
+The numeric score and risk band are hidden by default; `--score` and `--risk`
+add them for debugging. Ctrl-C cancels the gate with exit `10`.
 
 ## Exit codes
 
@@ -141,6 +142,8 @@ choose one explicitly:
 | `--base NAME` | package base label in the report |
 | `--dir PATH` | read split package names from `PATH/.SRCINFO` |
 | `--yes` / `--no` | non-interactive approve / refuse |
+| `--score` | show the numeric score (hidden by default) |
+| `--risk` | show the risk band (hidden by default) |
 
 Environment: `TRUSTSIGHT_BIN` overrides the `trustsight` executable,
 `TRUSTSIGHT_GATE_BIN` overrides `trustsight-gate` for the yay hook,

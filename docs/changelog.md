@@ -2,6 +2,13 @@
 
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- **The gate cancels cleanly on Ctrl-C.** Interrupting the approval prompt used to end with a `KeyboardInterrupt` traceback. The gate now prints `trustsight-gate: cancelled by user` and exits `10`, so yay and paru abort the transaction without a stack trace.
+- **The gate hides the score and risk band by default.** The approval prompt now shows the version, verdict and findings; `--score` and `--risk` add the numeric score and band when debugging. The decision no longer frames a threshold debate at the prompt.
+
 ## [0.28.7] - 2026-11-13
 
 ### Fixed

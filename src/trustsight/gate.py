@@ -35,6 +35,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, TextIO
 
+from .bounded_io import ReadTooLarge, read_file_capped
 from .safe_text import clean
 from .subproc import TRUSTED_PATH, minimal_env
 
@@ -45,6 +46,10 @@ EXIT_NONINTERACTIVE = 30
 
 MAX_TARGETS = 64
 MAX_FINDINGS = 8
+#: The checked-out .SRCINFO is package-controlled.  A split recipe can be
+#: large, but not unbounded: the gate must not let a checkout decide how much
+#: memory this process allocates before it can even inspect it.
+MAX_SRCINFO_BYTES = 2 * 1024 * 1024
 DEFAULT_DEPTH = 1
 DEFAULT_TIMEOUT = 180
 MAX_ANSWER_BYTES = 64
@@ -118,8 +123,13 @@ def parse_srcinfo(text: str) -> list[str]:
 def targets_from_dir(directory: str | Path, fallback: str = "") -> list[str]:
     """Target packages for a build directory, or the base name as fallback."""
     try:
-        text = (Path(directory) / ".SRCINFO").read_text(
-            encoding="utf-8", errors="replace")
+        raw = read_file_capped(
+            Path(directory) / ".SRCINFO", MAX_SRCINFO_BYTES, ".SRCINFO")
+        text = raw.decode("utf-8", errors="replace")
+    except ReadTooLarge:
+        # Too large is a refusal, not a fallback: silently using --base would
+        # let the file decide which package is inspected.
+        return []
     except OSError:
         text = ""
     names = parse_srcinfo(text)

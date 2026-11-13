@@ -568,7 +568,7 @@ class TestComparisonBase:
         from trustsight.analysis.pipeline import analyze_package
 
         with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
-            fact = analyze_package("testpkg", installed_version="1.0", depth=0)
+            fact = analyze_package("testpkg", installed_version="0.9", depth=0)
 
         assert fact.comparison_base == "parent"
         assert "parent_baseline" in fact.coverage_gaps
@@ -591,7 +591,7 @@ class TestComparisonBase:
         from trustsight.analysis.pipeline import analyze_package
 
         with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
-            fact = analyze_package("testpkg", installed_version="1.0", depth=0)
+            fact = analyze_package("testpkg", installed_version="0.9", depth=0)
 
         assert fact.comparison_base == "parent"
         assert "parent_baseline" in fact.coverage_gaps
@@ -628,7 +628,7 @@ class TestComparisonBase:
 
             fact = analyze_package("testpkg", installed_version="1.0", depth=0)
 
-        assert fact.comparison_base == "recorded"
+        assert fact.comparison_base == "installed"
         present = [e for e in fact.score_breakdown
                    if (e.params or {}).get("present_before")]
         assert present, "unchanged companion content vanished from the report"
@@ -660,10 +660,36 @@ class TestComparisonBase:
             git_project.head_commit_id(repo)
             _record_state(repo, tmp_path / "repos")
 
-            fact = analyze_package("testpkg", installed_version="1.0", depth=0)
+            fact = analyze_package("testpkg", installed_version="1.2", depth=0)
 
         assert fact.comparison_base == "recorded"
         assert "parent_baseline" not in fact.coverage_gaps
+
+
+def test_a_stale_recorded_row_uses_the_installed_commit(monkeypatch):
+    from types import SimpleNamespace
+
+    from trustsight.analysis.pipeline import _analyze_helpers as helpers
+
+    commits = [SimpleNamespace(id="head"), SimpleNamespace(id="old")]
+    versions = {"head": "1.2", "old": "1.0"}
+
+    class Project:
+        def walk(self, head, limit=None):
+            return commits
+
+        def file_at(self, oid, name):
+            return f"pkgver={versions[oid]}\n"
+
+    monkeypatch.setattr(
+        helpers, "get_last_analysis", lambda _package_id: {"new_commit": ""})
+    last, base, parent, old, fresh = helpers._resolve_comparison_base(
+        Project(), 1, "head", "", False, installed_version="1.0")
+
+    assert old == "old"
+    assert base == "installed"
+    assert parent is False
+    assert fresh is False
 
 
 class TestComparisonBaseRendering:
@@ -674,7 +700,7 @@ class TestComparisonBaseRendering:
         from trustsight.analysis.pipeline import analyze_package
 
         with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
-            return analyze_package("testpkg", installed_version="1.0", depth=0)
+            return analyze_package("testpkg", installed_version="0.9", depth=0)
 
     def test_plain_output_names_the_parent_base(self, tmp_path, monkeypatch):
         import contextlib
@@ -687,6 +713,23 @@ class TestComparisonBaseRendering:
         with contextlib.redirect_stdout(buffer):
             inspect_cli._inspect_plain(fact)
         assert "parent commit only" in buffer.getvalue()
+
+    def test_plain_output_names_the_installed_base(self, tmp_path, monkeypatch):
+        import contextlib
+        import io
+
+        from trustsight.analysis.pipeline import analyze_package
+        from trustsight.cli import inspect as inspect_cli
+
+        _env(tmp_path, monkeypatch)
+        _multi_commit_repo(tmp_path, monkeypatch, commits=3)
+        with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
+            fact = analyze_package("testpkg", installed_version="1.0", depth=0)
+
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            inspect_cli._inspect_plain(fact)
+        assert "declared the installed version" in buffer.getvalue()
 
 
 def test_a_package_name_cannot_inject_terminal_escapes(tmp_path, monkeypatch):

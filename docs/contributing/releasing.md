@@ -150,9 +150,11 @@ package in
    the release from that tag rather than passing `--target`, which would need
    a `workflows: write` scope `GITHUB_TOKEN` cannot hold once the default
    branch has moved past the release commit.
-10. **Push the AUR package:** copy the released `packaging/aur/PKGBUILD` and
-    `.SRCINFO` into the AUR repository so `trustsight` moves to the new
-    version.
+10. **Push the AUR package:** copy only the released
+    `packaging/aur/PKGBUILD` and `.SRCINFO` into the AUR repository so
+    `trustsight` moves to the new version.  Do not copy the tarball or
+    `.sig`; those are release assets referenced by URL, and a checkout must
+    contain exactly those two files.
 
 After the software release, and only if the seed or corpus changed, publish a
 `baseline-<date>` channel release ([publishing baselines](publishing-baselines.md)).

@@ -234,8 +234,13 @@ def render_panel(*, fact: dict, layers_line: str = "", contact_lines=None,
     if fact.comparison_base == "parent":
         inside.add_row(
             "[bold]Compared[/]",
-            "The parent commit only; no recorded baseline, so earlier "
-            "history was not examined.",
+            "The parent commit only; no recorded baseline or installed-version "
+            "commit, so earlier history was not examined.",
+        )
+    elif fact.comparison_base == "installed":
+        inside.add_row(
+            "[bold]Compared[/]",
+            "The AUR commit that declared the installed version.",
         )
 
     con.print()

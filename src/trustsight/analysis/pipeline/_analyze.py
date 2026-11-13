@@ -213,7 +213,8 @@ def analyze_package(
 
     last, comparison_base, parent_baseline, old_commit, needs_fresh = (
         _resolve_comparison_base(
-            project, package_id, head_commit, old_commit, full_recipe))
+            project, package_id, head_commit, old_commit, full_recipe,
+            installed_version=installed_version or ""))
     if needs_fresh:
         return _make_fresh_analysis(
             pkg_name, head_version, head_commit, package_id, project, config,

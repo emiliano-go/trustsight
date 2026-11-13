@@ -176,7 +176,8 @@ def test_read_answer_reads_a_real_terminal():
     master, slave = pty.openpty()
     try:
         os.write(master, b"y\n")
-        answer = gate._read_answer("Continue? ", tty_path=os.ttyname(slave))
+        answer = gate._read_answer(
+            "Continue? ", tty_paths=[os.ttyname(slave)])
     finally:
         os.close(master)
         os.close(slave)
@@ -184,7 +185,22 @@ def test_read_answer_reads_a_real_terminal():
 
 
 def test_read_answer_without_a_terminal_is_none():
-    assert gate._read_answer("Continue? ", tty_path="/nonexistent/tty") is None
+    assert gate._read_answer(
+        "Continue? ", tty_paths=["/nonexistent/tty"]) is None
+
+
+def test_read_answer_falls_back_to_a_tty_fd():
+    master, slave = pty.openpty()
+    try:
+        os.write(master, b"y\n")
+        answer = gate._read_answer(
+            "Continue? ",
+            tty_paths=["/nonexistent/tty", os.ttyname(slave)],
+        )
+    finally:
+        os.close(master)
+        os.close(slave)
+    assert answer == "y"
 
 
 def test_run_gate_prompts_once_per_package_and_approves():
@@ -239,6 +255,18 @@ def test_run_gate_analysis_failure_fails_closed():
         ["demo"], inspect=broken, answer=lambda prompt: "y", out=out,
     )
     assert code == gate.EXIT_ERROR
+
+
+def test_run_gate_reports_analysis_progress_without_a_tty():
+    out = io.StringIO()
+    code = gate.run_gate(
+        ["demo"],
+        inspect=lambda name: _body(package=name),
+        answer=lambda prompt: "y",
+        out=out,
+    )
+    assert code == gate.EXIT_APPROVED
+    assert "analyzing ..." in out.getvalue()
 
 
 def test_run_gate_rejects_an_empty_target_list():

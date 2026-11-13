@@ -123,10 +123,11 @@ class PackageFact:
 
     first_seen: bool = False
     # What this run compared against: "recorded" (a stored observation of
-    # this package), "parent" (the immediately preceding commit, because no
-    # observation existed), "none" (no diff at all), or "" (not applicable,
-    # e.g. a caller-supplied diff).  A first review must not read as a
-    # whole-history verdict, so the base travels with the fact.
+    # this package), "installed" (the AUR commit that declared the installed
+    # version), "parent" (the immediately preceding commit, because no
+    # observation or installed commit existed), "none" (no diff at all), or
+    # "" (not applicable, e.g. a caller-supplied diff).  A first review must
+    # not read as a whole-history verdict, so the base travels with the fact.
     comparison_base: str = ""
     suppressed_rules: list[dict] = field(default_factory=list)
     #: M-series tool-health observations about the *instrument*, not the

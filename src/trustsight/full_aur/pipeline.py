@@ -2,6 +2,7 @@
 
 import json  # noqa: F401
 import time
+from datetime import datetime, timezone
 from typing import Callable, Optional
 
 
@@ -12,6 +13,8 @@ from ..db import (  # noqa: F401
     activate_campaign,
     active_campaigns,
     record_cycle_events,
+    sleeper_adoption_history,
+    sleeper_recent_pushes,
     checkpoint_wal,
     clear_correlation_feeds,
     get_metadata,
@@ -168,12 +171,42 @@ def _run_corpus_sweep(
         correlate,
         first_seen_adoption_burst,
         package_creation_burst,
+        sleeper_adoption_campaign,
     )
 
     records = _correlation_records(new_meta, old_meta, processed, popular,
                                    source_repos, detail)
     config = load_config()
     findings.extend(correlate(records, config))
+    # G015 needs the long adoption history, not only this cycle's adoption
+    # feed.  Read a bounded lookback and join it to the current push.
+    g015 = (config.get("thresholds", {}) or {}).get("g015", {}) or {}
+    try:
+        max_age = max(30, int(g015.get("max_adoption_age_days", 365)))
+    except (TypeError, ValueError, OverflowError):
+        max_age = 365
+    try:
+        adopt_window = max(0, int(g015.get("adoption_window_days", 180)))
+    except (TypeError, ValueError, OverflowError):
+        adopt_window = 180
+    now_ts = time.time()
+    history_since = datetime.fromtimestamp(
+        now_ts - (max_age + adopt_window) * 86400, timezone.utc
+    ).isoformat()
+    history_until = datetime.fromtimestamp(now_ts, timezone.utc).isoformat()
+    history = sleeper_adoption_history(
+        since=history_since, until=history_until)
+    try:
+        push_days = max(0, int(g015.get("push_window_days", 7)))
+    except (TypeError, ValueError, OverflowError):
+        push_days = 7
+    pushes = sleeper_recent_pushes(
+        since=datetime.fromtimestamp(
+            now_ts - push_days * 86400, timezone.utc).isoformat(),
+        until=history_until,
+    )
+    findings.extend(sleeper_adoption_campaign(
+        records, history, config, pushes))
     # G008 reads the maintainer-event timeline to tell a first-seen account
     # from an established one; it runs before campaign activation so a burst
     # primes campaign state like any other G-series cluster.

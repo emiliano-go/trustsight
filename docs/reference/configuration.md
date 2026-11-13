@@ -505,6 +505,9 @@ own project's names from firing a scope-expansion rule.
 | `g009.enabled` / `g009.path` | G009 | `true` / empty | Whether the watchlist is consulted, and the watchlist file (`~/.config/trustsight/watchlist.json` when empty). The file holds maintainer entries under `entries` (salted hashes) and package entries under `packages` (plain names). A non-string `path` is ignored (the default file is used), and the file is read under a 1 MiB cap: an oversized or malformed file is treated as absent, never as an analysis error. |
 | `g010.min_packages` / `g010.window_days` | G010 | `5` / `7` | Packages that must share one first-seen host, and the first-seen window. |
 | `g011.min_packages` / `g011.window_days` / `g011.placeholder_share` / `g011.placeholder_escalation` | G011 | `5` / `7` / `0.5` / `true` | Brand-new packages a first-seen maintainer must create in the window, the window, the H104 share that escalates the finding to HIGH, and whether that escalation is enabled. |
+| `g015.min_packages` / `g015.min_maintainers` / `g015.min_push_share` | G015 | `3` / `2` / `0.5` | Dormant adopted packages and distinct maintainers needed, and the share of the eligible cohort that must reactivate together. |
+| `g015.push_window_days` / `g015.min_adoption_age_days` / `g015.max_adoption_age_days` / `g015.adoption_window_days` | G015 | `7` / `30` / `365` / `180` | Reactivation window, cooling-off band, and the maximum span of the adoption wave. |
+| `g015.min_dormant` / `g015.dormant_days` / `g015.orphan_only` | G015 | `2` / `180` / `true` | Dormant-target floor and age, and whether only orphan adoptions join the cohort. |
 | `m002.min_layers` | M002 | `3` | Distinct evidence categories that must fire (none above the alert bar) before M002 escalates the reported band one step. |
 
 A malformed threshold value (a non-numeric string, `null`, or a list where a

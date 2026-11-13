@@ -49,12 +49,14 @@ import math
 import time
 from collections import defaultdict
 
+from .payload_signals import SHARED_PAYLOAD_RULES
+
 __all__ = ["correlate", "shared_gained_host", "shared_added_literal",
            "coordinated_adoption", "shared_upstream_dependency",
            "first_seen_adoption_burst", "package_creation_burst",
            "watchlisted_maintainer",
            "shared_payload_signal", "shared_fetch_target",
-           "shared_adoption_window"]
+           "shared_adoption_window", "sleeper_adoption_campaign"]
 
 #: Above this many members, the pairwise naming-relatedness pass in G003 is
 #: skipped.  The pass is O(n^2) and the member set is attacker-influenced; a
@@ -787,6 +789,187 @@ def shared_adoption_window(records, min_packages: int = 3,
         "params": {"members": sorted(members), "maintainers": accounts,
                    "maintainer_count": len(accounts),
                    "dormant_count": dormant_count},
+    }]
+
+
+#: Payload and takeover findings that turn a sleeper adoption push from a
+#: review prompt into a high-confidence campaign.  The broad practice rules
+#: are deliberately absent; the shared payload allowlist is already curated.
+_SLEEPER_ESCALATION_RULES = frozenset({
+    "H042", "H087", "H088", "H105",
+}) | SHARED_PAYLOAD_RULES
+
+
+def sleeper_adoption_campaign(records, history, config=None, pushes=None) -> list[dict]:
+    """G015: a multi-account dormant adoption cohort reactivates together.
+
+    ``G003``/``G008``/``G014`` see the adoption wave while it is fresh.
+    This rule waits for the delayed push: the same maintainers still own
+    dormant packages they adopted after a cooling-off period, then update a
+    majority of that cohort in one short window.  A payload or takeover
+    finding on any member escalates the campaign from MEDIUM to HIGH.
+
+    Alert-only: the cluster names its members and accounts, primes campaign
+    state, and never adds its severity to a member's own score.
+    """
+    thresholds = _thresholds(config)
+    g015 = _section(thresholds.get("g015"))
+    min_packages = max(1, _safe_int(g015.get("min_packages", 3), 3))
+    min_maintainers = max(1, _safe_int(g015.get("min_maintainers", 2), 2))
+    try:
+        min_push_share = float(g015.get("min_push_share", 0.5) or 0.5)
+    except (TypeError, ValueError, OverflowError):
+        min_push_share = 0.5
+    if not math.isfinite(min_push_share) or min_push_share <= 0:
+        min_push_share = 0.5
+    min_push_share = min(1.0, min_push_share)
+    push_window_days = max(0, _safe_int(
+        g015.get("push_window_days", 7), 7))
+    min_age_days = max(0, _safe_int(
+        g015.get("min_adoption_age_days", 30), 30))
+    max_age_days = max(min_age_days, _safe_int(
+        g015.get("max_adoption_age_days", 365), 365))
+    adoption_window_days = max(0, _safe_int(
+        g015.get("adoption_window_days", 180), 180))
+    min_dormant = max(0, _safe_int(g015.get("min_dormant", 2), 2))
+    dormant_days = max(0, _safe_int(
+        g015.get("dormant_days", 180), 180))
+    orphan_only = bool(g015.get("orphan_only", True))
+
+    now = time.time()
+    age_min = now - max_age_days * 86400
+    age_max = now - min_age_days * 86400
+    dormant_cutoff = now - dormant_days * 86400
+    current = {
+        str(record.get("package", "")): record
+        for record in records or () if isinstance(record, dict)
+    }
+    eligible: dict[str, set[str]] = defaultdict(set)
+    pushed: dict[str, set[str]] = defaultdict(set)
+    pushed_records: dict[str, dict] = {}
+    adoption_ts: dict[str, float] = {}
+    adoption_last_modified: dict[str, float] = {}
+    seen: dict[str, float] = {}
+    if pushes is not None:
+        for row in pushes:
+            if not isinstance(row, dict):
+                continue
+            package = str(row.get("package", "") or "")
+            adopter = _maintainer_key(row.get("maintainer"))
+            record = current.get(package)
+            if (not package or not adopter
+                    or (record is not None
+                        and bool(record.get("routine_only", False)))):
+                continue
+            if int(row.get("score", 0) or 0) <= 0 and not row.get("rules"):
+                continue
+            pushed[adopter].add(package)
+            pushed_records[package] = {
+                **(record or {}),
+                "rules": list(row.get("rules", ()) or
+                              (record or {}).get("rules", ()) or ()),
+            }
+    for row in history or ():
+        if not isinstance(row, dict):
+            continue
+        package = str(row.get("package", "") or "")
+        adopter = _maintainer_key(row.get("maintainer"))
+        current_owner = _maintainer_key(row.get("current_maintainer"))
+        adopted_at = row.get("adoption_ts")
+        if (not package or not adopter or current_owner != adopter
+                or not isinstance(adopted_at, (int, float))
+                or adopted_at < age_min or adopted_at > age_max):
+            continue
+        if orphan_only and _maintainer_key(row.get("previous_maintainer")):
+            continue
+        last_mod = row.get("last_modified")
+        if not isinstance(last_mod, (int, float)) or not last_mod:
+            continue
+        if last_mod >= dormant_cutoff:
+            continue
+        # A package can have several transitions; the latest adoption into the
+        # current account is the one that matters.
+        previous_ts = seen.get(package)
+        if previous_ts is not None and previous_ts >= adopted_at:
+            continue
+        seen[package] = adopted_at
+        eligible[adopter].add(package)
+        adoption_ts[package] = float(adopted_at)
+        adoption_last_modified[package] = float(last_mod)
+        record = current.get(package)
+        if not record:
+            continue
+        if _maintainer_key(record.get("maintainer")) != adopter:
+            continue
+        if bool(record.get("routine_only", False)):
+            continue
+        if pushes is None:
+            pushed[adopter].add(package)
+            pushed_records[package] = record
+
+    accounts = sorted(account for account, members in pushed.items() if members)
+    if len(accounts) < min_maintainers:
+        return []
+    members = sorted({pkg for account in accounts for pkg in pushed[account]})
+    if len(members) < min_packages:
+        return []
+    if (max(adoption_ts[pkg] for pkg in members)
+            - min(adoption_ts[pkg] for pkg in members)
+            > adoption_window_days * 86400):
+        return []
+    if not (max(adoption_ts[pkg] for pkg in members) <= age_max
+            and min(adoption_ts[pkg] for pkg in members) >= age_min):
+        return []
+    # The push is already the current cycle; the share is over the accounts'
+    # eligible packages in this adoption wave, not every package they ever
+    # adopted.
+    wave_start = max(adoption_ts[pkg] for pkg in members) - (
+        adoption_window_days * 86400)
+    eligible_for_accounts = {
+        pkg for account in accounts for pkg in eligible[account]
+        if adoption_ts.get(pkg, 0) >= wave_start
+    }
+    if not eligible_for_accounts:
+        return []
+    if len(members) / len(eligible_for_accounts) < min_push_share:
+        return []
+    if sum(1 for pkg in members
+           if adoption_last_modified.get(pkg, 0) < dormant_cutoff) < min_dormant:
+        return []
+    if _one_project(pushed_records[pkg] for pkg in members):
+        return []
+    if _one_related_cluster(members):
+        return []
+
+    signals = set()
+    for pkg in members:
+        for rule in _seq(pushed_records[pkg].get("rules")):
+            if rule in _SLEEPER_ESCALATION_RULES or rule in SHARED_PAYLOAD_RULES:
+                signals.add(rule)
+    severity = "HIGH" if signals else "MEDIUM"
+    match = (f"{len(members)} dormant adopted packages from "
+             f"{len(accounts)} maintainer(s) reactivated within "
+             f"{push_window_days} days after adoption")
+    if signals:
+        match += f" ({len(signals)} payload signal(s))"
+    return [{
+        "rule_id": "G015",
+        "name": "Sleeper Adoption Campaign",
+        "severity": severity,
+        "category": "correlation",
+        "match": match,
+        "params": {
+            "members": members,
+            "maintainers": accounts,
+            "maintainer_count": len(accounts),
+            "adoption_window_days": adoption_window_days,
+            "push_window_days": push_window_days,
+            "push_share": round(len(members) / len(eligible_for_accounts), 3),
+            "dormant_count": sum(
+                1 for pkg in members
+                if adoption_last_modified.get(pkg, 0) < dormant_cutoff),
+            "signals": sorted(signals),
+        },
     }]
 
 

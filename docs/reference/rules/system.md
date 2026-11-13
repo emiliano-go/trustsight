@@ -1398,6 +1398,10 @@ See [G013: Shared Fetch Target](correlation.md#g013).
 
 See [G014: Shared Adoption Window](correlation.md#g014).
 
+### G015 {#g015}
+
+See [G015: Sleeper Adoption Campaign](correlation.md#g015).
+
 ### A001 {#a001}
 
 See [A001: Setuid File In Artifact](artifact.md#a001).

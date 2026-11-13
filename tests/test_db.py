@@ -12,6 +12,10 @@ from trustsight.db import (
     init_db,
     insert_analysis,
     record_cycle_events,
+    record_property_transition,
+    sleeper_adoption_history,
+    sleeper_recent_pushes,
+    update_package_maintainer,
     update_package_version,
     upsert_package,
 )
@@ -1560,3 +1564,61 @@ def test_upgrade_places_a_domain_without_history_outside_the_novelty_window(db):
     init_db()
 
     assert not domain_seen_within("old.example", 30)
+
+
+def test_sleeper_adoption_history_returns_current_owner_and_dormancy(db):
+    import time
+
+    now = int(time.time())
+    upsert_package("alpha", "1")
+    update_package_maintainer("alpha", "m1")
+    record_cycle_events([{
+        "package_name": "alpha",
+        "cycle_time": now - 90 * 86400,
+        "status": "modified",
+        "maintainer": "m1",
+        "last_modified": now - 300 * 86400,
+    }])
+    record_property_transition(
+        "alpha", "maintainer", "", "m1",
+        observed_at=time.strftime("%Y-%m-%dT%H:%M:%S+00:00",
+                                  time.gmtime(now - 90 * 86400)))
+    rows = sleeper_adoption_history(
+        since=time.strftime("%Y-%m-%dT%H:%M:%S+00:00",
+                            time.gmtime(now - 400 * 86400)),
+        until=time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(now)),
+    )
+    assert len(rows) == 1
+    assert rows[0]["package"] == "alpha"
+    assert rows[0]["maintainer"] == "m1"
+    assert rows[0]["previous_maintainer"] == ""
+    assert rows[0]["current_maintainer"] == "m1"
+    assert rows[0]["last_modified"] == now - 300 * 86400
+
+
+def test_sleeper_recent_pushes_reads_the_push_window(db):
+    import time
+
+    now = int(time.time())
+    pid = upsert_package("alpha", "2")
+    update_package_maintainer("alpha", "m1")
+    record_cycle_events([{
+        "package_name": "alpha",
+        "cycle_time": now - 86400,
+        "status": "modified",
+        "maintainer": "m1",
+        "last_modified": now - 86400,
+    }])
+    insert_analysis(pid, "1", "2", "", "", 25, "", "{}", [
+        {"rule_id": "H017", "severity": "HIGH"}])
+    rows = sleeper_recent_pushes(
+        since=time.strftime("%Y-%m-%dT%H:%M:%S+00:00",
+                            time.gmtime(now - 7 * 86400)),
+        until=time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(now)),
+    )
+    assert rows == [{
+        "package": "alpha",
+        "maintainer": "m1",
+        "score": 25,
+        "rules": ["H017"],
+    }]

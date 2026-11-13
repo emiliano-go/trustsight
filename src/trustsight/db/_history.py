@@ -7,7 +7,7 @@ from ._connection import get_connection
 from ._packages import _RESERVED_NAMES
 from ..maintainer_email import normalize_domain
 
-__all__ = ['clear_correlation_feeds', 'clear_upstream_dep_additions', 'MAX_OBSERVED_DOMAINS', 'MAX_OBSERVED_KEYS', 'MAX_OBSERVED_LITERALS', 'MAX_PROPERTY_TRANSITIONS_PER_KEY', 'MAX_RECIPE_OBSERVATIONS_PER_PACKAGE', '_array_entries_hash', '_parse_ts', 'array_seen_before', 'correlation_feed', 'domain_first_seen', 'domain_seen_within', 'get_all_packages', 'get_history', 'get_pkgbuild_snapshot', 'get_previous_pkgbuild_snapshot', 'get_property_transitions', 'key_observed_before', 'maintainer_first_seen', 'observed_domain_count', 'observed_key_count', 'package_added_literals', 'read_aur_cache', 'record_added_literals', 'record_observed_domain', 'record_observed_key', 'record_property_transition', 'record_recipe_document', 'record_upstream_dep_additions', 'save_pkgbuild_snapshot', 'tuple_observation_count', 'write_aur_cache', 'temporal_rule_history']
+__all__ = ['clear_correlation_feeds', 'clear_upstream_dep_additions', 'MAX_OBSERVED_DOMAINS', 'MAX_OBSERVED_KEYS', 'MAX_OBSERVED_LITERALS', 'MAX_PROPERTY_TRANSITIONS_PER_KEY', 'MAX_RECIPE_OBSERVATIONS_PER_PACKAGE', '_array_entries_hash', '_parse_ts', 'array_seen_before', 'correlation_feed', 'domain_first_seen', 'domain_seen_within', 'get_all_packages', 'get_history', 'get_pkgbuild_snapshot', 'get_previous_pkgbuild_snapshot', 'get_property_transitions', 'key_observed_before', 'maintainer_first_seen', 'sleeper_adoption_history', 'sleeper_recent_pushes', 'observed_domain_count', 'observed_key_count', 'package_added_literals', 'read_aur_cache', 'record_added_literals', 'record_observed_domain', 'record_observed_key', 'record_property_transition', 'record_recipe_document', 'record_upstream_dep_additions', 'save_pkgbuild_snapshot', 'tuple_observation_count', 'write_aur_cache', 'temporal_rule_history']
 
 def get_history(package_id: int, limit: int = 20, *, from_date: str | None = None, to_date: str | None = None) -> list[dict]:
     """Return recent analysis history for *package_id*, newest first.
@@ -760,6 +760,132 @@ def maintainer_first_seen(maintainer: str) -> Optional[str]:
         ).fetchone()
     return row[0] if row else None
 
+
+def sleeper_adoption_history(*, since: str, until: str) -> list[dict]:
+    """Maintainer transitions for G015's long-window adoption cohorts.
+
+    Returns one row per maintainer transition in the window, with the
+    package's current maintainer and the ``last_modified`` value around the
+    adoption.  The caller still decides whether the package is dormant,
+    unrelated and currently owned by the adopter.  No network or new table.
+    """
+    import json as _json
+
+    def _value(raw):
+        try:
+            value = _json.loads(raw or "null")
+        except (TypeError, ValueError):
+            return str(raw or "").strip()
+        return str(value or "").strip()
+
+    with get_connection() as conn:
+        rows = conn.execute(
+            """SELECT package_name, old_value, new_value, observed_at
+               FROM property_transitions
+               WHERE property_key = 'maintainer'
+                 AND observed_at >= ? AND observed_at <= ?
+               ORDER BY observed_at ASC""",
+            (since, until),
+        ).fetchall()
+        names = sorted({row[0] for row in rows if row[0]})
+        current: dict[str, str] = {}
+        for start in range(0, len(names), 500):
+            chunk = _json.dumps(names[start:start + 500])
+            for row in conn.execute(
+                    "SELECT name, current_maintainer FROM packages"
+                    " WHERE name IN (SELECT value FROM json_each(?))", (chunk,)):
+                current[row[0]] = str(row[1] or "")
+        events: dict[str, list[tuple[int, int]]] = {}
+        for start in range(0, len(names), 500):
+            chunk = _json.dumps(names[start:start + 500])
+            for row in conn.execute(
+                    "SELECT package_name, cycle_time, last_modified"
+                    " FROM cycle_events"
+                    " WHERE package_name IN (SELECT value FROM json_each(?))"
+                    " ORDER BY cycle_time ASC", (chunk,)):
+                events.setdefault(row[0], []).append(
+                    (int(row[1] or 0), int(row[2] or 0)))
+
+    out: list[dict] = []
+    for row in rows:
+        package = str(row[0] or "")
+        adopter = _value(row[2])
+        if not package or not adopter:
+            continue
+        adoption_ts = _parse_ts(row[3]).timestamp()
+        nearest = None
+        for cycle_time, last_modified in events.get(package, ()):
+            if nearest is None or abs(cycle_time - adoption_ts) < abs(
+                    nearest[0] - adoption_ts):
+                nearest = (cycle_time, last_modified)
+        out.append({
+            "package": package,
+            "maintainer": adopter,
+            "previous_maintainer": _value(row[1]),
+            "adoption_ts": adoption_ts,
+            "last_modified": nearest[1] if nearest else 0,
+            "current_maintainer": current.get(package, ""),
+        })
+    return out
+
+def sleeper_recent_pushes(*, since: str, until: str) -> list[dict]:
+    """Substantive package updates recorded in a recent push window.
+
+    G015 needs the whole push window, not only the current cycle.  Reads
+    recorded cycle events and the latest analysis for each package, bounded by
+    the caller's window.  A score of zero with no findings is a routine bump
+    and is omitted.  No network or new table.
+    """
+    since_ts = int(_parse_ts(since).timestamp())
+    until_ts = int(_parse_ts(until).timestamp())
+    with get_connection() as conn:
+        rows = conn.execute(
+            """WITH latest AS (
+                   SELECT package_id, MAX(id) AS history_id
+                   FROM analysis_history
+                   GROUP BY package_id
+               )
+               SELECT ce.package_name AS package,
+                      ce.cycle_time AS cycle_time,
+                      p.current_maintainer AS maintainer,
+                      l.history_id AS history_id,
+                      ah.final_score AS score
+               FROM cycle_events ce
+               JOIN packages p ON p.name = ce.package_name
+               LEFT JOIN latest l ON l.package_id = p.id
+               LEFT JOIN analysis_history ah ON ah.id = l.history_id
+               WHERE ce.status = 'modified'
+                 AND ce.cycle_time >= ? AND ce.cycle_time <= ?
+                 AND ce.maintainer != ''
+               ORDER BY ce.cycle_time ASC""",
+            (since_ts, until_ts),
+        ).fetchall()
+        rules: dict[int, list[str]] = {}
+        history_ids = sorted({int(r["history_id"]) for r in rows
+                              if r["history_id"] is not None})
+        for start in range(0, len(history_ids), 500):
+            chunk = history_ids[start:start + 500]
+            import json as _json
+            payload = _json.dumps(chunk)
+            for row in conn.execute(
+                    "SELECT history_id, rule_id FROM triggered_rules"
+                    " WHERE history_id IN (SELECT value FROM json_each(?))",
+                    (payload,)):
+                rules.setdefault(int(row[0]), []).append(str(row[1]))
+    out = []
+    for row in rows:
+        history_id = row["history_id"]
+        package_rules = rules.get(int(history_id), []) if history_id else []
+        score = int(row["score"] or 0)
+        if score <= 0 and not package_rules:
+            continue
+        out.append({
+            "package": str(row["package"]),
+            "maintainer": str(row["maintainer"] or ""),
+            "score": score,
+            "rules": package_rules,
+        })
+    return out
 
 def correlation_feed(package_names) -> dict[str, dict]:
     """Per-package G-series inputs, read from the views.

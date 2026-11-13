@@ -176,6 +176,8 @@ def init_db():
                 ON property_transitions(package_name);
             CREATE INDEX IF NOT EXISTS idx_property_transitions_key
                 ON property_transitions(package_name, property_key);
+            CREATE INDEX IF NOT EXISTS idx_property_transitions_key_time
+                ON property_transitions(property_key, observed_at);
 
             CREATE TABLE IF NOT EXISTS pkgbuild_snapshots (
                 package_name TEXT PRIMARY KEY,

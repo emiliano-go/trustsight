@@ -115,8 +115,10 @@ def _inspect_plain(fact, verbose=False, show_score=False, show_risk=False):
     if fact.first_seen:
         print("  [First analysis] No prior history; novelty carries no weight yet.")
     if fact.comparison_base == "parent":
-        print("  [Compared] The parent commit only; no recorded baseline, "
-              "so earlier history was not examined.")
+        print("  [Compared] The parent commit only; no recorded baseline or "
+              "installed-version commit, so earlier history was not examined.")
+    elif fact.comparison_base == "installed":
+        print("  [Compared] The AUR commit that declared the installed version.")
     if fact.maintainer_changed:
         print(f"  Maintainer changed: {clean(fact.previous_maintainer)} -> {clean(fact.current_maintainer)}")
     elif fact.current_maintainer:

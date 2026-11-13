@@ -52,6 +52,7 @@ from ..structural_rules import apply_structural_rules
 from ..buildfetch import has_unpinned_build_deps
 from ..version import (
     compare_installed_to_aur,
+    full_version_from_pkgbuild,
     is_vcs_package,
 )
 from ._common import log
@@ -249,33 +250,61 @@ def _assemble_diff(project, old_commit: str, head_commit: str, config: dict,
             cut_hunk_details(cut_hunks))
 
 
+#: AUR commits searched for the commit that declared the installed version.
+#: The installed version is normally a few commits behind HEAD; the bound
+#: keeps a history walk from becoming unbounded when a package is far behind
+#: or the version never appears in the readable history.
+_VERSION_BASELINE_WALK = 200
+
+
+def _commit_for_installed_version(project, head_commit: str,
+                                  installed_version: str) -> str:
+    """The newest AUR commit whose PKGBUILD declares *installed_version*."""
+    if not installed_version or not head_commit:
+        return ""
+    try:
+        commits = project.walk(head_commit, limit=_VERSION_BASELINE_WALK)
+    except (GitSandboxUnavailable, GitOpError):
+        note_stage_failure("history-walk")
+        return ""
+    for commit in commits:
+        text = project.file_at(str(commit.id), "PKGBUILD")
+        if full_version_from_pkgbuild(text) == installed_version:
+            return str(commit.id)
+    return ""
+
+
 def _resolve_comparison_base(project, package_id: int, head_commit: str,
-                             old_commit: str, full_recipe: bool):
+                             old_commit: str, full_recipe: bool,
+                             installed_version: str = ""):
     """Choose the base revision a run compares against."""
-    last = None
-    comparison_base = ""
-    parent_baseline = False
     if full_recipe:
         return None, "none", False, "", False
     if old_commit:
         return None, "", False, old_commit, False
     last = get_last_analysis(package_id)
+    # An installed package has a concrete AUR commit even when the local
+    # observation history is stale (or has no commit ids at all).  Comparing
+    # from that version is the review the user asked for; the repository
+    # root would mix in every skipped release and manufacture novelty.
+    installed_commit = _commit_for_installed_version(
+        project, head_commit, installed_version)
+    if installed_commit:
+        base = "recorded" if (
+            last is not None
+            and last.get("new_commit") == installed_commit
+        ) else "installed"
+        return last, base, False, installed_commit, False
     if last is not None:
-        comparison_base = "recorded"
         stored_commit = last.get("new_commit")
         if stored_commit:
-            old_commit = stored_commit
-        elif head_commit:
-            try:
-                for c in project.walk(head_commit):
-                    if not c.parents:
-                        old_commit = str(c.id)
-                        break
-            except (GitSandboxUnavailable, GitOpError):
-                note_stage_failure("history-walk")
-            if not old_commit:
-                old_commit = head_commit
-        return last, comparison_base, False, old_commit, False
+            return last, "recorded", False, stored_commit, False
+        # A recorded row without a commit id cannot name a revision.  The
+        # parent is the honest one-commit base; the repository root is not a
+        # prior observation and produced whole-history false positives.
+        comparison_base = "parent"
+        old_commit = _parent_commit(project, head_commit)
+        return last, comparison_base, True, old_commit, not old_commit
     # No recorded baseline.  A read-only run never writes one; the previous
     # commit in the AUR repository is the honest one-commit base.
     comparison_base = "parent"

@@ -180,7 +180,7 @@ class Report:
     :ivar first_seen: no prior history, so novelty signals carry no weight
         yet.
     :ivar comparison_base: what this run compared against, one of
-        ``"recorded"``, ``"parent"``, ``"none"``, or ``""``.
+        ``"recorded"``, ``"installed"``, ``"parent"``, ``"none"``, or ``""``.
     :ivar is_trivial: the change was too small to warrant findings.
     :ivar diff_truncated: the diff was clamped before the rules read it.
     :ivar tree_analyzed: the AUR git tree was walked, not only the diff.
@@ -300,7 +300,7 @@ class Report:
     first_seen: bool = False
     """No prior history: novelty signals carry no weight yet."""
     comparison_base: str = ""
-    """"recorded", "parent", "none", or "" when no comparison applied."""
+    """"recorded", "installed", "parent", "none", or "" when no comparison applied."""
     is_trivial: bool = False
     diff_truncated: bool = False
     tree_analyzed: bool = False

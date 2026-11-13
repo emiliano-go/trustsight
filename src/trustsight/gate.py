@@ -29,6 +29,8 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, TextIO
@@ -236,6 +238,52 @@ _SEVERITY_COLORS = {
     "MEDIUM": "33",
     "LOW": "32",
 }
+
+
+_SPINNER_FRAMES = ("-", "\\", "|", "/")
+_SPINNER_INTERVAL = 0.12
+_SPINNER_WIDTH = 80
+
+
+def _is_tty(out: TextIO) -> bool:
+    try:
+        return bool(out.isatty())
+    except (AttributeError, OSError, ValueError):
+        return False
+
+
+@contextmanager
+def _analysis_progress(out: TextIO, label: str = "analyzing"):
+    """Show that the child inspection is running, without owning the TTY.
+
+    The gate can spend minutes in one inspect call.  A terminal gets a small
+    spinner; a pipe gets one plain line so a captured log still says work
+    started.  The line is cleared before the report so it never mixes with a
+    finding.
+    """
+    if not _is_tty(out):
+        print(f"   {label} ...", file=out, flush=True)
+        yield
+        return
+    stop = threading.Event()
+
+    def spin() -> None:
+        index = 0
+        while not stop.wait(_SPINNER_INTERVAL):
+            frame = _SPINNER_FRAMES[index % len(_SPINNER_FRAMES)]
+            out.write(f"\r   {label} {frame}")
+            out.flush()
+            index += 1
+
+    thread = threading.Thread(target=spin, daemon=True)
+    thread.start()
+    try:
+        yield
+    finally:
+        stop.set()
+        thread.join(timeout=1)
+        out.write("\r" + (" " * _SPINNER_WIDTH) + "\r")
+        out.flush()
 
 
 def _paint(text: str, code: str, enabled: bool) -> str:
@@ -459,25 +507,53 @@ def run_inspect(
     return body
 
 
-def _read_answer(prompt: str, tty_path: str = "/dev/tty") -> str | None:
-    """Read one line from the controlling terminal; None when there is none.
+def _tty_paths() -> list[str]:
+    """Terminal paths to try, in order.
+
+    ``/dev/tty`` is the controlling terminal and the first choice.  yay and
+    paru can run a hook with a pty for stdio but no controlling terminal, so
+    a tty on fd 0, 1 or 2 is also a valid prompt target and is tried next.
+    """
+    paths: list[str] = []
+    seen: set[str] = set()
+
+    def add(path: str) -> None:
+        if path and path not in seen:
+            seen.add(path)
+            paths.append(path)
+
+    add("/dev/tty")
+    for fd in (0, 1, 2):
+        try:
+            if os.isatty(fd):
+                add(os.ttyname(fd))
+        except OSError:
+            continue
+    return paths
+
+
+def _read_answer(prompt: str,
+                 tty_paths: list[str] | None = None) -> str | None:
+    """Read one line from a terminal; None when none can be opened.
 
     A terminal is a character device, not a seekable file.  Opening it
     ``r+`` builds a buffered random-access stream, which raises
     ``UnsupportedOperation`` before the prompt is ever written, so the gate
-    must open the write and read sides separately.
+    opens the write and read sides separately.
     """
-    try:
-        with open(tty_path, "w", encoding="utf-8", errors="replace") as tty:
-            tty.write(prompt)
-            tty.flush()
-        with open(tty_path, "r", encoding="utf-8", errors="replace") as tty:
-            line = tty.readline(MAX_ANSWER_BYTES)
-    except (OSError, ValueError):
-        return None
-    if len(line) >= MAX_ANSWER_BYTES and not line.endswith("\n"):
-        return ""
-    return line.strip()
+    for tty_path in (tty_paths if tty_paths is not None else _tty_paths()):
+        try:
+            with open(tty_path, "w", encoding="utf-8", errors="replace") as tty:
+                tty.write(prompt)
+                tty.flush()
+            with open(tty_path, "r", encoding="utf-8", errors="replace") as tty:
+                line = tty.readline(MAX_ANSWER_BYTES)
+        except (OSError, ValueError):
+            continue
+        if len(line) >= MAX_ANSWER_BYTES and not line.endswith("\n"):
+            return ""
+        return line.strip()
+    return None
 
 
 def _approved(answer: str) -> bool:
@@ -501,7 +577,9 @@ def run_gate(
         return EXIT_ERROR
     for package in targets[:MAX_TARGETS]:
         try:
-            summary = summarize(inspect(package), fallback_package=package)
+            with _analysis_progress(out):
+                body = inspect(package)
+            summary = summarize(body, fallback_package=package)
         except GateError as exc:
             print(_paint(f"trustsight-gate: {exc}", "31", colour), file=out)
             return EXIT_ERROR

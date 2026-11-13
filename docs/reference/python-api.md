@@ -392,7 +392,7 @@ The analysis of one package.
 | `adapter` | `str` | `git`, `corpus`, or `diff`. |
 | `config_fingerprint` | `str` | Which instrument produced this. |
 | `scan_truncated` | `bool` | More lines than `rules.MAX_SCANNED_LINES`; the tail was not matched. Separate from `diff_truncated` because the caps are separate. |
-| `comparison_base` | `str` | The saved state the diff was taken against (`recorded`, `none`, ...), carried on the fact path as well as the review-row path (a B11 surface-parity fix). |
+| `comparison_base` | `str` | The saved state the diff was taken against (`recorded`, `installed`, `parent`, `none`, ...), carried on the fact path as well as the review-row path (a B11 surface-parity fix). |
 | `indicators` | `tuple[IocMatch, ...]` | The indicator tier, mirroring `ioc_matches` as a first-class surface. Outside the heuristic score, at maximum alert priority. |
 | `change` | `dict` | The typed change-as-data view (`ChangeDelta.to_dict()`), as JSON. The same object the prose summary renders. Use `report.change_delta` for the typed object. See the [report schema](report-schema.md). |
 | `unresolved_assignments` | `tuple[dict, ...]` | Every assignment the tokenizer refused, as `{name, line, file}`. Non-empty forbids `fully_vetted`. |

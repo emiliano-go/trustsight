@@ -2,6 +2,15 @@
 
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- **The gate compares the installed version, not a stale observation or the repository root.** A recorded analysis without commit ids used to fall back to the root commit, so a 0.28.0 to 0.28.3 update could include changes from 0.21.0 and report signing-key, maintainer, and source-URL novelty that did not belong to the update. When the installed version is known, the gate now selects the AUR commit that declared it and reports `comparison_base = "installed"`. The parent commit remains the fallback when no matching version is found.
+- **The gate finds the hook terminal when `/dev/tty` is unavailable.** yay and paru can run the hook with a pty for stdio but no controlling terminal. The gate now tries fd 0, 1 and 2 after `/dev/tty`, so the approval prompt works in both managers instead of aborting with `no terminal for approval`.
+- **The gate shows that inspection is running.** The report now prints a small ASCII spinner while the child analysis runs, or one plain `analyzing ...` line when the output is captured. A long inspection no longer looks stalled.
+- **The AUR repository carries only the packaging files.** A release signature accidentally copied into the AUR checkout from 0.28.1 onward is removed, and the release guide now says to copy only `PKGBUILD` and `.SRCINFO`.
+
 ## [0.28.3] - 2026-11-13
 
 ### Fixed

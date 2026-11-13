@@ -146,6 +146,19 @@ def test_render_shows_the_decision_facts():
     assert "1.1-1 (from 1.0-1)" in text
 
 
+def test_render_hides_the_band_and_score_by_default():
+    out = io.StringIO()
+    gate.render(gate.summarize(_body()), out)
+    text = out.getvalue()
+    assert "risk:" not in text
+    assert "score:" not in text
+
+    shown = io.StringIO()
+    gate.render(gate.summarize(_body()), shown, show_score=True, show_risk=True)
+    assert "risk: Medium" in shown.getvalue()
+    assert "score: 35" in shown.getvalue()
+
+
 def test_render_colors_only_a_terminal(monkeypatch):
     class Terminal(io.StringIO):
         def isatty(self):
@@ -383,6 +396,19 @@ def test_main_reads_targets_from_srcinfo(monkeypatch, tmp_path):
     code = gate.main(["--yes", "--dir", str(tmp_path)], out=out)
     assert code == gate.EXIT_APPROVED
     assert "split-a" in out.getvalue() and "split-b" in out.getvalue()
+
+
+def test_main_cancels_cleanly_at_the_prompt(monkeypatch):
+    monkeypatch.setattr(gate, "run_inspect",
+                        lambda name, **kw: _body(package=name))
+
+    def interrupt(_prompt):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(gate, "_read_answer", interrupt)
+    out = io.StringIO()
+    assert gate.main(["demo"], out=out) == gate.EXIT_REFUSED
+    assert "cancelled by user" in out.getvalue()
 
 
 def test_main_without_targets_is_an_error():

@@ -1106,7 +1106,7 @@ wheels = [
 
 [[package]]
 name = "trustsight"
-version = "0.28.6"
+version = "0.28.7"
 source = { editable = "." }
 dependencies = [
     { name = "cryptography" },

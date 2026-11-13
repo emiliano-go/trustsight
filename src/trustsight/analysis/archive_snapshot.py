@@ -47,6 +47,11 @@ def _pkgbuild_member(members: list, name: str):
     exact = f"{name}/PKGBUILD"
     fallback = None
     for member in members:
+        # Only a regular member is a recipe.  A symlink or hardlink named
+        # PKGBUILD is a pointer into the archive (or, in a malformed
+        # archive, outside it), not the file the recipe was committed as.
+        if not member.isfile():
+            continue
         if member.name == exact:
             return member
         if fallback is None and member.name.endswith("/PKGBUILD"):

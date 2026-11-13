@@ -194,6 +194,36 @@ def _apply_limits() -> list[str]:
     return failures
 
 
+def _libgit2_version_is_safe(raw: str | None = None) -> bool:
+    """Whether the bundled libgit2 carries the delta-size and libssh2 fixes.
+
+    The package floor keeps a fresh install patched, but a source checkout,
+    a developer venv or an older user install can still load a vulnerable
+    bundle.  Refusing at worker startup makes that fail closed instead of
+    exercising the vulnerable parser.  ``1.8.7`` and ``1.9.7`` are the
+    patched releases; anything newer is safe by version order.
+    """
+    value = str(raw if raw is not None
+                else getattr(pygit2, "LIBGIT2_VERSION", "") or "")
+    parts: list[int] = []
+    for token in value.split("."):
+        digits = ""
+        for ch in token:
+            if ch.isdigit():
+                digits += ch
+            else:
+                break
+        parts.append(int(digits) if digits else 0)
+    while len(parts) < 3:
+        parts.append(0)
+    major, minor, patch = parts[0], parts[1], parts[2]
+    return (
+        (major, minor, patch) >= (1, 10, 0)
+        or (major == 1 and minor == 9 and patch >= 7)
+        or (major == 1 and minor == 8 and patch >= 7)
+    )
+
+
 def _harden_libgit2() -> list[str]:
     """Configure libgit2 once; return the protections that could not be set.
 
@@ -934,6 +964,16 @@ def main() -> int:
     if _ROLE not in ("read", "fetch"):
         print("trustsight-git-sandbox-refused: unknown role", file=sys.stderr,
               flush=True)
+        return 3
+
+    if not _libgit2_version_is_safe():
+        print(
+            "trustsight-git-sandbox-refused: bundled libgit2 "
+            f"{getattr(pygit2, 'LIBGIT2_VERSION', 'unknown')} is below the "
+            "patched 1.8.7/1.9.7 floor; upgrade pygit2 (>=1.20.1)",
+            file=sys.stderr,
+            flush=True,
+        )
         return 3
 
     limit_failures = _apply_limits()

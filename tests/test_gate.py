@@ -74,6 +74,13 @@ def test_targets_from_dir_uses_srcinfo_then_base_fallback(tmp_path):
     assert gate.targets_from_dir(empty, "base") == ["base"]
 
 
+def test_an_oversized_srcinfo_is_refused(tmp_path):
+    """The checkout cannot make the gate allocate an unbounded .SRCINFO."""
+    (tmp_path / ".SRCINFO").write_text(
+        "pkgname = demo\n" + "#" * (gate.MAX_SRCINFO_BYTES + 1))
+    assert gate.targets_from_dir(tmp_path, "base") == []
+
+
 def test_targets_from_dir_without_fallback_is_empty(tmp_path):
     assert gate.targets_from_dir(tmp_path) == []
 
@@ -318,6 +325,49 @@ def test_run_gate_yes_never_reads_the_terminal():
     ) == gate.EXIT_APPROVED
 
 
+def test_a_relative_trustsight_bin_cannot_shadow_the_inspector(monkeypatch):
+    """TRUSTSIGHT_BIN is trusted only as an absolute path.
+
+    A relative value would be resolved through the caller's PATH, so a
+    directory earlier in that path could substitute the inspector the gate
+    runs.  The gate falls back to its own interpreter instead.
+    """
+    monkeypatch.setenv("TRUSTSIGHT_BIN", "trustsight")
+    argv = gate._trustsight_argv()
+    assert argv[1:] == ["-m", "trustsight"]
+    assert argv[0] == gate.sys.executable
+
+    monkeypatch.setenv("TRUSTSIGHT_BIN", "/usr/bin/trustsight-dev")
+    assert gate._trustsight_argv() == ["/usr/bin/trustsight-dev"]
+
+
+def test_pacman_is_looked_up_on_the_trusted_path_and_gets_a_separator(monkeypatch):
+    """A package name beginning with '-' is data, not a pacman option."""
+    seen: list[list[str]] = []
+
+    def which(name, path=None):
+        assert path == gate.TRUSTED_PATH
+        return "/usr/bin/pacman" if name == "pacman" else None
+
+    def run(argv, **kwargs):
+        seen.append(argv)
+        return subprocess.CompletedProcess(argv, 1, "", "")
+
+    monkeypatch.setattr(gate.shutil, "which", which)
+    monkeypatch.setattr(gate.subprocess, "run", run)
+    assert gate._pacman_says_installed("--help") is False
+    assert seen == [["/usr/bin/pacman", "-Qq", "--", "--help"]]
+
+
+def test_run_gate_refuses_a_body_for_another_package():
+    """An inspection that answers for a different package cannot approve."""
+    code = gate.run_gate(
+        ["demo"], inspect=lambda name: _body(package="other"),
+        answer=lambda prompt: "y", out=io.StringIO(),
+    )
+    assert code == gate.EXIT_ERROR
+
+
 def test_run_inspect_parses_the_body():
     def runner(argv, **kwargs):
         # The binary may be `trustsight` on PATH or the `-m trustsight` module
@@ -465,6 +515,37 @@ def test_run_gate_sanitizes_the_approval_prompt():
     assert "demo" in prompts[0]
 
 
+def test_run_inspect_lints_the_local_recipe_even_when_the_aur_name_resolves(
+    tmp_path,
+):
+    """A checked-out .SRCINFO cannot hide a different local PKGBUILD.
+
+    The target list comes from the package-controlled .SRCINFO.  A malicious
+    recipe can name a benign package there, so the local recipe is always
+    linted and its findings are merged with the remote view before approval.
+    """
+    (tmp_path / "PKGBUILD").write_text("pkgname=demo\n")
+
+    def runner(argv, **kwargs):
+        if "inspect" in argv:
+            return subprocess.CompletedProcess(
+                argv, 0, json.dumps(_body(package="demo")), "")
+        return subprocess.CompletedProcess(
+            argv, 0,
+            json.dumps({"rules": [{
+                "rule_id": "X002",
+                "severity": "HIGH",
+                "message": "downloaded payload",
+                "line": 3,
+            }]}),
+            "",
+        )
+
+    body = gate.run_inspect(
+        "demo", full_recipe=False, directory=str(tmp_path), runner=runner)
+    assert any(row["rule_id"] == "X002" for row in body["findings"])
+
+
 def test_run_inspect_falls_back_to_lint_for_a_local_package(tmp_path):
     (tmp_path / "PKGBUILD").write_text("pkgname=local\npkgver=1\n")
     calls: list[list[str]] = []
@@ -494,7 +575,7 @@ def test_run_inspect_falls_back_to_lint_for_a_local_package(tmp_path):
     )
     assert body["verdict"] == "local recipe (no diff)"
     assert body["findings"][0]["description"] == "checksum disabled"
-    assert calls[1][1:3] == ["lint", "--json"]
+    assert calls[1][calls[1].index("lint") + 1] == "--json"
 
 
 def test_run_inspect_falls_back_when_a_banner_is_the_last_stderr_line(tmp_path):

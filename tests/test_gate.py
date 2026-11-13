@@ -461,6 +461,13 @@ def test_main_cancels_cleanly_at_the_prompt(monkeypatch):
     assert "cancelled by user" in out.getvalue()
 
 
+def test_main_rejects_an_option_shaped_srcinfo_target(tmp_path):
+    (tmp_path / ".SRCINFO").write_text("pkgname = --help\n")
+    out = io.StringIO()
+    assert gate.main(["--yes", "--dir", str(tmp_path)], out=out) == gate.EXIT_ERROR
+    assert "option-shaped" in out.getvalue()
+
+
 def test_main_without_targets_is_an_error():
     out = io.StringIO()
     assert gate.main(["--yes"], out=out) == gate.EXIT_ERROR

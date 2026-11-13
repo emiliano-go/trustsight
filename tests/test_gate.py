@@ -19,6 +19,24 @@ import pytest
 from trustsight import gate
 
 
+@pytest.fixture(autouse=True)
+def _isolated_gate_environment(monkeypatch):
+    """A user's package-manager environment must not move these tests.
+
+    The AUR package's ``check()`` runs the suite with the environment that
+    invoked makepkg.  A user who set ``TRUSTSIGHT_GATE_DISABLE=1`` to install
+    the package made every main-path test see the bypass and fail.  The tests
+    that exercise the bypass set it themselves, after this fixture runs.
+    """
+    for name in (
+        "TRUSTSIGHT_GATE_DISABLE",
+        "TRUSTSIGHT_GATE_BIN",
+        "TRUSTSIGHT_GATE_DEPTH",
+        "TRUSTSIGHT_BIN",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+
 def _body(**overrides):
     body = {
         "package": "demo",

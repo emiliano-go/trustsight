@@ -2,6 +2,12 @@
 
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- **The gate tests ignore an inherited `TRUSTSIGHT_GATE_DISABLE`.** The AUR package's `check()` inherits the environment that invoked makepkg, so installing with `TRUSTSIGHT_GATE_DISABLE=1` made three main-path tests see the bypass and fail the package build. The gate test module now clears the gate environment before each test, and CI runs it once with the inherited value set so the isolation cannot regress silently.
+
 ## [0.28.4] - 2026-11-13
 
 ### Fixed

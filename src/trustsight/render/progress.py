@@ -97,4 +97,12 @@ def stop(*, id):
     if entry is None:
         return
     progress, _task = entry
+    transient = bool(getattr(progress, "transient", False))
     progress.stop()
+    # Rich leaves the cursor at the end of the bar.  Without a newline the
+    # next notice or prompt starts on the same line as the completed bar.
+    if not transient:
+        stream = _stream()
+        if stream is not None:
+            stream.write("\n")
+            stream.flush()

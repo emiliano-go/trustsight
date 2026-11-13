@@ -233,11 +233,18 @@ def evaluate_fact(fact) -> dict[str, Any]:
         "campaign_state": getattr(fact, "campaign_state", "") or "unavailable",
         "tender_point": _tender_point(fact),
         "is_trivial": is_trivial(fact, findings),
-        "ioc_matches": list(fact.ioc_matches),
+        "ioc_matches": [_ioc_row(m) for m in fact.ioc_matches],
         # the indicator tier, promoted. Same facts as
         # `ioc_matches`, exposed as the first-class I-series surface.
-        "indicators": list(fact.ioc_matches),
-        "dependencies": list(getattr(fact, "dependencies", ())),
+        "indicators": [_ioc_row(m) for m in fact.ioc_matches],
+        # Each dependency is its own analysis, but this body is passed to
+        # `json.dumps` and to the render worker before `report_body` sees it.
+        # A DependencyReport is not plain data; convert it here so every
+        # adapter receives the same dict shape.
+        "dependencies": [
+            d.to_dict() if hasattr(d, "to_dict") else dict(d)
+            for d in getattr(fact, "dependencies", ())
+        ],
         "depth_truncated": bool(getattr(fact, "depth_truncated", False)),
         # The Contact Ledger panel: weight-0 first contacts, warm-only.  A
         # dict so a cold replay carries the standing

@@ -80,6 +80,36 @@ def test_a_finished_progress_bar_ends_with_a_newline(monkeypatch):
     assert stream.getvalue() == "\n"
 
 
+def test_a_failed_review_card_names_the_error():
+    text = render_client.render("review_results", {
+        "results": [{
+            "package": "demo",
+            "failed": True,
+            "score": 0,
+            "risk": "Error",
+            "findings": [],
+            "verdict": "Analysis failed (fetch did not complete): this package was NOT vetted.",
+            "error": "unexpected http status code: 502",
+        }],
+        "total_installed": 1,
+        "all_packages": False,
+        "show_score": False,
+        "show_risk": False,
+        "verbose": False,
+        "outdated_total": 1,
+        "deps_only": False,
+    })
+    assert "502" in text
+    assert "fetch did not complete" in text
+
+
+def test_render_uses_color_when_forced(monkeypatch):
+    monkeypatch.setenv("FORCE_COLOR", "1")
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    text = render_client.render("list_table", {"rows": []})
+    assert "\x1b[" in text
+
+
 def test_unknown_op_is_a_named_refusal():
     with pytest.raises(render_client.RenderUnavailable, match="unknown render op"):
         render_client.render("no_such_op", {})

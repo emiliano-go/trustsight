@@ -133,6 +133,7 @@ def _parse_advertisement(data: bytes):
     """``(head_oid, advertised_oids)`` from a protocol-v0 ref advertisement."""
     refs: dict[str, str] = {}
     symref_head = ""
+    empty_repo = False
     offset = 0
     lines = 0
     while offset < len(data):
@@ -161,6 +162,10 @@ def _parse_advertisement(data: bytes):
         if len(fields) != 2:
             raise _BadRequest("malformed ref advertisement")
         oid, name = fields
+        if name == "capabilities^{}" and set(oid) == {"0"}:
+            # An empty AUR repository advertises only this zero-OID line.
+            empty_repo = True
+            continue
         if not _is_oid(oid) or not (
                 name == "HEAD" or name.startswith("refs/")):
             raise _BadRequest("malformed ref advertisement")
@@ -173,7 +178,7 @@ def _parse_advertisement(data: bytes):
                 if token.startswith("symref=HEAD:"):
                     symref_head = token.split(":", 1)[1]
     if not refs:
-        return None
+        return ("", frozenset()) if empty_repo else None
     head = refs.get(symref_head) or refs.get("refs/heads/master") \
         or refs.get("refs/heads/main") or refs.get("HEAD")
     if not head:

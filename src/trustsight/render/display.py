@@ -11,6 +11,7 @@ from ..scoring import risk_level
 
 #: Set by the worker before any render module is imported.
 _OUT = None
+_COLOR = False
 
 RISK_COLORS = {
     "Low": "green",
@@ -31,10 +32,11 @@ SEVERITY_COLORS = {
 }
 
 
-def set_output(stream=None) -> None:
-    """Point the render console at *stream* (the worker's capture buffer)."""
-    global _OUT
+def set_output(stream=None, *, color: bool = False) -> None:
+    """Point the render console at *stream* and choose its color mode."""
+    global _OUT, _COLOR
     _OUT = stream
+    _COLOR = bool(color)
 
 
 def _stream():
@@ -45,8 +47,9 @@ def console():
     from rich.console import Console
 
     return Console(
-        file=_stream(), force_terminal=False, width=140,
-        color_system=None, no_color=True,
+        file=_stream(), force_terminal=_COLOR, width=140,
+        color_system="standard" if _COLOR else None,
+        no_color=not _COLOR,
     )
 
 
@@ -54,8 +57,9 @@ def err_console():
     from rich.console import Console
 
     return Console(
-        file=_stream(), force_terminal=False, width=140,
-        color_system=None, no_color=True, stderr=True,
+        file=_stream(), force_terminal=_COLOR, width=140,
+        color_system="standard" if _COLOR else None,
+        no_color=not _COLOR, stderr=True,
     )
 
 

@@ -81,6 +81,8 @@ class MetadataProvider(Protocol):
 
     def deps_of(self, name: str) -> set[str]: ...
 
+    def package_base(self, name: str) -> str: ...
+
 
 @dataclass(frozen=True)
 class DependencyReport:
@@ -474,6 +476,12 @@ class SnapshotMetadata:
     def is_aur(self, name: str) -> bool:
         return name in self._packages
 
+    def package_base(self, name: str) -> str:
+        """The AUR git repository name for *name*."""
+        resolved = self.aur_name(name)
+        entry = self._packages.get(resolved) or {}
+        return str(entry.get("PackageBase") or resolved)
+
     def deps_of(self, name: str) -> set[str]:
         from .deps import normalize_dependency
 
@@ -546,6 +554,13 @@ class RpcMetadata:
         if name not in self._cache:
             self.prime([name])
         return bool(self._cache.get(name))
+
+    def package_base(self, name: str) -> str:
+        """The AUR git repository name for *name*."""
+        if name not in self._cache:
+            self.prime([name])
+        entry = self._cache.get(name) or {}
+        return str(entry.get("PackageBase") or name)
 
     def deps_of(self, name: str) -> set[str]:
         from .deps import normalize_dependency

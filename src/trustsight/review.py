@@ -42,6 +42,13 @@ def _orphan_state(aur: Optional[dict]) -> Optional[bool]:
     return not aur.get("Maintainer")
 
 
+def _package_base(aur: Optional[dict], name: str) -> str:
+    """The AUR git repository name, which differs for split packages."""
+    if not aur:
+        return name
+    return str(aur.get("PackageBase") or name)
+
+
 def metadata_ttl_minutes() -> int:
     """Minutes a metadata snapshot may be used before it is refetched.
 
@@ -205,12 +212,14 @@ def discover_packages(
                 if aur and isinstance(aur.get("LastModified"), int):
                     pkg["last_modified"] = aur["LastModified"]
                 pkg["aur_orphaned"] = orphaned
+                pkg["package_base"] = _package_base(aur, name)
                 outdated.append(pkg)
             elif latest_ver and _vercmp(pkg["current_version"], latest_ver) < 0:
                 pkg["latest_version"] = latest_ver
                 if isinstance(aur.get("LastModified"), int):
                     pkg["last_modified"] = aur["LastModified"]
                 pkg["aur_orphaned"] = orphaned
+                pkg["package_base"] = _package_base(aur, name)
                 outdated.append(pkg)
 
         return outdated, total_installed
@@ -329,6 +338,7 @@ def dependency_entries(discovered, depth, config=None, on_warn=None):
             "name": name,
             "current_version": installed.get(name) or None,
             "latest_version": (metadata.packages.get(name) or {}).get("Version", ""),
+            "package_base": (metadata.packages.get(name) or {}).get("PackageBase") or name,
         }
         for name in closure.names
     ]
@@ -358,19 +368,25 @@ def prefetch(pkgs: list[dict], progress_callback: Optional[ProgressCallback] = N
     """Clone or fetch AUR repos for *pkgs* in parallel, returning {name: hint}."""
     from .fetcher import clone_or_fetch
 
-    def fetch(entry: dict) -> tuple[str, int | None]:
-        name = entry["name"]
-        project = clone_or_fetch(name, entry.get("last_modified"))
+    def fetch(base: str, entry: dict) -> tuple[int | None]:
+        project = clone_or_fetch(base, entry.get("last_modified"))
         try:
             hint = entry.get("last_modified")
             if hint is None:
                 hint = project.last_fetch_time()
-            return name, hint
+            return hint
         finally:
             project.close()
 
+    # Split packages share one AUR git repository.  Fetch it once even when
+    # several installed outputs of the same base are being reviewed.
+    groups: dict[str, list[dict]] = {}
+    for entry in pkgs:
+        base = entry.get("package_base") or entry["name"]
+        groups.setdefault(base, []).append(entry)
+
     hints: dict[str, int] = {}
-    total = len(pkgs)
+    total = len(groups)
     deadline = prefetch_deadline()
     workers = max(1, min(default_workers(), total))
     # Not a `with` block: the context manager exit calls shutdown(wait=True),
@@ -380,19 +396,23 @@ def prefetch(pkgs: list[dict], progress_callback: Optional[ProgressCallback] = N
     # the deadline cut off.
     pool = ThreadPoolExecutor(max_workers=workers)
     try:
-        futures = {pool.submit(fetch, entry): entry["name"] for entry in pkgs}
+        futures = {
+            pool.submit(fetch, base, entries[0]): (base, entries)
+            for base, entries in groups.items()
+        }
         try:
             for done, future in enumerate(as_completed(futures, timeout=deadline), start=1):
-                name = futures[future]
+                base, entries = futures[future]
                 if progress_callback:
-                    progress_callback(done, total, f"Fetching {name}")
+                    progress_callback(done, total, f"Fetching {base}")
                 try:
-                    fetched, commit_time = future.result()
+                    commit_time = future.result()
                 except Exception:
-                    log.warning("fetch of %s failed; will retry during analysis", name, exc_info=True)
+                    log.warning("fetch of %s failed; will retry during analysis", base, exc_info=True)
                     continue
                 if commit_time is not None:
-                    hints[fetched] = commit_time
+                    for entry in entries:
+                        hints[entry["name"]] = commit_time
         except _FutureTimeout:
             log.warning(
                 "prefetch timed out after %ss; remaining packages will fetch during analysis",
@@ -445,6 +465,7 @@ def analyze_outdated_batch(
         try:
             fact = analyze_package(
                 name,
+                package_base=entry.get("package_base") or name,
                 installed_version=entry.get("current_version"),
                 upstream_mtime=hints.get(name),
                 aur_orphaned=entry.get("aur_orphaned"),
@@ -497,12 +518,17 @@ def analyze_outdated_batch(
 
                 if status == "fail":
                     _, _, _, _, exc = result
+                    from .fetcher import _TimeoutError
+
+                    label = ("fetch did not complete"
+                             if isinstance(exc, _TimeoutError)
+                             else type(exc).__name__)
                     failures.append({
                         "package": entry["name"],
                         "old_version": entry.get("current_version", ""),
                         "new_version": entry.get("latest_version", ""),
                         "score": None,
-                        "verdict": f"Analysis failed ({type(exc).__name__}): this package was NOT vetted.",
+                        "verdict": f"Analysis failed ({label}): this package was NOT vetted.",
                         "risk": "Error",
                         "first_seen": False,
                         "failed": True,

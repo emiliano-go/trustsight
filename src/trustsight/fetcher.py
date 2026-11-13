@@ -1,3 +1,4 @@
+import functools
 import re
 import shutil
 import signal
@@ -176,6 +177,28 @@ def _discard_cached_repo(pkg_name: str) -> None:
         pass
 
 
+_repo_locks: dict[str, threading.Lock] = {}
+_repo_locks_guard = threading.Lock()
+
+
+def _repo_lock(name: str) -> threading.Lock:
+    """One clone/fetch lock per AUR repository, including split packages."""
+    with _repo_locks_guard:
+        return _repo_locks.setdefault(name, threading.Lock())
+
+
+def _serialise_repo_fetch(function):
+    """Serialize clone/fetch for one repository, including split packages."""
+
+    @functools.wraps(function)
+    def wrapper(pkg_name, upstream_mtime=None):
+        with _repo_lock(pkg_name):
+            return function(pkg_name, upstream_mtime)
+
+    return wrapper
+
+
+@_serialise_repo_fetch
 def clone_or_fetch(pkg_name: str, upstream_mtime: Optional[int] = None):
     """Clone or update the AUR git repo for *pkg_name*, returning a handle.
 

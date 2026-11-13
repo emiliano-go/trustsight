@@ -319,6 +319,17 @@ def test_a_snapshot_is_always_available():
     assert SnapshotMetadata({}).available is True
 
 
+def test_a_snapshot_reports_the_split_package_base():
+    metadata = SnapshotMetadata({
+        "lib32-gst-plugins-base-libs": {
+            "Name": "lib32-gst-plugins-base-libs",
+            "PackageBase": "lib32-gstreamer",
+        },
+    })
+    assert metadata.package_base("lib32-gst-plugins-base-libs") == "lib32-gstreamer"
+    assert metadata.package_base("not-there") == "not-there"
+
+
 def test_a_report_serialises_to_plain_data():
     dep = DependencyReport(name="d", depth=2, score=30, risk="Medium",
                            risk_label="Medium", finding_count=1,

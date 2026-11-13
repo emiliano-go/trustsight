@@ -123,13 +123,25 @@ def _after_fork() -> None:
 os.register_at_fork(after_in_child=_after_fork)
 
 
+def _color_enabled() -> bool:
+    """Whether rendered text should carry Rich ANSI styles."""
+    if os.environ.get("NO_COLOR"):
+        return False
+    if os.environ.get("FORCE_COLOR") or os.environ.get("TRUSTSIGHT_FORCE_RICH"):
+        return True
+    try:
+        return bool(sys.stdout.isatty())
+    except (AttributeError, OSError, ValueError):
+        return False
+
+
 def _request(op: str, payload: dict) -> str:
     global _worker
     with _lock:
         worker = _get_worker()
         body = json.dumps(
-            {"op": op, "payload": payload}, ensure_ascii=False,
-            separators=(",", ":"),
+            {"op": op, "payload": payload, "color": _color_enabled()},
+            ensure_ascii=False, separators=(",", ":"),
         ).encode("utf-8")
         try:
             raw = worker.request(body)

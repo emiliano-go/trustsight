@@ -2,6 +2,15 @@
 
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- **Review uses the AUR PackageBase for split packages.** AUR stores one git repository per package base, but review fetched the installed split output's name. That repository is empty, advertised a zero-OID `capabilities^{}` line, and the proxy turned the rejected advertisement into `502`. Discovery, dependency entries and analysis now carry `PackageBase`; prefetch fetches each base once and clone/fetch is serialized per repository.
+- **An empty repository advertisement is no longer a proxy failure.** The zero-OID `capabilities^{}` line is accepted as an empty repository, so a genuinely empty repository reports a normal Git result instead of `502`.
+- **Review output is coloured on a terminal.** The render sandbox had `no_color=True` on every console, so panels were monochrome even on a TTY. Colour is now passed from the parent, enabled on a terminal unless `NO_COLOR` is set, and still forced by `FORCE_COLOR` or `TRUSTSIGHT_FORCE_RICH`.
+- **A failed review card names its error.** The card shows the existing `error` field and labels a fetch timeout as `fetch did not complete` instead of `_TimeoutError`.
+
 ## [0.28.6] - 2026-11-13
 
 ### Fixed

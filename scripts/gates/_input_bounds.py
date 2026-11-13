@@ -1173,7 +1173,7 @@ def gate_fetch_state_is_parent_owned() -> Gate:
         if required not in worker_source:
             problems.append(f"worker marker read lacks {required}")
     from trustsight import fetcher
-    fetch_source = inspect.getsource(fetcher.clone_or_fetch)
+    fetch_source = inspect.getsource(inspect.unwrap(fetcher.clone_or_fetch))
     for required in ("fetch_state.load", "advertised_head", "session.head",
                      "fetch_state.store", "previous.upstream_mtime",
                      "proxy_received", "force and not fetched"):

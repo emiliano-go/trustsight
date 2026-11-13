@@ -14,8 +14,9 @@ The worker runs in one of two roles:
 
 ``fetch``
     It never originates TLS.  It speaks plain HTTP over a loopback bridge to a
-    parent-owned reverse proxy that accepts only two Git smart-HTTP endpoints
-    for the one package and owns TLS to ``aur.archlinux.org``.  The bridge
+    parent-owned reverse proxy that accepts the one package's ref advertisement
+    and bounded upload-pack negotiation requests, rebuilds ``want`` lines from
+    the advertisement, and owns TLS to ``aur.archlinux.org``.  The bridge
     uses inherited, already-connected Unix socketpairs; the seccomp filter
     permits only ``AF_INET``/``AF_INET6`` socket creation, so code execution
     in the worker cannot open a new Unix socket to a host service.  Its

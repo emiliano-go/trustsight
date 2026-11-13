@@ -34,6 +34,7 @@ __all__ = [
     "GIT_PROXY_ADVERT_BYTES",
     "GIT_PROXY_MAX_REFS",
     "GIT_PROXY_MAX_WANTS",
+    "GIT_PROXY_MAX_HAVES",
     "GIT_PROXY_RESPONSE_HEADER_BYTES",
     "GIT_FETCH_TIMEOUT_SECONDS",
     "GIT_TRANSFER_DEADLINE_SECONDS",
@@ -101,16 +102,18 @@ GIT_PROXY_REQUEST_BODY_BYTES = 64 * 1024
 #: body is not forwarded, so this is a bound on the parent-produced request.
 GIT_PROXY_TOTAL_REQUEST_BYTES = 256 * 1024
 
-#: Response body bytes the parent relays for one upload-pack request.  The
-#: parent counts this itself and charges it to the run budget, so a
+#: Upload-pack response bytes the parent relays across one fetch session.
+#: The parent counts this itself and charges it to the run budget, so a
 #: compromised worker cannot under-report a transfer.  It matches the
-#: per-transfer ceiling; HTTP headers are bounded separately.
+#: per-transfer ceiling; HTTP headers are bounded separately.  A cumulative
+#: cap keeps negotiation rounds from turning into repeated full packs.
 GIT_PROXY_RESPONSE_BYTES = 256 * 1024 * 1024
 
 #: Requests one proxy session may forward.  A full clone is GET info/refs
-#: plus POST upload-pack; the slack is for one HTTP client reconnect.  The
-#: stricter per-method counters in the proxy permit one GET and one POST.
-GIT_PROXY_MAX_REQUESTS = 4
+#: plus POST upload-pack.  An incremental fetch may need one POST per twenty
+#: haves until the server acknowledges a common commit, plus a final POST with
+#: done; libgit2 stops after 256 haves, so fifteen POSTs covers every round.
+GIT_PROXY_MAX_REQUESTS = 16
 
 #: Wall-clock ceiling for one proxy request and its response.
 GIT_PROXY_DEADLINE_SECONDS = 180
@@ -129,6 +132,11 @@ GIT_PROXY_MAX_REFS = 4096
 
 #: Wants the parent will put into a synthesised upload-pack request.
 GIT_PROXY_MAX_WANTS = 1024
+
+#: Client ``have`` lines the parent will forward in one upload-pack request.
+#: The request body cap already bounds this; the explicit cap keeps a
+#: pathological negotiation from spending the whole body on haves.
+GIT_PROXY_MAX_HAVES = 1024
 
 #: HTTP response header block the parent validates before relaying.  The
 #: body stays bounded by ``GIT_PROXY_RESPONSE_BYTES``.

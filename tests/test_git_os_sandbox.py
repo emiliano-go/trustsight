@@ -240,6 +240,68 @@ def test_the_proxy_synthesises_upload_pack_from_the_advertisement():
     assert request.endswith(_aur_proxy._pkt_line(b"done\n"))
 
 
+def test_the_proxy_carries_client_haves_but_rebuilds_wants():
+    from trustsight.sandbox import _aur_proxy
+
+    advertised = "a" * 40
+    client_want = "c" * 40
+    common = "d" * 40
+    proxy = _aur_proxy.AurFetchProxy("demo")
+    try:
+        with proxy._lock:
+            proxy._advertised_head = advertised
+            proxy._advertised_oids = frozenset({advertised})
+        body = (
+            _aur_proxy._pkt_line(f"want {client_want}\n".encode("ascii"))
+            + b"0000"
+            + _aur_proxy._pkt_line(f"have {common}\n".encode("ascii"))
+            + b"0000"
+        )
+        request = proxy._build_upstream(
+            "POST", "/demo.git/git-upload-pack", body)
+    finally:
+        proxy.close()
+    assert f"want {advertised}".encode() in request
+    assert client_want.encode() not in request
+    assert f"have {common}".encode() in request
+    assert not request.endswith(_aur_proxy._pkt_line(b"done\n"))
+
+
+def test_the_proxy_forwards_done_only_when_the_client_sent_it():
+    from trustsight.sandbox import _aur_proxy
+
+    advertised = "a" * 40
+    common = "d" * 40
+    proxy = _aur_proxy.AurFetchProxy("demo")
+    try:
+        with proxy._lock:
+            proxy._advertised_head = advertised
+            proxy._advertised_oids = frozenset({advertised})
+        body = (
+            _aur_proxy._pkt_line(f"have {common}\n".encode("ascii"))
+            + _aur_proxy._pkt_line(b"done\n")
+        )
+        request = proxy._build_upstream(
+            "POST", "/demo.git/git-upload-pack", body)
+    finally:
+        proxy.close()
+    assert f"have {common}".encode() in request
+    assert request.endswith(_aur_proxy._pkt_line(b"done\n"))
+
+
+def test_the_proxy_rejects_a_malformed_have_line():
+    from trustsight.sandbox import _aur_proxy
+
+    proxy = _aur_proxy.AurFetchProxy("demo")
+    try:
+        with pytest.raises(_aur_proxy._BadRequest):
+            proxy._build_upstream(
+                "POST", "/demo.git/git-upload-pack",
+                _aur_proxy._pkt_line(b"have not-an-oid\n"))
+    finally:
+        proxy.close()
+
+
 def test_the_proxy_refuses_upload_pack_before_advertisement():
     from trustsight.sandbox import _aur_proxy
 
@@ -593,7 +655,48 @@ def test_a_real_git_fetch_works_through_the_validating_proxy(tmp_path,
             "demo", str(cache), updated, "PKGBUILD", 4096) == "pkgver=2.0\n"
         assert len(posted) >= 2
         assert f"want {updated}".encode() in posted[1]
-        assert b"have " not in posted[1]
+        assert f"have {head}".encode() in posted[1]
+        assert posted[1].endswith(_aur_proxy._pkt_line(b"done\n"))
+
+        # A clone with more than twenty commits makes libgit2 negotiate in
+        # several stateless rounds: one POST with haves and a flush, then a
+        # final POST with the acknowledged haves and done.
+        parent = repo.head.peel().id
+        for index in range(25):
+            history_blob = repo.create_blob(f"pkgver=1.{index}\n".encode())
+            history_builder = repo.TreeBuilder()
+            history_builder.insert(
+                "PKGBUILD", history_blob, pygit2.GIT_FILEMODE_BLOB)
+            parent = repo.create_commit(
+                "refs/heads/master", author, author, f"history-{index}",
+                history_builder.write(), [parent])
+        result = session.request("open_fetch", {
+            "pkg": "demo", "cache_dir": str(cache),
+            "upstream_mtime": None, "offline": False,
+            "connect_timeout": 5, "transfer_timeout": 5, "force": True,
+        })
+        assert result["fetched"] is True
+        assert session.head("demo", str(cache)) == str(parent)
+
+        final_blob = repo.create_blob(b"pkgver=2.0\n")
+        final_builder = repo.TreeBuilder()
+        final_builder.insert("PKGBUILD", final_blob, pygit2.GIT_FILEMODE_BLOB)
+        final = repo.create_commit(
+            "refs/heads/master", author, author, "final",
+            final_builder.write(), [parent])
+        start = len(posted)
+        result = session.request("open_fetch", {
+            "pkg": "demo", "cache_dir": str(cache),
+            "upstream_mtime": None, "offline": False,
+            "connect_timeout": 5, "transfer_timeout": 5, "force": True,
+        })
+        assert result["fetched"] is True
+        assert session.head("demo", str(cache)) == str(final)
+        rounds = posted[start:]
+        assert len(rounds) >= 2
+        assert any(b"have " in body and b"done\n" not in body
+                   for body in rounds[:-1])
+        assert rounds[-1].endswith(_aur_proxy._pkt_line(b"done\n"))
     finally:
         session.close()
         server.shutdown()
@@ -633,7 +736,7 @@ def test_the_proxy_rejects_malformed_headers():
         proxy.close()
 
 
-def test_the_proxy_requires_ordered_get_then_post():
+def test_the_proxy_requires_ordered_get_then_post_and_bounds_negotiation():
     from trustsight.sandbox import _aur_proxy
 
     proxy = _aur_proxy.AurFetchProxy("demo")
@@ -641,7 +744,8 @@ def test_the_proxy_requires_ordered_get_then_post():
         with pytest.raises(_aur_proxy._BadRequest):
             proxy._charge("POST", b"x")
         proxy._charge("GET", b"x")
-        proxy._charge("POST", b"x")
+        for _ in range(_aur_proxy._MAX_POSTS):
+            proxy._charge("POST", b"x")
         with pytest.raises(_aur_proxy._BadRequest):
             proxy._charge("POST", b"x")
         with pytest.raises(_aur_proxy._BadRequest):

@@ -463,6 +463,7 @@ def _run_baseline_build(
             "pkgbuild_sha256": _recipe_digest(new_pkgbuild),
             "previous_pkgbuild_sha256": _recipe_digest(old_pkgbuild or ""),
             "rules": [f["rule_id"] for f in findings],
+            "dependency_analysis": _dependency_analysis(fact),
             # T010 joins recipe dependency additions against nodes whose
             # creation/adoption is visible in this metadata cycle.
             "dependency_changes": getattr(fact, "dependency_changes", {}),
@@ -640,8 +641,56 @@ def _scan_records(detail: dict, statuses: dict[str, str]) -> list[dict]:
                 "coverage_gaps": list(data.get("coverage_gaps") or ()),
                 "has_diff": bool(data.get("diff") or data.get("diff_sha256")),
             })
+            if data.get("dependency_analysis"):
+                record["dependency_analysis"] = data["dependency_analysis"]
         records.append(record)
     return records
+
+
+def _dependency_analysis(fact) -> dict | None:
+    """The bounded dependency-walk summary a scan record can carry.
+
+    The feed does not need every analysed dependency (the corpus already
+    stores each one under its own name); it needs to say how deep the walk
+    went, what it saw, and which dependencies independently cleared the
+    review threshold.  The list is capped so one hostile closure cannot
+    inflate a signed scan document.
+    """
+    reports = list(getattr(fact, "dependencies", ()) or ())
+    requested = getattr(fact, "depth", None)
+    if requested in (None, 0) and not reports:
+        return None
+
+    def row(report) -> dict:
+        return {
+            "name": str(getattr(report, "name", "") or ""),
+            "depth": int(getattr(report, "depth", 0) or 0),
+            "score": int(getattr(report, "score", 0) or 0),
+            "risk": str(getattr(report, "risk", "") or ""),
+            "finding_count": int(getattr(report, "finding_count", 0) or 0),
+            "via": str(getattr(report, "via", "") or ""),
+            "parent": str(getattr(report, "parent", "") or ""),
+            "failed": bool(getattr(report, "failed", False)),
+        }
+
+    flagged = [report for report in reports
+               if getattr(report, "flagged", False)]
+    failed = [report for report in reports
+              if getattr(report, "failed", False)]
+    return {
+        "requested_depth": int(requested) if requested is not None else 0,
+        "examined": len(reports),
+        "maximum_depth_reached": max(
+            (int(getattr(report, "depth", 0) or 0) for report in reports),
+            default=0,
+        ),
+        "truncated": bool(getattr(fact, "depth_truncated", False)),
+        "note": str(getattr(fact, "depth_note", "") or "")[:300],
+        "flagged_count": len(flagged),
+        "failed_count": len(failed),
+        "flagged": [row(report) for report in flagged[:25]],
+        "failed": [row(report) for report in failed[:25]],
+    }
 
 
 def _scan_summary(records: list[dict], statuses: dict[str, str]) -> dict:

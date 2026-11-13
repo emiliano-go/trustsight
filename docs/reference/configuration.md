@@ -273,7 +273,8 @@ levels = 1
 
 How far into a package's AUR dependency closure to analyse. `0` disables it,
 `1` (the default) analyses direct AUR dependencies, `n` analyses `n` levels,
-and `-1` walks every level there is.
+and `-1` walks every level there is. A run overrides it with `--depth`,
+including `trustsight full-aur` and `full-aur --watch`.
 
 `-1` is bounded, and it has to be: the dependency graph is written by the
 party under review, so an unbounded walk would let a crafted recipe decide

@@ -73,6 +73,17 @@ def run_watch(
         _log(f"  alert webhook: {'configured' if _effective else 'none'}")
     except Exception:  # noqa: BLE001
         pass
+    try:
+        from ..config import load_config
+        from ..depth import resolve_depth
+
+        _effective_depth = resolve_depth(depth, load_config())
+        _depth_label = (
+            "every level (bounded)" if _effective_depth == -1
+            else f"{_effective_depth} level(s)")
+        _log(f"  dependency depth: {_effective_depth} ({_depth_label})")
+    except Exception:  # noqa: BLE001 - the banner must never fail the watch
+        pass
     # Retry anything a previous run could not deliver before spending the
     # next interval asleep.
     try:

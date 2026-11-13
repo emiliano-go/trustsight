@@ -800,8 +800,8 @@ trustsight baseline import FILE [--allow-unsigned] [--json]
 Bootstrap or update the full-AUR baseline corpus. Fetches the AUR metadata snapshot, downloads each package's snapshot tree from the read-only GitHub AUR mirror (`codeload.github.com`, one branch per package) with the AUR's cgit snapshot endpoint as the fallback (no git repos), analyses stateless rules, and optionally emits a signed baseline artifact. `full-aur` is a writer by design: unlike `review` and `inspect`, which are read-only unless you pass `--record`, every `full-aur` cycle records its observations, PKGBUILD snapshots and property transitions unconditionally.
 
 ```
-trustsight full-aur [--bootstrap] [--resume] [--export PATH] [--sign PATH] [--json]
-trustsight full-aur --watch [--interval SECONDS] [--cycles N] [--auto-pull-baselines] [--auto-pull-iocs] [--auto-pull-watchlists] [--json]
+trustsight full-aur [--bootstrap] [--resume] [--export PATH] [--sign PATH] [--depth N] [--json]
+trustsight full-aur --watch [--interval SECONDS] [--cycles N] [--depth N] [--auto-pull-baselines] [--auto-pull-iocs] [--auto-pull-watchlists] [--json]
 trustsight full-aur --transitions PACKAGE [--limit N] [--json]
 trustsight full-aur health [--json] [--optional]
 trustsight full-aur maintenance [--json] [--dry-run] [--vacuum] [--prune-cycle-events-days N] [--prune-alert-state-days N]
@@ -824,6 +824,7 @@ trustsight full-aur maintenance [--json] [--dry-run] [--vacuum] [--prune-cycle-e
 | `--notify URL` | POST each cycle's new alerts as a JSON document to this webhook, on single-shot cycles and `--watch` alike. Overrides `[notify] webhook` in `config.toml`. A dead receiver is logged and swallowed; a quiet cycle sends nothing. |
 | `--over-threshold N` | Alerting bar: packages scoring strictly above N land in the cycle's `over_threshold` list, which the webhook document carries. Default 30, the benign corpus's measured p95. |
 | `--since YYYY-MM-DD` | Replay change history from this date: each cycle analyses the packages whose AUR `LastModified` falls in one day of AUR time, skipping empty days, and joins the live delta stream when caught up. The cursor persists in the database, so a replay resumes across restarts. Sweep and adoption-feed machinery stay out of replay cycles. |
+| `--depth N` | AUR dependency levels to analyse for this run: `0` off, `1` direct (the `[depth] levels` default), `n` levels, `-1` every reachable level, bounded by 8 levels and 200 dependency nodes per root. Applies to `--watch` and single-shot cycles; a walk cut short reports `deps_not_scanned`. Values below `-1` exit 2. |
 | `--transitions PACKAGE` | Print the recorded property timeline for PACKAGE and exit. Read-only and works offline; cannot be combined with `--watch`, `--bootstrap`, `--export`, `--sign` or `--since`. |
 | `--limit N` | With `--transitions`: show only the newest N rows (default 500; `0` shows all). The write path already caps rows per property key. |
 | `--json` | Output JSON. |

@@ -21,7 +21,11 @@ services:
   trustsight-watch:
     image: ghcr.io/emiliano-go/trustsight:latest
     container_name: trustsight-watch
-    command: ["full-aur", "--watch", "--interval", "1800"]
+    # -1 walks the whole reachable AUR dependency closure, bounded by
+    # depth.MAX_DEPTH_LEVELS (8) and MAX_DEPTH_NODES (200) per root.  The
+    # scan stream publishes a dependency summary so the feed can say what
+    # was actually examined; that visibility is why the deeper walk is on.
+    command: ["full-aur", "--watch", "--interval", "1800", "--depth", "-1"]
     restart: unless-stopped
     # A watcher is a long-lived service: let SIGTERM finish the package in
     # flight, save the resume state and checkpoint the WAL.

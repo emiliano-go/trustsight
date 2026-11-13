@@ -1,5 +1,16 @@
 {
   "anergic": {
+    "C001": {
+      "changelog": "c001-upstream-hash-corroboration",
+      "decided_in": "",
+      "promoted_in": "",
+      "promotion": "keep conditional while the signed baseline covers the corpus; promote the corroboration path into ordinary HIGH reporting or retire the baseline once it stops paying for itself",
+      "rule_id": "C001",
+      "signal": "conditional weight 0 only when the signed upstream_hash baseline names the exact (url|version|sha256) triple; an uncorroborated checksum change keeps its HIGH weight",
+      "since": "0.28.0",
+      "status": "conditional",
+      "weight": null
+    },
     "C033": {
       "changelog": "missing-self-axis",
       "decided_in": "",
@@ -9,6 +20,17 @@
       "signal": "locked benign corpus fire-rate < 0.30 after the deletion-ratio threshold is corpus-adjudicated, plus a malicious twin",
       "since": "0.27.0",
       "status": "promoted",
+      "weight": null
+    },
+    "G015": {
+      "changelog": "sleeper-adoption-campaign",
+      "decided_in": "",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly anergic calibration, then set weight and decided_in",
+      "rule_id": "G015",
+      "signal": "full-AUR benign replay fire-rate < 0.30 plus a positive sleeper-adoption campaign and a benign dormant-reactivation twin",
+      "since": "Unreleased",
+      "status": "anergic",
       "weight": null
     },
     "H009": {

@@ -80,6 +80,18 @@ def test_missing_database_defaults_only_apply_to_reads(tmp_path, monkeypatch):
     assert "error" in write
 
 
+def test_an_existing_unreadable_store_fails_closed(tmp_path, monkeypatch):
+    """Only a missing database is a cold start; a broken one is a refusal."""
+    from trustsight.sandbox import store_worker
+
+    broken = tmp_path / "not-a-database"
+    broken.mkdir()
+    monkeypatch.setenv("TRUSTSIGHT_DB_PATH", str(broken))
+    response = store_worker._handle(
+        b'{"op": "get_package", "args": ["demo"]}')
+    assert "error" in response
+
+
 def test_store_request_cap_refuses_before_spawning(monkeypatch):
     with pytest.raises(store_client.StoreUnavailable, match="request exceeds"):
         store_client.set_metadata("key", "x" * (store_client.MAX_REQUEST_BYTES + 1))

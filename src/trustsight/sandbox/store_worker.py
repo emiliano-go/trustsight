@@ -121,6 +121,13 @@ def _handle(body: bytes) -> dict:
             return {"error": f"{type(exc).__name__}: {exc}"}
         if op not in _READ_OPS:
             return {"error": "database unavailable for a write operation"}
+        # A missing file is a cold start: the read defaults are the honest
+        # answer.  An existing file that cannot be opened is a broken store,
+        # and returning "no history" for it would let an unreadable database
+        # look like a clean cold database.  Keep that a refusal.
+        db_path = os.environ.get("TRUSTSIGHT_DB_PATH", "")
+        if db_path and Path(db_path).exists():
+            return {"error": f"{type(exc).__name__}: {exc}"}
         return {"result": _READ_DEFAULTS.get(op)}
     except Exception as exc:
         return {"error": f"{type(exc).__name__}: {exc}"}

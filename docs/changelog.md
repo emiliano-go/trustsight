@@ -2,6 +2,13 @@
 
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- **`review` renders dependencies as plain data.** `evaluate_fact` passed `DependencyReport` objects to the Rich render worker, which serializes its payload as JSON, so a review with depth 1 failed with `Object of type DependencyReport is not JSON serializable` after analysis completed. Dependencies and IOC matches are converted to their dict shapes before any adapter sees them.
+- **A finished progress bar ends with a newline.** The metadata download and analysis bars left the cursor at the end of the bar, so the next notice or prompt started on the same line. A non-transient progress stop now writes the newline.
+
 ## [0.28.5] - 2026-11-13
 
 ### Fixed

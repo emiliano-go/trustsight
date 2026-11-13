@@ -60,6 +60,26 @@ def test_render_output_is_inert_and_ordered():
     assert "RED" in out
 
 
+def test_a_finished_progress_bar_ends_with_a_newline(monkeypatch):
+    import io
+
+    from trustsight.render import progress
+
+    stream = io.StringIO()
+
+    class FakeProgress:
+        transient = False
+
+        def stop(self):
+            pass
+
+    monkeypatch.setitem(progress._TASKS, "download", (FakeProgress(), 1))
+    monkeypatch.setattr(progress, "_stream", lambda: stream)
+    progress.stop(id="download")
+
+    assert stream.getvalue() == "\n"
+
+
 def test_unknown_op_is_a_named_refusal():
     with pytest.raises(render_client.RenderUnavailable, match="unknown render op"):
         render_client.render("no_such_op", {})

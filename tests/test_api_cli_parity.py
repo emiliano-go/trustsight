@@ -61,6 +61,58 @@ def test_api_review_row_adapter_preserves_shared_semantic_fields():
     assert report.findings[0].rule_id == "R001"
 
 
+def test_evaluate_fact_is_json_ready_with_dependencies_and_iocs():
+    import json
+
+    from trustsight.depth import DependencyReport
+    from trustsight.ioc_baseline import IocMatch
+
+    fact = _fact()
+    fact.dependencies = [
+        DependencyReport(name="dep", depth=1, score=40, risk="High"),
+    ]
+    fact.ioc_matches = [
+        IocMatch(type="domain", value="evil.example", source="test"),
+    ]
+    evaluated = evaluate_fact(fact)
+    evaluated.pop("fact", None)
+
+    json.dumps(evaluated)
+    assert evaluated["dependencies"][0]["name"] == "dep"
+    assert evaluated["ioc_matches"][0]["value"] == "evil.example"
+    assert evaluated["indicators"][0]["value"] == "evil.example"
+
+
+def test_review_results_with_dependencies_render_in_the_sandbox():
+    from trustsight.depth import DependencyReport
+    from trustsight.sandbox import render_client
+
+    fact = _fact()
+    fact.dependencies = [
+        DependencyReport(
+            name="dep", depth=1, score=40, risk="High",
+            risk_label="High", finding_count=1,
+        ),
+    ]
+    row = evaluate_fact(fact)
+    row.pop("fact", None)
+    row["version_text"] = "1.0 -> 1.1"
+
+    text = render_client.render("review_results", {
+        "results": [row],
+        "total_installed": 1,
+        "all_packages": False,
+        "show_score": False,
+        "show_risk": False,
+        "verbose": False,
+        "outdated_total": 1,
+        "deps_only": False,
+    })
+
+    assert "dep" in text
+    assert "parity" in text
+
+
 def test_every_json_surface_emits_the_same_body():
     """B11: the surfaces differ in form, never in information."""
     from trustsight.reporting import REPORT_KEYS, report_body

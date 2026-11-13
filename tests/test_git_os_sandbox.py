@@ -220,6 +220,22 @@ def test_the_proxy_parses_a_v0_ref_advertisement():
     assert oid in oids
 
 
+def test_the_proxy_accepts_an_empty_repository_advertisement():
+    from trustsight.sandbox import _aur_proxy
+
+    body = (
+        _aur_proxy._pkt_line(b"# service=git-upload-pack\n")
+        + b"0000"
+        + _aur_proxy._pkt_line(
+            b"0000000000000000000000000000000000000000 capabilities^{}\0"
+            b"multi_ack thin-pack side-band\n")
+        + b"0000"
+    )
+    head, oids = _aur_proxy._parse_advertisement(body)
+    assert head == ""
+    assert oids == frozenset()
+
+
 def test_the_proxy_synthesises_upload_pack_from_the_advertisement():
     from trustsight.sandbox import _aur_proxy
 

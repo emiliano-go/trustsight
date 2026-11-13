@@ -118,6 +118,9 @@ def render_results(*, results, total_installed, all_packages, show_score,
 
         if r.get("failed"):
             table.add_row("Status", Text(clean(r["verdict"])))
+            error = r.get("error")
+            if error:
+                table.add_row("Error", Text(clean(str(error))))
             panel = Panel(table, title=Text(clean(r["package"])), border_style="red")
             con.print(panel)
             continue

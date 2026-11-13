@@ -47,6 +47,7 @@ def _handle(body: bytes) -> dict:
         request = json.loads(body.decode("utf-8"))
         op = request.get("op")
         payload = request.get("payload") or {}
+        color = bool(request.get("color", False))
         global _OPS
         if _OPS is None:
             from trustsight.render import OPS as render_ops
@@ -61,7 +62,7 @@ def _handle(body: bytes) -> dict:
         _OUT = _BoundedOutput()
         from trustsight.render import display as render_display
 
-        render_display.set_output(_OUT)
+        render_display.set_output(_OUT, color=color)
         captured = _BoundedOutput()
         with contextlib.redirect_stdout(captured), \
                 contextlib.redirect_stderr(captured):

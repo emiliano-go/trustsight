@@ -114,7 +114,10 @@ def _walk_dependencies(pkg_name, depth, config, seen, record: bool = False,
             pkg_name,
             depth=resolved,
             metadata=provider,
-            analyse=lambda name: analyze_package(name, depth=0, record=record),
+            analyse=lambda name: analyze_package(
+                name, depth=0, record=record,
+                package_base=provider.package_base(name),
+            ),
             already_seen=seen,
         )
     if added_names:
@@ -152,6 +155,7 @@ def analyze_package(
     record: bool = False,
     full_recipe: bool = False,
     allow_cached: bool = False,
+    package_base: str = "",
 ) -> PackageFact:
     from ...depth import resolve_depth
 
@@ -163,7 +167,16 @@ def analyze_package(
     if installed_version is None:
         installed_version = _get_installed_version(pkg_name)
 
-    project = clone_or_fetch(pkg_name, upstream_mtime)
+    if not package_base:
+        try:
+            from ...depth import default_metadata
+
+            package_base = default_metadata().package_base(pkg_name)
+        except Exception:
+            package_base = pkg_name
+    repo_name = package_base or pkg_name
+
+    project = clone_or_fetch(repo_name, upstream_mtime)
     head_commit = get_head_commit(project)
     # Read once, here, rather than after the two fresh-analysis returns
     # below: the declared version and the VCS question are both answered

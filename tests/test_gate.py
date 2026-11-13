@@ -74,6 +74,13 @@ def test_targets_from_dir_uses_srcinfo_then_base_fallback(tmp_path):
     assert gate.targets_from_dir(empty, "base") == ["base"]
 
 
+def test_an_oversized_srcinfo_is_refused(tmp_path):
+    """The checkout cannot make the gate allocate an unbounded .SRCINFO."""
+    (tmp_path / ".SRCINFO").write_text(
+        "pkgname = demo\n" + "#" * (gate.MAX_SRCINFO_BYTES + 1))
+    assert gate.targets_from_dir(tmp_path, "base") == []
+
+
 def test_targets_from_dir_without_fallback_is_empty(tmp_path):
     assert gate.targets_from_dir(tmp_path) == []
 

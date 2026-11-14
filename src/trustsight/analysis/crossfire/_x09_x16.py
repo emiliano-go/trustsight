@@ -73,7 +73,11 @@ X019_RE = re.compile(
 )
 
 X011_STANDDOWN_RE = re.compile(
-    r"--ignore-scripts|--no-index|--offline|--no-deps"
+    # `opam install --fake P` only registers P in the switch as a
+    # system-provided package; it fetches and builds nothing.  Without
+    # this, every opam build that fakes its system toolchain (dune,
+    # ocamlbuild) was reported as running fetched code.
+    r"--ignore-scripts|--no-index|--offline|--no-deps|--fake\b"
     r"|--frozen-lockfile\b[^\n]*--offline"
     # `--prefix "$srcdir"` is a destination, not a target, and matching any
     # occurrence of `$srcdir` stood the rule down on

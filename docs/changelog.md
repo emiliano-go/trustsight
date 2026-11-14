@@ -91,6 +91,19 @@
   (anergic). The bits and magic are read from the archive, nothing is
   extracted to disk or executed.
 
+### Fixed
+
+- **Seven rule shapes that scored benign packaging work are narrowed.** The 2026-11-14 watcher triage produced no true positives from 27 alerts; each correction below keeps its true-positive twin.
+  - H081 no longer reads an argument continued with `\` as a command position (`install -Dm644 -t DEST \` + `"$srcdir/p/LICENSE"`).
+  - X011 stands down on `opam install --fake`, which registers a system package without fetching or building anything.
+  - H077 consults the current recipe when the hunk omits the enclosing function header, so a fetch inside `prepare()` is not parse-time.
+  - X005 no longer treats `2>`/`&>` or a write to `/dev/null` as a write, so a defensive `grep '/home/…/' 2>/dev/null` is not a profile write.
+  - H082 no longer attributes an execution under `/usr`, `/bin`, `/sbin`, `/lib`, `/opt` or `/etc` to an earlier fetch; a build cannot have fetched a system tool into place.
+  - C001 no longer counts compiling a `.c`/`.rs` source file as a new code capability on a version bump.
+  - C022 only reports a checksum downgrade when the best retained array is weaker than sha256; removing a redundant sha512/b2 is not a downgrade.
+- **Dependency and naming rules stop reading declared companions as impersonation.** D001/D002 stand down for names the watcher already has a `packages` row for; H064 reports an added `conflicts` entry at weight 0 (a refusal is not a name claim), and D005 skips a conflict whose name the recipe also provides/replaces.
+- **Published figures are recalibrated to the narrowed rules.** The locked-corpus measurement moved to 74.0% benign zero-rate, 6.7% above the 20-point threshold, 30.1% ruleset trigger rate and 93.3th percentile; `tests/fixtures/published-figures.json` and the docs that quote it carry the measured values. The suite figure is 9,168 tests across 259 files.
+
 ## [0.28.8] - 2026-11-13
 
 ### Fixed

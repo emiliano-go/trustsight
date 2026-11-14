@@ -169,7 +169,9 @@ compositional, in [X007](#x007). Bare `2>/dev/null` is excluded as noise.
 Fires when a write or redirect reaches a home directory by a spelling
 [H032](install-and-persist.md#h032) does not match: `/home/alice`,
 `/home/$USER/...`, `~alice`, `/root`, `${HOME:-/home/alice}/...`, or a
-traversal naming `home` or `root`. The trailing separator is optional.
+traversal naming `home` or `root`. The trailing separator is optional. A
+file-descriptor redirect (`2>`, `&>`) and a write to `/dev/null`,
+`/dev/stdout` or `/dev/stderr` write no file and are not a write.
 
 Defers rather than doubles: a target H032 claims is skipped, so one write
 scores once.
@@ -257,6 +259,9 @@ during the build (`npm install`, `pip install`, `cargo`, `go install`,
 Stands down for local paths, which mean "install what this recipe just
 built". Distribution tools are the exception: `pacman -U ./evil.pkg.tar.zst`
 installs a local package as root, scriptlets and all.
+
+`opam install --fake P` also stands down: `--fake` registers a
+system-provided package in the switch and fetches or builds nothing.
 
 **Related:** [W002](unverifiable.md#w002), which reports the same act at
 weight 0 when nothing else claims it.

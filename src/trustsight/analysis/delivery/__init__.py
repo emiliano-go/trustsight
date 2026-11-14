@@ -428,6 +428,14 @@ def edge_fetch_then_execute(ctx, add) -> None:
 
         for path in _collect_executions(body):
             base = os.path.basename(path)
+            # A fetch cannot have put a file in a system prefix: the build
+            # runs unprivileged, and `/usr/bin/vendor_perl/strip-nondeterminism`
+            # is a tool the packager invokes, not a payload.  The
+            # unattributed arm paired it with the earlier `pnpm install`
+            # and called an ordinary reproducible-build step fetch-then-
+            # execute.
+            if path.startswith(("/usr/", "/bin/", "/sbin/", "/lib/", "/opt/", "/etc/")):
+                continue
             for directory, fetch_added in cloned_by_fn.get(fn, []):
                 if directory and path.startswith(directory.rstrip("/") + "/"):
                     if not (added or fetch_added):

@@ -224,6 +224,15 @@ def capability_in_diff(diff_text: str, current_text: str | None = None) -> str |
             # package.  `electron44`'s launcher was read as a C001 signal.
             if path.startswith(("/usr/", "/bin/", "/sbin/", "/opt/")):
                 continue
+            # A compiler's input is source, not something that runs.  The
+            # execution collector lists `gcc … dsh-gtk.c` because H081
+            # needs to see a *committed* C file compiled; at a version
+            # bump the same arm made C001 call an ordinary compile a new
+            # code capability.
+            if (path.endswith((".c", ".cc", ".cpp", ".cxx", ".rs", ".h"))
+                    and re.search(r"\b(?:gcc|g\+\+|clang|clang\+\+|cc|rustc)\b",
+                                  body)):
+                continue
             # A command substitution's inner text is not a path.  The
             # `node -p "try { require('./package.json')… } catch …"` version
             # probe produced a "path" made of JavaScript, which C001 then

@@ -208,14 +208,21 @@ def test_h064_conflicts_is_unscored_info_not_high(establish, observe):
     assert finding["params"]["field"] == "conflicts"
 
 
-def test_h064_a_widely_depended_conflict_is_high(establish, observe):
+def test_h064_a_widely_depended_conflict_is_unscored(establish, observe):
+    """A conflict refuses co-installation; it does not claim the name.
+
+    Scoring it HIGH put a 25 on every drop-in replacement that conflicts
+    the package it replaces.  A provides/replaces claim on the same name
+    still scores (the next test).
+    """
     establish(False)
     observe(30)
     finding = next(
         f for f in structural("+conflicts=('glibc')\n")
         if f["rule_id"] == "H064"
     )
-    assert finding["severity"] == "HIGH"
+    assert finding["severity"] == "INFO"
+    assert finding["weight_override"] == 0
 
 
 def test_h064_provides_of_an_established_package_stays_high(establish, observe):

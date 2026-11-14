@@ -68,7 +68,10 @@ DISPOSITION_STATUSES = frozenset({"deferred", "resolved"})
 DISPOSITION_PLANS = frozenset({
     "add_benign_shape",
     "add_history_or_warm",
+    "add_cycle_corpus",
+    "add_git_history",
     "add_artifact_or_manifest",
+    "triage_benign_twin",
     "attack_only",
     "not_measurable",
     "expectation_wrong",

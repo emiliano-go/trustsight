@@ -1,10 +1,58 @@
 {
+  "A001": {
+    "note": "Fire-based ledger cannot record an abstention; needs a reachability signal.",
+    "phase": "3",
+    "plan": "not_measurable",
+    "status": "deferred"
+  },
+  "A004": {
+    "note": "Fire-based ledger cannot record an abstention; needs a reachability signal.",
+    "phase": "3",
+    "plan": "not_measurable",
+    "status": "deferred"
+  },
+  "A006": {
+    "note": "Fire-based ledger cannot record an abstention; needs a reachability signal.",
+    "phase": "3",
+    "plan": "not_measurable",
+    "status": "deferred"
+  },
   "C006": {
     "expected_strata": [
       "maintainer_churn"
     ],
     "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
     "phase": "D",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "C008": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "2",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "C009": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "2",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "C010": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "2",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "C012": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "2",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "C016": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "2",
     "plan": "add_benign_shape",
     "status": "deferred"
   },
@@ -18,6 +66,24 @@
     "plan": "add_benign_shape",
     "status": "deferred"
   },
+  "C020": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "2",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "C023": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "2",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "C027": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "2",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
   "C031": {
     "expected_strata": [
       "persist_surface"
@@ -25,6 +91,12 @@
     "note": "Measured only by malicious fixtures; add a benign negative control or drop the benign expectation.",
     "phase": "C",
     "plan": "attack_only",
+    "status": "deferred"
+  },
+  "C032": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "2",
+    "plan": "add_benign_shape",
     "status": "deferred"
   },
   "C034": {
@@ -65,6 +137,108 @@
     "plan": "known_false_positive",
     "status": "deferred"
   },
+  "D005": {
+    "note": "Needs observation history / warm replay; Phase 3.",
+    "phase": "3",
+    "plan": "add_history_or_warm",
+    "status": "deferred"
+  },
+  "G001": {
+    "note": "Needs a multi-package cycle, not a single diff; Phase 3 cycle corpus.",
+    "phase": "3",
+    "plan": "add_cycle_corpus",
+    "status": "deferred"
+  },
+  "G002": {
+    "note": "Needs a multi-package cycle, not a single diff; Phase 3 cycle corpus.",
+    "phase": "3",
+    "plan": "add_cycle_corpus",
+    "status": "deferred"
+  },
+  "G003": {
+    "note": "Needs a multi-package cycle, not a single diff; Phase 3 cycle corpus.",
+    "phase": "3",
+    "plan": "add_cycle_corpus",
+    "status": "deferred"
+  },
+  "G004": {
+    "note": "Needs a multi-package cycle, not a single diff; Phase 3 cycle corpus.",
+    "phase": "3",
+    "plan": "add_cycle_corpus",
+    "status": "deferred"
+  },
+  "G005": {
+    "note": "Needs a multi-package cycle, not a single diff; Phase 3 cycle corpus.",
+    "phase": "3",
+    "plan": "add_cycle_corpus",
+    "status": "deferred"
+  },
+  "G006": {
+    "note": "Needs a multi-package cycle, not a single diff; Phase 3 cycle corpus.",
+    "phase": "3",
+    "plan": "add_cycle_corpus",
+    "status": "deferred"
+  },
+  "G007": {
+    "note": "Needs a multi-package cycle, not a single diff; Phase 3 cycle corpus.",
+    "phase": "3",
+    "plan": "add_cycle_corpus",
+    "status": "deferred"
+  },
+  "G008": {
+    "note": "Needs a multi-package cycle, not a single diff; Phase 3 cycle corpus.",
+    "phase": "3",
+    "plan": "add_cycle_corpus",
+    "status": "deferred"
+  },
+  "G009": {
+    "note": "Needs a multi-package cycle, not a single diff; Phase 3 cycle corpus.",
+    "phase": "3",
+    "plan": "add_cycle_corpus",
+    "status": "deferred"
+  },
+  "G010": {
+    "note": "Needs a multi-package cycle, not a single diff; Phase 3 cycle corpus.",
+    "phase": "3",
+    "plan": "add_cycle_corpus",
+    "status": "deferred"
+  },
+  "G011": {
+    "note": "Needs a multi-package cycle, not a single diff; Phase 3 cycle corpus.",
+    "phase": "3",
+    "plan": "add_cycle_corpus",
+    "status": "deferred"
+  },
+  "G012": {
+    "note": "Needs a multi-package cycle, not a single diff; Phase 3 cycle corpus.",
+    "phase": "3",
+    "plan": "add_cycle_corpus",
+    "status": "deferred"
+  },
+  "G013": {
+    "note": "Needs a multi-package cycle, not a single diff; Phase 3 cycle corpus.",
+    "phase": "3",
+    "plan": "add_cycle_corpus",
+    "status": "deferred"
+  },
+  "G014": {
+    "note": "Needs a multi-package cycle, not a single diff; Phase 3 cycle corpus.",
+    "phase": "3",
+    "plan": "add_cycle_corpus",
+    "status": "deferred"
+  },
+  "G015": {
+    "note": "Needs a multi-package cycle, not a single diff; Phase 3 cycle corpus.",
+    "phase": "3",
+    "plan": "add_cycle_corpus",
+    "status": "deferred"
+  },
+  "H005": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "2",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
   "H006": {
     "expected_strata": [
       "dependency_heavy"
@@ -72,6 +246,78 @@
     "note": "Verify the rule is emitted before adding a dependency-change shape.",
     "phase": "D",
     "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "H007": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "2",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "H008": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "2",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "H009": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "1",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "H010": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "1",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "H011": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "1",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "H012": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "1",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "H013": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "1",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "H014": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "2",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "H020": {
+    "note": "Needs observation history / warm replay; Phase 3.",
+    "phase": "3",
+    "plan": "add_history_or_warm",
+    "status": "deferred"
+  },
+  "H021": {
+    "note": "Needs observation history / warm replay; Phase 3.",
+    "phase": "3",
+    "plan": "add_history_or_warm",
+    "status": "deferred"
+  },
+  "H022": {
+    "note": "Needs observation history / warm replay; Phase 3.",
+    "phase": "3",
+    "plan": "add_history_or_warm",
+    "status": "deferred"
+  },
+  "H028": {
+    "note": "Needs observation history / warm replay; Phase 3.",
+    "phase": "3",
+    "plan": "add_history_or_warm",
     "status": "deferred"
   },
   "H029": {
@@ -115,6 +361,12 @@
     "plan": "add_history_or_warm",
     "status": "deferred"
   },
+  "H038": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "2",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
   "H039": {
     "expected_strata": [
       "appimage_repack",
@@ -133,6 +385,24 @@
     "note": "Measured only by malicious fixtures; add a benign negative control or drop the benign expectation.",
     "phase": "C",
     "plan": "attack_only",
+    "status": "deferred"
+  },
+  "H042": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "2",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "H046": {
+    "note": "Needs observation history / warm replay; Phase 3.",
+    "phase": "3",
+    "plan": "add_history_or_warm",
+    "status": "deferred"
+  },
+  "H047": {
+    "note": "Needs observation history / warm replay; Phase 3.",
+    "phase": "3",
+    "plan": "add_history_or_warm",
     "status": "deferred"
   },
   "H048": {
@@ -182,12 +452,36 @@
     "plan": "add_history_or_warm",
     "status": "deferred"
   },
+  "H056": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "2",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "H057": {
+    "note": "Needs observation history / warm replay; Phase 3.",
+    "phase": "3",
+    "plan": "add_history_or_warm",
+    "status": "deferred"
+  },
   "H058": {
     "expected_strata": [
       "maintainer_churn"
     ],
     "note": "Needs observation history or warm state; schedule a history/warm cycle.",
     "phase": "B",
+    "plan": "add_history_or_warm",
+    "status": "deferred"
+  },
+  "H060": {
+    "note": "Needs observation history / warm replay; Phase 3.",
+    "phase": "3",
+    "plan": "add_history_or_warm",
+    "status": "deferred"
+  },
+  "H061": {
+    "note": "Needs observation history / warm replay; Phase 3.",
+    "phase": "3",
     "plan": "add_history_or_warm",
     "status": "deferred"
   },
@@ -200,6 +494,18 @@
     "plan": "add_benign_shape",
     "status": "deferred"
   },
+  "H066": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "1",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "H067": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "2",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
   "H068": {
     "expected_strata": [
       "multi_client_fetch"
@@ -207,6 +513,12 @@
     "note": "Measured only by malicious fixtures; add a benign negative control or drop the benign expectation.",
     "phase": "C",
     "plan": "attack_only",
+    "status": "deferred"
+  },
+  "H070": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "1",
+    "plan": "add_benign_shape",
     "status": "deferred"
   },
   "H071": {
@@ -234,6 +546,12 @@
     "note": "Measured only by malicious fixtures; add a benign negative control or drop the benign expectation.",
     "phase": "C",
     "plan": "attack_only",
+    "status": "deferred"
+  },
+  "H080": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "2",
+    "plan": "add_benign_shape",
     "status": "deferred"
   },
   "H084": {
@@ -275,6 +593,18 @@
     "plan": "add_benign_shape",
     "status": "deferred"
   },
+  "H091": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "2",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "H092": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "2",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
   "H093": {
     "expected_strata": [
       "persist_surface"
@@ -302,6 +632,120 @@
     "plan": "add_benign_shape",
     "status": "deferred"
   },
+  "H098": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "2",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "H102": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "2",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "H103": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "2",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "H104": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "2",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "H105": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "2",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "H106": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "2",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "H107": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "2",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "M001": {
+    "note": "Needs observation history / warm replay; Phase 3.",
+    "phase": "3",
+    "plan": "add_history_or_warm",
+    "status": "deferred"
+  },
+  "M004": {
+    "note": "Needs observation history / warm replay; Phase 3.",
+    "phase": "3",
+    "plan": "add_history_or_warm",
+    "status": "deferred"
+  },
+  "M005": {
+    "note": "Needs observation history / warm replay; Phase 3.",
+    "phase": "3",
+    "plan": "add_history_or_warm",
+    "status": "deferred"
+  },
+  "M006": {
+    "note": "Needs observation history / warm replay; Phase 3.",
+    "phase": "3",
+    "plan": "add_history_or_warm",
+    "status": "deferred"
+  },
+  "NOVELTY": {
+    "note": "Boundary/aggregate id, not a corpus rule; covered by integration tests.",
+    "phase": "0",
+    "plan": "pseudo",
+    "status": "resolved"
+  },
+  "P003": {
+    "note": "Boundary/aggregate id, not a corpus rule; covered by integration tests.",
+    "phase": "0",
+    "plan": "pseudo",
+    "status": "resolved"
+  },
+  "P009": {
+    "note": "Boundary/aggregate id, not a corpus rule; covered by integration tests.",
+    "phase": "0",
+    "plan": "pseudo",
+    "status": "resolved"
+  },
+  "R001": {
+    "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+    "phase": "4",
+    "plan": "triage_benign_twin",
+    "status": "deferred"
+  },
+  "R002": {
+    "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+    "phase": "4",
+    "plan": "triage_benign_twin",
+    "status": "deferred"
+  },
+  "R003": {
+    "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+    "phase": "4",
+    "plan": "triage_benign_twin",
+    "status": "deferred"
+  },
+  "R008": {
+    "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+    "phase": "4",
+    "plan": "triage_benign_twin",
+    "status": "deferred"
+  },
+  "R013": {
+    "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+    "phase": "4",
+    "plan": "triage_benign_twin",
+    "status": "deferred"
+  },
   "R017": {
     "expected_strata": [
       "persist_surface"
@@ -309,6 +753,30 @@
     "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
     "phase": "D",
     "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "R040": {
+    "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+    "phase": "4",
+    "plan": "triage_benign_twin",
+    "status": "deferred"
+  },
+  "R041": {
+    "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+    "phase": "4",
+    "plan": "triage_benign_twin",
+    "status": "deferred"
+  },
+  "R042": {
+    "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+    "phase": "4",
+    "plan": "triage_benign_twin",
+    "status": "deferred"
+  },
+  "R043": {
+    "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+    "phase": "4",
+    "plan": "triage_benign_twin",
     "status": "deferred"
   },
   "R044": {
@@ -390,6 +858,312 @@
     "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
     "phase": "D",
     "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "R059": {
+    "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+    "phase": "4",
+    "plan": "triage_benign_twin",
+    "status": "deferred"
+  },
+  "R078": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "2",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "R091": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "2",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "R104": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "2",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "R144": {
+    "note": "Add a packaging shape that contains the benign context; Phase 2.",
+    "phase": "2",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "S001": {
+    "note": "No benign AUR analogue; the labelled malicious corpus is the evidence.",
+    "phase": "4",
+    "plan": "attack_only",
+    "status": "deferred"
+  },
+  "S002": {
+    "note": "No benign AUR analogue; the labelled malicious corpus is the evidence.",
+    "phase": "4",
+    "plan": "attack_only",
+    "status": "deferred"
+  },
+  "S003": {
+    "note": "No benign AUR analogue; the labelled malicious corpus is the evidence.",
+    "phase": "4",
+    "plan": "attack_only",
+    "status": "deferred"
+  },
+  "S004": {
+    "note": "No benign AUR analogue; the labelled malicious corpus is the evidence.",
+    "phase": "4",
+    "plan": "attack_only",
+    "status": "deferred"
+  },
+  "S005": {
+    "note": "No benign AUR analogue; the labelled malicious corpus is the evidence.",
+    "phase": "4",
+    "plan": "attack_only",
+    "status": "deferred"
+  },
+  "S006": {
+    "note": "No benign AUR analogue; the labelled malicious corpus is the evidence.",
+    "phase": "4",
+    "plan": "attack_only",
+    "status": "deferred"
+  },
+  "S007": {
+    "note": "No benign AUR analogue; the labelled malicious corpus is the evidence.",
+    "phase": "4",
+    "plan": "attack_only",
+    "status": "deferred"
+  },
+  "S008": {
+    "note": "No benign AUR analogue; the labelled malicious corpus is the evidence.",
+    "phase": "4",
+    "plan": "attack_only",
+    "status": "deferred"
+  },
+  "T006": {
+    "note": "Needs real commit history; the stateless diff corpus cannot reach it.",
+    "phase": "3",
+    "plan": "add_git_history",
+    "status": "deferred"
+  },
+  "T007": {
+    "note": "Needs real commit history; the stateless diff corpus cannot reach it.",
+    "phase": "3",
+    "plan": "add_git_history",
+    "status": "deferred"
+  },
+  "TAG_CONVERGENCE": {
+    "note": "Boundary/aggregate id, not a corpus rule; covered by integration tests.",
+    "phase": "0",
+    "plan": "pseudo",
+    "status": "resolved"
+  },
+  "U001": {
+    "note": "Add a committed manifest transition that exercises this rule.",
+    "phase": "1",
+    "plan": "add_artifact_or_manifest",
+    "status": "deferred"
+  },
+  "U003": {
+    "note": "Add a committed manifest transition that exercises this rule.",
+    "phase": "1",
+    "plan": "add_artifact_or_manifest",
+    "status": "deferred"
+  },
+  "U004": {
+    "note": "Add a committed manifest transition that exercises this rule.",
+    "phase": "1",
+    "plan": "add_artifact_or_manifest",
+    "status": "deferred"
+  },
+  "U005": {
+    "note": "Add a committed manifest transition that exercises this rule.",
+    "phase": "1",
+    "plan": "add_artifact_or_manifest",
+    "status": "deferred"
+  },
+  "U007": {
+    "note": "Add a committed manifest transition that exercises this rule.",
+    "phase": "1",
+    "plan": "add_artifact_or_manifest",
+    "status": "deferred"
+  },
+  "U008": {
+    "note": "Add a committed manifest transition that exercises this rule.",
+    "phase": "1",
+    "plan": "add_artifact_or_manifest",
+    "status": "deferred"
+  },
+  "U009": {
+    "note": "Add a committed manifest transition that exercises this rule.",
+    "phase": "1",
+    "plan": "add_artifact_or_manifest",
+    "status": "deferred"
+  },
+  "U011": {
+    "note": "Add a committed manifest transition that exercises this rule.",
+    "phase": "1",
+    "plan": "add_artifact_or_manifest",
+    "status": "deferred"
+  },
+  "U012": {
+    "note": "Add a committed manifest transition that exercises this rule.",
+    "phase": "1",
+    "plan": "add_artifact_or_manifest",
+    "status": "deferred"
+  },
+  "W004": {
+    "note": "Boundary/aggregate id, not a corpus rule; covered by integration tests.",
+    "phase": "0",
+    "plan": "pseudo",
+    "status": "resolved"
+  },
+  "W009": {
+    "note": "Boundary/aggregate id, not a corpus rule; covered by integration tests.",
+    "phase": "0",
+    "plan": "pseudo",
+    "status": "resolved"
+  },
+  "W010": {
+    "note": "Boundary/aggregate id, not a corpus rule; covered by integration tests.",
+    "phase": "0",
+    "plan": "pseudo",
+    "status": "resolved"
+  },
+  "W013": {
+    "note": "Boundary/aggregate id, not a corpus rule; covered by integration tests.",
+    "phase": "0",
+    "plan": "pseudo",
+    "status": "resolved"
+  },
+  "X001": {
+    "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+    "phase": "4",
+    "plan": "triage_benign_twin",
+    "status": "deferred"
+  },
+  "X003": {
+    "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+    "phase": "4",
+    "plan": "triage_benign_twin",
+    "status": "deferred"
+  },
+  "X005": {
+    "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+    "phase": "4",
+    "plan": "triage_benign_twin",
+    "status": "deferred"
+  },
+  "X006": {
+    "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+    "phase": "4",
+    "plan": "triage_benign_twin",
+    "status": "deferred"
+  },
+  "X007": {
+    "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+    "phase": "4",
+    "plan": "triage_benign_twin",
+    "status": "deferred"
+  },
+  "X008": {
+    "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+    "phase": "4",
+    "plan": "triage_benign_twin",
+    "status": "deferred"
+  },
+  "X009": {
+    "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+    "phase": "4",
+    "plan": "triage_benign_twin",
+    "status": "deferred"
+  },
+  "X010": {
+    "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+    "phase": "4",
+    "plan": "triage_benign_twin",
+    "status": "deferred"
+  },
+  "X014": {
+    "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+    "phase": "4",
+    "plan": "triage_benign_twin",
+    "status": "deferred"
+  },
+  "X016": {
+    "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+    "phase": "4",
+    "plan": "triage_benign_twin",
+    "status": "deferred"
+  },
+  "X017": {
+    "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+    "phase": "4",
+    "plan": "triage_benign_twin",
+    "status": "deferred"
+  },
+  "X018": {
+    "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+    "phase": "4",
+    "plan": "triage_benign_twin",
+    "status": "deferred"
+  },
+  "X019": {
+    "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+    "phase": "4",
+    "plan": "triage_benign_twin",
+    "status": "deferred"
+  },
+  "X020": {
+    "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+    "phase": "4",
+    "plan": "triage_benign_twin",
+    "status": "deferred"
+  },
+  "X022": {
+    "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+    "phase": "4",
+    "plan": "triage_benign_twin",
+    "status": "deferred"
+  },
+  "X025": {
+    "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+    "phase": "4",
+    "plan": "triage_benign_twin",
+    "status": "deferred"
+  },
+  "X028": {
+    "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+    "phase": "4",
+    "plan": "triage_benign_twin",
+    "status": "deferred"
+  },
+  "X029": {
+    "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+    "phase": "4",
+    "plan": "triage_benign_twin",
+    "status": "deferred"
+  },
+  "X030": {
+    "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+    "phase": "4",
+    "plan": "triage_benign_twin",
+    "status": "deferred"
+  },
+  "X031": {
+    "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+    "phase": "4",
+    "plan": "triage_benign_twin",
+    "status": "deferred"
+  },
+  "X032": {
+    "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+    "phase": "4",
+    "plan": "triage_benign_twin",
+    "status": "deferred"
+  },
+  "X034": {
+    "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+    "phase": "4",
+    "plan": "triage_benign_twin",
     "status": "deferred"
   }
 }

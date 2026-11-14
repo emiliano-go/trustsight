@@ -103,17 +103,44 @@ def test_coverage_gate_requires_a_disposition(tmp_path):
     assert "unmet without disposition" in gate.detail
 
 
+def test_coverage_gate_requires_a_disposition_for_every_unmeasured_rule(tmp_path):
+    """A rule with no benign source and no expectation is still a gap: the
+    ledger may not leave it unclassified just because no stratum names it."""
+    path = tmp_path / "ledger.json"
+    _write_ledger(path)
+    gate = gate_coverage_expectations(path)
+    assert not gate.passed
+    assert "unmeasured without disposition" in gate.detail
+
+    dispositions = {
+        rid: {"status": "deferred", "plan": "add_benign_shape"}
+        for rid, row in json.loads(path.read_text())["rules"].items()
+        if not row.get("benign_sources")
+    }
+    _write_ledger(path, dispositions=dispositions)
+    assert gate_coverage_expectations(path).passed
+
+
 def test_coverage_gate_accepts_deferred_and_rejects_stale_add(tmp_path):
     disposition = {"status": "deferred", "plan": "add_benign_shape"}
     path = tmp_path / "ledger.json"
-    _write_ledger(path, expected={"H015": ["source_patched"]},
-                  dispositions={"H015": disposition})
+    base = build_ledger([Observation(source="cold")],
+                        expected={"H015": ["source_patched"]})
+    all_dispositions = {
+        rid: disposition for rid, row in base["rules"].items()
+        if not row.get("benign_sources")
+    }
+    all_dispositions["H015"] = disposition
+    ledger = build_ledger([Observation(source="cold")],
+                          expected={"H015": ["source_patched"]},
+                          dispositions=all_dispositions)
+    path.write_text(json.dumps(ledger))
     assert gate_coverage_expectations(path).passed
 
     obs = Observation(source="cold", fires={"H015": 1})
     obs.strata["H015"].add("source_patched")
     ledger = build_ledger([obs], expected={"H015": ["source_patched"]},
-                          dispositions={"H015": disposition})
+                          dispositions=all_dispositions)
     path.write_text(json.dumps(ledger))
     gate = gate_coverage_expectations(path)
     assert not gate.passed

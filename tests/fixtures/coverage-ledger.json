@@ -179,7 +179,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Fire-based ledger cannot record an abstention; needs a reachability signal.",
+        "phase": "3",
+        "plan": "not_measurable",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -259,7 +264,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Fire-based ledger cannot record an abstention; needs a reachability signal.",
+        "phase": "3",
+        "plan": "not_measurable",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -311,7 +321,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Fire-based ledger cannot record an abstention; needs a reachability signal.",
+        "phase": "3",
+        "plan": "not_measurable",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -754,7 +769,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "2",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -772,7 +792,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "2",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -790,7 +815,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "2",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -843,7 +873,12 @@
       "benign_sources": [],
       "benign_state": "malicious_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "2",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -993,7 +1028,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "2",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -1157,7 +1197,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "2",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -1312,7 +1357,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "2",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -1503,7 +1553,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "2",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -1694,7 +1749,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "2",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -2058,7 +2118,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Needs observation history / warm replay; Phase 3.",
+        "phase": "3",
+        "plan": "add_history_or_warm",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -2273,7 +2338,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Needs a multi-package cycle, not a single diff; Phase 3 cycle corpus.",
+        "phase": "3",
+        "plan": "add_cycle_corpus",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -2291,7 +2361,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Needs a multi-package cycle, not a single diff; Phase 3 cycle corpus.",
+        "phase": "3",
+        "plan": "add_cycle_corpus",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -2309,7 +2384,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Needs a multi-package cycle, not a single diff; Phase 3 cycle corpus.",
+        "phase": "3",
+        "plan": "add_cycle_corpus",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -2327,7 +2407,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Needs a multi-package cycle, not a single diff; Phase 3 cycle corpus.",
+        "phase": "3",
+        "plan": "add_cycle_corpus",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -2345,7 +2430,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Needs a multi-package cycle, not a single diff; Phase 3 cycle corpus.",
+        "phase": "3",
+        "plan": "add_cycle_corpus",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -2363,7 +2453,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Needs a multi-package cycle, not a single diff; Phase 3 cycle corpus.",
+        "phase": "3",
+        "plan": "add_cycle_corpus",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -2381,7 +2476,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Needs a multi-package cycle, not a single diff; Phase 3 cycle corpus.",
+        "phase": "3",
+        "plan": "add_cycle_corpus",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -2399,7 +2499,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Needs a multi-package cycle, not a single diff; Phase 3 cycle corpus.",
+        "phase": "3",
+        "plan": "add_cycle_corpus",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -2417,7 +2522,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Needs a multi-package cycle, not a single diff; Phase 3 cycle corpus.",
+        "phase": "3",
+        "plan": "add_cycle_corpus",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -2435,7 +2545,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Needs a multi-package cycle, not a single diff; Phase 3 cycle corpus.",
+        "phase": "3",
+        "plan": "add_cycle_corpus",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -2453,7 +2568,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Needs a multi-package cycle, not a single diff; Phase 3 cycle corpus.",
+        "phase": "3",
+        "plan": "add_cycle_corpus",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -2471,7 +2591,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Needs a multi-package cycle, not a single diff; Phase 3 cycle corpus.",
+        "phase": "3",
+        "plan": "add_cycle_corpus",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -2489,7 +2614,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Needs a multi-package cycle, not a single diff; Phase 3 cycle corpus.",
+        "phase": "3",
+        "plan": "add_cycle_corpus",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -2507,7 +2637,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Needs a multi-package cycle, not a single diff; Phase 3 cycle corpus.",
+        "phase": "3",
+        "plan": "add_cycle_corpus",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -2525,7 +2660,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Needs a multi-package cycle, not a single diff; Phase 3 cycle corpus.",
+        "phase": "3",
+        "plan": "add_cycle_corpus",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -2770,7 +2910,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "2",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -2816,7 +2961,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "2",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -2834,7 +2984,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "2",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -2852,7 +3007,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "1",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -2870,7 +3030,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "1",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -2888,7 +3053,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "1",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -2906,7 +3076,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "1",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -2924,7 +3099,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "1",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -2942,7 +3122,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "2",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -3203,7 +3388,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Needs observation history / warm replay; Phase 3.",
+        "phase": "3",
+        "plan": "add_history_or_warm",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -3221,7 +3411,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Needs observation history / warm replay; Phase 3.",
+        "phase": "3",
+        "plan": "add_history_or_warm",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -3239,7 +3434,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Needs observation history / warm replay; Phase 3.",
+        "phase": "3",
+        "plan": "add_history_or_warm",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -3553,7 +3753,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Needs observation history / warm replay; Phase 3.",
+        "phase": "3",
+        "plan": "add_history_or_warm",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -3945,7 +4150,12 @@
       "benign_sources": [],
       "benign_state": "malicious_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "2",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -4079,7 +4289,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "2",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -4231,7 +4446,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Needs observation history / warm replay; Phase 3.",
+        "phase": "3",
+        "plan": "add_history_or_warm",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -4249,7 +4469,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Needs observation history / warm replay; Phase 3.",
+        "phase": "3",
+        "plan": "add_history_or_warm",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -4532,7 +4757,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "2",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -4550,7 +4780,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Needs observation history / warm replay; Phase 3.",
+        "phase": "3",
+        "plan": "add_history_or_warm",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -4630,7 +4865,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Needs observation history / warm replay; Phase 3.",
+        "phase": "3",
+        "plan": "add_history_or_warm",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -4648,7 +4888,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Needs observation history / warm replay; Phase 3.",
+        "phase": "3",
+        "plan": "add_history_or_warm",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -4852,7 +5097,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "1",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -4870,7 +5120,12 @@
       "benign_sources": [],
       "benign_state": "malicious_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "2",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -4963,7 +5218,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "1",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -5310,7 +5570,12 @@
       "benign_sources": [],
       "benign_state": "malicious_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "2",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -5723,7 +5988,12 @@
       "benign_sources": [],
       "benign_state": "malicious_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "2",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -5746,7 +6016,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "2",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -5919,7 +6194,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "2",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -6114,7 +6394,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "2",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -6132,7 +6417,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "2",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -6150,7 +6440,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "2",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -6168,7 +6463,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "2",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -6186,7 +6486,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "2",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -6204,7 +6509,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "2",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -6253,7 +6563,12 @@
       "benign_sources": [],
       "benign_state": "malicious_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Needs observation history / warm replay; Phase 3.",
+        "phase": "3",
+        "plan": "add_history_or_warm",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -6436,7 +6751,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Needs observation history / warm replay; Phase 3.",
+        "phase": "3",
+        "plan": "add_history_or_warm",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -6454,7 +6774,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Needs observation history / warm replay; Phase 3.",
+        "phase": "3",
+        "plan": "add_history_or_warm",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -6472,7 +6797,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Needs observation history / warm replay; Phase 3.",
+        "phase": "3",
+        "plan": "add_history_or_warm",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -6490,7 +6820,12 @@
       "benign_sources": [],
       "benign_state": "pseudo",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Boundary/aggregate id, not a corpus rule; covered by integration tests.",
+        "phase": "0",
+        "plan": "pseudo",
+        "status": "resolved"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -6647,7 +6982,12 @@
       "benign_sources": [],
       "benign_state": "pseudo",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Boundary/aggregate id, not a corpus rule; covered by integration tests.",
+        "phase": "0",
+        "plan": "pseudo",
+        "status": "resolved"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -6960,7 +7300,12 @@
       "benign_sources": [],
       "benign_state": "pseudo",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Boundary/aggregate id, not a corpus rule; covered by integration tests.",
+        "phase": "0",
+        "plan": "pseudo",
+        "status": "resolved"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -6978,7 +7323,12 @@
       "benign_sources": [],
       "benign_state": "malicious_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+        "phase": "4",
+        "plan": "triage_benign_twin",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -7001,7 +7351,12 @@
       "benign_sources": [],
       "benign_state": "malicious_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+        "phase": "4",
+        "plan": "triage_benign_twin",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -7024,7 +7379,12 @@
       "benign_sources": [],
       "benign_state": "malicious_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+        "phase": "4",
+        "plan": "triage_benign_twin",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -7121,7 +7481,12 @@
       "benign_sources": [],
       "benign_state": "malicious_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+        "phase": "4",
+        "plan": "triage_benign_twin",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -7281,7 +7646,12 @@
       "benign_sources": [],
       "benign_state": "malicious_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+        "phase": "4",
+        "plan": "triage_benign_twin",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -7379,7 +7749,12 @@
       "benign_sources": [],
       "benign_state": "adversarial_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+        "phase": "4",
+        "plan": "triage_benign_twin",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -7397,7 +7772,12 @@
       "benign_sources": [],
       "benign_state": "adversarial_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+        "phase": "4",
+        "plan": "triage_benign_twin",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -7415,7 +7795,12 @@
       "benign_sources": [],
       "benign_state": "adversarial_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+        "phase": "4",
+        "plan": "triage_benign_twin",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -7433,7 +7818,12 @@
       "benign_sources": [],
       "benign_state": "malicious_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+        "phase": "4",
+        "plan": "triage_benign_twin",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -7937,7 +8327,12 @@
       "benign_sources": [],
       "benign_state": "malicious_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+        "phase": "4",
+        "plan": "triage_benign_twin",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -7960,7 +8355,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "2",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -7978,7 +8378,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "2",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -8033,7 +8438,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "2",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -8051,7 +8461,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a packaging shape that contains the benign context; Phase 2.",
+        "phase": "2",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -8110,7 +8525,12 @@
       "benign_sources": [],
       "benign_state": "malicious_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "No benign AUR analogue; the labelled malicious corpus is the evidence.",
+        "phase": "4",
+        "plan": "attack_only",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -8133,7 +8553,12 @@
       "benign_sources": [],
       "benign_state": "malicious_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "No benign AUR analogue; the labelled malicious corpus is the evidence.",
+        "phase": "4",
+        "plan": "attack_only",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -8156,7 +8581,12 @@
       "benign_sources": [],
       "benign_state": "malicious_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "No benign AUR analogue; the labelled malicious corpus is the evidence.",
+        "phase": "4",
+        "plan": "attack_only",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -8179,7 +8609,12 @@
       "benign_sources": [],
       "benign_state": "malicious_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "No benign AUR analogue; the labelled malicious corpus is the evidence.",
+        "phase": "4",
+        "plan": "attack_only",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -8202,7 +8637,12 @@
       "benign_sources": [],
       "benign_state": "malicious_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "No benign AUR analogue; the labelled malicious corpus is the evidence.",
+        "phase": "4",
+        "plan": "attack_only",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -8225,7 +8665,12 @@
       "benign_sources": [],
       "benign_state": "malicious_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "No benign AUR analogue; the labelled malicious corpus is the evidence.",
+        "phase": "4",
+        "plan": "attack_only",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -8248,7 +8693,12 @@
       "benign_sources": [],
       "benign_state": "malicious_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "No benign AUR analogue; the labelled malicious corpus is the evidence.",
+        "phase": "4",
+        "plan": "attack_only",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -8271,7 +8721,12 @@
       "benign_sources": [],
       "benign_state": "malicious_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "No benign AUR analogue; the labelled malicious corpus is the evidence.",
+        "phase": "4",
+        "plan": "attack_only",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -8560,7 +9015,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Needs real commit history; the stateless diff corpus cannot reach it.",
+        "phase": "3",
+        "plan": "add_git_history",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -8578,7 +9038,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Needs real commit history; the stateless diff corpus cannot reach it.",
+        "phase": "3",
+        "plan": "add_git_history",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -8751,7 +9216,12 @@
       "benign_sources": [],
       "benign_state": "pseudo",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Boundary/aggregate id, not a corpus rule; covered by integration tests.",
+        "phase": "0",
+        "plan": "pseudo",
+        "status": "resolved"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -8769,7 +9239,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a committed manifest transition that exercises this rule.",
+        "phase": "1",
+        "plan": "add_artifact_or_manifest",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -8822,7 +9297,12 @@
       "benign_sources": [],
       "benign_state": "malicious_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a committed manifest transition that exercises this rule.",
+        "phase": "1",
+        "plan": "add_artifact_or_manifest",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -8845,7 +9325,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a committed manifest transition that exercises this rule.",
+        "phase": "1",
+        "plan": "add_artifact_or_manifest",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -8863,7 +9348,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a committed manifest transition that exercises this rule.",
+        "phase": "1",
+        "plan": "add_artifact_or_manifest",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -8916,7 +9406,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a committed manifest transition that exercises this rule.",
+        "phase": "1",
+        "plan": "add_artifact_or_manifest",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -8934,7 +9429,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a committed manifest transition that exercises this rule.",
+        "phase": "1",
+        "plan": "add_artifact_or_manifest",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -8952,7 +9452,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a committed manifest transition that exercises this rule.",
+        "phase": "1",
+        "plan": "add_artifact_or_manifest",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -9001,7 +9506,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a committed manifest transition that exercises this rule.",
+        "phase": "1",
+        "plan": "add_artifact_or_manifest",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -9019,7 +9529,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a committed manifest transition that exercises this rule.",
+        "phase": "1",
+        "plan": "add_artifact_or_manifest",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -9225,7 +9740,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Boundary/aggregate id, not a corpus rule; covered by integration tests.",
+        "phase": "0",
+        "plan": "pseudo",
+        "status": "resolved"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -9498,7 +10018,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Boundary/aggregate id, not a corpus rule; covered by integration tests.",
+        "phase": "0",
+        "plan": "pseudo",
+        "status": "resolved"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -9516,7 +10041,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Boundary/aggregate id, not a corpus rule; covered by integration tests.",
+        "phase": "0",
+        "plan": "pseudo",
+        "status": "resolved"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -9694,7 +10224,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Boundary/aggregate id, not a corpus rule; covered by integration tests.",
+        "phase": "0",
+        "plan": "pseudo",
+        "status": "resolved"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -9712,7 +10247,12 @@
       "benign_sources": [],
       "benign_state": "malicious_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+        "phase": "4",
+        "plan": "triage_benign_twin",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -9782,7 +10322,12 @@
       "benign_sources": [],
       "benign_state": "adversarial_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+        "phase": "4",
+        "plan": "triage_benign_twin",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -9838,7 +10383,12 @@
       "benign_sources": [],
       "benign_state": "malicious_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+        "phase": "4",
+        "plan": "triage_benign_twin",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -9861,7 +10411,12 @@
       "benign_sources": [],
       "benign_state": "malicious_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+        "phase": "4",
+        "plan": "triage_benign_twin",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -9884,7 +10439,12 @@
       "benign_sources": [],
       "benign_state": "malicious_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+        "phase": "4",
+        "plan": "triage_benign_twin",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -9907,7 +10467,12 @@
       "benign_sources": [],
       "benign_state": "adversarial_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+        "phase": "4",
+        "plan": "triage_benign_twin",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -9925,7 +10490,12 @@
       "benign_sources": [],
       "benign_state": "adversarial_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+        "phase": "4",
+        "plan": "triage_benign_twin",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -9943,7 +10513,12 @@
       "benign_sources": [],
       "benign_state": "malicious_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+        "phase": "4",
+        "plan": "triage_benign_twin",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -10084,7 +10659,12 @@
       "benign_sources": [],
       "benign_state": "adversarial_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+        "phase": "4",
+        "plan": "triage_benign_twin",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -10133,7 +10713,12 @@
       "benign_sources": [],
       "benign_state": "malicious_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+        "phase": "4",
+        "plan": "triage_benign_twin",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -10156,7 +10741,12 @@
       "benign_sources": [],
       "benign_state": "adversarial_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+        "phase": "4",
+        "plan": "triage_benign_twin",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -10174,7 +10764,12 @@
       "benign_sources": [],
       "benign_state": "adversarial_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+        "phase": "4",
+        "plan": "triage_benign_twin",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -10192,7 +10787,12 @@
       "benign_sources": [],
       "benign_state": "adversarial_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+        "phase": "4",
+        "plan": "triage_benign_twin",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -10210,7 +10810,12 @@
       "benign_sources": [],
       "benign_state": "adversarial_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+        "phase": "4",
+        "plan": "triage_benign_twin",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -10262,7 +10867,12 @@
       "benign_sources": [],
       "benign_state": "adversarial_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+        "phase": "4",
+        "plan": "triage_benign_twin",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -10355,7 +10965,12 @@
       "benign_sources": [],
       "benign_state": "adversarial_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+        "phase": "4",
+        "plan": "triage_benign_twin",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -10450,7 +11065,12 @@
       "benign_sources": [],
       "benign_state": "adversarial_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+        "phase": "4",
+        "plan": "triage_benign_twin",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -10468,7 +11088,12 @@
       "benign_sources": [],
       "benign_state": "adversarial_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+        "phase": "4",
+        "plan": "triage_benign_twin",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -10486,7 +11111,12 @@
       "benign_sources": [],
       "benign_state": "adversarial_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+        "phase": "4",
+        "plan": "triage_benign_twin",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -10504,7 +11134,12 @@
       "benign_sources": [],
       "benign_state": "adversarial_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+        "phase": "4",
+        "plan": "triage_benign_twin",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -10522,7 +11157,12 @@
       "benign_sources": [],
       "benign_state": "malicious_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+        "phase": "4",
+        "plan": "triage_benign_twin",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -10585,7 +11225,12 @@
       "benign_sources": [],
       "benign_state": "malicious_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
+        "phase": "4",
+        "plan": "triage_benign_twin",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],

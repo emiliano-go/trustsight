@@ -210,6 +210,15 @@ def _signature_source(arrays) -> bool:
     return False
 
 
+def _validpgpkeys_gained(pre, post) -> bool:
+    """True when this diff adds a trusted signing key."""
+    if pre is None or post is None:
+        return False
+    before = set(_family_values(pre.arrays, "validpgpkeys"))
+    after = set(_family_values(post.arrays, "validpgpkeys"))
+    return bool(after - before)
+
+
 def _signature_verification_introduced(pre, post) -> bool:
     """True when this diff newly trusts a key *and* ships its signature.
 
@@ -548,8 +557,26 @@ def addendum4_findings(diff_text, scope_doc, pre, post, source_changes,
         # (sha256 -> sha512) is an upgrade, not a downgrade.
         weaker = [base for base in _CHECKSUM_STRENGTH[
             _CHECKSUM_STRENGTH.index(strongest) + 1:] if post_present[base]]
+        # Dropping sha512/b2 while sha256 remains is not an integrity
+        # downgrade: every retained array is still collision-resistant.
+        # The downgrade claim starts below sha256 (sha1/md5), where the
+        # remaining digest no longer carries the same guarantee.
+        retained = [base for base in _CHECKSUM_STRENGTH if post_present[base]]
+        best_retained = retained[0] if retained else None
+        # A newly trusted key is the trust-root change the downgrade
+        # guards: the key can authenticate a *future* artifact whose hash
+        # this recipe no longer checks at the same strength.  It is only
+        # safe to read as an upgrade when the diff also ships the
+        # signature (the `_signature_verification_introduced` stand-down
+        # above); a bare `validpgpkeys` entry verifies nothing.
+        still_strong = (
+            best_retained is not None
+            and _CHECKSUM_STRENGTH.index(best_retained)
+            <= _CHECKSUM_STRENGTH.index("sha256sums")
+            and not _validpgpkeys_gained(pre, post)
+        )
         # Stands down when every array was removed together: H002 owns it.
-        if weaker and any(post_present.values()):
+        if weaker and any(post_present.values()) and not still_strong:
             add("C022", "Checksum Strength Downgraded", "HIGH", "integrity",
                 f"{strongest} removed or emptied while "
                 f"{', '.join(weaker)} remains",

@@ -796,9 +796,11 @@ printed. Measured on the locked benign corpus: 0 on the v1 corpus.
 - **Category:** `integrity`
 
 - **Condition:** The strongest checksum array a recipe carried has its
-  declaration removed in this diff while a strictly weaker array remains.
-  Strength order is `b2 > sha512 > sha256 > sha1 > md5`; arch-suffixed
-  variants count with their base.
+  declaration removed in this diff, a strictly weaker array remains, and the
+  best retained array is weaker than sha256. Strength order is
+  `b2 > sha512 > sha256 > sha1 > md5`; arch-suffixed variants count with
+  their base. Removing sha512 or b2 while sha256 remains is not a downgrade:
+  every retained digest is still collision-resistant.
 
 Stands down when every checksum array was removed together - H002 owns
 that shape. Measured on the locked benign corpus: 43 on the v1 corpus (1.15%), every

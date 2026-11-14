@@ -11,12 +11,13 @@ from ...config import (
 )
 from ...coverage import note_stage_failure
 from ...deps import _strip_comment
+from ...diffdoc import parse_diff_lines
 from ...findings import stamp
 from ...rules import (
     MAX_RULE_LINE_BYTES,
     ScopeResolver,
 )
-from ...tokenizer import resolve_added_lines
+from ...tokenizer import resolve_added_lines, split_lines
 from ..build import (
     _REMOTE_PROC_SUBST_OUT_RE,
     _REMOTE_PROC_SUBST_RE,
@@ -159,6 +160,28 @@ def _matches_committed(base: str, manifest_basenames) -> bool:
     return _names_a_member_or_pattern(base, manifest_basenames)
 
 
+def _continuation_line_texts(diff_text: str) -> set[str]:
+    """Added raw lines that continue the previous line with a backslash.
+
+    ``resolve_added_lines`` returns both the joined command and the raw
+    continuation line.  Reading the second as a command position made
+    ``install -Dm644 -t "$pkgdir/x" \\`` + ``"$srcdir/p/LICENSE"`` look
+    like an execution of ``LICENSE`` (H081).  The raw diff still carries
+    the backslash, so the echo is identified before scope is consulted.
+    """
+    texts: set[str] = set()
+    continued = False
+    for parsed in parse_diff_lines(split_lines(diff_text)).lines:
+        if parsed.side == "other":
+            continued = False
+            continue
+        body = parsed.content
+        if continued and parsed.side == "add":
+            texts.add(_strip_comment(body).strip())
+        continued = body.rstrip().endswith("\\")
+    return texts
+
+
 def _committed_execution_findings(diff_text, tree_manifest, add, current_text=None) -> None:
     """An execution whose target is a repo-committed file the recipe never
     declared (H081).
@@ -189,6 +212,7 @@ def _committed_execution_findings(diff_text, tree_manifest, add, current_text=No
         None if tree_manifest is None
         else {os.path.basename(name.rstrip("/")) for name, _ in tree_manifest}
     )
+    continuation_texts = _continuation_line_texts(diff_text)
 
     written_by_fn: dict[str, set[str]] = {}
     bindings_by_fn: dict[str, dict[str, list[str]]] = {}
@@ -203,6 +227,9 @@ def _committed_execution_findings(diff_text, tree_manifest, add, current_text=No
         if len(line) > MAX_RULE_LINE_BYTES:
             continue
         body = _strip_comment(line[1:])
+        # An argument on the next physical line is not a command of its own.
+        if body.strip() in continuation_texts:
+            continue
 
         written = written_by_fn.setdefault(fn, set())
         for _kind, wpath in _collect_writes(body, fn):

@@ -9,7 +9,29 @@ from ._connection import get_connection
 from ._metadata import seed_observation_count
 from ._packages import count_observations
 
-__all__ = ['_ESTABLISHED_MIN_NAME_LENGTH', '_ESTABLISHED_OBSERVATIONS', '_official_names', '_official_names_lock', 'dependency_observation_count', 'dependency_observation_counts', 'dependency_table_populated', 'effective_observation_count', 'is_established_package', 'official_package_names', 'record_dependency_names', 'top_dependency_names', 'top_dependency_pairs']
+__all__ = ['_ESTABLISHED_MIN_NAME_LENGTH', '_ESTABLISHED_OBSERVATIONS', '_official_names', '_official_names_lock', 'dependency_observation_count', 'dependency_observation_counts', 'dependency_table_populated', 'effective_observation_count', 'is_established_package', 'is_known_aur_package', 'official_package_names', 'record_dependency_names', 'top_dependency_names', 'top_dependency_pairs']
+
+def is_known_aur_package(name: str) -> bool:
+    """True when the watcher has a package row for *name*.
+
+    The dependency corpus answers "has anything depended on this name",
+    which is a different question from "does this package exist".  A
+    companion package published the same day as the recipe that depends
+    on it has no dependency observations yet, so D001 called it novel and
+    D002 called it a typosquat.  The packages table is the watcher's own
+    record that the name exists.
+    """
+    if not name:
+        return False
+    with get_connection() as conn:
+        try:
+            row = conn.execute(
+                "SELECT 1 FROM packages WHERE name = ? LIMIT 1", (name,),
+            ).fetchone()
+        except sqlite3.OperationalError:
+            return False
+        return row is not None
+
 
 def dependency_observation_count(name: str) -> int:
     """How many times *name* has been seen as a dependency, package, or alias."""

@@ -111,6 +111,7 @@ Three classes of name are never considered novel, each an observed false positiv
 | Unresolved variables | `$_pkgname`, `${pkgbase}` | Not a name; the tokenizer could not expand it |
 | Sonames | `libwlroots-0.21.so` | Satisfied by whichever package provides that ABI |
 | Companion split packages | `jellyfin-desktop-libcef-bin` alongside `jellyfin-desktop-git` | Belongs to the same project, so it is expected to be globally unknown |
+| Known AUR packages | `waymobar` alongside `rivermonad` | The watcher has a `packages` row, so "never seen" is false even before anything depends on it |
 
 ### D002: Typosquatted Dependency {#d002}
 
@@ -119,7 +120,7 @@ Three classes of name are never considered novel, each an observed false positiv
 
 - **Description:** A novel dependency name within one or two edits (Damerau-Levenshtein, so transpositions count) of a popular package: `openss1` for `openssl`, `cur1` for `curl`.
 
-D002 **refines D001**: only a name D001 has already found to be globally unknown is compared, and D002 is reported instead of D001 when it matches. That ordering is what makes the check both affordable and correct. A precomputed table of confusable pairs cannot work, because a table built from existing package names can only contain names that must *not* fire, while the names that should fire do not exist yet.
+D002 **refines D001**: only a name D001 has already found to be globally unknown is compared, and D002 is reported instead of D001 when it matches. That ordering is what makes the check both affordable and correct. A precomputed table of confusable pairs cannot work, because a table built from existing package names can only contain names that must *not* fire, while the names that should fire do not exist yet. A name the watcher already has a package row for is neither novel nor impersonation, so same-day companion packages do not become typosquats of the project they belong to.
 
 Popularity is taken from `observation_count`, so no separate package list is shipped. The distance threshold scales with length: short names sit close to many unrelated real packages, with `yay` one edit from `yak`, `yam`, `jay`, and `may`.
 
@@ -176,12 +177,13 @@ shipped list.
 - **Severity:** HIGH (weight 25) for an established package, MEDIUM (weight 15) for a widely-provided one; INFO (weight 0) for a conflict with an established-only package
 - **Category:** `dependency`
 
-- **Condition:** A newly claimed `provides`, `replaces` or `conflicts` names an established package (official repo or fallback observations) or a widely-provided one (observation count at or above `[h064] widely_provided_observations`, default 25).
+- **Condition:** A newly claimed `provides` or `replaces` names an established package (official repo or fallback observations) or a widely-provided one (observation count at or above `[h064] widely_provided_observations`, default 25). A newly added `conflicts` entry is reported at weight 0.
 
 Claiming another project's name redirects installs of that name to this
-package. A `conflicts` entry only refuses co-installation; it is HIGH when the
-target is widely depended on and INFO at weight 0 when it is merely established,
-which keeps a documented file collision from reading as a hijack. Relatedness
+package. A `conflicts` entry only refuses co-installation and never claims to
+be the target, so it is INFO at weight 0 whatever the target's popularity;
+a drop-in replacement that conflicts the package it replaces must not read as
+a name grab. A `provides`/`replaces` claim on the same name still scores. Relatedness
 suppresses the obvious false positive: variant, companion and sibling stems of
 the package's own name never fire. Cold start cannot fire either branch, since
 neither corpus nor pacman data exists to establish what is established. H064
@@ -257,7 +259,7 @@ A placeholder reserves a name in the AUR while installing nothing - it builds, r
 - **Severity:** MEDIUM (weight 0, report-only)
 - **Category:** `dependency`
 
-- **Condition:** A ``pkgname`` output is exactly an established package, a ``provides`` or ``replaces`` entry names an established package unrelated to this one, or a ``conflicts`` entry does.
+- **Condition:** A ``pkgname`` output is exactly an established package, a ``provides`` or ``replaces`` entry names an established package unrelated to this one, or a ``conflicts`` entry does. A ``conflicts`` entry whose name the recipe also ``provides``/``replaces`` is a declared replacement, not a shadow, and is skipped.
 
 H064 and D004 own the *added* ``provides``/``replaces``/``conflicts``. This rule owns the claim the recipe carries now: a split output whose name pacman already resolves elsewhere, a reservation or rename that predates the diff, or a conflict whose target became an official package after the recipe declared it. The variant carve-out is the ordinary pattern - ``foo-git`` providing or conflicting ``foo`` is suppressed - and a soname (``libfoo.so``) is not a package claim, so the finding names a name claim that stands alone. "Established" is official-repo membership, falling back to the dependency observation proxy exactly as H064 does, and cold start fires nothing. Weight 0 until the benign corpus calibrates it; the recipe's current text is read on the fresh path, the incremental path and ``trustsight lint``.
 

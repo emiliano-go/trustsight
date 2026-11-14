@@ -32,13 +32,13 @@ from ..config import (
 from ..deps import _strip_comment
 from ..line_lex import lex_lines
 from ..shell_words import command_starts as _command_starts
-from ..tokenizer import join_line_continuations, resolve_added_lines
+from ..tokenizer import join_line_continuations, resolve_added_lines, split_lines
 from .base import compile_configured_patterns, iter_scheme_urls, mask_to_recipe
 from .version import any_version_scalar_moved
 from .build import _SCOPE_FUNCTIONS
 from .delivery import _SRCINFO_SOURCE_RE, _find_line
 from ..diffdoc import parse_diff_lines
-from ..tokenizer import split_lines
+from ..rules import ScopeResolver
 
 _SOURCE_ARRAY_RE = re.compile(r"^\s*source(?:_[a-z0-9_]+)?\s*=\s*\(")
 # URL tokens are found by scanning for "://" (see base.iter_scheme_urls);
@@ -511,6 +511,18 @@ def edge_parse_time_fetch(ctx, add) -> None:
     lexed = lex_lines(lines, fragment=True)
     patterns = _parse_time_fetch_patterns(config)
     fetch_funcs = _fetch_function_names(diff_text, config)
+    # A hunk need not include the function header: adding one line near the
+    # end of prepare() used to leave the line with no known scope, and H077
+    # blamed the recipe for fetching at parse time.  The current recipe is
+    # the authority for which lines sit inside a function.
+    recipe_function_lines: set[str] = set()
+    if ctx.current_text:
+        recipe = list(split_lines(ctx.current_text))
+        recipe_scopes = ScopeResolver(recipe)
+        recipe_function_lines = {
+            line.strip() for index, line in enumerate(recipe)
+            if recipe_scopes.direct(index) is not None
+        }
     from .crossfire import _split_commands
     in_array = False
     for i, line in enumerate(lines):
@@ -541,6 +553,8 @@ def edge_parse_time_fetch(ctx, add) -> None:
                 in_array = False
             continue
         if ctx.scopes.direct(i) is not None or _PIPE_TO_SHELL_RE.search(body):
+            continue
+        if ctx.scopes.direct(i) is None and stripped in recipe_function_lines:
             continue
         if fetch_funcs & set(_CMDSUB_CALL_RE.findall(body)):
             add("H077", "Parse-time Network Fetch", "HIGH", "network",

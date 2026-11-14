@@ -126,7 +126,10 @@ _WRITE_PREFIX = r"(?:[A-Za-z_]\w*=\S*\s+|(?:env|sudo|doas|exec|nohup|command|tim
 _WRITE_COMMAND_RE = re.compile(
     _CMD + _WRITE_PREFIX +
     r"(?:install|cp|mv|tee|ln|mkdir|touch|rsync|dd|chmod|chown|sed)\b|"
-    r">>?\s*[\"']?(?=\S)",
+    # A file-descriptor redirect (`2>`, `&>`) and the null device write
+    # nothing to a home directory.  Reading `2>/dev/null` as a write made
+    # every `grep '/home/.../' … 2>/dev/null` line a profile write (X005).
+    r"(?<![0-9&])>>?\s*[\"']?(?!/dev/(?:null|stdout|stderr)\b)(?=\S)",
     re.MULTILINE,
 )
 

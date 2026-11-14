@@ -362,7 +362,7 @@ Fire rate: 0 on the v1 corpus.
 - **Severity:** HIGH (weight 25)
 - **Category:** `network`
 
-- **Condition:** A network client from `[patterns] parse_time_fetch` runs at a command position **outside every function**, in the PKGBUILD or an install file.
+- **Condition:** A network client from `[patterns] parse_time_fetch` runs at a command position **outside every function**, in the PKGBUILD or an install file. When the hunk does not carry the enclosing function header, the current recipe decides: a line the recipe places inside a function is not parse-time.
 
 Everything at the top level executes as soon as makepkg sources the recipe,
 which happens on `makepkg --printsrcinfo`, on an AUR helper's metadata refresh,
@@ -436,7 +436,7 @@ rather than at R010/R011's "uses curl" LOW.
 - **Severity:** HIGH (weight 25)
 - **Category:** `execution`
 
-- **Condition:** An executed path is not a declared `source=()` basename, not a file the recipe wrote earlier in the same function, and not an H072-exempt build artifact, and either the path references `${startdir}`/`$startdir` or walks `../`, or the executed basename is present in the repository tree manifest under a relative path. A build tool (`make`, `cmake`, `ninja`, `meson`) whose *implicit* input file is in the manifest and undeclared counts as executing it.
+- **Condition:** An executed path is not a declared `source=()` basename, not a file the recipe wrote earlier in the same function, and not an H072-exempt build artifact, and either the path references `${startdir}`/`$startdir` or walks `../`, or the executed basename is present in the repository tree manifest under a relative path. A build tool (`make`, `cmake`, `ninja`, `meson`) whose *implicit* input file is in the manifest and undeclared counts as executing it. An argument continued onto the next physical line with `\` is not a command position.
 
 H069/H072 own files the recipe itself writes; H066 owns committed ELF
 binaries. Between them sat the cleartext helper script: committed to the AUR
@@ -471,6 +471,12 @@ them. Detected by `_committed_execution_findings()` in
 - **Condition:** Inside a build/package/check/prepare function (install hooks already have H017), a line downloads to a file with `curl`/`wget`/`aria2c`/`axel` (`-o`, `--output`, `--output-document`, glued or spaced, a `>` redirect, or a stdout-dash piped to `tee`), or with an interpreter one-liner (`python3 -c ... urlretrieve`, `perl -e ... getstore`, and the rest), and the same scope later executes that file. "The same scope" follows the call graph: a fetch in a helper and the execution in the `build()` that calls it are one operation.
 
 The **unattributed arm** covers the clients whose output grammar names no file: `sftp`/`ftp`/`ssh`/`nc`, `git fetch`/`pull`, `rclone moveto`/`move`/`bisync`/`copyurl`, `ipfs get`, `aws s3 cp`, `gsutil cp`, `b2 download`, `cvs`, `tftp`, `openssl s_client`, `npx`, a glued or server-decided flag, and a fetch-spec-in-file (`wget -i`, `aria2c -i`, `lftp -f`, `curl --config`). A later execution of an undeclared, non-benign file in the same reachable scope pairs with it; pairing crosses makepkg phases in order (`prepare` -> `build` -> `check` -> `package`), treats a loop variable (`bash "$f"`) as an unknown path, and follows a rename of a fetched file (`awk '1' repo/x.sh > run.me; escript run.me`). Executions under `$pkgdir` are the package's own output and are exempt. A scheme-bearing URL is left to H016 and the attributed arm, so one command is not scored twice.
+
+An execution under a system prefix (`/usr`, `/bin`, `/sbin`, `/lib`,
+`/opt`, `/etc`) is never attributed to a fetch: the build runs
+unprivileged, so a fetch cannot have written there, and
+`/usr/bin/vendor_perl/strip-nondeterminism` is a tool the packager runs,
+not a payload.
 
 The execution side is the same sink vocabulary H083 uses: shells, `sh -s < f`, interpreter `< f`, process substitution (`python3 < <(curl ...)`), `/dev/fd/N`, and `escript`, `fennel`, `zx`, `guile`, `racket`, `pwsh`, `julia`, `Rscript`, `deno`, `bun`, `elixir`, `ts-node` and the rest. Detected by `_fetch_then_execute_findings()` in `src/trustsight/analysis/delivery/__init__.py`.
 

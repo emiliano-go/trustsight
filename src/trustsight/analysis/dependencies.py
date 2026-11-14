@@ -131,13 +131,14 @@ def _scope_expansion_findings(diff_text, package_name, config, add,
                 continue
             # `provides`/`replaces` *claim* the name, so official-repo
             # membership alone is enough for HIGH.  `conflicts` only refuses
-            # co-installation; it is a scope statement when the target is one
-            # the ecosystem depends on, and a lower-confidence note when it is
-            # merely established (alda's documented icedtea-web
-            # incompatibility is the common benign shape).  A conflict alone
-            # never composes into H098, because D004 stays provides/replaces.
+            # co-installation: it never claims to be the target.  Scoring it
+            # as scope expansion put a HIGH on every drop-in replacement that
+            # declares the package it replaces (outpace vs acestream-engine);
+            # the refusal is a note, and a *claim* on the same name is still
+            # caught above at HIGH.  A conflict alone never composes into
+            # H098, because D004 stays provides/replaces.
             if field == "conflicts":
-                severity = "HIGH" if widely else "INFO"
+                severity = "INFO"
                 kind = "widely depended on" if widely else "established"
             else:
                 severity = "HIGH" if established else "MEDIUM"
@@ -148,7 +149,7 @@ def _scope_expansion_findings(diff_text, package_name, config, add,
                 f"to '{package_name}'",
                 field=field, dep_name=name, kind=kind,
                 package_name=package_name,
-                weight_override=0 if field == "conflicts" and not widely else None)
+                weight_override=0 if field == "conflicts" else None)
             return
 
 
@@ -243,7 +244,10 @@ def name_shadow_findings(text: str, package_name: str,
 
     conflicts = field_entries("conflicts")
     for name in sorted(conflicts):
-        if name in skip or is_related_package(name, package_name):
+        # A name this recipe also provides/replaces is a declared
+        # replacement, not a shadow: the conflict is how the two packages
+        # agree they cannot coexist.
+        if name in skip or name in claimed or is_related_package(name, package_name):
             continue
         if is_established_package(name):
             emit(name, "conflicts",
@@ -328,7 +332,8 @@ def _dependency_findings(diff_text, package_name, config, add, current_text=None
                 # typosquat: `tlottie` resembles `rlottie` but is a real extra
                 # package, and a name-similarity hit on a package that exists
                 # is a naming heuristic, not impersonation.
-                if "D002" in wanted and not is_established_package(name):
+                if ("D002" in wanted and not is_established_package(name)
+                        and not _db.is_known_aur_package(name)):
                     if candidates is None:
                         candidates = top_dependency_names()
                     impersonated = typosquat_target(name, candidates)
@@ -342,9 +347,10 @@ def _dependency_findings(diff_text, package_name, config, add, current_text=None
                     # make an ordinary new dependency look novel), so it is
                     # evidence to weigh, not a high-severity finding on its
                     # own.  It stays scored and quietable-by-poisoning.
-                    add("D001", "Novel Dependency Added", "MEDIUM", "dependency",
-                        f"{field} '{name}' has never been seen in the AUR",
-                        field=field, dep_name=name)
+                    if not _db.is_known_aur_package(name):
+                        add("D001", "Novel Dependency Added", "MEDIUM", "dependency",
+                            f"{field} '{name}' has never been seen in the AUR",
+                            field=field, dep_name=name)
 
     if "D003" in wanted:
         network = (added_deps.get("makedepends", set())

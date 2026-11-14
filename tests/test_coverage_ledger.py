@@ -156,6 +156,22 @@ def test_coverage_gate_rejects_an_empty_or_incomplete_disposition(tmp_path):
     assert "bad plan" in gate.detail
 
 
+def test_coverage_gate_rejects_a_resolved_add_plan_without_coverage(tmp_path):
+    """A resolved add_* plan claims the rule is now measured.  If it still has
+    no benign source, the ledger is claiming work that did not happen."""
+    path = tmp_path / "ledger.json"
+    _write_ledger(path)
+    dispositions = {
+        rid: {"status": "resolved", "plan": "add_benign_shape"}
+        for rid, row in json.loads(path.read_text())["rules"].items()
+        if not row.get("benign_sources")
+    }
+    _write_ledger(path, dispositions=dispositions)
+    gate = gate_coverage_expectations(path)
+    assert not gate.passed
+    assert "resolved add_* disposition without a benign source" in gate.detail
+
+
 def test_coverage_gate_accepts_deferred_and_rejects_stale_add(tmp_path):
     disposition = {"status": "deferred", "plan": "add_benign_shape"}
     path = tmp_path / "ledger.json"

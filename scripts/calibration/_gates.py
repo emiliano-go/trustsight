@@ -486,6 +486,7 @@ def gate_coverage_expectations(ledger_path: Path | None = None) -> Gate:
     bad_status: list[str] = []
     bad_plan: list[str] = []
     stale_add: list[str] = []
+    stale_resolved: list[str] = []
     stale_expectation: list[str] = []
     no_expectation_plans = {
         "attack_only", "not_measurable", "expectation_wrong",
@@ -506,6 +507,10 @@ def gate_coverage_expectations(ledger_path: Path | None = None) -> Gate:
             bad_plan.append(f"{rid}:{plan}")
         if plan and str(plan).startswith("add_") and row.get("expected_met"):
             stale_add.append(rid)
+        if (status == "resolved" and plan
+                and str(plan).startswith("add_")
+                and not row.get("benign_sources")):
+            stale_resolved.append(rid)
         if status == "resolved" and plan in no_expectation_plans and row.get("expected_strata"):
             stale_expectation.append(rid)
     problems: list[str] = []
@@ -520,6 +525,10 @@ def gate_coverage_expectations(ledger_path: Path | None = None) -> Gate:
         problems.append(f"bad plan: {', '.join(bad_plan[:8])}")
     if stale_add:
         problems.append(f"stale add_* disposition: {', '.join(stale_add[:8])}")
+    if stale_resolved:
+        problems.append(
+            "resolved add_* disposition without a benign source: "
+            + ", ".join(stale_resolved[:8]))
     if stale_expectation:
         problems.append(
             f"resolved non-benign plan still expected: {', '.join(stale_expectation[:8])}")
@@ -528,6 +537,7 @@ def gate_coverage_expectations(ledger_path: Path | None = None) -> Gate:
         {"expectations": len(expected), "unmet": len(unmet),
          "unclassified": len(unclassified),
          "missing_disposition": len(missing), "stale_disposition": len(stale_add),
+         "stale_resolved": len(stale_resolved),
          "stale_expectation": len(stale_expectation)},
         0, "; ".join(problems))
 

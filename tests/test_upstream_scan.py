@@ -56,10 +56,12 @@ def test_configured_hosts_merges_extras_and_ignores_malformed():
         "allowed_hosts_extra": ["forge.example.org", "bad/host", "a:b", "", 5],
     }}
     hosts = configured_hosts(config)
-    assert "github.com" in hosts
-    assert "forge.example.org" in hosts
-    assert "bad/host" not in hosts
-    assert "a:b" not in hosts
+    # Compare the whole allowlist instead of probing it host by host.  The
+    # probe form ("github.com" in hosts) is misread by CodeQL's
+    # py/incomplete-url-substring-sanitization query as a substring check on a
+    # URL; equality is also stricter, since an unexpected extra host -- one
+    # that would widen the reach -- fails the test.
+    assert hosts == frozenset(DEFAULT_ALLOWED_HOSTS) | {"forge.example.org"}
 
 
 @pytest.mark.parametrize("address,expected", [

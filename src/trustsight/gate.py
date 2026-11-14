@@ -35,8 +35,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, TextIO
 
+from .bounded_io import ReadTooLarge, read_file_capped
 from .safe_text import clean
-from .subproc import minimal_env
+from .subproc import TRUSTED_PATH, minimal_env
 
 EXIT_APPROVED = 0
 EXIT_REFUSED = 10
@@ -45,6 +46,10 @@ EXIT_NONINTERACTIVE = 30
 
 MAX_TARGETS = 64
 MAX_FINDINGS = 8
+#: The checked-out .SRCINFO is package-controlled.  A split recipe can be
+#: large, but not unbounded: the gate must not let a checkout decide how much
+#: memory this process allocates before it can even inspect it.
+MAX_SRCINFO_BYTES = 2 * 1024 * 1024
 DEFAULT_DEPTH = 1
 DEFAULT_TIMEOUT = 180
 MAX_ANSWER_BYTES = 64
@@ -118,8 +123,13 @@ def parse_srcinfo(text: str) -> list[str]:
 def targets_from_dir(directory: str | Path, fallback: str = "") -> list[str]:
     """Target packages for a build directory, or the base name as fallback."""
     try:
-        text = (Path(directory) / ".SRCINFO").read_text(
-            encoding="utf-8", errors="replace")
+        raw = read_file_capped(
+            Path(directory) / ".SRCINFO", MAX_SRCINFO_BYTES, ".SRCINFO")
+        text = raw.decode("utf-8", errors="replace")
+    except ReadTooLarge:
+        # Too large is a refusal, not a fallback: silently using --base would
+        # let the file decide which package is inspected.
+        return []
     except OSError:
         text = ""
     names = parse_srcinfo(text)
@@ -356,7 +366,7 @@ def build_inspect_argv(
     The package name is a single argv element, never interpolated into a
     shell.  ``--record`` is never passed: a gate must not rewrite history.
     """
-    base = [binary] if binary else [sys.executable, "-m", "trustsight"]
+    base = [binary] if binary else _trustsight_argv()
     argv = base + [
         "inspect", package,
         "--allow-uninstalled",
@@ -370,17 +380,33 @@ def build_inspect_argv(
     return argv
 
 
+def _trustsight_argv() -> list[str]:
+    """The interpreter and module that run the child inspection.
+
+    ``TRUSTSIGHT_BIN`` is honoured only when it is an absolute path: a
+    relative value would be resolved through the caller's ``PATH``, which is
+    exactly how a directory earlier in a user's path can substitute the
+    inspector the gate runs.  Without an explicit absolute binary the gate
+    uses its own interpreter, so no ``PATH`` lookup happens at all.
+    """
+    binary = os.environ.get("TRUSTSIGHT_BIN", "")
+    if binary and os.path.isabs(binary):
+        return [binary]
+    return [sys.executable, "-m", "trustsight"]
+
+
 def _trustsight_binary() -> str | None:
-    return os.environ.get("TRUSTSIGHT_BIN") or shutil.which("trustsight")
+    argv = _trustsight_argv()
+    return argv[0] if len(argv) == 1 else None
 
 
 def _pacman_says_installed(package: str) -> bool | None:
-    pacman = shutil.which("pacman")
+    pacman = shutil.which("pacman", path=TRUSTED_PATH)
     if pacman is None:
         return None
     try:
         result = subprocess.run(
-            [pacman, "-Qq", package],
+            [pacman, "-Qq", "--", package],
             capture_output=True, text=True, timeout=15, check=False,
             env=minimal_env(),
         )
@@ -419,7 +445,7 @@ def _lint_body(
     path = Path(directory) / "PKGBUILD"
     if not path.is_file():
         raise GateError(f"no local PKGBUILD for {package} in {directory}")
-    argv = [_trustsight_binary() or "trustsight", "lint", "--json", str(path)]
+    argv = _trustsight_argv() + ["lint", "--json", str(path)]
     try:
         result = runner(
             argv, capture_output=True, text=True,
@@ -509,6 +535,40 @@ def run_inspect(
             return _lint_body(
                 package, directory, timeout=timeout, runner=runner)
         raise GateError(f"inspection of {package} failed: {reason}")
+    if not isinstance(body, dict):
+        raise GateError(f"inspection of {package} returned a non-object body")
+    if directory:
+        # The target names come from the checked-out .SRCINFO, which is
+        # package-controlled.  A recipe can list a benign package there and
+        # build something else, so the remote inspection answers for the
+        # name while the local PKGBUILD is what actually runs.  Always lint
+        # the local recipe too: the two views are merged before the prompt,
+        # and a failing local lint fails the gate closed.
+        local = _lint_body(package, directory, timeout=timeout, runner=runner)
+        merged = dict(body)
+        findings = [row for row in (body.get("findings") or ())
+                    if isinstance(row, dict)]
+        seen = {
+            (str(row.get("rule_id") or ""), _as_int(row.get("line")),
+             str(row.get("file") or ""))
+            for row in findings
+        }
+        for row in local.get("findings", ()):
+            key = (str(row.get("rule_id") or ""), _as_int(row.get("line")),
+                   str(row.get("file") or ""))
+            if key not in seen:
+                saved = dict(row)
+                saved["severity"] = saved.get("severity") or ""
+                saved["weight"] = 0
+                findings.append(saved)
+                seen.add(key)
+        merged["findings"] = findings
+        gaps = list(body.get("coverage_gaps") or ())
+        for gap in local.get("coverage_gaps", ()):
+            if gap not in gaps:
+                gaps.append(gap)
+        merged["coverage_gaps"] = gaps
+        return merged
     return body
 
 
@@ -587,6 +647,10 @@ def run_gate(
             with _analysis_progress(out):
                 body = inspect(package)
             summary = summarize(body, fallback_package=package)
+            if summary.package != package:
+                raise GateError(
+                    f"inspection answered for {summary.package!r}, not "
+                    f"{package!r}; refusing to approve a different package")
         except GateError as exc:
             print(_paint(f"trustsight-gate: {exc}", "31", colour), file=out)
             return EXIT_ERROR

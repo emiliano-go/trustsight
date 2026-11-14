@@ -484,6 +484,17 @@ def latest_release_tag() -> str | None:
         return _LATEST_TAG_CACHE
 
 
+_ASSET_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+
+def _checked_asset_name(asset_name: str) -> str:
+    value = str(asset_name or "")
+    if not _ASSET_NAME_RE.match(value):
+        raise ReleaseFetchError(
+            f"refusing release asset name {value!r}: use [A-Za-z0-9._-]")
+    return value
+
+
 def asset_url(asset_name: str, tag: str | None = None,
               channel: Channel | None = None) -> str:
     """Return the download URL for *asset_name* on *channel*.
@@ -504,6 +515,7 @@ def asset_url(asset_name: str, tag: str | None = None,
     its tag must come from discovery or an explicit *tag*.
     """
     channel = channel or official_channel()
+    asset_name = _checked_asset_name(asset_name)
 
     def _checked(candidate: str | None) -> str:
         value = str(candidate or "")
@@ -794,6 +806,38 @@ def _download_url(url: str, max_bytes: int = _MAX_RELEASE_BYTES) -> bytes:
             f"could not download from {urlsplit(url).netloc or 'release host'}: {exc}") from exc
 
 
+_FEDERATION_ASSET_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+
+
+def _validate_federation_target(base_url: str, asset_name: str) -> None:
+    """Refuse a federation URL or asset name that can escape the channel.
+
+    The URL is operator- or feed-configured, but it is still a URL this
+    process will open.  A ``file://`` URL would turn a feed entry into a
+    local-file read, credentials in the authority would be sent to the
+    publisher, and ``..`` in an asset name would address a sibling path.
+    HTTPS is required outside loopback, matching the IOC feed rule.
+    """
+    parts = urlsplit(base_url)
+    host = (parts.hostname or "").lower()
+    if not host or parts.scheme not in ("http", "https"):
+        raise ReleaseFetchError(
+            "a federation base URL must be an http(s) URL")
+    if parts.scheme == "http" and host not in _LOOPBACK_HOSTS:
+        raise ReleaseFetchError(
+            "federation feeds must use https (http only for loopback)")
+    if parts.username is not None or parts.password is not None:
+        raise ReleaseFetchError(
+            "a federation base URL must not carry credentials")
+    if parts.query or parts.fragment:
+        raise ReleaseFetchError(
+            "a federation base URL must not carry a query or fragment")
+    if not asset_name or not _FEDERATION_ASSET_RE.match(asset_name):
+        raise ReleaseFetchError(
+            f"invalid federation asset name: {asset_name!r}")
+
+
 def fetch_verified_url(
     base_url: str, asset_name: str, *, pubkey_path: Path | None = None,
     pubkey: bytes | None = None,
@@ -813,6 +857,7 @@ def fetch_verified_url(
     if pubkey is None and pubkey_path is None:
         raise ReleaseSignatureError(
             "no publisher key given to verify the federation asset against")
+    _validate_federation_target(base_url, asset_name)
     base = base_url.rstrip("/")
     data = _download_url(f"{base}/{asset_name}")
     signature = _download_url(f"{base}/{asset_name}.sig", max_bytes=64 * 1024)

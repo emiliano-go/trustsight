@@ -11,6 +11,7 @@ from calibration._gates import gate_coverage_expectations  # noqa: E402
 from calibration._ledger import (  # noqa: E402
     Observation,
     build_ledger,
+    expected_from_strata,
     ledger_audit,
     unmet_expectations,
 )
@@ -24,6 +25,24 @@ def test_every_catalog_id_has_one_state_and_a_reason():
                for row in ledger["rules"].values())
     assert all(row["reason"] for row in ledger["rules"].values()
                if row["state"] != "measured")
+
+
+def test_committed_ledger_matches_the_strata_expectations():
+    """Adding a stratum must update the committed ledger's expectations.
+
+    The ledger is rebuilt in CI; a stratum edit that only changes
+    ``strata.toml`` leaves the checked-in expectations stale, and
+    ``coverage_ledger.py --check`` reports functional drift even though the
+    coverage gate itself still passes.
+    """
+    import tomllib
+
+    fixture = Path(__file__).resolve().parent / "fixtures" / "coverage-ledger.json"
+    strata = Path(__file__).resolve().parent.parent / "scripts" / "strata.toml"
+    expected = expected_from_strata(tomllib.loads(strata.read_text()))
+    ledger = json.loads(fixture.read_text())
+    for rid, row in ledger["rules"].items():
+        assert row.get("expected_strata", []) == expected.get(rid, []), rid
 
 
 def test_a_benign_fire_makes_a_rule_measured_with_its_stratum():
@@ -103,17 +122,91 @@ def test_coverage_gate_requires_a_disposition(tmp_path):
     assert "unmet without disposition" in gate.detail
 
 
+def test_coverage_gate_requires_a_disposition_for_every_unmeasured_rule(tmp_path):
+    """A rule with no benign source and no expectation is still a gap: the
+    ledger may not leave it unclassified just because no stratum names it."""
+    path = tmp_path / "ledger.json"
+    _write_ledger(path)
+    gate = gate_coverage_expectations(path)
+    assert not gate.passed
+    assert "unmeasured without disposition" in gate.detail
+
+    dispositions = {
+        rid: {"status": "deferred", "plan": "add_benign_shape"}
+        for rid, row in json.loads(path.read_text())["rules"].items()
+        if not row.get("benign_sources")
+    }
+    _write_ledger(path, dispositions=dispositions)
+    assert gate_coverage_expectations(path).passed
+
+
+def test_coverage_gate_rejects_an_empty_or_incomplete_disposition(tmp_path):
+    """Presence of a dict is not enough: an unmeasured rule's disposition must
+    name a valid status and plan, or it is a silent gap with extra steps."""
+    path = tmp_path / "ledger.json"
+    _write_ledger(path)
+    dispositions = {
+        rid: {"status": "deferred"}
+        for rid, row in json.loads(path.read_text())["rules"].items()
+        if not row.get("benign_sources")
+    }
+    _write_ledger(path, dispositions=dispositions)
+    gate = gate_coverage_expectations(path)
+    assert not gate.passed
+    assert "bad plan" in gate.detail
+
+
+def test_coverage_gate_rejects_an_unknown_disposition_status(tmp_path):
+    """Only deferred/resolved are states; a typo must not read as progress."""
+    path = tmp_path / "ledger.json"
+    _write_ledger(path)
+    dispositions = {
+        rid: {"status": "done", "plan": "add_benign_shape"}
+        for rid, row in json.loads(path.read_text())["rules"].items()
+        if not row.get("benign_sources")
+    }
+    _write_ledger(path, dispositions=dispositions)
+    gate = gate_coverage_expectations(path)
+    assert not gate.passed
+    assert "bad status" in gate.detail
+
+
+def test_coverage_gate_rejects_a_resolved_add_plan_without_coverage(tmp_path):
+    """A resolved add_* plan claims the rule is now measured.  If it still has
+    no benign source, the ledger is claiming work that did not happen."""
+    path = tmp_path / "ledger.json"
+    _write_ledger(path)
+    dispositions = {
+        rid: {"status": "resolved", "plan": "add_benign_shape"}
+        for rid, row in json.loads(path.read_text())["rules"].items()
+        if not row.get("benign_sources")
+    }
+    _write_ledger(path, dispositions=dispositions)
+    gate = gate_coverage_expectations(path)
+    assert not gate.passed
+    assert "resolved add_* disposition without a benign source" in gate.detail
+
+
 def test_coverage_gate_accepts_deferred_and_rejects_stale_add(tmp_path):
     disposition = {"status": "deferred", "plan": "add_benign_shape"}
     path = tmp_path / "ledger.json"
-    _write_ledger(path, expected={"H015": ["source_patched"]},
-                  dispositions={"H015": disposition})
+    base = build_ledger([Observation(source="cold")],
+                        expected={"H015": ["source_patched"]})
+    all_dispositions = {
+        rid: disposition for rid, row in base["rules"].items()
+        if not row.get("benign_sources")
+    }
+    all_dispositions["H015"] = disposition
+    ledger = build_ledger([Observation(source="cold")],
+                          expected={"H015": ["source_patched"]},
+                          dispositions=all_dispositions)
+    path.write_text(json.dumps(ledger))
     assert gate_coverage_expectations(path).passed
 
     obs = Observation(source="cold", fires={"H015": 1})
     obs.strata["H015"].add("source_patched")
     ledger = build_ledger([obs], expected={"H015": ["source_patched"]},
-                          dispositions={"H015": disposition})
+                          dispositions=all_dispositions)
     path.write_text(json.dumps(ledger))
     gate = gate_coverage_expectations(path)
     assert not gate.passed

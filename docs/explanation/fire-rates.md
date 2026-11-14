@@ -30,7 +30,7 @@ Fire rates are measured against the one locked corpus:
 
 | Corpus | Diffs | Packages | What it covers |
 |--------|-------|----------|----------------|
-| Benign (lock) | 8,393 | 426 | Staged diffs from real AUR package updates across 16 strata (the original eight plus persist_surface, signed_sources, multi_client_fetch, maintainer_churn, dependency_heavy, vcs_other, appimage_repack and lang_deep). |
+| Benign (lock) | 8,393 | 426 | Staged diffs from real AUR package updates across 16 strata (the original eight plus persist_surface, signed_sources, multi_client_fetch, maintainer_churn, dependency_heavy, vcs_other, appimage_repack and lang_deep). The next lock adds `runtime_carriers`. |
 
 The corpus is pinned by `corpus.lock` and regenerated deterministically from
 the AUR git mirror (CI rebuilds it before the calibration gates; a local

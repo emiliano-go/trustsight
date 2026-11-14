@@ -492,9 +492,11 @@ def gate_coverage_expectations(ledger_path: Path | None = None) -> Gate:
         "weight_zero", "unverifiable", "pseudo", "known_false_positive",
     }
     for rid in sorted(unmet):
-        disposition = rows.get(rid, {}).get("disposition")
-        if not isinstance(disposition, dict):
+        if not isinstance(rows.get(rid, {}).get("disposition"), dict):
             missing.append(rid)
+    for rid, row in sorted(rows.items()):
+        disposition = row.get("disposition")
+        if not isinstance(disposition, dict):
             continue
         status = disposition.get("status")
         plan = disposition.get("plan")
@@ -502,12 +504,6 @@ def gate_coverage_expectations(ledger_path: Path | None = None) -> Gate:
             bad_status.append(f"{rid}:{status}")
         if plan not in DISPOSITION_PLANS:
             bad_plan.append(f"{rid}:{plan}")
-    for rid, row in sorted(rows.items()):
-        disposition = row.get("disposition")
-        if not isinstance(disposition, dict):
-            continue
-        status = disposition.get("status")
-        plan = disposition.get("plan")
         if plan and str(plan).startswith("add_") and row.get("expected_met"):
             stale_add.append(rid)
         if status == "resolved" and plan in no_expectation_plans and row.get("expected_strata"):

@@ -140,6 +140,22 @@ def test_coverage_gate_requires_a_disposition_for_every_unmeasured_rule(tmp_path
     assert gate_coverage_expectations(path).passed
 
 
+def test_coverage_gate_rejects_an_empty_or_incomplete_disposition(tmp_path):
+    """Presence of a dict is not enough: an unmeasured rule's disposition must
+    name a valid status and plan, or it is a silent gap with extra steps."""
+    path = tmp_path / "ledger.json"
+    _write_ledger(path)
+    dispositions = {
+        rid: {"status": "deferred"}
+        for rid, row in json.loads(path.read_text())["rules"].items()
+        if not row.get("benign_sources")
+    }
+    _write_ledger(path, dispositions=dispositions)
+    gate = gate_coverage_expectations(path)
+    assert not gate.passed
+    assert "bad plan" in gate.detail
+
+
 def test_coverage_gate_accepts_deferred_and_rejects_stale_add(tmp_path):
     disposition = {"status": "deferred", "plan": "add_benign_shape"}
     path = tmp_path / "ledger.json"

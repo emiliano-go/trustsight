@@ -275,6 +275,7 @@ def collect_upstream_manifest_texts(
             continue
         if parsed.get("refused") or parsed.get("malformed"):
             notes.append("upstream_scan_partial")
+        findings.extend(_artifact_findings(parsed.get("artifacts") or ()))
         for path, text in parsed.get("manifest_texts") or ():
             if is_ci_workflow_path(path):
                 findings.extend(_workflow_findings(f"upstream/{path}", text))
@@ -335,6 +336,45 @@ def persist_upstream_observation(
 
     save_upstream_observation(
         package, repo, version=version, checksum=checksum, detail=detail)
+
+
+def _artifact_findings(artifacts) -> list[dict]:
+    """A009/A010 over artifact-shaped entries in the fetched source archive."""
+    out: list[dict] = []
+    for artifact in artifacts:
+        path = f"upstream/{artifact.get('path', '')}"
+        if artifact.get("elf"):
+            out.append(stamp({
+                "rule_id": "A009",
+                "name": "Executable Binary In Source Archive",
+                "severity": "HIGH",
+                "category": "artifact",
+                "match": f"{path} is an ELF binary inside the declared source archive",
+                "file": path,
+                "line": None,
+                "params": {"size": str(artifact.get("size", ""))},
+                "weight_override": 0,
+            }))
+        if artifact.get("setuid") or artifact.get("setgid"):
+            bits = []
+            if artifact.get("setuid"):
+                bits.append("setuid")
+            if artifact.get("setgid"):
+                bits.append("setgid")
+            out.append(stamp({
+                "rule_id": "A010",
+                "name": "Setuid File In Source Archive",
+                "severity": "HIGH",
+                "category": "artifact",
+                "match": f"{path} carries the {'/'.join(bits)} bit (mode "
+                         f"{artifact.get('mode', 0):04o}) inside the declared "
+                         "source archive",
+                "file": path,
+                "line": None,
+                "params": {"mode": f"{artifact.get('mode', 0):04o}"},
+                "weight_override": 0,
+            }))
+    return out
 
 
 def _dedupe(findings: list[dict]) -> list[dict]:

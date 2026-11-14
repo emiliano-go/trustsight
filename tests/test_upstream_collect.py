@@ -208,3 +208,24 @@ def test_scan_notes_reach_the_fact_as_a_weight_zero_boundary():
     )
     entry = next(e for e in fact.score_breakdown if e.rule_id == "W014")
     assert entry.weight == 0
+
+
+def test_archive_artifacts_become_report_only_a009_a010():
+    def extractor(_slug, _data):
+        return {
+            "manifest_texts": [],
+            "artifacts": [
+                {"path": "bin/tool", "mode": 0o755, "setuid": False,
+                 "setgid": False, "elf": True, "size": 10},
+                {"path": "bin/suid", "mode": 0o4755, "setuid": True,
+                 "setgid": False, "elf": False, "size": 5},
+            ],
+            "complete": True, "refused": False, "malformed": False,
+        }
+
+    _texts, _notes, findings, _verified = collect_upstream_manifest_texts(
+        RECIPE, config=CONFIG, fetcher=lambda url, target: DATA,
+        extractor=extractor)
+    ids = {f["rule_id"] for f in findings}
+    assert {"A009", "A010"} <= ids
+    assert all(f.get("weight_override") == 0 for f in findings)

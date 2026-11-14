@@ -71,6 +71,24 @@
     "target": "programmatic (built package manifest)",
     "uid": "TS-0008"
   },
+  "a009": {
+    "canonical": true,
+    "capability": "artifact",
+    "name": "Executable Binary In Source Archive",
+    "severity": "HIGH",
+    "severity_text": "HIGH (weight 0)",
+    "target": "declared source archive (opt-in upstream lane)",
+    "uid": "TS-0300"
+  },
+  "a010": {
+    "canonical": true,
+    "capability": "artifact",
+    "name": "Setuid File In Source Archive",
+    "severity": "HIGH",
+    "severity_text": "HIGH (weight 0)",
+    "target": "declared source archive (opt-in upstream lane)",
+    "uid": "TS-0301"
+  },
   "c001": {
     "canonical": true,
     "capability": null,

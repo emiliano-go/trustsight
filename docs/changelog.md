@@ -64,6 +64,12 @@
   signed `upstream_manifest` baseline carries it, and the local U-series
   reports a matching `repo|pkgver` at weight 0 (anergic) without fetching.
 
+- **Upstream source archives are scanned for artifact shapes (A009/A010).**
+  With the opt-in upstream lane enabled, a fetched archive that ships an ELF
+  binary (A009) or a setuid/setgid file (A010) is reported at weight 0
+  (anergic). The bits and magic are read from the archive, nothing is
+  extracted to disk or executed.
+
 - **G015 reports sleeper adoption campaigns.** A multi-account cohort of dormant adopted packages is joined when the same maintainers reactivate most of it after a cooling-off period. The base finding is MEDIUM and alert-only; a curated payload or takeover signal raises it to HIGH. G015 primes campaign state on both severities and never adds its severity to a member's score.
 
 ## [0.28.8] - 2026-11-13

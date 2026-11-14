@@ -45,6 +45,10 @@ _HARD_TOTAL_BYTES = 256 * 1024 * 1024
 _HARD_FILES = 64
 
 _ZIP_MAGIC = b"PK\x03\x04"
+_ELF_MAGIC = b"\x7fELF"
+_ARTIFACT_PREFIX = 4
+_MAX_INSPECTED = 2048
+MAX_ARCHIVE_ARTIFACTS = 256
 _ZIP_EOCD = b"PK\x05\x06"
 _GZIP_MAGIC = b"\x1f\x8b"
 _BZ2_MAGIC = b"BZh"
@@ -112,6 +116,7 @@ def _safe_name(raw: str) -> str | None:
 def _empty() -> dict:
     return {
         "manifest_texts": [],
+        "artifacts": [],
         "complete": True,
         "refused": False,
         "malformed": False,
@@ -132,10 +137,32 @@ def _decompressed(data: bytes):
     return io.BytesIO(data)
 
 
+def _record_artifact(result: dict, name: str, mode: int, prefix: bytes,
+                     size: int) -> None:
+    """Keep only artifact-shaped entries: ELF binaries and setuid/setgid bits."""
+    setuid = bool(mode & 0o4000)
+    setgid = bool(mode & 0o2000)
+    elf = prefix[:4] == _ELF_MAGIC
+    if not (setuid or setgid or elf):
+        return
+    if len(result["artifacts"]) >= MAX_ARCHIVE_ARTIFACTS:
+        result["complete"] = False
+        result["refused"] = True
+        return
+    result["artifacts"].append({
+        "path": name,
+        "mode": mode & 0o7777,
+        "setuid": setuid,
+        "setgid": setgid,
+        "elf": elf,
+        "size": size,
+    })
+
+
 def _tar(data: bytes, result: dict, *, max_members: int,
          max_file_bytes: int, max_total_bytes: int, max_files: int) -> None:
     texts = result["manifest_texts"]
-    seen = kept = 0
+    seen = kept = inspected = 0
     stream = _LimitedReader(_decompressed(data), max_total_bytes)
     try:
         tar_context = tarfile.open(fileobj=stream, mode="r|")
@@ -155,24 +182,32 @@ def _tar(data: bytes, result: dict, *, max_members: int,
             if name is None:
                 result["refused"] = True
                 continue
-            if not _selected(name):
-                continue
-            if member.size <= 0 or member.size > max_file_bytes:
-                result["refused"] = True
-                continue
-            if kept >= max_files:
-                result["complete"] = False
-                result["refused"] = True
-                return
-            handle = tar.extractfile(member)
-            if handle is None:
-                continue
-            raw = handle.read(max_file_bytes + 1)
-            if len(raw) > max_file_bytes or b"\x00" in raw:
-                result["refused"] = True
-                continue
-            texts.append((name, raw.decode("utf-8", errors="replace")))
-            kept += 1
+            mode = member.mode or 0
+            prefix = b""
+            if _selected(name):
+                if member.size <= 0 or member.size > max_file_bytes:
+                    result["refused"] = True
+                    continue
+                if kept >= max_files:
+                    result["complete"] = False
+                    result["refused"] = True
+                    return
+                handle = tar.extractfile(member)
+                if handle is None:
+                    continue
+                raw = handle.read(max_file_bytes + 1)
+                if len(raw) > max_file_bytes or b"\x00" in raw:
+                    result["refused"] = True
+                    continue
+                prefix = raw[:4]
+                texts.append((name, raw.decode("utf-8", errors="replace")))
+                kept += 1
+            elif inspected < _MAX_INSPECTED:
+                handle = tar.extractfile(member)
+                if handle is not None:
+                    prefix = handle.read(_ARTIFACT_PREFIX)
+                inspected += 1
+            _record_artifact(result, name, mode, prefix, member.size)
     stream.close()
 
 
@@ -205,43 +240,50 @@ def _zip(data: bytes, result: dict, *, max_members: int,
             result["complete"] = False
             result["refused"] = True
             return
-        kept = total = 0
+        kept = total = inspected = 0
         for info in entries:
             if info.is_dir():
                 continue
             if info.flag_bits & 0x1:
                 result["refused"] = True  # encrypted member
                 continue
-            mode = (info.external_attr >> 16) & 0o170000
-            if mode == _SYMLINK_MODE:
+            file_type = (info.external_attr >> 16) & 0o170000
+            if file_type == _SYMLINK_MODE:
                 result["refused"] = True
                 continue
             name = _safe_name(info.filename)
             if name is None:
                 result["refused"] = True
                 continue
-            if not _selected(name):
-                continue
-            if info.file_size <= 0 or info.file_size > max_file_bytes:
-                result["refused"] = True
-                continue
-            if kept >= max_files:
-                result["complete"] = False
-                result["refused"] = True
-                return
-            with archive.open(info) as handle:
-                raw = handle.read(max_file_bytes + 1)
-            actual = len(raw)
-            if actual > max_file_bytes or b"\x00" in raw:
-                result["refused"] = True
-                continue
-            total += actual
-            if total > max_total_bytes:
-                result["complete"] = False
-                result["refused"] = True
-                return
-            texts.append((name, raw.decode("utf-8", errors="replace")))
-            kept += 1
+            mode = (info.external_attr >> 16) & 0o7777
+            prefix = b""
+            if _selected(name):
+                if info.file_size <= 0 or info.file_size > max_file_bytes:
+                    result["refused"] = True
+                    continue
+                if kept >= max_files:
+                    result["complete"] = False
+                    result["refused"] = True
+                    return
+                with archive.open(info) as handle:
+                    raw = handle.read(max_file_bytes + 1)
+                actual = len(raw)
+                if actual > max_file_bytes or b"\x00" in raw:
+                    result["refused"] = True
+                    continue
+                total += actual
+                if total > max_total_bytes:
+                    result["complete"] = False
+                    result["refused"] = True
+                    return
+                prefix = raw[:4]
+                texts.append((name, raw.decode("utf-8", errors="replace")))
+                kept += 1
+            elif inspected < _MAX_INSPECTED and info.file_size > 0:
+                with archive.open(info) as handle:
+                    prefix = handle.read(_ARTIFACT_PREFIX)
+                inspected += 1
+            _record_artifact(result, name, mode, prefix, info.file_size)
 
 
 def parse_upstream_archive(

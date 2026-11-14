@@ -411,6 +411,8 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
     "A006": _C.ARTIFACT,
     "A007": _C.ARTIFACT,
     "A008": _C.ARTIFACT,
+    "A009": _C.ARTIFACT,
+    "A010": _C.ARTIFACT,
     "X001": _C.CROSSFIRE,
     "X002": _C.CROSSFIRE,
     "X003": _C.CROSSFIRE,

@@ -119,3 +119,27 @@ def test_zip_entry_count_is_read_before_the_archive_is_opened(monkeypatch):
     out = parse_upstream_archive(data, max_members=2)
     assert out["refused"] is True
     assert out["complete"] is False
+
+
+def _tar_modes(entries) -> bytes:
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        for name, data, mode in entries:
+            info = tarfile.TarInfo(name=name)
+            info.mode = mode
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+    return buf.getvalue()
+
+
+def test_artifacts_report_elf_binaries_and_setuid_bits():
+    data = _tar_modes([
+        ("pkg/bin/tool", b"\x7fELF\x02\x01\x01\x00rest", 0o755),
+        ("pkg/bin/suid", b"#!/bin/sh\n", 0o4755),
+        ("pkg/Cargo.toml", b"[package]\n", 0o644),
+    ])
+    out = parse_upstream_archive(data)
+    artifacts = {a["path"]: a for a in out["artifacts"]}
+    assert artifacts["pkg/bin/tool"]["elf"] is True
+    assert artifacts["pkg/bin/suid"]["setuid"] is True
+    assert "pkg/Cargo.toml" not in artifacts

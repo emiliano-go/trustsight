@@ -1450,6 +1450,14 @@ See [A007: Privileged Surface In Artifact](artifact.md#a007).
 
 See [A008: eBPF Artifact In Package](artifact.md#a008).
 
+### A009 {#a009}
+
+See [A009: Executable Binary In Source Archive](artifact.md#a009).
+
+### A010 {#a010}
+
+See [A010: Setuid File In Source Archive](artifact.md#a010).
+
 ### C027 {#c027}
 
 See [C027: Declared Install Script Is Absent](integrity.md#c027).

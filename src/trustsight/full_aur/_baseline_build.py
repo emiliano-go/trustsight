@@ -292,6 +292,11 @@ def _run_baseline_build(
                     manifest_texts = list(manifest_texts) + upstream_texts
                 for note in upstream_notes:
                     log.info("%s: upstream scan boundary %s", name, note)
+                from ..upstream_collect import persist_upstream_observation
+
+                persist_upstream_observation(
+                    name, new_pkgbuild, upstream_texts, upstream_findings,
+                    upstream_notes, verified_upstream_hashes)
             except Exception as exc:  # noqa: BLE001 - never fail the cycle
                 log.warning("%s: upstream scan failed: %s", name, exc)
 

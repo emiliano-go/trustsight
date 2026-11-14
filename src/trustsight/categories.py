@@ -366,6 +366,7 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
     "U010": _C.UPSTREAM_RELEASE,
     "U013": _C.UPSTREAM_RELEASE,
     "U014": _C.UPSTREAM_RELEASE,
+    "U015": _C.UPSTREAM_MANIFESTS,
     "M001": _C.META,
     "M002": _C.META,
     "M003": _C.META,

@@ -62,6 +62,7 @@ This is a reference page. For how weight and scope work, see
 | [U006](#u006) | Manifest Changed Without Its Lockfile | INFO |
 | [U011](#u011) | Upstream Origin Changed | - |
 | [U012](#u012) | Lockfile Integrity Weakened | - |
+| [U015](#u015) | Federated Upstream Manifest Delta | INFO |
 <!-- /generated: page-index -->
 
 ### U001: Manifest Added Or Removed {#u001}
@@ -171,3 +172,18 @@ lockfile can legitimately drop integrity for a path or workspace entry, and
 the finding is a review prompt rather than a scored change. The lockfile's
 removal is reported here because the file that pinned every dependency is
 gone.
+
+### U015: Federated Upstream Manifest Delta {#u015}
+
+- **Target:** declared upstream repository and version (federation-fed)
+- **Severity:** INFO (weight 0)
+- **Category:** `dependency-manifest`
+
+- **Condition:** A signed `upstream_manifest` federation entry names the
+  `host/owner/repo` and `pkgver` this recipe declares, carrying the bounded
+  projection a server-side scan observed (new remote hosts, dependency
+  changes, resolver redirects).
+
+The local analysis does not fetch: this is the signed result of the
+server-side `[upstream_scan]` lane, reported at weight 0 (anergic) as an
+indicator. A miss is uninformative.

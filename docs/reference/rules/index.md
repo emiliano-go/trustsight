@@ -7,7 +7,7 @@ inventory is the R-series regex rules, the H-series heuristics, sabotage rules S
 rules X001-X034, integrity-change rules C001-C034, dependency rules
 D001-D005, temporal rules T001-T012, correlation rules G001-G011 and G012-G015, entropy
 rules E001-E003, the indicator rule H056, meta rules M001-M006, upstream
-rules U001-U014, artifact rules A001-A008, declared-practice rules P001-P009 (P004 skipped), and
+rules U001-U015, artifact rules A001-A008, declared-practice rules P001-P009 (P004 skipped), and
 unverifiable rules W001-W014.
 
 Each rule contributes according to its severity weight, match target and
@@ -63,7 +63,7 @@ generated from it by `scripts/build_rules_index.py`.
 | [Correlation](correlation.md) | `correlation` | 15 | The pattern is across packages, not inside one: a host, literal or adopter shared by several packages in a window. |
 | [Artifact](artifact.md) | `artifact` | 8 | The built package does not match the recipe: the L9 artifact layer, off by default, never blended into the static score. |
 | [Indicators](indicator.md) | `indicator` | 1 | A declared surface matches an entry in signed external data: the IOC list, or a federated publisher's indicator set.  Outside the heuristic score and alerted at maximum priority. |
-| [Upstream Manifests](upstream-manifests.md) | `upstream-manifests` | 8 | A committed dependency manifest changed: a dependency moved, a new remote source entered the recipe's reach, or the resolver is being redirected.  Read from the repository, never fetched. |
+| [Upstream Manifests](upstream-manifests.md) | `upstream-manifests` | 9 | A committed dependency manifest changed: a dependency moved, a new remote source entered the recipe's reach, or the resolver is being redirected.  Read from the repository, never fetched. |
 | [Upstream Release Integrity](upstream-release.md) | `upstream-release` | 6 | What a recipe declares about upstream - its URL, its sources, their access mode - and the CI surface it commits.  Upstream content is never read (A2/A8); the CI exfil and history-sweep shapes arrive over the signed federation channel instead. |
 <!-- /generated: legend -->
 
@@ -348,6 +348,7 @@ is deliberately non-contiguous; see
 | [U012](upstream-manifests.md#u012) | Lockfile Integrity Weakened | U | - | [Upstream Manifests](upstream-manifests.md) |
 | [U013](upstream-release.md#u013) | CI Exfil Shape (Local) | U | MEDIUM | [Upstream Release Integrity](upstream-release.md) |
 | [U014](upstream-release.md#u014) | Git-History Credential Sweep (Local) | U | MEDIUM | [Upstream Release Integrity](upstream-release.md) |
+| [U015](upstream-manifests.md#u015) | Federated Upstream Manifest Delta | U | INFO | [Upstream Manifests](upstream-manifests.md) |
 | [W001](unverifiable.md#w001) | Executes Code This Analysis Did Not Read | Unverifiable | - | [Unverifiable](unverifiable.md) |
 | [W002](unverifiable.md#w002) | Build Resolves Dependencies From A Registry | Unverifiable | - | [Unverifiable](unverifiable.md) |
 | [W003](unverifiable.md#w003) | Applies A Patch This Analysis Did Not Read | Unverifiable | - | [Unverifiable](unverifiable.md) |

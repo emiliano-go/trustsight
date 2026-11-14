@@ -18,6 +18,7 @@ default analysis path.  A refusal is returned as a note, not hidden.
 from __future__ import annotations
 
 import ipaddress
+import json
 import os
 import re
 import time
@@ -29,7 +30,10 @@ from .upstream_scan import (
     configured_hosts,
     verify_archive_checksum,
 )
-from .analysis.upstream_release import is_ci_workflow_path
+from .analysis.upstream_release import (
+    declared_upstream_repo,
+    is_ci_workflow_path,
+)
 from .findings import stamp
 from .upstream_fetch import UpstreamFetchError, fetch_bytes
 
@@ -283,6 +287,54 @@ def collect_upstream_manifest_texts(
             text_bytes += size
         seen += 1
     return texts, sorted(set(notes)), _dedupe(findings), frozenset(verified)
+
+
+def persist_upstream_observation(
+    package: str,
+    recipe_text: str,
+    texts: list[tuple[str, str]],
+    findings: list[dict],
+    notes: list[str],
+    verified: frozenset[str],
+) -> None:
+    """Store a bounded projection of this scan for the signed publish step.
+
+    No raw manifest text is stored: only paths, sizes, the finding shapes and
+    the refusal notes, so the exported baseline is small and carries no
+    package content beyond what the report already shows.
+    """
+    if not (texts or findings or verified):
+        return
+    repo = declared_upstream_repo(recipe_text)
+    if not repo:
+        return
+    try:
+        from .recipedoc import parse_recipe
+
+        version = str(parse_recipe(recipe_text).scalars.get("pkgver", "") or "")
+    except Exception:  # noqa: BLE001 - an unparsable recipe has no version
+        version = ""
+    checksum = ""
+    for triple in sorted(verified):
+        parts = triple.split("|")
+        if len(parts) == 3:
+            checksum = parts[2]
+            break
+    detail = json.dumps({
+        "manifests": [
+            {"path": path, "bytes": len(text.encode("utf-8", "replace"))}
+            for path, text in texts[:64]
+        ],
+        "findings": [
+            {"rule_id": f.get("rule_id", ""), "file": f.get("file", "")}
+            for f in findings[:32]
+        ],
+        "notes": sorted(set(notes)),
+    }, sort_keys=True, separators=(",", ":"))
+    from .db import save_upstream_observation
+
+    save_upstream_observation(
+        package, repo, version=version, checksum=checksum, detail=detail)
 
 
 def _dedupe(findings: list[dict]) -> list[dict]:

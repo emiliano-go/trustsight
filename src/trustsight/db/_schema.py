@@ -342,6 +342,25 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_ioc_entries_expires
                 ON ioc_entries(expires_at);
 
+            /* P4: the server-side upstream scan's bounded observations.
+               The local tool never fetches; a signed upstream_manifest
+               baseline carries the projection, and these rows are what the
+               publish step exports.  Keyed by package/repo/version so a
+               re-scan replaces its own row. */
+            CREATE TABLE IF NOT EXISTS upstream_observations (
+                id INTEGER PRIMARY KEY,
+                package_name TEXT NOT NULL,
+                repo TEXT NOT NULL,
+                version TEXT NOT NULL DEFAULT '',
+                ref TEXT,
+                checksum TEXT,
+                detail TEXT,
+                captured_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(package_name, repo, version)
+            );
+            CREATE INDEX IF NOT EXISTS idx_upstream_observations_repo
+                ON upstream_observations(repo);
+
             /* The imported watchlist: the package names and salted
                maintainer hashes a signed ``watchlist-*`` release carries,
                ingested with ``trustsight watchlist update``.  Kept apart
@@ -526,6 +545,8 @@ _ADDED_COLUMNS = {
     # (`exfil` or `history_sweep`); empty for every other IOC type.
     "ioc_entries": {
         "shape": "TEXT",
+        # The bounded projection behind an ``upstream_manifest`` entry.
+        "detail": "TEXT",
     },
     # G002 joins on a digest of the full literal; the stored text is the
     # bounded copy kept for diagnostics.

@@ -126,6 +126,14 @@
       "signal": "local CI shape over a fetched upstream workflow; needs a corpus rate before it can score",
       "since": "0.28.9",
       "status": "anergic"
+    },
+    "U015": {
+      "changelog": "upstream-scan-lane",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly calibration, then set an explicit weight after the signed observations cover the corpus",
+      "signal": "signed server-side manifest observations; needs a corpus rate before it can score",
+      "since": "0.28.9",
+      "status": "anergic"
     }
   }
 }

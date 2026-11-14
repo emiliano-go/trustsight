@@ -1270,6 +1270,10 @@ See [U013: CI Exfil Shape (Local)](upstream-release.md#u013).
 
 See [U014: Git-History Credential Sweep (Local)](upstream-release.md#u014).
 
+### U015 {#u015}
+
+See [U015: Federated Upstream Manifest Delta](upstream-manifests.md#u015).
+
 ### M001 {#m001}
 
 See [M001: Claim Contradicted By Structure](meta.md#m001).

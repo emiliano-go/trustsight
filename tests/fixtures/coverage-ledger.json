@@ -3014,7 +3014,9 @@
         "status": "deferred"
       },
       "expected_met": false,
-      "expected_strata": [],
+      "expected_strata": [
+        "runtime_carriers"
+      ],
       "expected_strata_met": [],
       "fires": 0,
       "id": "H009",
@@ -3037,7 +3039,9 @@
         "status": "deferred"
       },
       "expected_met": false,
-      "expected_strata": [],
+      "expected_strata": [
+        "runtime_carriers"
+      ],
       "expected_strata_met": [],
       "fires": 0,
       "id": "H010",
@@ -3060,7 +3064,9 @@
         "status": "deferred"
       },
       "expected_met": false,
-      "expected_strata": [],
+      "expected_strata": [
+        "runtime_carriers"
+      ],
       "expected_strata_met": [],
       "fires": 0,
       "id": "H011",
@@ -3083,7 +3089,9 @@
         "status": "deferred"
       },
       "expected_met": false,
-      "expected_strata": [],
+      "expected_strata": [
+        "runtime_carriers"
+      ],
       "expected_strata_met": [],
       "fires": 0,
       "id": "H012",
@@ -3106,7 +3114,9 @@
         "status": "deferred"
       },
       "expected_met": false,
-      "expected_strata": [],
+      "expected_strata": [
+        "runtime_carriers"
+      ],
       "expected_strata_met": [],
       "fires": 0,
       "id": "H013",
@@ -5104,7 +5114,9 @@
         "status": "deferred"
       },
       "expected_met": false,
-      "expected_strata": [],
+      "expected_strata": [
+        "runtime_carriers"
+      ],
       "expected_strata_met": [],
       "fires": 0,
       "id": "H066",
@@ -5225,7 +5237,9 @@
         "status": "deferred"
       },
       "expected_met": false,
-      "expected_strata": [],
+      "expected_strata": [
+        "runtime_carriers"
+      ],
       "expected_strata_met": [],
       "fires": 0,
       "id": "H070",
@@ -6050,7 +6064,8 @@
       },
       "expected_met": false,
       "expected_strata": [
-        "persist_surface"
+        "persist_surface",
+        "runtime_carriers"
       ],
       "expected_strata_met": [],
       "fires": 0,
@@ -6106,7 +6121,8 @@
       },
       "expected_met": false,
       "expected_strata": [
-        "persist_surface"
+        "persist_surface",
+        "runtime_carriers"
       ],
       "expected_strata_met": [],
       "fires": 0,

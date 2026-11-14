@@ -11,6 +11,7 @@ from calibration._gates import gate_coverage_expectations  # noqa: E402
 from calibration._ledger import (  # noqa: E402
     Observation,
     build_ledger,
+    expected_from_strata,
     ledger_audit,
     unmet_expectations,
 )
@@ -24,6 +25,24 @@ def test_every_catalog_id_has_one_state_and_a_reason():
                for row in ledger["rules"].values())
     assert all(row["reason"] for row in ledger["rules"].values()
                if row["state"] != "measured")
+
+
+def test_committed_ledger_matches_the_strata_expectations():
+    """Adding a stratum must update the committed ledger's expectations.
+
+    The ledger is rebuilt in CI; a stratum edit that only changes
+    ``strata.toml`` leaves the checked-in expectations stale, and
+    ``coverage_ledger.py --check`` reports functional drift even though the
+    coverage gate itself still passes.
+    """
+    import tomllib
+
+    fixture = Path(__file__).resolve().parent / "fixtures" / "coverage-ledger.json"
+    strata = Path(__file__).resolve().parent.parent / "scripts" / "strata.toml"
+    expected = expected_from_strata(tomllib.loads(strata.read_text()))
+    ledger = json.loads(fixture.read_text())
+    for rid, row in ledger["rules"].items():
+        assert row.get("expected_strata", []) == expected.get(rid, []), rid
 
 
 def test_a_benign_fire_makes_a_rule_measured_with_its_stratum():

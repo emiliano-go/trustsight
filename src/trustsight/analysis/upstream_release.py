@@ -187,6 +187,33 @@ def _federation_matches(repo: str, config: dict | None, matches) -> list:
         return []
 
 
+def _manifest_matches(repo: str, head: str | None, config: dict | None) -> list:
+    """Signed ``upstream_manifest`` observations for this repo and version."""
+    if not repo or not head:
+        return []
+    try:
+        from ..recipedoc import parse_recipe
+
+        version = str(parse_recipe(head).scalars.get("pkgver", "") or "").strip()
+    except Exception:  # noqa: BLE001 - an unparsable recipe has no release key
+        return []
+    if not version:
+        return []
+    if not _ioc_section(config).get("enabled", True):
+        return []
+    try:
+        from ..config import load_ioc_sources
+        from ..ioc_baseline import match_upstream_manifest
+
+        matched = match_upstream_manifest(f"{repo}|{version}")
+        sources = set(load_ioc_sources())
+        if sources:
+            matched = [m for m in matched if getattr(m, "source", "") in sources]
+        return matched
+    except Exception:  # noqa: BLE001 - a cold store is no matches
+        return []
+
+
 def _federation_unavailable(repo: str, config: dict | None, matches) -> bool:
     """True when the federation channel could not answer for *repo*.
 
@@ -270,6 +297,19 @@ def upstream_release_findings(
             # never heuristic points (the same contract as other IOC hits).
             weight_override=0)
         federated_fired = True
+
+    # U015: a signed server-side manifest observation for this release.  The
+    # local analysis did not fetch, so this is indicator-tier and weight 0.
+    for match in _manifest_matches(repo, head, config):
+        detail = (getattr(match, "detail", "") or "").strip()
+        add("U015", "Federated Upstream Manifest Delta", "INFO",
+            "dependency-manifest",
+            f"federated manifest observation for {repo}: "
+            f"{detail[:200] or 'a dependency delta was recorded'}",
+            line=None, upstream_repo=repo, detail=detail[:1000],
+            ioc_source=getattr(match, "source", ""),
+            provenance=getattr(match, "provenance", ""),
+            weight_override=0)
 
     # U009: a CI workflow committed into the AUR repository (weight 0).
     for path in added_ci_workflows(delta):

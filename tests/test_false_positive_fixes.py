@@ -673,6 +673,34 @@ def test_c022_still_fires_when_the_checksum_is_downgraded():
     assert "C022" in _ids(diff)
 
 
+def test_c022_does_not_fire_when_a_signature_is_introduced():
+    # lttng-tools 2.16.0 moved sha512 -> sha256 and added a detached .asc
+    # source plus validpgpkeys.  The signature authenticates the artifact
+    # independently of the hash, so this is an integrity upgrade, not a
+    # downgrade; H078/T001 own the key change.
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,5 +1,7 @@\n"
+            " pkgname=demo\n pkgver=1.0\n"
+            "-sha512sums=('aaaa')\n"
+            "+source=('https://up.test/demo-1.0.tar.gz'\n"
+            "+        'https://up.test/demo-1.0.tar.gz.asc')\n"
+            "+sha256sums=('bbbb' 'SKIP')\n"
+            "+validpgpkeys=('7F49314A26E0DE78427680E05F1B2A0789F12B11')\n"
+            "-pkgrel=1\n+depends=('glibc')\n")
+    assert "C022" not in _ids(diff)
+
+
+def test_c022_still_fires_when_a_key_is_added_without_a_signature():
+    # The stand-down requires a signature source; a bare validpgpkeys entry
+    # with no .sig/.asc in source=() verifies nothing.
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,5 +1,6 @@\n"
+            " pkgname=demo\n pkgver=1.0\n"
+            "-sha512sums=('aaaa')\n"
+            "+sha256sums=('bbbb')\n"
+            "+validpgpkeys=('7F49314A26E0DE78427680E05F1B2A0789F12B11')\n"
+            "-pkgrel=1\n+depends=('glibc')\n")
+    assert "C022" in _ids(diff)
+
+
 def test_x033_does_not_fire_on_a_runtime_subcommand():
     # prism-harness-suite runs `bun run --no-install build`; `run` is a
     # bun subcommand, not a `$srcdir`-root file.

@@ -16,6 +16,16 @@ This layer sits between the declared `source=()` surface and the
 the build-time registry blind spot has, and these rules are the sensor in
 that window.
 
+Most AUR packages commit only the PKGBUILD, so the manifests that matter live
+inside the declared source archive. The optional `[upstream_scan]` lane (off by
+default, server-side) closes that gap: for an allowlisted forge source with a
+strong checksum it fetches the archive through `upstream_fetch.py`, verifies
+the checksum, extracts the manifests in the sandboxed read-role worker, and
+feeds them into this same state/delta path as `upstream/<path>`. The first
+observation is a baseline, not an "added" delta. With the lane disabled - the
+default - these rules see only what the AUR repository commits, and
+[W011](unverifiable.md#w011) names that limit.
+
 Adding a dependency is ordinary packaging, so most of the series is a
 weight-0 ledger. Only **fetch-surface extension** (a new remote source),
 **an origin move**, and **a redirected resolver** score. On the full-AUR

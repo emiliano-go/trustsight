@@ -365,6 +365,32 @@ If none of these settings are explicitly configured, the tool scans foreign pack
 |-----|------|---------|-------------|
 | `enabled` | bool | `false` | Enable the optional L9 artifact-inspection lane. When false, `trustsight verify-build` reports `l9_unavailable`. When true, the lane inspects a manifest supplied with `--manifest`; TrustSight does not build the package, so with no manifest the result is still `l9_unavailable`. L9 findings are never blended into the static score. |
 
+### `[upstream_scan]`
+
+The optional lane that reads a declared upstream source archive (a forge clone is future work).
+Off by default: the default analysis path never fetches a URL a package
+declares. When enabled, only the hosts below are reachable, a declared
+upstream is reduced to an exact `host/owner/repo` and pinned, and an archive
+is parsed only after its declared checksum verifies at the configured
+strength. Provider tokens are never stored in this file; see
+[`trustsight auth`](cli.md) and the environment variables below.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `enabled` | bool | `false` | Enable the upstream-scan lane. The default `review`/`inspect` path stays fetch-free. |
+| `allowed_hosts` | list of hosts | the four forge domains | Exact registrable domains the lane may reach. |
+| `allowed_hosts_extra` | list of hosts | `[]` | Operator additions to the allowlist. Exact hosts only: no wildcard, port or IP literal; a malformed entry is ignored. |
+| `archive_fetch` | bool | `false` | Fetch the declared source archive. This is the implemented acquisition mode; it requires a strong declared checksum and reads the archive in the sandboxed worker under a decompressed-byte cap. |
+| `min_checksum_bits` | int | `256` | Minimum checksum strength an archive read requires before parsing. |
+| `deadline_seconds` | int | `120` | Wall-clock budget for one scan call. The lane clamps it (and the archive byte/text caps) to hard ceilings, so a config value can lower a bound but never remove it. |
+
+In containers, `TRUSTSIGHT_UPSTREAM_SCAN_ENABLED` and
+`TRUSTSIGHT_UPSTREAM_SCAN_ARCHIVE_FETCH` override `enabled` and
+`archive_fetch`.  The shipped `docker-compose.watcher.yml` sets both, so the
+watcher reads upstream archives while local `review`/`inspect` stays
+fetch-free.  A provider token is never stored in this file; use
+`TRUSTSIGHT_<PROVIDER>_TOKEN_FILE` (preferred) or `trustsight auth`.
+
 ### `[layers]`
 
 Override a rule's evidence category (its "layer"). The category
@@ -564,6 +590,9 @@ changes behaviour is a config key or a command flag.
 | `TRUSTSIGHT_FEED_KEY` | A base64 PKCS#8 Ed25519 private key | Signs each feed POST (`webhook-id`, `webhook-timestamp`, `webhook-signature`). The feed holds only the public half, so a leaked feed secret cannot forge a document. With no key the feed sink is skipped and only ntfy is notified. |
 | `TRUSTSIGHT_FEED_KEY_FILE` | A file containing the base64 PKCS#8 Ed25519 private key | Reads the feed key from a file instead of the environment, so a container or systemd unit can mount a secret. The environment variable wins when both are set. |
 | `TRUSTSIGHT_FEED_KEY_ID` | A short identifier | Names the signing key so the feed can rotate (it accepts a current and a previous key). |
+| `CREDENTIALS_DIRECTORY` | A directory path | systemd sets this for a service using `LoadCredential=`/`LoadCredentialEncrypted=`. The upstream-scan lane reads `<provider>-token` from it first, so a service token is root-owned and never in a file the user can read. |
+| `TRUSTSIGHT_<PROVIDER>_TOKEN` | A provider token | The least-safe source: an environment variable is visible to same-UID processes. Use it for CI/containers only; prefer [`trustsight auth`](cli.md) (OS keyring) or a `0600` token file. `<PROVIDER>` is `GITHUB`, `GITLAB`, `CODEBERG` or `BITBUCKET`. |
+| `TRUSTSIGHT_<PROVIDER>_TOKEN_FILE` | A file path | Read the token from a `0600` file instead of the environment. A file readable by group or others is named in a warning; `trustsight auth status` shows only the token's last four characters. |
 
 Rich output is the default only when the target stream is a terminal:
 renderers look at stdout, and progress bars look at stderr. A pipe, a

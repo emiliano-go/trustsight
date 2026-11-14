@@ -5,7 +5,7 @@
 Mechanics live on the [Upstream Release Integrity system page](../rules/upstream-release.md).
 
 <!-- generated: nature-rules -->
-**Rules in this nature:** [U007](../rules/upstream-release.md#u007), [U008](../rules/upstream-release.md#u008), [U009](../rules/upstream-release.md#u009), [U010](../rules/upstream-release.md#u010) (4 rules).
+**Rules in this nature:** [U007](../rules/upstream-release.md#u007), [U008](../rules/upstream-release.md#u008), [U009](../rules/upstream-release.md#u009), [U010](../rules/upstream-release.md#u010), [U013](../rules/upstream-release.md#u013), [U014](../rules/upstream-release.md#u014) (6 rules).
 <!-- /generated: nature-rules -->
 
 ## Where it comes from

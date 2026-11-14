@@ -40,6 +40,8 @@ This is a reference page. For how weight and scope work, see
 | [A006](#a006) | File Capabilities In Artifact | HIGH |
 | [A007](#a007) | Privileged Surface In Artifact | MEDIUM |
 | [A008](#a008) | eBPF Artifact In Package | HIGH |
+| [A009](#a009) | Executable Binary In Source Archive | HIGH |
+| [A010](#a010) | Setuid File In Source Archive | HIGH |
 <!-- /generated: page-index -->
 
 ### A001: Setuid File In Artifact {#a001}
@@ -111,3 +113,29 @@ The L1 C018 rule's artifact twin.
 - **Condition:** An eBPF object or loader shipped in the package - the Atomic Arch rootkit's artifact shape.
 
 Inspection only; nothing is loaded or executed.
+
+### A009: Executable Binary In Source Archive {#a009}
+
+- **Target:** declared source archive (opt-in upstream lane)
+- **Severity:** HIGH (weight 0)
+- **Category:** `artifact`
+
+- **Condition:** A regular file in the declared source archive (read by the
+  opt-in `[upstream_scan]` lane) begins with the ELF magic.
+
+A source archive normally ships source, not compiled objects. A committed ELF
+binary is report-only (weight 0, anergic) until calibrated; the file is never
+executed.
+
+### A010: Setuid File In Source Archive {#a010}
+
+- **Target:** declared source archive (opt-in upstream lane)
+- **Severity:** HIGH (weight 0)
+- **Category:** `artifact`
+
+- **Condition:** A regular file in the declared source archive carries the
+  setuid or setgid mode bit.
+
+The bit is read from the archive header, not by executing anything. It is
+report-only (weight 0, anergic) until calibrated; a source tree that ships a
+setuid file is worth a look even before it is built.

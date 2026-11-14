@@ -44,7 +44,7 @@ log = logging.getLogger(__name__)
 # explain; a match downgrades C001 to report-only, it never raises one.
 IOC_TYPES = frozenset({
     "package", "domain", "hash", "file_path", "pkgbuild_pattern",
-    "upstream_repo", "upstream_hash",
+    "upstream_repo", "upstream_hash", "upstream_manifest",
 })
 
 #: Types the corpus pivot understands.  `file_path` and `pkgbuild_pattern`

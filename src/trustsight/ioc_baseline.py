@@ -57,6 +57,7 @@ MAX_BASELINE_ENTRIES = 100_000
 MAX_BASELINE_LINES = 1_000_000
 MAX_IOC_LINE_BYTES = 64 * 1024
 MAX_IOC_FIELD_CHARS = 4_096
+MAX_IOC_DETAIL_CHARS = 4_096
 
 #: The indicator types, re-exported from the single source of truth so the
 #: federation layer and the legacy H056 list cannot drift apart.
@@ -118,6 +119,9 @@ class IocEntry:
     #: ``history_sweep``); empty for every other type.  The U007/U008
     #: federation feed is the only producer.
     shape: str = ""
+    #: The bounded projection behind an ``upstream_manifest`` entry (a compact
+    #: JSON string).  Empty for every other type.
+    detail: str = ""
 
 
 @dataclass(frozen=True)
@@ -135,6 +139,7 @@ class IocMatch:
     line: int | None = None
     expired: bool = False
     shape: str = ""
+    detail: str = ""
 
 
 def _now_iso() -> str:
@@ -173,7 +178,27 @@ def _normalize_value(type_: str, value: str) -> str | None:
         return normalize_ioc("upstream_repo", value)
     if type_ == "upstream_hash":
         return _normalize_upstream_hash(value)
+    if type_ == "upstream_manifest":
+        return _normalize_upstream_manifest(value)
     return None
+
+
+def _normalize_upstream_manifest(value: str) -> str | None:
+    """Canonicalise a ``repo|version`` key for a signed manifest observation.
+
+    The detail travels separately; the value is only the lookup key the local
+    U-series can construct from its declared ``url=`` and ``pkgver``.
+    """
+    parts = value.split("|")
+    if len(parts) not in (1, 2):
+        return None
+    repo = parts[0].strip().lower()
+    version = parts[1].strip() if len(parts) == 2 else ""
+    if not repo or "/" not in repo or any(ch.isspace() for ch in repo):
+        return None
+    if len(repo) > MAX_IOC_FIELD_CHARS or len(version) > MAX_IOC_FIELD_CHARS:
+        return None
+    return f"{repo}|{version}"
 
 
 def _normalize_upstream_hash(value: str) -> str | None:
@@ -353,6 +378,7 @@ def _load_iocs(path: Path) -> list[IocEntry]:
                 added=str(row.get("added", ""))[:MAX_IOC_FIELD_CHARS],
                 expires_at=str(row.get("expires_at", ""))[:MAX_IOC_FIELD_CHARS],
                 shape=str(row.get("shape", "")).strip().lower(),
+                detail=str(row.get("detail", ""))[:MAX_IOC_DETAIL_CHARS],
             )
         )
     return entries
@@ -541,8 +567,8 @@ def import_baseline(
                 conn.execute(
                     """INSERT INTO ioc_entries
                        (type, value, source, confidence, provenance, campaign,
-                        added, expires_at, imported_at, shape)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        added, expires_at, imported_at, shape, detail)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         entry.type,
                         entry.value,
@@ -554,6 +580,7 @@ def import_baseline(
                         entry.expires_at,
                         now,
                         entry.shape,
+                        entry.detail,
                     ),
                 )
             except sqlite3.IntegrityError:
@@ -566,7 +593,7 @@ def import_baseline(
                     """UPDATE ioc_entries
                        SET confidence = ?, provenance = ?, campaign = ?,
                            added = ?, expires_at = ?, imported_at = ?,
-                           shape = ?
+                           shape = ?, detail = ?
                        WHERE type = ? AND value = ? AND source = ?""",
                     (
                         entry.confidence,
@@ -576,6 +603,7 @@ def import_baseline(
                         entry.expires_at,
                         now,
                         entry.shape,
+                        entry.detail,
                         entry.type,
                         entry.value,
                         source,
@@ -598,8 +626,10 @@ def _row_to_entry(row: sqlite3.Row) -> IocEntry:
     # ``shape`` is an added column; a row read from a database created before
     # the migration (a read-only connection never runs one) simply lacks it.
     shape = ""
+    detail = ""
     try:
         shape = row["shape"] or ""
+        detail = row["detail"] or ""
     except (IndexError, KeyError):
         pass
     return IocEntry(
@@ -612,6 +642,7 @@ def _row_to_entry(row: sqlite3.Row) -> IocEntry:
         added=row["added"] or "",
         expires_at=row["expires_at"] or "",
         shape=shape,
+        detail=detail,
     )
 
 
@@ -709,6 +740,7 @@ def _entry_to_match(entry: IocEntry) -> IocMatch:
         line=None,
         expired=_is_expired(entry.expires_at),
         shape=entry.shape,
+        detail=entry.detail,
     )
 
 
@@ -869,6 +901,17 @@ def match_upstream_repo(repo: str) -> list[IocMatch]:
     must name exactly.  A miss is uninformative, as for every other type.
     """
     return match_ioc("upstream_repo", repo)
+
+
+def match_upstream_manifest(value: str) -> list[IocMatch]:
+    """Return active ``upstream_manifest`` matches for ``repo|version``.
+
+    The local U-series builds the key from the declared ``url=`` and
+    ``pkgver``; a match means a signed server-side scan observed a manifest
+    delta for that exact upstream release.  A miss is uninformative.
+    """
+    return [match for match in match_ioc("upstream_manifest", value)
+            if not match.expired]
 
 
 def match_upstream_hash(value: str) -> list[IocMatch]:

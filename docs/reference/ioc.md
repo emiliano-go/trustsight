@@ -73,6 +73,13 @@ dropped with a warning; the rest import.
 | `file_path` | A file the diff **added or modified**, and a file the recipe **names** (`install=`, local `source=()` entries) | Separators folded to `/`, a leading `./` and trailing `/` removed. Case-sensitive. Removals are not a compromise signal and do not match. |
 | `pkgbuild_pattern` | **Added diff lines**, matched as a regular expression | The pattern text, compiled once. Invalid or catastrophic-backtracking patterns are refused at load. |
 
+The federation-only types `upstream_repo` (`host/owner/repo`), `upstream_hash`
+(`url|version|checksum`) and `upstream_manifest` (`host/owner/repo|version`,
+with a bounded `detail`) are matched by the U-series; they are not part of the
+legacy exact-match list. `upstream_manifest` is the signed projection a
+server-side `[upstream_scan]` observation produces, so the local analysis can
+report it without fetching.
+
 `file_path` and `pkgbuild_pattern` are the two non-equality types. `file_path`
 is still an exact comparison on a normalized path. `pkgbuild_pattern` is the
 one type that matches a *shape* rather than an artefact, so it is treated as a

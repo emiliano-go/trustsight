@@ -198,6 +198,35 @@ def _family_values(arrays, base: str) -> tuple[str, ...]:
             out.extend(arrays[key])
     return tuple(out)
 
+_SIGNATURE_SOURCE_RE = re.compile(r"\.(?:sig|asc|sign)(?:[?#].*)?$", re.IGNORECASE)
+
+
+def _signature_source(arrays) -> bool:
+    """True when a declared source is a detached signature file."""
+    for entry in _family_values(arrays, "source"):
+        target = str(entry).split("::", 1)[-1].strip()
+        if _SIGNATURE_SOURCE_RE.search(target):
+            return True
+    return False
+
+
+def _signature_verification_introduced(pre, post) -> bool:
+    """True when this diff newly trusts a key *and* ships its signature.
+
+    A hash-length reduction beside a newly added ``validpgpkeys`` entry is not
+    a verification downgrade: makepkg verifies the source signature itself, so
+    the artifact is authenticated independently of the hash.  The key change
+    is owned by H078/T001/T003, so C022 stands down rather than double-count
+    the same diff (the lttng-tools shape: sha512 -> sha256 + ``.asc`` +
+    ``validpgpkeys``).
+    """
+    if pre is None or post is None:
+        return False
+    before = set(_family_values(pre.arrays, "validpgpkeys"))
+    after = set(_family_values(post.arrays, "validpgpkeys"))
+    return bool(after - before) and _signature_source(post.arrays)
+
+
 def _removed_declarations(doc) -> set[str]:
     """Array names whose declaration line is removed and not re-added."""
     if doc is None:
@@ -511,7 +540,8 @@ def addendum4_findings(diff_text, scope_doc, pre, post, source_changes,
         strongest in removed_names
         or (strongest in post.arrays and not post_present[strongest])
     )
-    if strongest is not None and strongest_gone:
+    if (strongest is not None and strongest_gone
+            and not _signature_verification_introduced(pre, post)):
         # Only a *strictly weaker* array remaining is a downgrade.  The
         # order is strongest first, so the weaker arrays are the ones after
         # `strongest`; a stronger array that merely appears in the same diff

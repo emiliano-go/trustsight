@@ -49,3 +49,12 @@ def test_the_watcher_container_is_hardened_and_health_checked():
     assert service["pids_limit"] == 512
     assert service["healthcheck"]["test"][-1] == "--optional"
     assert "full-aur" in service["healthcheck"]["test"]
+
+
+def test_the_watcher_runs_the_deep_walk_with_the_upstream_lane():
+    compose = yaml.safe_load((ROOT / "docker-compose.watcher.yml").read_text())
+    service = compose["services"]["trustsight-watch"]
+    assert service["command"][-2:] == ["--depth", "-1"]
+    env = service["environment"]
+    assert env["TRUSTSIGHT_UPSTREAM_SCAN_ENABLED"] == "1"
+    assert env["TRUSTSIGHT_UPSTREAM_SCAN_ARCHIVE_FETCH"] == "1"

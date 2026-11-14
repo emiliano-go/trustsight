@@ -16,6 +16,16 @@ This layer sits between the declared `source=()` surface and the
 the build-time registry blind spot has, and these rules are the sensor in
 that window.
 
+Most AUR packages commit only the PKGBUILD, so the manifests that matter live
+inside the declared source archive. The optional `[upstream_scan]` lane (off by
+default, server-side) closes that gap: for an allowlisted forge source with a
+strong checksum it fetches the archive through `upstream_fetch.py`, verifies
+the checksum, extracts the manifests in the sandboxed read-role worker, and
+feeds them into this same state/delta path as `upstream/<path>`. The first
+observation is a baseline, not an "added" delta. With the lane disabled - the
+default - these rules see only what the AUR repository commits, and
+[W011](unverifiable.md#w011) names that limit.
+
 Adding a dependency is ordinary packaging, so most of the series is a
 weight-0 ledger. Only **fetch-surface extension** (a new remote source),
 **an origin move**, and **a redirected resolver** score. On the full-AUR
@@ -52,6 +62,7 @@ This is a reference page. For how weight and scope work, see
 | [U006](#u006) | Manifest Changed Without Its Lockfile | INFO |
 | [U011](#u011) | Upstream Origin Changed | - |
 | [U012](#u012) | Lockfile Integrity Weakened | - |
+| [U015](#u015) | Federated Upstream Manifest Delta | INFO |
 <!-- /generated: page-index -->
 
 ### U001: Manifest Added Or Removed {#u001}
@@ -161,3 +172,18 @@ lockfile can legitimately drop integrity for a path or workspace entry, and
 the finding is a review prompt rather than a scored change. The lockfile's
 removal is reported here because the file that pinned every dependency is
 gone.
+
+### U015: Federated Upstream Manifest Delta {#u015}
+
+- **Target:** declared upstream repository and version (federation-fed)
+- **Severity:** INFO (weight 0)
+- **Category:** `dependency-manifest`
+
+- **Condition:** A signed `upstream_manifest` federation entry names the
+  `host/owner/repo` and `pkgver` this recipe declares, carrying the bounded
+  projection a server-side scan observed (new remote hosts, dependency
+  changes, resolver redirects).
+
+The local analysis does not fetch: this is the signed result of the
+server-side `[upstream_scan]` lane, reported at weight 0 (anergic) as an
+indicator. A miss is uninformative.

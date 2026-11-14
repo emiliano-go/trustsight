@@ -525,6 +525,7 @@ def _register_full_aur(app: typer.Typer) -> None:
         notify: str | None = typer.Option(None, "--notify", help="POST new alerts as JSON to this webhook URL each cycle (overrides [notify] webhook in config.toml)"),
         over_threshold: int | None = typer.Option(None, "--over-threshold", help="Alert bar: packages scoring strictly above this land in the cycle's over_threshold list (default 30, the benign corpus p95)"),
         since: str | None = typer.Option(None, "--since", help="Replay change history from this date (YYYY-MM-DD, UTC), one AUR day per cycle, then join the live stream"),
+        depth: int | None = typer.Option(None, "--depth", help="AUR dependency levels to analyse: 0 off, 1 default, n levels, -1 every level (bounded)"),
         auto_pull_baselines: bool = typer.Option(False, "--auto-pull-baselines", help="With --watch, pull and import a newer baseline seed after each cycle"),
         auto_pull_iocs: bool = typer.Option(False, "--auto-pull-iocs", help="With --watch, pull and import newer IOC feeds after each cycle"),
         auto_pull_watchlists: bool = typer.Option(False, "--auto-pull-watchlists", help="With --watch, pull and import a newer watchlist release after each cycle"),
@@ -594,6 +595,13 @@ def _register_full_aur(app: typer.Typer) -> None:
             else:
                 _print_colored(msg, "red", stderr=True)
             raise typer.Exit(code=2)
+        if depth is not None and depth < -1:
+            msg = "--depth must be -1 (every level), 0 (off) or a positive level count"
+            if json_output:
+                typer.echo(json.dumps({"error": msg}))
+            else:
+                _print_colored(msg, "red", stderr=True)
+            raise typer.Exit(code=2)
         if (auto_pull_baselines or auto_pull_iocs
                 or auto_pull_watchlists) and not watch:
             msg = ("--auto-pull-baselines/--auto-pull-iocs/"
@@ -629,6 +637,7 @@ def _register_full_aur(app: typer.Typer) -> None:
                         interval=interval, cycles=cycles,
                         json_output=json_output, notify_url=notify,
                         over_threshold=over_threshold, since=since_ts,
+                        depth=depth,
                         auto_pull_baselines=auto_pull_baselines,
                         auto_pull_iocs=auto_pull_iocs,
                         auto_pull_watchlists=auto_pull_watchlists,
@@ -650,6 +659,7 @@ def _register_full_aur(app: typer.Typer) -> None:
             resume=resume, export_path=export, sign_key=sign,
             json_output=json_output, bootstrap=bootstrap,
             over_threshold=over_threshold, since=since_ts,
+            depth=depth,
         )
         # Single-shot cycles alert too: a bootstrap chunk is where a
         # high-scoring package is most likely to land.

@@ -211,6 +211,9 @@ def analyze_package_text(
         pkg_name, depth, config, _depth_seen, record=record,
         added_names=added_names,
     )
+    from ...depth import resolve_depth
+
+    resolved_depth = resolve_depth(depth, config)
     # The dependency walk recursively analyses packages, and every recursive
     # analysis starts its own thread-local stage record.  Start the root's
     # record after the walk, or the parent inherits the last dependency's
@@ -534,6 +537,7 @@ def analyze_package_text(
             comparison_base="recorded",
             temporal_source=temporal.source,
             depth_result=depth_result,
+            depth=resolved_depth,
             added_names=added_names,
             pkgver_changed=pkgver_changed,
             version_moved=version_moved,

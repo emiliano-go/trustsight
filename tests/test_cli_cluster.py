@@ -407,7 +407,32 @@ def test_full_aur_watch_invokes_the_loop(monkeypatch):
     assert seen == {"interval": 120, "cycles": 2, "json_output": False,
                     "notify_url": None, "over_threshold": None,
                         "since": None, "auto_pull_baselines": False,
-                        "auto_pull_iocs": False, "auto_pull_watchlists": False}
+                        "auto_pull_iocs": False, "auto_pull_watchlists": False,
+                        "depth": None}
+
+
+def test_full_aur_watch_passes_the_dependency_depth(monkeypatch):
+    """--depth is a per-run override; the watcher must receive it rather than
+    falling back to [depth] levels in config."""
+    monkeypatch.delenv("TRUSTSIGHT_OFFLINE", raising=False)
+    seen = {}
+    monkeypatch.setattr(
+        "trustsight.full_aur.pipeline.run_watch",
+        lambda **kwargs: seen.update(kwargs) or [],
+    )
+    result = CliRunner().invoke(
+        app, ["full-aur", "--watch", "--depth", "-1", "--cycles", "1"]
+    )
+    assert result.exit_code == 0, result.output
+    assert seen["depth"] == -1
+
+
+def test_full_aur_rejects_a_depth_below_minus_one(monkeypatch):
+    monkeypatch.delenv("TRUSTSIGHT_OFFLINE", raising=False)
+    result = CliRunner().invoke(
+        app, ["full-aur", "--watch", "--depth=-2"]
+    )
+    assert result.exit_code == 2
 
 
 def test_full_aur_watch_ending_on_a_refusal_exits_2(monkeypatch):

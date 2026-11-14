@@ -17,6 +17,18 @@
     "plan": "not_measurable",
     "status": "deferred"
   },
+  "A009": {
+    "note": "Add a benign source archive carrying a vendored ELF binary to the artifact corpus (opt-in upstream lane).",
+    "phase": "1",
+    "plan": "add_artifact_or_manifest",
+    "status": "deferred"
+  },
+  "A010": {
+    "note": "Add a benign source archive carrying a setuid file to the artifact corpus (opt-in upstream lane).",
+    "phase": "1",
+    "plan": "add_artifact_or_manifest",
+    "status": "deferred"
+  },
   "C006": {
     "expected_strata": [
       "maintainer_churn"
@@ -1010,6 +1022,24 @@
     "plan": "add_artifact_or_manifest",
     "status": "deferred"
   },
+  "U013": {
+    "note": "Add a benign upstream workflow read by the opt-in lane: a secrets reference to a known-egress host.",
+    "phase": "1",
+    "plan": "add_artifact_or_manifest",
+    "status": "deferred"
+  },
+  "U014": {
+    "note": "Add a benign upstream workflow read by the opt-in lane: fetch-depth 0 with no credential-shaped grep.",
+    "phase": "1",
+    "plan": "add_artifact_or_manifest",
+    "status": "deferred"
+  },
+  "U015": {
+    "note": "Add a signed upstream_manifest observation for the declared repo/version.",
+    "phase": "1",
+    "plan": "add_artifact_or_manifest",
+    "status": "deferred"
+  },
   "W004": {
     "note": "Boundary/aggregate id, not a corpus rule; covered by integration tests.",
     "phase": "0",
@@ -1029,6 +1059,12 @@
     "status": "resolved"
   },
   "W013": {
+    "note": "Boundary/aggregate id, not a corpus rule; covered by integration tests.",
+    "phase": "0",
+    "plan": "pseudo",
+    "status": "resolved"
+  },
+  "W014": {
     "note": "Boundary/aggregate id, not a corpus rule; covered by integration tests.",
     "phase": "0",
     "plan": "pseudo",

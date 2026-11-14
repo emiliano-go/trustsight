@@ -1,5 +1,27 @@
 {
   "anergic": {
+    "A009": {
+      "changelog": "upstream-scan-lane",
+      "decided_in": "",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
+      "rule_id": "A009",
+      "signal": "artifact shape inside a fetched source archive; needs a corpus rate before it can score",
+      "since": "0.28.9",
+      "status": "anergic",
+      "weight": null
+    },
+    "A010": {
+      "changelog": "upstream-scan-lane",
+      "decided_in": "",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
+      "rule_id": "A010",
+      "signal": "artifact shape inside a fetched source archive; needs a corpus rate before it can score",
+      "since": "0.28.9",
+      "status": "anergic",
+      "weight": null
+    },
     "C001": {
       "changelog": "c001-upstream-hash-corroboration",
       "decided_in": "",
@@ -164,15 +186,48 @@
       "since": "0.27.1",
       "status": "anergic",
       "weight": null
+    },
+    "U013": {
+      "changelog": "upstream-scan-lane",
+      "decided_in": "",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
+      "rule_id": "U013",
+      "signal": "local CI shape over a fetched upstream workflow; needs a corpus rate before it can score",
+      "since": "0.28.9",
+      "status": "anergic",
+      "weight": null
+    },
+    "U014": {
+      "changelog": "upstream-scan-lane",
+      "decided_in": "",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
+      "rule_id": "U014",
+      "signal": "local CI shape over a fetched upstream workflow; needs a corpus rate before it can score",
+      "since": "0.28.9",
+      "status": "anergic",
+      "weight": null
+    },
+    "U015": {
+      "changelog": "upstream-scan-lane",
+      "decided_in": "",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly calibration, then set an explicit weight after the signed observations cover the corpus",
+      "rule_id": "U015",
+      "signal": "signed server-side manifest observations; needs a corpus rate before it can score",
+      "since": "0.28.9",
+      "status": "anergic",
+      "weight": null
     }
   },
-  "catalog_size": 307,
+  "catalog_size": 313,
   "corpus_content_sha256": "a4cbea4ef14029c97d7746e2be080a2e5c931502429ee261d974810b35f5cafc",
   "counts": {
     "adversarial_only": 18,
     "cold_only": 42,
     "measured": 174,
-    "zero_fire": 73
+    "zero_fire": 79
   },
   "rules": {
     "A001": {
@@ -401,6 +456,52 @@
         "lang_deep"
       ],
       "uid": "TS-0008"
+    },
+    "A009": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": {
+        "note": "Add a benign source archive carrying a vendored ELF binary to the artifact corpus (opt-in upstream lane).",
+        "phase": "1",
+        "plan": "add_artifact_or_manifest",
+        "status": "deferred"
+      },
+      "expected_met": false,
+      "expected_strata": [],
+      "expected_strata_met": [],
+      "fires": 0,
+      "id": "A009",
+      "pseudo": false,
+      "reason": "no benign shape in the locked corpus yet; add a shape stratum, never a rule-targeted sample",
+      "series": "A",
+      "sources": {},
+      "state": "zero_fire",
+      "strata": [],
+      "uid": "TS-0300"
+    },
+    "A010": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": {
+        "note": "Add a benign source archive carrying a setuid file to the artifact corpus (opt-in upstream lane).",
+        "phase": "1",
+        "plan": "add_artifact_or_manifest",
+        "status": "deferred"
+      },
+      "expected_met": false,
+      "expected_strata": [],
+      "expected_strata_met": [],
+      "fires": 0,
+      "id": "A010",
+      "pseudo": false,
+      "reason": "no benign shape in the locked corpus yet; add a shape stratum, never a rule-targeted sample",
+      "series": "A",
+      "sources": {},
+      "state": "zero_fire",
+      "strata": [],
+      "uid": "TS-0301"
     },
     "C001": {
       "benign_sources": [
@@ -1290,46 +1391,30 @@
       "benign_state": "fire",
       "benign_strata": [
         "appimage_repack",
-        "autotools",
-        "bin_repack",
-        "data_fonts",
-        "dependency_heavy",
         "dkms_kernel",
-        "lang_deep",
         "lang_ecosystem",
-        "large_electron",
         "maintainer_churn",
         "persist_surface",
-        "signed_sources",
-        "source_patched",
         "vcs_git"
       ],
       "disposition": null,
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 22,
+      "fires": 6,
       "id": "C022",
       "pseudo": false,
       "reason": "",
       "series": "C",
       "sources": {
         "cold": {
-          "fires": 22,
+          "fires": 6,
           "strata": [
             "appimage_repack",
-            "autotools",
-            "bin_repack",
-            "data_fonts",
-            "dependency_heavy",
             "dkms_kernel",
-            "lang_deep",
             "lang_ecosystem",
-            "large_electron",
             "maintainer_churn",
             "persist_surface",
-            "signed_sources",
-            "source_patched",
             "vcs_git"
           ]
         }
@@ -1337,18 +1422,10 @@
       "state": "measured",
       "strata": [
         "appimage_repack",
-        "autotools",
-        "bin_repack",
-        "data_fonts",
-        "dependency_heavy",
         "dkms_kernel",
-        "lang_deep",
         "lang_ecosystem",
-        "large_electron",
         "maintainer_churn",
         "persist_surface",
-        "signed_sources",
-        "source_patched",
         "vcs_git"
       ],
       "uid": "TS-0030"
@@ -3021,7 +3098,7 @@
       "fires": 0,
       "id": "H009",
       "pseudo": false,
-      "reason": "no benign shape in the locked corpus yet; add a shape stratum, never a rule-targeted sample",
+      "reason": "no benign shape in the locked corpus; expected from runtime_carriers",
       "series": "H",
       "sources": {},
       "state": "zero_fire",
@@ -3046,7 +3123,7 @@
       "fires": 0,
       "id": "H010",
       "pseudo": false,
-      "reason": "no benign shape in the locked corpus yet; add a shape stratum, never a rule-targeted sample",
+      "reason": "no benign shape in the locked corpus; expected from runtime_carriers",
       "series": "H",
       "sources": {},
       "state": "zero_fire",
@@ -3071,7 +3148,7 @@
       "fires": 0,
       "id": "H011",
       "pseudo": false,
-      "reason": "no benign shape in the locked corpus yet; add a shape stratum, never a rule-targeted sample",
+      "reason": "no benign shape in the locked corpus; expected from runtime_carriers",
       "series": "H",
       "sources": {},
       "state": "zero_fire",
@@ -3096,7 +3173,7 @@
       "fires": 0,
       "id": "H012",
       "pseudo": false,
-      "reason": "no benign shape in the locked corpus yet; add a shape stratum, never a rule-targeted sample",
+      "reason": "no benign shape in the locked corpus; expected from runtime_carriers",
       "series": "H",
       "sources": {},
       "state": "zero_fire",
@@ -3121,7 +3198,7 @@
       "fires": 0,
       "id": "H013",
       "pseudo": false,
-      "reason": "no benign shape in the locked corpus yet; add a shape stratum, never a rule-targeted sample",
+      "reason": "no benign shape in the locked corpus; expected from runtime_carriers",
       "series": "H",
       "sources": {},
       "state": "zero_fire",
@@ -3706,14 +3783,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 1119,
+      "fires": 1115,
       "id": "H027",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 1092,
+          "fires": 1088,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -5121,7 +5198,7 @@
       "fires": 0,
       "id": "H066",
       "pseudo": false,
-      "reason": "no benign shape in the locked corpus yet; add a shape stratum, never a rule-targeted sample",
+      "reason": "no benign shape in the locked corpus; expected from runtime_carriers",
       "series": "H",
       "sources": {},
       "state": "zero_fire",
@@ -5244,7 +5321,7 @@
       "fires": 0,
       "id": "H070",
       "pseudo": false,
-      "reason": "no benign shape in the locked corpus yet; add a shape stratum, never a rule-targeted sample",
+      "reason": "no benign shape in the locked corpus; expected from runtime_carriers",
       "series": "H",
       "sources": {},
       "state": "zero_fire",
@@ -6071,7 +6148,7 @@
       "fires": 0,
       "id": "H093",
       "pseudo": false,
-      "reason": "no benign shape in the locked corpus; expected from persist_surface",
+      "reason": "no benign shape in the locked corpus; expected from persist_surface, runtime_carriers",
       "series": "H",
       "sources": {},
       "state": "zero_fire",
@@ -6128,7 +6205,7 @@
       "fires": 0,
       "id": "H095",
       "pseudo": false,
-      "reason": "no benign shape in the locked corpus; expected from persist_surface",
+      "reason": "no benign shape in the locked corpus; expected from persist_surface, runtime_carriers",
       "series": "H",
       "sources": {},
       "state": "zero_fire",
@@ -6630,14 +6707,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 577,
+      "fires": 582,
       "id": "M002",
       "pseudo": false,
       "reason": "",
       "series": "M",
       "sources": {
         "cold": {
-          "fires": 574,
+          "fires": 579,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -6710,14 +6787,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 300,
+      "fires": 301,
       "id": "M003",
       "pseudo": false,
       "reason": "",
       "series": "M",
       "sources": {
         "cold": {
-          "fires": 268,
+          "fires": 269,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -9564,6 +9641,75 @@
       "strata": [],
       "uid": "TS-0279"
     },
+    "U013": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": {
+        "note": "Add a benign upstream workflow read by the opt-in lane: a secrets reference to a known-egress host.",
+        "phase": "1",
+        "plan": "add_artifact_or_manifest",
+        "status": "deferred"
+      },
+      "expected_met": false,
+      "expected_strata": [],
+      "expected_strata_met": [],
+      "fires": 0,
+      "id": "U013",
+      "pseudo": false,
+      "reason": "no benign shape in the locked corpus yet; add a shape stratum, never a rule-targeted sample",
+      "series": "U",
+      "sources": {},
+      "state": "zero_fire",
+      "strata": [],
+      "uid": "TS-0296"
+    },
+    "U014": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": {
+        "note": "Add a benign upstream workflow read by the opt-in lane: fetch-depth 0 with no credential-shaped grep.",
+        "phase": "1",
+        "plan": "add_artifact_or_manifest",
+        "status": "deferred"
+      },
+      "expected_met": false,
+      "expected_strata": [],
+      "expected_strata_met": [],
+      "fires": 0,
+      "id": "U014",
+      "pseudo": false,
+      "reason": "no benign shape in the locked corpus yet; add a shape stratum, never a rule-targeted sample",
+      "series": "U",
+      "sources": {},
+      "state": "zero_fire",
+      "strata": [],
+      "uid": "TS-0297"
+    },
+    "U015": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": {
+        "note": "Add a signed upstream_manifest observation for the declared repo/version.",
+        "phase": "1",
+        "plan": "add_artifact_or_manifest",
+        "status": "deferred"
+      },
+      "expected_met": false,
+      "expected_strata": [],
+      "expected_strata_met": [],
+      "fires": 0,
+      "id": "U015",
+      "pseudo": false,
+      "reason": "no benign shape in the locked corpus yet; add a shape stratum, never a rule-targeted sample",
+      "series": "U",
+      "sources": {},
+      "state": "zero_fire",
+      "strata": [],
+      "uid": "TS-0299"
+    },
     "W001": {
       "benign_sources": [
         "cold"
@@ -10258,6 +10404,29 @@
       "state": "zero_fire",
       "strata": [],
       "uid": "TS-0289"
+    },
+    "W014": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": {
+        "note": "Boundary/aggregate id, not a corpus rule; covered by integration tests.",
+        "phase": "0",
+        "plan": "pseudo",
+        "status": "resolved"
+      },
+      "expected_met": false,
+      "expected_strata": [],
+      "expected_strata_met": [],
+      "fires": 0,
+      "id": "W014",
+      "pseudo": false,
+      "reason": "no benign shape in the locked corpus yet; add a shape stratum, never a rule-targeted sample",
+      "series": "W",
+      "sources": {},
+      "state": "zero_fire",
+      "strata": [],
+      "uid": "TS-0298"
     },
     "X001": {
       "benign_sources": [],

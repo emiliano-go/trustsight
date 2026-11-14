@@ -205,6 +205,7 @@ Explanation = [
   {"Recipe-Targeted User Rules" = "explanation/structural-user-rules.md"},
   {"Cross-File Consistency" = "explanation/cross-file-consistency.md"},
   {"The Typed Core" = "explanation/the-typed-core.md"},
+  {"State and Lifecycles" = "explanation/state-and-lifecycles.md"},
   {"Kinds of Alerts" = "explanation/kinds-of-alerts.md"},
   {"Alert Budget" = "explanation/alert-budget.md"},
   {"Campaign Alert Mode" = "explanation/campaign-alert-mode.md"},

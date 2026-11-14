@@ -74,6 +74,16 @@ def test_lang_deep_reads_vendored_and_lockfile_shapes():
     assert not sel.tree_match(pkg, "lang_deep", paths=["src/main.rs"])
 
 
+def test_runtime_carriers_need_a_unit_or_script_carrier():
+    pkg = _pkg("demo", "systemd service")
+    assert sel.metadata_match(pkg, "runtime_carriers")
+    assert not sel.metadata_match(_pkg("demo", "font package"), "runtime_carriers")
+    assert sel.tree_match(pkg, "runtime_carriers",
+                          paths=["usr/lib/systemd/system/demo.service"])
+    assert sel.tree_match(pkg, "runtime_carriers", paths=["usr/bin/helper.sh"])
+    assert not sel.tree_match(pkg, "runtime_carriers", paths=["usr/bin/demo"])
+
+
 def test_tree_strata_are_declared():
     assert sel.requires_tree("persist_surface")
     assert not sel.requires_tree("dependency_heavy")
@@ -89,7 +99,7 @@ def test_strata_file_targets_and_expectations_are_valid():
     strata = cfg["strata"]
     assert set(strata) == set(sel.EXISTING) | set(sel.NEW)
     targets = {name: row["target"] for name, row in strata.items()}
-    assert sum(targets.values()) == 455
+    assert sum(targets.values()) == 515
     live = set(rule_ids())
     for name, row in strata.items():
         for rule_id in row.get("expected_rules") or ():

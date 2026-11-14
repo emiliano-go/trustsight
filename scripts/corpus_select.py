@@ -22,13 +22,14 @@ EXISTING = (
 NEW = (
     "persist_surface", "signed_sources", "multi_client_fetch",
     "maintainer_churn", "dependency_heavy", "vcs_other",
-    "appimage_repack", "lang_deep",
+    "appimage_repack", "lang_deep", "runtime_carriers",
 )
 
 #: Strata whose predicate needs the repository tree or PKGBUILD text.
 TREE_STRATA = frozenset({
     "persist_surface", "signed_sources", "multi_client_fetch",
     "maintainer_churn", "vcs_other", "appimage_repack", "lang_deep",
+    "runtime_carriers",
 })
 
 _LANG_PREFIXES = ("python-", "ruby-", "perl-", "rust-", "go-")
@@ -48,6 +49,10 @@ _FETCH_HINTS = re.compile(
     r"download manager|mirror|network|api|repository", re.I)
 _VCS_HINTS = re.compile(r"\bhg\b|mercurial|subversion|\bsvn\b|bzr|bazaar|fossil", re.I)
 _APPIMAGE_HINTS = re.compile(r"appimage|app run|portable", re.I)
+_RUNTIME_HINTS = re.compile(
+    r"systemd|service|daemon|timer|socket|tmpfiles|udev|dbus|polkit|"
+    r"autostart|tracerpid|ptrace|strace", re.I)
+_SCRIPT_SUFFIXES = (".sh", ".bash", ".py", ".pl", ".rb", ".install")
 _LANG_DEEP_HINTS = re.compile(
     r"vendor|cargo|go module|golang|npm|node|julia|\br\b|haskell|cabal|dotnet|"
     r"\.net|nuget|composer|maven|gradle|python|ruby|rust|electron", re.I)
@@ -110,6 +115,8 @@ def metadata_match(pkg: dict, stratum: str) -> bool:
         return bool(_VCS_HINTS.search(text))
     if stratum == "appimage_repack":
         return bool(_APPIMAGE_HINTS.search(text)) or "appimage" in lower
+    if stratum == "runtime_carriers":
+        return bool(_RUNTIME_HINTS.search(text))
     if stratum == "lang_deep":
         return bool(_LANG_DEEP_HINTS.search(text))
     return False
@@ -186,6 +193,9 @@ def tree_match(
                 "gradle ", "nuget ", "stack build", "cargo fetch",
             ))
         )
+    if stratum == "runtime_carriers":
+        return (_has_unit(paths)
+                or any(p.lower().endswith(_SCRIPT_SUFFIXES) for p in paths))
     # The eight existing strata were already verified by their metadata
     # predicate; their tree stage adds no further constraint.
     return True

@@ -94,6 +94,7 @@ class ScanInput:
     maintainer_changed: bool
     tree_manifest: list = field(default_factory=list)
     tree_complete: bool = True
+    verified_upstream_hashes: frozenset[str] = frozenset()
     whole_recipe: bool = False
     previous_diff: str = ""
     previous_commit: str = ""
@@ -214,6 +215,7 @@ def scan_recipe(scan: ScanInput, config: dict) -> ScanResult:
             previous_commit=scan.previous_commit,
             current_commit=scan.current_commit,
             delta=change_delta_obj,
+            verified_upstream_hashes=scan.verified_upstream_hashes,
         ))
     )
     triggered_rules.extend(

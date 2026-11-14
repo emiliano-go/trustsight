@@ -60,6 +60,7 @@ from .seed import register_commands as _register_seed
 from .rules import register_commands as _register_rules
 from .verdict import register_commands as _register_verdict
 from .hook import register_commands as _register_hook
+from .auth import register_commands as _register_auth
 
 _register_review(app)
 _register_inspect(app)
@@ -77,6 +78,7 @@ _register_seed(app)
 _register_rules(app)
 _register_verdict(app)
 _register_hook(app)
+_register_auth(app)
 
 
 class _StderrHandler(logging.StreamHandler):

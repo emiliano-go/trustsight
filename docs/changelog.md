@@ -4,14 +4,92 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **The upstream lane no longer downgrades a credential failure to an
+  anonymous read.** A keyring that is locked or refuses now records
+  `upstream_scan_token_unavailable` and skips that archive, instead of
+  silently fetching without the configured token. `trustsight auth login
+  --file` also refuses group/other-readable, non-regular or oversized token
+  files, and an invalid `min_checksum_bits` falls back to the 256-bit floor
+  rather than aborting the scan.
+
+- **C022 no longer fires when a signature is introduced.** A diff that drops
+  the strongest checksum array while adding a `validpgpkeys` entry *and* a
+  detached `.sig`/`.asc` source is an integrity upgrade, not a downgrade:
+  makepkg verifies the signature independently of the hash. The key change is
+  left to H078/T001/T003, so the same diff is not counted twice (the
+  lttng-tools 2.16.0 shape: sha512 -> sha256 + `.asc` + validpgpkeys scored
+  100).
+
 ### Added
+
+- **The watcher runs the full dependency walk with the upstream lane on.**
+  The shipped `docker-compose.watcher.yml` sets `--depth -1` and both
+  `TRUSTSIGHT_UPSTREAM_SCAN_ENABLED` and
+  `TRUSTSIGHT_UPSTREAM_SCAN_ARCHIVE_FETCH`; local `review`/`inspect` remains
+  fetch-free, and the upstream checks still apply (allowlisted forge,
+  checksum-gated archive, bounded sandboxed parse).  A provider token is
+  recommended for AUR-wide runs and is mounted as a `0600` file, never put in
+  the compose environment.
 
 - **Every unmeasured rule is classified.** The coverage gate now requires a disposition for every rule with no benign source, not only the rules a stratum expects. All 171 unmeasured ids carry a reviewed bucket: benign shape, history/warm, cycle corpus, git history, artifact/manifest, benign-twin triage, attack-only, not-measurable, or pseudo. New plans (`add_cycle_corpus`, `add_git_history`, `triage_benign_twin`) make the multi-package, git-history and attack-twin work explicit instead of leaving those rules as unlabelled zero-fire gaps.
 - **The public watcher publishes dependency-walk coverage.** Every `trustsight.scans` record now carries a bounded `dependency_analysis` summary: the requested depth, dependencies examined, deepest level reached, whether the walk was truncated, and the identities of dependencies that independently cleared the review threshold (full dependency findings stay out of the signed document). The feed stores the summary and renders it on the package page, so a reader can tell a completed direct-only walk from a truncated deep one.
 - **`full-aur` accepts `--depth`.** The watch loop already accepted a depth internally but the CLI never defined the option, so a watcher could only change it through `[depth] levels`. The option now reaches both `--watch` and single-shot cycles, prints the effective depth in the watch banner, and rejects values below `-1`. The shipped watcher compose file uses `--depth -1`, subject to the existing 8-level and 200-node per-root ceilings.
 - **G015 reports sleeper adoption campaigns.** {#sleeper-adoption-campaign} A multi-account cohort of dormant adopted packages is joined when the same maintainers reactivate most of it after a cooling-off period. The base finding is MEDIUM and alert-only; a curated payload or takeover signal raises it to HIGH. G015 primes campaign state on both severities and never adds its severity to a member's score.
+- **Provider credentials are safe by default.** `trustsight auth
+  login|status|logout` stores a GitHub/GitLab/Codeberg/Bitbucket token in the
+  OS keyring (optional `keyring` extra), or reads a systemd credential, a
+  `0600` file or the environment. A keyring that refuses fails closed, a
+  `Secret` redacts itself in every rendering, and a token is provider-scoped so
+  it is never sent to another host (A18). The token is never an argument, so it
+  cannot land in `ps` or the shell history.
 
-- **G015 reports sleeper adoption campaigns.** A multi-account cohort of dormant adopted packages is joined when the same maintainers reactivate most of it after a cooling-off period. The base finding is MEDIUM and alert-only; a curated payload or takeover signal raises it to HIGH. G015 primes campaign state on both severities and never adds its severity to a member's score.
+- **The upstream-scan safety core.** `trustsight.upstream_scan` validates a
+  declared upstream against an exact forge allowlist (with operator
+  `allowed_hosts_extra`), refuses userinfo/ports/IP-literals/non-HTTPS, pins a
+  routable DNS answer (a private/loopback/metadata answer is refused), and
+  exposes a checksum-gated archive fetch that parses nothing until a strong
+  declared digest verifies. The transport is injected, so the core imports no
+  network and the reviewed egress module can be wired separately.
+
+- **The upstream-scan lane reads the declared source archive (opt-in).** With
+  `[upstream_scan] enabled`, the server-side watcher fetches an allowlisted
+  forge source whose strong checksum pins it, verifies the checksum, and
+  extracts dependency manifests in the read-role manifest worker (absolute and
+  `..` paths, links and bombs refused). The texts join the existing
+  manifest-state path as `upstream/<path>`, so U001-U006/U011/U012 finally see
+  the manifests most AUR packages ship only inside the source archive. The
+  first observation is a baseline; a redirect is followed only to a fixed
+  forge CDN and never carries the token. Off by default; the local analysis
+  path stays fetch-free.
+
+- **The upstream lane is hardened against SSRF and archive bombs.** The
+  transport checks the *connected socket peer* against the pinned address
+  (not just the pre-connect DNS answer), refuses every redirect except to the
+  fixed forge CDNs, sends `Accept-Encoding: identity`, and clamps its byte and
+  time ceilings. Archive extraction caps *decompressed* bytes with a limited
+  reader and counts actual bytes read rather than declared sizes, refuses
+  encrypted/symlink/oversized members, and the collector clamps its deadline,
+  checksum floor and total manifest text. New gate: `upstream reads are
+  bounded and pinned`.
+
+- **Local CI shapes are reported (U013/U014).** With the opt-in upstream lane
+  enabled, a fetched workflow that pairs a repository secret with an outbound
+  transfer (U013), or that checks out full history and greps it for credential
+  patterns (U014), is reported at weight 0 (anergic) beside the federation-fed
+  U007/U008.
+
+- **Signed upstream manifest observations are consumed locally (U015).** The
+  server-side lane persists a bounded `upstream_observations` projection; a
+  signed `upstream_manifest` baseline carries it, and the local U-series
+  reports a matching `repo|pkgver` at weight 0 (anergic) without fetching.
+
+- **Upstream source archives are scanned for artifact shapes (A009/A010).**
+  With the opt-in upstream lane enabled, a fetched archive that ships an ELF
+  binary (A009) or a setuid/setgid file (A010) is reported at weight 0
+  (anergic). The bits and magic are read from the archive, nothing is
+  extracted to disk or executed.
 
 ## [0.28.8] - 2026-11-13
 

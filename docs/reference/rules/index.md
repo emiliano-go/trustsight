@@ -7,8 +7,8 @@ inventory is the R-series regex rules, the H-series heuristics, sabotage rules S
 rules X001-X034, integrity-change rules C001-C034, dependency rules
 D001-D005, temporal rules T001-T012, correlation rules G001-G011 and G012-G015, entropy
 rules E001-E003, the indicator rule H056, meta rules M001-M006, upstream
-rules U001-U012, artifact rules A001-A008, declared-practice rules P001-P009 (P004 skipped), and
-unverifiable rules W001-W013.
+rules U001-U015, artifact rules A001-A010, declared-practice rules P001-P009 (P004 skipped), and
+unverifiable rules W001-W014.
 
 Each rule contributes according to its severity weight, match target and
 scope, except the P and W series and the weight-0 M annotations, which are
@@ -57,14 +57,14 @@ generated from it by `scripts/build_rules_index.py`.
 | [Corpus Behavioral](corpus-behavioral.md) | `corpus-behavioral` | 6 | The package's position in, or deviation from, the corpus baseline - silent without prior observations. |
 | [Crossfire](crossfire.md) | `crossfire` | 34 | The evasion technique itself, not the payload it hides: a rule here fires on how a thing was written rather than on what it does. |
 | [Sabotage](sabotage.md) | `sabotage` | 8 | A payload aimed at the operator's machine rather than at getting something out of it: resource exhaustion, deletion, permission sabotage, service disruption, resource theft. |
-| [Unverifiable](unverifiable.md) | `unverifiable` | 13 | Not a claim about the recipe but about the analysis: something the package will run that this run could not read. Weight 0 always, and always shown. |
+| [Unverifiable](unverifiable.md) | `unverifiable` | 14 | Not a claim about the recipe but about the analysis: something the package will run that this run could not read. Weight 0 always, and always shown. |
 | [Meta and Confluence](meta.md) | `meta` | 6 | A claim about other findings: a declared practice contradicted by structure, or a composition only visible from the whole profile. |
 | [Entropy](entropy.md) | `entropy` | 3 | The added content is statistically abnormal - a distribution outlier, not a known pattern. Suspicion, never a verdict. |
 | [Correlation](correlation.md) | `correlation` | 15 | The pattern is across packages, not inside one: a host, literal or adopter shared by several packages in a window. |
-| [Artifact](artifact.md) | `artifact` | 8 | The built package does not match the recipe: the L9 artifact layer, off by default, never blended into the static score. |
+| [Artifact](artifact.md) | `artifact` | 10 | The built package does not match the recipe: the L9 artifact layer, off by default, never blended into the static score. |
 | [Indicators](indicator.md) | `indicator` | 1 | A declared surface matches an entry in signed external data: the IOC list, or a federated publisher's indicator set.  Outside the heuristic score and alerted at maximum priority. |
-| [Upstream Manifests](upstream-manifests.md) | `upstream-manifests` | 8 | A committed dependency manifest changed: a dependency moved, a new remote source entered the recipe's reach, or the resolver is being redirected.  Read from the repository, never fetched. |
-| [Upstream Release Integrity](upstream-release.md) | `upstream-release` | 4 | What a recipe declares about upstream - its URL, its sources, their access mode - and the CI surface it commits.  Upstream content is never read (A2/A8); the CI exfil and history-sweep shapes arrive over the signed federation channel instead. |
+| [Upstream Manifests](upstream-manifests.md) | `upstream-manifests` | 9 | A committed dependency manifest changed: a dependency moved, a new remote source entered the recipe's reach, or the resolver is being redirected.  Read from the repository, never fetched. |
+| [Upstream Release Integrity](upstream-release.md) | `upstream-release` | 6 | What a recipe declares about upstream - its URL, its sources, their access mode - and the CI surface it commits.  Upstream content is never read (A2/A8); the CI exfil and history-sweep shapes arrive over the signed federation channel instead. |
 <!-- /generated: legend -->
 
 Crossfire is the anti-evasion family introduced in the current ruleset. Its
@@ -106,6 +106,8 @@ is deliberately non-contiguous; see
 | [A006](artifact.md#a006) | File Capabilities In Artifact | Artifact | HIGH | [Artifact](artifact.md) |
 | [A007](artifact.md#a007) | Privileged Surface In Artifact | Artifact | MEDIUM | [Artifact](artifact.md) |
 | [A008](artifact.md#a008) | eBPF Artifact In Package | Artifact | HIGH | [Artifact](artifact.md) |
+| [A009](artifact.md#a009) | Executable Binary In Source Archive | Artifact | HIGH | [Artifact](artifact.md) |
+| [A010](artifact.md#a010) | Setuid File In Source Archive | Artifact | HIGH | [Artifact](artifact.md) |
 | [C001](integrity.md#c001) | Checksum Changed Without Source Change With Stable Version | Integrity-change | HIGH | [Integrity and Verification](integrity.md) |
 | [C002](integrity.md#c002) | Checksum Updated With Version Bump | Integrity-change | INFO | [Integrity and Verification](integrity.md) |
 | [C003](integrity.md#c003) | Source URL Changed Without Version Bump | Integrity-change | INFO | [Integrity and Verification](integrity.md) |
@@ -346,6 +348,9 @@ is deliberately non-contiguous; see
 | [U010](upstream-release.md#u010) | Unauditable Upstream | U | MEDIUM | [Upstream Release Integrity](upstream-release.md) |
 | [U011](upstream-manifests.md#u011) | Upstream Origin Changed | U | - | [Upstream Manifests](upstream-manifests.md) |
 | [U012](upstream-manifests.md#u012) | Lockfile Integrity Weakened | U | - | [Upstream Manifests](upstream-manifests.md) |
+| [U013](upstream-release.md#u013) | CI Exfil Shape (Local) | U | MEDIUM | [Upstream Release Integrity](upstream-release.md) |
+| [U014](upstream-release.md#u014) | Git-History Credential Sweep (Local) | U | MEDIUM | [Upstream Release Integrity](upstream-release.md) |
+| [U015](upstream-manifests.md#u015) | Federated Upstream Manifest Delta | U | INFO | [Upstream Manifests](upstream-manifests.md) |
 | [W001](unverifiable.md#w001) | Executes Code This Analysis Did Not Read | Unverifiable | - | [Unverifiable](unverifiable.md) |
 | [W002](unverifiable.md#w002) | Build Resolves Dependencies From A Registry | Unverifiable | - | [Unverifiable](unverifiable.md) |
 | [W003](unverifiable.md#w003) | Applies A Patch This Analysis Did Not Read | Unverifiable | - | [Unverifiable](unverifiable.md) |
@@ -359,6 +364,7 @@ is deliberately non-contiguous; see
 | [W011](unverifiable.md#w011) | Upstream Content Not Read | Unverifiable | - | [Unverifiable](unverifiable.md) |
 | [W012](unverifiable.md#w012) | Federation Not Consulted | Unverifiable | - | [Unverifiable](unverifiable.md) |
 | [W013](unverifiable.md#w013) | Campaign Perimeter Boundary Note | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
+| [W014](unverifiable.md#w014) | Upstream Scan Not Completed | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
 | [X001](crossfire.md#x001) | Encoded Payload Decoded And Executed | Crossfire | - | [Crossfire](crossfire.md) |
 | [X002](crossfire.md#x002) | Non-Literal Executable Name | Crossfire | - | [Crossfire](crossfire.md) |
 | [X003](crossfire.md#x003) | Obfuscated Command Argument | Crossfire | - | [Crossfire](crossfire.md) |

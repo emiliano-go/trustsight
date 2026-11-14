@@ -141,3 +141,20 @@ def test_an_uncorroborated_checksum_stays_high(tmp_path, isolated_db):
     c001 = _c001(findings)
     assert c001 and c001[0]["severity"] == "HIGH"
     assert "weight_override" not in c001[0]
+
+
+def test_a_live_verified_triple_corroborates_without_a_baseline():
+    assert _upstream_hash_corroborated(PKGBUILD, {KEY})
+    assert not _upstream_hash_corroborated(PKGBUILD, {f"{URL}|1.0|{'d' * 64}"})
+
+
+def test_a_live_verified_triple_downgrades_c001(tmp_path, isolated_db):
+    new = PKGBUILD.replace(OLD_SUM, NEW_SUM)
+    text = _diff(PKGBUILD, new)
+    changes = extract_urls_from_diff(text)
+    findings = _structural_findings(
+        text, changes, package_name="demo", current_text=new,
+        verified_upstream_hashes={f"{URL}|1.0|{NEW_SUM}"},
+    )
+    c001 = _c001(findings)
+    assert c001 and c001[0]["severity"] == "INFO"

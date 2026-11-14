@@ -61,6 +61,12 @@ dev = [
     "hypothesis",
     "pytest-xdist>=3.8.0",
 ]
+credentials = [
+    # Optional: the OS keyring (Secret Service/KWallet) for provider tokens.
+    # The upstream-scan lane falls back to a 0600 token file or the environment
+    # when it is absent; importing it is lazy, so the core has no new dependency.
+    "keyring>=24.0",
+]
 docs = [
     # Pinned to the versions in uv.lock.  The docs site is also built by an
     # external service that runs `pip install -e '.[docs]'` and does not read

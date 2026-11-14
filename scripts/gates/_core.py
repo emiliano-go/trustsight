@@ -60,6 +60,7 @@ _NETWORK_MODULES = {
     "full_aur/metadata.py",
     "notify.py",
     "release.py",
+    "upstream_fetch.py",
     # The isolated git worker clones the AUR repository (A16), but only
     # through its own loopback bridge and the parent CONNECT proxy pinned to
     # aur.archlinux.org:443.

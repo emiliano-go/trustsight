@@ -1,5 +1,21 @@
 {
   "rules": {
+    "A009": {
+      "changelog": "upstream-scan-lane",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
+      "signal": "artifact shape inside a fetched source archive; needs a corpus rate before it can score",
+      "since": "0.28.9",
+      "status": "anergic"
+    },
+    "A010": {
+      "changelog": "upstream-scan-lane",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
+      "signal": "artifact shape inside a fetched source archive; needs a corpus rate before it can score",
+      "since": "0.28.9",
+      "status": "anergic"
+    },
     "C001": {
       "changelog": "c001-upstream-hash-corroboration",
       "promotion": "keep conditional while the signed baseline covers the corpus; promote the corroboration path into ordinary HIGH reporting or retire the baseline once it stops paying for itself",
@@ -117,6 +133,30 @@
       "promotion": "remove status or mark promoted after the full-AUR benign replay checkpoint; record the measured rate in the changelog",
       "signal": "full-AUR benign replay fire-rate < 0.30 plus positive trust-erosion and no-precursor/no-terminal twins",
       "since": "0.27.1",
+      "status": "anergic"
+    },
+    "U013": {
+      "changelog": "upstream-scan-lane",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
+      "signal": "local CI shape over a fetched upstream workflow; needs a corpus rate before it can score",
+      "since": "0.28.9",
+      "status": "anergic"
+    },
+    "U014": {
+      "changelog": "upstream-scan-lane",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
+      "signal": "local CI shape over a fetched upstream workflow; needs a corpus rate before it can score",
+      "since": "0.28.9",
+      "status": "anergic"
+    },
+    "U015": {
+      "changelog": "upstream-scan-lane",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly calibration, then set an explicit weight after the signed observations cover the corpus",
+      "signal": "signed server-side manifest observations; needs a corpus rate before it can score",
+      "since": "0.28.9",
       "status": "anergic"
     }
   }

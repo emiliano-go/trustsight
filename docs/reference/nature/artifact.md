@@ -5,7 +5,7 @@
 Mechanics live on the [Artifact system page](../rules/artifact.md).
 
 <!-- generated: nature-rules -->
-**Rules in this nature:** [A001](../rules/artifact.md#a001), [A002](../rules/artifact.md#a002), [A003](../rules/artifact.md#a003), [A004](../rules/artifact.md#a004), [A005](../rules/artifact.md#a005), [A006](../rules/artifact.md#a006), [A007](../rules/artifact.md#a007), [A008](../rules/artifact.md#a008) (8 rules).
+**Rules in this nature:** [A001](../rules/artifact.md#a001), [A002](../rules/artifact.md#a002), [A003](../rules/artifact.md#a003), [A004](../rules/artifact.md#a004), [A005](../rules/artifact.md#a005), [A006](../rules/artifact.md#a006), [A007](../rules/artifact.md#a007), [A008](../rules/artifact.md#a008), [A009](../rules/artifact.md#a009), [A010](../rules/artifact.md#a010) (10 rules).
 <!-- /generated: nature-rules -->
 
 ## Where it comes from

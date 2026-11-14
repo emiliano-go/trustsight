@@ -272,9 +272,41 @@ def set_config(key: str, value: str):
 
     path.write_text(text)
 
+def _env_bool(name: str) -> bool | None:
+    """Read an explicit boolean env override, or ``None`` when absent."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return None
+    value = raw.strip().lower()
+    if value in ("1", "true", "yes", "on"):
+        return True
+    if value in ("0", "false", "no", "off"):
+        return False
+    _log.warning("%s=%r is not a boolean; ignoring", name, raw)
+    return None
+
+
 def load_config() -> dict:
-    """Load the user config.toml"""
-    return load_toml("config.toml")
+    """Load the user config.toml, with container-safe upstream overrides.
+
+    The upstream lane stays off for local ``review``/``inspect``.  A watcher
+    container enables it explicitly through the environment rather than
+    shipping a config file; the two flags are the only settings a deployment
+    must change, and both remain opt-in.
+    """
+    config = load_toml("config.toml")
+    section = config.get("upstream_scan")
+    if not isinstance(section, dict):
+        section = {}
+        config["upstream_scan"] = section
+    for env_name, key in (
+        ("TRUSTSIGHT_UPSTREAM_SCAN_ENABLED", "enabled"),
+        ("TRUSTSIGHT_UPSTREAM_SCAN_ARCHIVE_FETCH", "archive_fetch"),
+    ):
+        value = _env_bool(env_name)
+        if value is not None:
+            section[key] = value
+    return config
 
 _shipped_rules_cache: list[dict] | None = None
 

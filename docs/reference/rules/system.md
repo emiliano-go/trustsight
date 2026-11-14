@@ -102,7 +102,7 @@ be a script the recipe executes.
 | B (Priors/Context) | Source bucket classification | Domain reputation of new URLs (not a rule, but a scoring input) |
 | C (History/Novelty) | URL and maintainer novelty | First-seen signals from the local database |
 | D (Verification) | Checksum, PGP, GPG presence | Declared integrity metadata, reported at weight 0 |
-| Reported, not scored | W001-W013 | Analysis boundaries: bytes the package will run that this run could not read. Weight 0, always shown. |
+| Reported, not scored | W001-W014 | Analysis boundaries: bytes the package will run that this run could not read. Weight 0, always shown. |
 
 The U-series reads what a recipe declares about upstream. From the committed dependency manifests beside a recipe: U003 (a new remote source) and U004 (a redirected resolver) score at MEDIUM; U001, U002, U005 and U006 are weight-0 ledger entries. From upstream release integrity: U007 (CI exfil shape) and U008 (git-history credential sweep) score at MEDIUM from the signed federation channel, U009 (new CI surface committed) is a weight-0 ledger entry, and U010 (unauditable upstream) scores at MEDIUM.
 
@@ -1210,6 +1210,10 @@ See [W012: Federation Not Consulted](unverifiable.md#w012).
 
 See [W013: Campaign Perimeter Boundary Note](unverifiable.md#w013).
 
+### W014 {#w014}
+
+See [W014: Upstream Scan Not Completed](unverifiable.md#w014).
+
 ### U001 {#u001}
 
 See [U001: Manifest Added Or Removed](upstream-manifests.md#u001).
@@ -1257,6 +1261,18 @@ See [U009: New CI Surface Committed](upstream-release.md#u009).
 ### U010 {#u010}
 
 See [U010: Unauditable Upstream](upstream-release.md#u010).
+
+### U013 {#u013}
+
+See [U013: CI Exfil Shape (Local)](upstream-release.md#u013).
+
+### U014 {#u014}
+
+See [U014: Git-History Credential Sweep (Local)](upstream-release.md#u014).
+
+### U015 {#u015}
+
+See [U015: Federated Upstream Manifest Delta](upstream-manifests.md#u015).
 
 ### M001 {#m001}
 
@@ -1433,6 +1449,14 @@ See [A007: Privileged Surface In Artifact](artifact.md#a007).
 ### A008 {#a008}
 
 See [A008: eBPF Artifact In Package](artifact.md#a008).
+
+### A009 {#a009}
+
+See [A009: Executable Binary In Source Archive](artifact.md#a009).
+
+### A010 {#a010}
+
+See [A010: Setuid File In Source Archive](artifact.md#a010).
 
 ### C027 {#c027}
 

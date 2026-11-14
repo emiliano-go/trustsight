@@ -237,11 +237,13 @@ docker run -d --name trustsight-watch \
   --user 1000:1000 \
   --security-opt seccomp=unconfined \
   --security-opt apparmor=unconfined \
+  -e TRUSTSIGHT_UPSTREAM_SCAN_ENABLED=1 \
+  -e TRUSTSIGHT_UPSTREAM_SCAN_ARCHIVE_FETCH=1 \
   -v trustsight-data:/home/ts/.local/share/trustsight \
   -v $PWD/trustsight-config:/home/ts/.config/trustsight \
   --restart unless-stopped \
   ghcr.io/emiliano-go/trustsight:latest \
-  full-aur --watch --interval 1800
+  full-aur --watch --interval 1800 --depth -1
 ```
 
 The volume holds the database, the corpus state and the resume file, so a
@@ -272,6 +274,51 @@ capabilities, resource limits and the watcher healthcheck - ships as
 mkdir -p trustsight-config
 docker compose -f docker-compose.watcher.yml up -d
 docker compose -f docker-compose.watcher.yml logs -f trustsight-watch
+```
+
+### Upstream reads and deep dependencies
+
+The shipped compose file runs `full-aur --watch --interval 1800 --depth -1`,
+so a cycle walks each root's reachable AUR dependency closure (bounded by the
+existing 8-level and 200-node per-root ceilings).  It also enables the
+upstream lane for the watcher only:
+
+```yaml
+environment:
+  TRUSTSIGHT_UPSTREAM_SCAN_ENABLED: "1"
+  TRUSTSIGHT_UPSTREAM_SCAN_ARCHIVE_FETCH: "1"
+```
+
+The lane reads a declared source archive only when the recipe names an
+allowlisted forge host and a checksum at or above 256 bits pins it.  It never
+fetches on the local `review`/`inspect` path, and those two environment
+variables are the only settings a container needs; setting them in a shell
+profile would enable the lane for every local command too.
+
+GitHub rate-limits anonymous source reads, so a token is strongly recommended
+for an AUR-wide watcher.  Mount a `0600` token file read-only and point the
+container at it:
+
+```yaml
+volumes:
+  - ./secrets/github-token:/run/secrets/github_token:ro
+environment:
+  TRUSTSIGHT_GITHUB_TOKEN_FILE: "/run/secrets/github_token"
+```
+
+Do not put the token itself in `docker-compose.watcher.yml` or the
+environment: `docker inspect` exposes it.  A token issued for a different
+provider uses the matching `TRUSTSIGHT_<PROVIDER>_TOKEN_FILE`.  A locked or
+refusing keyring fails closed: the package records
+`upstream_scan_token_unavailable` and the archive is skipped rather than read
+anonymously.
+
+The same settings can live in the mounted `config.toml`:
+
+```toml
+[upstream_scan]
+enabled = true
+archive_fetch = true
 ```
 
 ### Reading the logs

@@ -101,6 +101,27 @@ def test_load_config_creates_default(tmp_path, monkeypatch):
     assert config["seed"]["baseline_tag"].startswith("baseline-")
 
 
+def test_upstream_scan_env_flags_override_the_config(tmp_path, monkeypatch):
+    cfg_dir = tmp_path / ".config" / "trustsight"
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", cfg_dir)
+    monkeypatch.setattr(
+        "trustsight.config.DATA_DIR", tmp_path / ".local" / "share" / "trustsight")
+    monkeypatch.setattr(
+        "trustsight.config.CACHE_DIR", tmp_path / ".cache" / "trustsight")
+    monkeypatch.setenv("TRUSTSIGHT_UPSTREAM_SCAN_ENABLED", "1")
+    monkeypatch.setenv("TRUSTSIGHT_UPSTREAM_SCAN_ARCHIVE_FETCH", "true")
+
+    config = load_config()
+    assert config["upstream_scan"]["enabled"] is True
+    assert config["upstream_scan"]["archive_fetch"] is True
+
+    monkeypatch.setenv("TRUSTSIGHT_UPSTREAM_SCAN_ENABLED", "not-a-boolean")
+    monkeypatch.setenv("TRUSTSIGHT_UPSTREAM_SCAN_ARCHIVE_FETCH", "0")
+    config = load_config()
+    assert config["upstream_scan"]["enabled"] is False
+    assert config["upstream_scan"]["archive_fetch"] is False
+
+
 def test_review_profiles_are_validated_and_change_the_fingerprint(monkeypatch):
     import trustsight.config as config_module
     import trustsight.review_policy as policy_module

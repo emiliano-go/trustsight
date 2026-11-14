@@ -863,3 +863,25 @@ def test_expired_only_domain_is_still_reported_by_the_match_path(
     assert len(fact.ioc_matches) == 1
     assert fact.ioc_matches[0].value == "expired.example"
     assert fact.ioc_matches[0].expired is True
+
+
+def test_upstream_manifest_entries_round_trip_with_detail(tmp_path, isolated_db):
+    from trustsight.db import get_db_path, save_upstream_observation
+    from trustsight.ioc_baseline import match_upstream_manifest
+
+    bib = _build_script()
+    save_upstream_observation(
+        "demo", "github.com/owner/repo", "1.0", checksum="a" * 64,
+        detail='{"remote_added":["evil.example"]}')
+
+    rows = bib._rows_from_upstream_db(get_db_path())
+    assert rows and rows[0]["type"] == "upstream_manifest"
+    assert rows[0]["value"] == "github.com/owner/repo|1.0"
+
+    entries = bib._normalise_entries(rows, "curator-x")
+    out = tmp_path / "upstream-baseline"
+    bib.build(entries, "curator-x", out, None, 30, None)
+    import_baseline(out, allow_unsigned=True)
+
+    matched = match_upstream_manifest("github.com/owner/repo|1.0")
+    assert matched and "evil.example" in matched[0].detail

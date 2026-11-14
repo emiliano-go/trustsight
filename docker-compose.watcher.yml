@@ -72,6 +72,15 @@ services:
       # The watcher also calls malloc_trim(0) at the end of every cycle.
       MALLOC_ARENA_MAX: "2"
       MALLOC_TRIM_THRESHOLD_: "131072"
+      # The upstream lane is opt-in and only the watcher enables it: local
+      # `review`/`inspect` stays fetch-free.  The lane reaches only the
+      # allowlisted forges, and parses an archive only after its declared
+      # checksum verifies.  A token is strongly recommended; mount a 0600
+      # file read-only and point TRUSTSIGHT_GITHUB_TOKEN_FILE at it rather
+      # than putting the token in the environment.
+      TRUSTSIGHT_UPSTREAM_SCAN_ENABLED: "1"
+      TRUSTSIGHT_UPSTREAM_SCAN_ARCHIVE_FETCH: "1"
+      # TRUSTSIGHT_GITHUB_TOKEN_FILE: "/run/secrets/github_token"
       # Secret-file form of the feed key.  Prefer this (or a Docker secret)
       # over putting the private key in the environment, which is visible to
       # `docker inspect`.

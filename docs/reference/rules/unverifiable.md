@@ -67,6 +67,7 @@ rules, because a W is weight-0 by construction:
 | [W011](#w011) | Upstream Content Not Read | - |
 | [W012](#w012) | Federation Not Consulted | - |
 | [W013](#w013) | Campaign Perimeter Boundary Note | INFO |
+| [W014](#w014) | Upstream Scan Not Completed | INFO |
 <!-- /generated: page-index -->
 
 ### W001: Executes Code This Analysis Did Not Read {#w001}
@@ -319,3 +320,17 @@ spot, until the campaign TTL expires.
 
 Escalation-only, weight 0. It is louder under campaign context and never
 quieter, so the score and the clean/not-clean boundary are untouched.
+
+### W014: Upstream Scan Not Completed {#w014}
+
+- **Target:** opt-in upstream scan lane
+- **Severity:** INFO (weight 0)
+- **Category:** `unverifiable`
+
+- **Condition:** The opt-in `[upstream_scan]` lane ran for this package but at
+  least one read was refused, a checksum did not verify, the text budget was
+  reached, the deadline expired, or the operator set `TRUSTSIGHT_OFFLINE`.
+
+This is a weight-0 boundary, not a scored finding and not a clean verdict. It
+names what the lane could not read this cycle; with the lane disabled, W011
+already states that upstream content is not read at all.

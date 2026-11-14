@@ -13,7 +13,8 @@ primary-sourced input file; the script only normalises, signs and packages it.
 
 Input file (`--from-file`): a JSON array of entries, each at minimum::
 
-    {"type": "domain|hash|package|upstream_repo|upstream_hash", "value": "evil.example",
+    {"type": "domain|hash|package|upstream_repo|upstream_hash|upstream_manifest",
+     "value": "evil.example", "detail": "bounded JSON (upstream_manifest only)",
      "shape": "exfil|history_sweep (upstream_repo only)",
      "confidence": "confirmed", "provenance": "ASA-2026-06",
      "campaign": "some-incident", "expires_at": "2026-12-31T00:00:00Z"}
@@ -97,6 +98,10 @@ def _normalise_entries(rows: list[dict], source: str) -> list[dict]:
         # baseline-built row default to U007 in the analyser.
         if type_ == "upstream_repo":
             entry["shape"] = str(row.get("shape", "")).strip().lower()
+        if type_ == "upstream_manifest":
+            # The detail is the projection the local report renders; it is
+            # never the raw manifest text and is bounded before signing.
+            entry["detail"] = str(row.get("detail", ""))[:4096]
         out.append(entry)
     # Deterministic order so the signed bytes are reproducible.
     out.sort(key=lambda e: (e["type"], e["value"]))
@@ -179,10 +184,38 @@ def build(
     }
 
 
+def _rows_from_upstream_db(path: Path) -> list[dict]:
+    """Read the server's bounded observations as ``upstream_manifest`` rows."""
+    import sqlite3
+
+    uri = f"file:{path}?mode=ro"
+    conn = sqlite3.connect(uri, uri=True)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "SELECT package_name, repo, version, detail FROM upstream_observations"
+        ).fetchall()
+    finally:
+        conn.close()
+    return [
+        {
+            "type": "upstream_manifest",
+            "value": f"{row['repo']}|{row['version']}",
+            "detail": row["detail"] or "",
+            "provenance": f"upstream-scan:{row['package_name']}",
+            "confidence": "high",
+        }
+        for row in rows
+    ]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build a signed IOC baseline directory.")
-    parser.add_argument("--from-file", required=True, type=Path,
+    parser.add_argument("--from-file", type=Path, default=None,
                         help="JSON array of curated IOC entries.")
+    parser.add_argument("--from-upstream-db", type=Path, default=None,
+                        help="Read upstream_observations from this database and "
+                             "emit upstream_manifest entries.")
     parser.add_argument("--source", required=True,
                         help="Curator name; must match the pinned feed source.")
     parser.add_argument("--incident", default=None, help="Incident identifier for the manifest.")
@@ -196,9 +229,18 @@ def main() -> int:
                        help="Build an unsigned baseline (imports only with --allow-unsigned).")
     args = parser.parse_args()
 
-    rows = json.loads(args.from_file.read_text(encoding="utf-8"))
-    if not isinstance(rows, list):
-        print("input must be a JSON array of IOC entries", file=sys.stderr)
+    rows: list[dict] = []
+    if args.from_file is not None:
+        loaded = json.loads(args.from_file.read_text(encoding="utf-8"))
+        if not isinstance(loaded, list):
+            print("input must be a JSON array of IOC entries", file=sys.stderr)
+            return 2
+        rows.extend(loaded)
+    if args.from_upstream_db is not None:
+        rows.extend(_rows_from_upstream_db(args.from_upstream_db))
+    if not rows:
+        print("no entries: pass --from-file and/or --from-upstream-db",
+              file=sys.stderr)
         return 2
     entries = _normalise_entries(rows, args.source)
     out_dir = args.out or Path("ioc-baselines") / args.source

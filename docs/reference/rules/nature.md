@@ -348,9 +348,9 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 ## U-series: **Upstream** Declared Surfaces
 
-**Count:** 12 rules (U001-U012)
+**Count:** 14 rules (U001-U014)
 
-**Mechanism:** For the committed-manifest rules, parses the dependency manifests committed beside a recipe - `Cargo.toml`, `package.json`, `requirements.txt`, `go.mod`, `Gemfile`, `composer.json` and peers - with the existing tree walk and diff. The upstream-release rules read what the recipe declares about upstream: U007/U008 consume a signed `upstream_repo` shape over the federation channel (the workflow itself is upstream and A2-forbidden locally), U009 notes a committed `.github/workflows/*` path, and U010 reads the access mode of gained `source=()` entries. No fetch and no extraction (A2, A8): these are repository bytes, a signed observation, or the declaration itself.
+**Mechanism:** For the committed-manifest rules, parses the dependency manifests committed beside a recipe - `Cargo.toml`, `package.json`, `requirements.txt`, `go.mod`, `Gemfile`, `composer.json` and peers - with the existing tree walk and diff. The upstream-release rules read what the recipe declares about upstream: U007/U008 consume a signed `upstream_repo` shape over the federation channel (the workflow itself is upstream and A2-forbidden locally), U009 notes a committed `.github/workflows/*` path, and U010 reads the access mode of gained `source=()` entries. U013/U014 are the local counterparts of U007/U008, over a workflow read by the opt-in upstream-scan lane (weight 0). No fetch and no extraction (A2, A8): these are repository bytes, a signed observation, or the declaration itself.
 
 **What you can tune:**
 

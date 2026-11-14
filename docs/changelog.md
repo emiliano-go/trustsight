@@ -53,6 +53,12 @@
   checksum floor and total manifest text. New gate: `upstream reads are
   bounded and pinned`.
 
+- **Local CI shapes are reported (U013/U014).** With the opt-in upstream lane
+  enabled, a fetched workflow that pairs a repository secret with an outbound
+  transfer (U013), or that checks out full history and greps it for credential
+  patterns (U014), is reported at weight 0 (anergic) beside the federation-fed
+  U007/U008.
+
 - **G015 reports sleeper adoption campaigns.** A multi-account cohort of dormant adopted packages is joined when the same maintainers reactivate most of it after a cooling-off period. The base finding is MEDIUM and alert-only; a curated payload or takeover signal raises it to HIGH. G015 primes campaign state on both severities and never adds its severity to a member's score.
 
 ## [0.28.8] - 2026-11-13

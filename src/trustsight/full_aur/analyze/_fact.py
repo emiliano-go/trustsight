@@ -107,6 +107,7 @@ def analyze_package_text(
     upstream_manifest_incomplete: bool = False,
     manifest_deltas=(),
     workflow_deltas=(),
+    upstream_findings=(),
 ) -> PackageFact:
     """Analyse a package from PKGBUILD text, without a git repository.
 
@@ -482,6 +483,7 @@ def analyze_package_text(
     pre_filter_findings: list[dict] = []
     if archive_trailer_finding:
         pre_filter_findings.append(archive_trailer_finding)
+    pre_filter_findings.extend(upstream_findings or ())
     post_filter_findings = list(_temporal_findings(temporal, pkg_name, False))
     post_filter_findings.extend(longitudinal_findings(
         diff_text, pkg_name, breaks, config,

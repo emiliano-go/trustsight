@@ -17,6 +17,7 @@ default analysis path.  A refusal is returned as a note, not hidden.
 
 from __future__ import annotations
 
+import ipaddress
 import os
 import re
 import time
@@ -28,6 +29,8 @@ from .upstream_scan import (
     configured_hosts,
     verify_archive_checksum,
 )
+from .analysis.upstream_release import is_ci_workflow_path
+from .findings import stamp
 from .upstream_fetch import UpstreamFetchError, fetch_bytes
 
 __all__ = ["collect_upstream_manifest_texts"]
@@ -61,6 +64,68 @@ _PROVIDER_BY_HOST = {
     "bitbucket.org": "bitbucket",
 }
 
+#: Local CI shapes, reported only (U013/U014 are anergic).  A workflow that
+#: references a repository secret and sends it to an unknown host, or that
+#: materialises full history and greps it for credentials, is the shape the
+#: federation channel reports; these are the local equivalents.
+_SECRET_REF_RE = re.compile(r"\$\{\{\s*secrets\.", re.IGNORECASE)
+_OUTBOUND_RE = re.compile(
+    r"(?:curl|wget|Invoke-WebRequest|iwr)\b[^\n]{0,200}?"
+    r"https?://([^\s/'\"?#]+)", re.IGNORECASE)
+_DEPTH_ZERO_RE = re.compile(r"fetch-depth:\s*['\"]?0", re.IGNORECASE)
+_GREP_SECRET_RE = re.compile(
+    r"\bgrep\b[^\n]{0,160}(?:token|secret|password|passwd|"
+    r"api[_-]?key|credential)", re.IGNORECASE)
+_KNOWN_EGRESS = frozenset({
+    "github.com", "api.github.com", "codeload.github.com",
+    "objects.githubusercontent.com", "raw.githubusercontent.com",
+    "uploads.github.com", "pypi.org", "files.pythonhosted.org",
+    "registry.npmjs.org", "crates.io", "static.crates.io",
+    "deb.debian.org", "archive.ubuntu.com",
+})
+
+
+def _is_ip_literal(host: str) -> bool:
+    try:
+        ipaddress.ip_address(host.strip("[]"))
+        return True
+    except ValueError:
+        return False
+
+
+def _workflow_findings(path: str, text: str) -> list[dict]:
+    """U013/U014 over one fetched upstream workflow's text (weight 0)."""
+    out: list[dict] = []
+    if _SECRET_REF_RE.search(text):
+        for match in _OUTBOUND_RE.finditer(text):
+            host = match.group(1).strip().lower().rstrip(".")
+            if _is_ip_literal(host) or host not in _KNOWN_EGRESS:
+                out.append(stamp({
+                    "rule_id": "U013",
+                    "name": "CI Exfil Shape (Local)",
+                    "severity": "MEDIUM",
+                    "category": "upstream-ci",
+                    "match": (f"{path} pairs a repository secret with an "
+                              f"outbound transfer to {host}"),
+                    "file": path,
+                    "line": None,
+                    "params": {"host": host},
+                    "weight_override": 0,
+                }))
+                break
+    if _DEPTH_ZERO_RE.search(text) and _GREP_SECRET_RE.search(text):
+        out.append(stamp({
+            "rule_id": "U014",
+            "name": "Git-History Credential Sweep (Local)",
+            "severity": "MEDIUM",
+            "category": "upstream-ci",
+            "match": f"{path} checks out full history and greps it for credentials",
+            "file": path,
+            "line": None,
+            "weight_override": 0,
+        }))
+    return out
+
 
 def _checksum_for(recipe, index: int):
     for name, algorithm in _CHECKSUM_ARRAYS:
@@ -91,26 +156,26 @@ def collect_upstream_manifest_texts(
     config: dict | None = None,
     fetcher=None,
     extractor=None,
-) -> tuple[list[tuple[str, str]], list[str]]:
-    """Return upstream manifest texts and any refusal notes.
+) -> tuple[list[tuple[str, str]], list[str], list[dict]]:
+    """Return upstream manifest texts, refusal notes and local CI findings.
 
     *fetcher* and *extractor* are injectable for tests; the defaults are the
     real bounded transport and the sandboxed archive worker.
     """
     if not recipe_text:
-        return [], []
+        return [], [], []
     if config is None:
         from .config import load_config
 
         config = load_config()
     section = (config or {}).get("upstream_scan") if isinstance(config, dict) else None
     if not isinstance(section, dict) or not section.get("enabled", False):
-        return [], []
+        return [], [], []
     # The operator's offline switch is absolute: the lane never opens a
     # connection when TRUSTSIGHT_OFFLINE is set, whatever the config says.
     if os.environ.get("TRUSTSIGHT_OFFLINE", "").strip().lower() in (
             "1", "true", "yes"):
-        return [], ["upstream_scan_offline"]
+        return [], ["upstream_scan_offline"], []
 
     from .expansion import resolve_text
     from .recipedoc import parse_recipe
@@ -119,11 +184,12 @@ def collect_upstream_manifest_texts(
     try:
         recipe = parse_recipe(recipe_text)
     except Exception:  # noqa: BLE001 - an unparsable recipe yields no upstream reads
-        return [], ["upstream_scan_recipe_unparsed"]
+        return [], ["upstream_scan_recipe_unparsed"], []
 
     allowed = configured_hosts(config)
     texts: list[tuple[str, str]] = []
     notes: list[str] = []
+    findings: list[dict] = []
     seen = 0
     text_bytes = 0
 
@@ -202,14 +268,28 @@ def collect_upstream_manifest_texts(
         if parsed.get("refused") or parsed.get("malformed"):
             notes.append("upstream_scan_partial")
         for path, text in parsed.get("manifest_texts") or ():
+            if is_ci_workflow_path(path):
+                findings.extend(_workflow_findings(f"upstream/{path}", text))
             size = len(text.encode("utf-8", "replace"))
             if text_bytes + size > _MAX_TEXT_BYTES:
                 notes.append("upstream_scan_partial")
-                return texts, sorted(set(notes))
+                return texts, sorted(set(notes)), _dedupe(findings)
             texts.append((f"upstream/{path}", text))
             text_bytes += size
         seen += 1
-    return texts, sorted(set(notes))
+    return texts, sorted(set(notes)), _dedupe(findings)
+
+
+def _dedupe(findings: list[dict]) -> list[dict]:
+    seen: set[tuple[str, str]] = set()
+    out: list[dict] = []
+    for finding in findings:
+        key = (str(finding.get("rule_id", "")), str(finding.get("file", "")))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(finding)
+    return out
 
 
 def _resolve(raw: str, recipe, resolve_text) -> str:

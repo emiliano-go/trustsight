@@ -110,6 +110,22 @@
       "signal": "full-AUR benign replay fire-rate < 0.30 plus positive trust-erosion and no-precursor/no-terminal twins",
       "since": "0.27.1",
       "status": "anergic"
+    },
+    "U013": {
+      "changelog": "upstream-scan-lane",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
+      "signal": "local CI shape over a fetched upstream workflow; needs a corpus rate before it can score",
+      "since": "0.28.9",
+      "status": "anergic"
+    },
+    "U014": {
+      "changelog": "upstream-scan-lane",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
+      "signal": "local CI shape over a fetched upstream workflow; needs a corpus rate before it can score",
+      "since": "0.28.9",
+      "status": "anergic"
     }
   }
 }

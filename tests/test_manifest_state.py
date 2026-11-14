@@ -79,3 +79,24 @@ def test_first_upstream_observation_is_a_baseline_not_an_added_manifest():
     assert len(manifests) == 1
     assert manifests[0].path == "upstream/Cargo.toml"
     assert manifests[0].origin_changes
+
+
+def test_first_upstream_workflows_are_a_baseline_and_later_additions_fire():
+    cargo = "[dependencies]\nfoo = { git = \"https://github.com/good/foo\" }\n"
+
+    def state(workflows):
+        return build_manifest_state(
+            [("Cargo.toml", cargo)]
+            + [(f"upstream/.github/workflows/{w}", "on: push\n") for w in workflows],
+            [],
+        )
+
+    before = build_manifest_state([("Cargo.toml", cargo)], [])
+    first = state(["ci.yml"])
+    assert manifest_state_delta(before, first) == ((), ())
+
+    second = state(["ci.yml", "release.yml"])
+    manifests, workflows = manifest_state_delta(first, second)
+    assert manifests == ()
+    assert [w.path for w in workflows] == [
+        "upstream/.github/workflows/release.yml"]

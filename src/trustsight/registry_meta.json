@@ -2240,6 +2240,24 @@
     "target": null,
     "uid": "TS-0279"
   },
+  "u013": {
+    "canonical": true,
+    "capability": "upstream-ci",
+    "name": "CI Exfil Shape (Local)",
+    "severity": "MEDIUM",
+    "severity_text": "MEDIUM (weight 0)",
+    "target": "fetched upstream workflow",
+    "uid": "TS-0296"
+  },
+  "u014": {
+    "canonical": true,
+    "capability": "upstream-ci",
+    "name": "Git-History Credential Sweep (Local)",
+    "severity": "MEDIUM",
+    "severity_text": "MEDIUM (weight 0)",
+    "target": "fetched upstream workflow",
+    "uid": "TS-0297"
+  },
   "w001": {
     "canonical": true,
     "capability": null,

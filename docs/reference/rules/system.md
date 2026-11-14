@@ -1258,6 +1258,14 @@ See [U009: New CI Surface Committed](upstream-release.md#u009).
 
 See [U010: Unauditable Upstream](upstream-release.md#u010).
 
+### U013 {#u013}
+
+See [U013: CI Exfil Shape (Local)](upstream-release.md#u013).
+
+### U014 {#u014}
+
+See [U014: Git-History Credential Sweep (Local)](upstream-release.md#u014).
+
 ### M001 {#m001}
 
 See [M001: Claim Contradicted By Structure](meta.md#m001).

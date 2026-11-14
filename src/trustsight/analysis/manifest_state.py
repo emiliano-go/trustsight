@@ -31,17 +31,24 @@ def build_manifest_state(manifest_texts, tree_manifest) -> str | None:
         path for path, _head in tree_manifest or ()
         if is_ci_workflow_path(path)
     })
+    upstream_workflows = sorted(
+        str(path) for path, _text in manifest_texts or ()
+        if str(path).startswith("upstream/") and is_ci_workflow_path(path)
+    )
     has_upstream = any(
         str(path).startswith("upstream/") for path, _text in manifest_texts or ())
     return json.dumps({
         "version": _STATE_VERSION,
         "documents": documents,
         "workflows": workflows,
+        "upstream_workflows": upstream_workflows,
         "upstream": has_upstream,
     }, sort_keys=True, separators=(",", ":"))
 
 
-def _documents(raw: str) -> tuple[dict[str, ManifestDoc], list[str], bool] | None:
+def _documents(
+    raw: str,
+) -> tuple[dict[str, ManifestDoc], list[str], list[str], bool] | None:
     try:
         data = json.loads(raw)
         if not isinstance(data, dict) or data.get("version") != _STATE_VERSION:
@@ -67,7 +74,10 @@ def _documents(raw: str) -> tuple[dict[str, ManifestDoc], list[str], bool] | Non
             )
             documents[doc.path] = doc
         workflows = [str(path) for path in data.get("workflows", ())]
-        return documents, workflows, bool(data.get("upstream", False))
+        upstream_workflows = [
+            str(path) for path in data.get("upstream_workflows", ())]
+        return documents, workflows, upstream_workflows, bool(
+            data.get("upstream", False))
     except (ValueError, TypeError, KeyError):
         return None
 
@@ -82,8 +92,8 @@ def manifest_state_delta(
     new = _documents(current)
     if old is None or new is None:
         return (), ()
-    old_docs, old_workflows, old_upstream = old
-    new_docs, new_workflows, _new_upstream = new
+    old_docs, old_workflows, old_upstream_workflows, old_upstream = old
+    new_docs, new_workflows, new_upstream_workflows, _new_upstream = new
     deltas = []
     for path in sorted(old_docs.keys() | new_docs.keys()):
         before, after = old_docs.get(path), new_docs.get(path)
@@ -98,8 +108,14 @@ def manifest_state_delta(
         deltas.append(manifest_delta_from_docs(
             path, doc.format, status, before, after,
         ))
+    added_workflows = set(new_workflows) - set(old_workflows)
+    # The first state that carries upstream workflows is a baseline, not an
+    # "added" delta (the same rule the manifests use).
+    if old_upstream:
+        added_workflows |= (
+            set(new_upstream_workflows) - set(old_upstream_workflows))
     workflow_deltas = tuple(
         FileDelta(path=path, old_path=path, status="added", hunks=())
-        for path in sorted(set(new_workflows) - set(old_workflows))
+        for path in sorted(added_workflows)
     )
     return tuple(deltas), workflow_deltas

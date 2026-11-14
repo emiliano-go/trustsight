@@ -35,6 +35,8 @@ weights and the reserved identifier ranges.
 | [U008](#u008) | Git-History Credential Sweep | MEDIUM |
 | [U009](#u009) | New CI Surface Committed | LOW |
 | [U010](#u010) | Unauditable Upstream | MEDIUM |
+| [U013](#u013) | CI Exfil Shape (Local) | MEDIUM |
+| [U014](#u014) | Git-History Credential Sweep (Local) | MEDIUM |
 <!-- /generated: page-index -->
 
 ### U007: CI Exfil Shape {#u007}
@@ -109,3 +111,30 @@ not a score change.
 
 Measured on the v1 benign corpus, U010 fires on none: the transports it
 reads are deliberate choices, not background churn.
+
+### U013: CI Exfil Shape (Local) {#u013}
+
+- **Target:** fetched upstream workflow
+- **Severity:** MEDIUM (weight 0)
+- **Category:** `upstream-ci`
+
+- **Condition:** A fetched upstream workflow (`.github/workflows/*`) that
+  references a repository secret (`${{ secrets.`) and sends it to an IP
+  literal or to a host outside the small known-egress set.
+
+This is the local counterpart of U007. It runs only when the operator enabled
+`[upstream_scan]`, the declared archive's checksum verified, and the workflow
+was read from that archive. It is anergic (weight 0) until the corpus
+calibrates it, so it is a report-only signal rather than a scored claim.
+
+### U014: Git-History Credential Sweep (Local) {#u014}
+
+- **Target:** fetched upstream workflow
+- **Severity:** MEDIUM (weight 0)
+- **Category:** `upstream-ci`
+
+- **Condition:** A fetched upstream workflow that checks out full history
+  (`fetch-depth: 0`) and greps that history for credential-shaped patterns.
+
+This is the local counterpart of U008. It runs only on a workflow read by the
+opt-in `[upstream_scan]` lane and is anergic (weight 0) until calibrated.

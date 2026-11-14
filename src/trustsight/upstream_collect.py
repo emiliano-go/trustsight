@@ -156,26 +156,26 @@ def collect_upstream_manifest_texts(
     config: dict | None = None,
     fetcher=None,
     extractor=None,
-) -> tuple[list[tuple[str, str]], list[str], list[dict]]:
-    """Return upstream manifest texts, refusal notes and local CI findings.
+) -> tuple[list[tuple[str, str]], list[str], list[dict], frozenset[str]]:
+    """Return manifest texts, notes, local CI findings and verified triples.
 
     *fetcher* and *extractor* are injectable for tests; the defaults are the
     real bounded transport and the sandboxed archive worker.
     """
     if not recipe_text:
-        return [], [], []
+        return [], [], [], frozenset()
     if config is None:
         from .config import load_config
 
         config = load_config()
     section = (config or {}).get("upstream_scan") if isinstance(config, dict) else None
     if not isinstance(section, dict) or not section.get("enabled", False):
-        return [], [], []
+        return [], [], [], frozenset()
     # The operator's offline switch is absolute: the lane never opens a
     # connection when TRUSTSIGHT_OFFLINE is set, whatever the config says.
     if os.environ.get("TRUSTSIGHT_OFFLINE", "").strip().lower() in (
             "1", "true", "yes"):
-        return [], ["upstream_scan_offline"], []
+        return [], ["upstream_scan_offline"], [], frozenset()
 
     from .expansion import resolve_text
     from .recipedoc import parse_recipe
@@ -184,12 +184,13 @@ def collect_upstream_manifest_texts(
     try:
         recipe = parse_recipe(recipe_text)
     except Exception:  # noqa: BLE001 - an unparsable recipe yields no upstream reads
-        return [], ["upstream_scan_recipe_unparsed"], []
+        return [], ["upstream_scan_recipe_unparsed"], [], frozenset()
 
     allowed = configured_hosts(config)
     texts: list[tuple[str, str]] = []
     notes: list[str] = []
     findings: list[dict] = []
+    verified: set[str] = set()
     seen = 0
     text_bytes = 0
 
@@ -256,6 +257,9 @@ def collect_upstream_manifest_texts(
                 data, expected, algorithm=algorithm, min_bits=minimum):
             notes.append("upstream_scan_checksum")
             continue
+        version = str(recipe.scalars.get("pkgver", "") or "").strip()
+        if version:
+            verified.add(f"{url}|{version}|{expected}")
         try:
             if extractor is None:
                 parsed = manifest_client.parse_upstream_archive(
@@ -273,11 +277,12 @@ def collect_upstream_manifest_texts(
             size = len(text.encode("utf-8", "replace"))
             if text_bytes + size > _MAX_TEXT_BYTES:
                 notes.append("upstream_scan_partial")
-                return texts, sorted(set(notes)), _dedupe(findings)
+                return texts, sorted(set(notes)), _dedupe(findings), frozenset(
+                    verified)
             texts.append((f"upstream/{path}", text))
             text_bytes += size
         seen += 1
-    return texts, sorted(set(notes)), _dedupe(findings)
+    return texts, sorted(set(notes)), _dedupe(findings), frozenset(verified)
 
 
 def _dedupe(findings: list[dict]) -> list[dict]:

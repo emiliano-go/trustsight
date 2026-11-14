@@ -279,12 +279,14 @@ def _run_baseline_build(
         # [upstream_scan] enabled; a refusal is logged and never fails the
         # cycle, and the default local path does not call this.
         upstream_findings: list[dict] = []
+        upstream_notes: list[str] = []
+        verified_upstream_hashes: frozenset[str] = frozenset()
         if manifest_texts is not None:
             try:
                 from ..upstream_collect import collect_upstream_manifest_texts
 
-                (upstream_texts, upstream_notes,
-                 upstream_findings) = collect_upstream_manifest_texts(
+                (upstream_texts, upstream_notes, upstream_findings,
+                 verified_upstream_hashes) = collect_upstream_manifest_texts(
                     new_pkgbuild)
                 if upstream_texts:
                     manifest_texts = list(manifest_texts) + upstream_texts
@@ -369,6 +371,8 @@ def _run_baseline_build(
                 manifest_deltas=manifest_deltas,
                 workflow_deltas=workflow_deltas,
                 upstream_findings=upstream_findings,
+                verified_upstream_hashes=verified_upstream_hashes,
+                upstream_scan_notes=upstream_notes,
             )
             save_pkgbuild_snapshot(
                 package_name=name,

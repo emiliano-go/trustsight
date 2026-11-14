@@ -101,6 +101,9 @@ _W_RULE_KIND: dict[str, str] = {
     "W011": BoundaryKind.UPSTREAM_UNREAD,
     # The federation channel that could stand in for reading it is cold.
     "W012": BoundaryKind.FEDERATION_UNAVAILABLE,
+    # The opt-in scan ran but a read was refused/partial/offline: the
+    # standing upstream boundary, made specific to this run.
+    "W014": BoundaryKind.UPSTREAM_UNREAD,
 }
 
 

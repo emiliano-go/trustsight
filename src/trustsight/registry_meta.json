@@ -2375,6 +2375,15 @@
     "target": "campaign perimeter + standing boundary notes",
     "uid": "TS-0289"
   },
+  "w014": {
+    "canonical": true,
+    "capability": "unverifiable",
+    "name": "Upstream Scan Not Completed",
+    "severity": "INFO",
+    "severity_text": "INFO (weight 0)",
+    "target": "opt-in upstream scan lane",
+    "uid": "TS-0298"
+  },
   "x001": {
     "canonical": true,
     "capability": null,

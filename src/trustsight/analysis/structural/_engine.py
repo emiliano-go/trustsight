@@ -90,16 +90,25 @@ def _upstream_hash_key(current_text: str) -> str:
     if len(sources) != 1 or len(sums) != 1 or not version:
         return ""
     url = str(sources[0]).strip().split("::", 1)[-1].strip().strip("'").strip('"')
-    checksum = str(sums[0]).strip().strip("'").strip('"')
-    if not url or checksum in ("", "SKIP"):
+    checksum = str(sums[0]).strip().strip("'").strip('"').lower()
+    if not url or checksum in ("", "skip"):
         return ""
     return f"{url}|{version}|{checksum}"
 
 
-def _upstream_hash_corroborated(current_text: str) -> bool:
+def _upstream_hash_corroborated(current_text: str, verified=None) -> bool:
+    """True when the signed baseline *or* a live verified read names the triple.
+
+    ``verified`` is the set of ``url|version|sha256`` triples the opt-in
+    upstream lane actually fetched and checksum-verified this cycle.  It is
+    evidence of the same fact the signed baseline records, so it downgrades
+    C001 to report-only exactly the same way; an empty set changes nothing.
+    """
     key = _upstream_hash_key(current_text)
     if not key:
         return False
+    if verified and key.lower() in {str(v).lower() for v in verified}:
+        return True
     try:
         from ...ioc_baseline import match_upstream_hash
 
@@ -169,6 +178,7 @@ class ScanRequest:
     previous_commit: str = ""
     current_commit: str = ""
     delta: object = None
+    verified_upstream_hashes: frozenset[str] = frozenset()
 
 
 def _structural_findings(
@@ -185,6 +195,7 @@ def _structural_findings(
     previous_commit: str = "",
     current_commit: str = "",
     delta=None,
+    verified_upstream_hashes=frozenset(),
 ) -> list[dict]:
     return _structural_findings_from_request(ScanRequest(
         diff_text=diff_text,
@@ -200,6 +211,7 @@ def _structural_findings(
         previous_commit=previous_commit,
         current_commit=current_commit,
         delta=delta,
+        verified_upstream_hashes=frozenset(verified_upstream_hashes),
     ))
 
 
@@ -217,6 +229,7 @@ def _structural_findings_from_request(request: ScanRequest) -> list[dict]:
     previous_commit = request.previous_commit
     current_commit = request.current_commit
     delta = request.delta
+    verified_upstream_hashes = request.verified_upstream_hashes
     source_buckets = source_buckets or {}
     tree_manifest = normalise_tree_manifest(tree_manifest)
     findings: list[dict] = []
@@ -468,7 +481,8 @@ def _structural_findings_from_request(request: ScanRequest) -> list[dict]:
             # artifact, so the checksum change is corroborated rather than
             # unexplained: report it, never score it.  An uncorroborated swap
             # keeps the HIGH weight.
-            corroborated = _upstream_hash_corroborated(current_text)
+            corroborated = _upstream_hash_corroborated(
+                current_text, verified_upstream_hashes)
             add("C001", "Checksum Changed Without Source Change With Stable Version",
                 "INFO" if corroborated else "HIGH", "integrity", match,
                 weight_override=0 if corroborated else None,

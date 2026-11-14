@@ -39,7 +39,7 @@ def _extractor(_slug, _data):
 
 
 def test_disabled_lane_collects_nothing():
-    texts, notes, findings = collect_upstream_manifest_texts(
+    texts, notes, findings, verified = collect_upstream_manifest_texts(
         RECIPE, config={"upstream_scan": {"enabled": False}})
     assert texts == [] and notes == [] and findings == []
 
@@ -51,7 +51,7 @@ def test_enabled_lane_fetches_verifies_and_extracts():
         calls.append((url, target.slug))
         return DATA
 
-    texts, notes, findings = collect_upstream_manifest_texts(
+    texts, notes, findings, verified = collect_upstream_manifest_texts(
         RECIPE, config=CONFIG, fetcher=fetcher, extractor=_extractor)
     assert texts == [("upstream/pkg/Cargo.toml", "[package]\nname='x'\n")]
     assert notes == []
@@ -59,7 +59,7 @@ def test_enabled_lane_fetches_verifies_and_extracts():
 
 
 def test_a_checksum_mismatch_is_a_boundary_not_a_parse():
-    texts, notes, findings = collect_upstream_manifest_texts(
+    texts, notes, findings, verified = collect_upstream_manifest_texts(
         RECIPE, config=CONFIG, fetcher=lambda url, target: b"different",
         extractor=_extractor)
     assert texts == []
@@ -74,7 +74,7 @@ def test_an_off_allowlist_source_is_never_fetched():
         called.append(url)
         return DATA
 
-    texts, notes, findings = collect_upstream_manifest_texts(
+    texts, notes, findings, verified = collect_upstream_manifest_texts(
         recipe, config=CONFIG, fetcher=fetcher, extractor=_extractor)
     assert texts == [] and notes == [] and findings == []
     assert called == []
@@ -84,7 +84,7 @@ def test_archive_fetch_must_be_enabled():
     config = dict(CONFIG)
     config["upstream_scan"] = dict(CONFIG["upstream_scan"], archive_fetch=False)
     called = []
-    texts, _, _ = collect_upstream_manifest_texts(
+    texts, _, _, _ = collect_upstream_manifest_texts(
         RECIPE, config=config,
         fetcher=lambda url, target: called.append(url) or DATA,
         extractor=_extractor)
@@ -94,7 +94,7 @@ def test_archive_fetch_must_be_enabled():
 def test_a_weak_checksum_is_never_an_archive_anchor():
     weak = RECIPE.replace("sha256sums", "md5sums").replace(SHA256, "0" * 32)
     called = []
-    texts, _, _ = collect_upstream_manifest_texts(
+    texts, _, _, _ = collect_upstream_manifest_texts(
         weak, config=CONFIG,
         fetcher=lambda url, target: called.append(url) or DATA,
         extractor=_extractor)
@@ -107,7 +107,7 @@ def test_the_total_manifest_text_is_capped():
             (f"pkg/m{i}.toml", "x" * (64 * 1024)) for i in range(80)],
             "complete": True, "refused": False, "malformed": False}
 
-    texts, notes, findings = collect_upstream_manifest_texts(
+    texts, notes, findings, verified = collect_upstream_manifest_texts(
         RECIPE, config=CONFIG, fetcher=lambda url, target: DATA,
         extractor=extractor)
     assert sum(len(text) for _, text in texts) <= 2 * 1024 * 1024
@@ -117,7 +117,7 @@ def test_the_total_manifest_text_is_capped():
 def test_offline_never_opens_a_connection(monkeypatch):
     monkeypatch.setenv("TRUSTSIGHT_OFFLINE", "1")
     called = []
-    texts, notes, findings = collect_upstream_manifest_texts(
+    texts, notes, findings, verified = collect_upstream_manifest_texts(
         RECIPE, config=CONFIG,
         fetcher=lambda url, target: called.append(url) or DATA,
         extractor=_extractor)
@@ -138,7 +138,7 @@ def test_local_ci_exfil_shape_is_reported_report_only():
         return {"manifest_texts": [("pkg/.github/workflows/ci.yml", text)],
                 "complete": True, "refused": False, "malformed": False}
 
-    texts, notes, findings = collect_upstream_manifest_texts(
+    texts, notes, findings, verified = collect_upstream_manifest_texts(
         RECIPE, config=CONFIG, fetcher=lambda url, target: DATA,
         extractor=extractor)
     assert notes == []
@@ -158,7 +158,7 @@ def test_local_history_sweep_shape_is_reported_report_only():
         return {"manifest_texts": [("pkg/.github/workflows/ci.yml", text)],
                 "complete": True, "refused": False, "malformed": False}
 
-    _texts, _notes, findings = collect_upstream_manifest_texts(
+    _texts, _notes, findings, _verified = collect_upstream_manifest_texts(
         RECIPE, config=CONFIG, fetcher=lambda url, target: DATA,
         extractor=extractor)
     assert "U014" in {f["rule_id"] for f in findings}
@@ -192,3 +192,19 @@ def test_upstream_findings_reach_the_fact_at_weight_zero():
     assert entry.weight == 0
     assert (sum(e.weight for e in with_finding.score_breakdown)
             == sum(e.weight for e in base.score_breakdown))
+
+
+def test_scan_notes_reach_the_fact_as_a_weight_zero_boundary():
+    from trustsight.config import ensure_default_configs
+    from trustsight.db import init_db
+    from trustsight.full_aur.analyze import TemporalContext, analyze_package_text
+
+    ensure_default_configs()
+    init_db()
+    fact = analyze_package_text(
+        "demo", "pkgname=demo\npkgver=1\n", "pkgname=demo\npkgver=1\n",
+        "tester", TemporalContext(),
+        upstream_scan_notes=["upstream_scan_checksum"],
+    )
+    entry = next(e for e in fact.score_breakdown if e.rule_id == "W014")
+    assert entry.weight == 0

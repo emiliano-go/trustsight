@@ -195,7 +195,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 ## W-series: **Warning** Analysis Boundaries
 
-**Count:** 12 rules (W001-W013)
+**Count:** 13 rules (W001-W014)
 
 **Mechanism:** Reports what the analysis *could not read*. W-series findings mark visibility boundaries in the analysis: a package will run code the examination did not cover, and silence about that would be dishonest. They **warn** the reviewer where the analysis stopped.
 

@@ -8,7 +8,7 @@ rules X001-X034, integrity-change rules C001-C034, dependency rules
 D001-D005, temporal rules T001-T012, correlation rules G001-G011 and G012-G015, entropy
 rules E001-E003, the indicator rule H056, meta rules M001-M006, upstream
 rules U001-U014, artifact rules A001-A008, declared-practice rules P001-P009 (P004 skipped), and
-unverifiable rules W001-W013.
+unverifiable rules W001-W014.
 
 Each rule contributes according to its severity weight, match target and
 scope, except the P and W series and the weight-0 M annotations, which are
@@ -57,7 +57,7 @@ generated from it by `scripts/build_rules_index.py`.
 | [Corpus Behavioral](corpus-behavioral.md) | `corpus-behavioral` | 6 | The package's position in, or deviation from, the corpus baseline - silent without prior observations. |
 | [Crossfire](crossfire.md) | `crossfire` | 34 | The evasion technique itself, not the payload it hides: a rule here fires on how a thing was written rather than on what it does. |
 | [Sabotage](sabotage.md) | `sabotage` | 8 | A payload aimed at the operator's machine rather than at getting something out of it: resource exhaustion, deletion, permission sabotage, service disruption, resource theft. |
-| [Unverifiable](unverifiable.md) | `unverifiable` | 13 | Not a claim about the recipe but about the analysis: something the package will run that this run could not read. Weight 0 always, and always shown. |
+| [Unverifiable](unverifiable.md) | `unverifiable` | 14 | Not a claim about the recipe but about the analysis: something the package will run that this run could not read. Weight 0 always, and always shown. |
 | [Meta and Confluence](meta.md) | `meta` | 6 | A claim about other findings: a declared practice contradicted by structure, or a composition only visible from the whole profile. |
 | [Entropy](entropy.md) | `entropy` | 3 | The added content is statistically abnormal - a distribution outlier, not a known pattern. Suspicion, never a verdict. |
 | [Correlation](correlation.md) | `correlation` | 15 | The pattern is across packages, not inside one: a host, literal or adopter shared by several packages in a window. |
@@ -361,6 +361,7 @@ is deliberately non-contiguous; see
 | [W011](unverifiable.md#w011) | Upstream Content Not Read | Unverifiable | - | [Unverifiable](unverifiable.md) |
 | [W012](unverifiable.md#w012) | Federation Not Consulted | Unverifiable | - | [Unverifiable](unverifiable.md) |
 | [W013](unverifiable.md#w013) | Campaign Perimeter Boundary Note | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
+| [W014](unverifiable.md#w014) | Upstream Scan Not Completed | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
 | [X001](crossfire.md#x001) | Encoded Payload Decoded And Executed | Crossfire | - | [Crossfire](crossfire.md) |
 | [X002](crossfire.md#x002) | Non-Literal Executable Name | Crossfire | - | [Crossfire](crossfire.md) |
 | [X003](crossfire.md#x003) | Obfuscated Command Argument | Crossfire | - | [Crossfire](crossfire.md) |

@@ -144,7 +144,7 @@ Break this down left to right:
 |------|---------|
 | `+25` | Weight contributed to the total score. Never negative: nothing lowers a score. `0` marks an annotation, a coverage gap, or a declared-practice `P` finding. |
 | `HIGH` | Severity tier. Determines the weight magnitude. Order: INFO (0) < LOW (5) < MEDIUM (15) < HIGH (25) < CRITICAL (40) < FATAL (weight 0; names itself in the verdict label). |
-| `H001` | Rule identifier from the published R/H/C/D/S/X catalog; P001-P009 are declared-practice findings and W001-W013 are unverifiable findings; SOURCE_BUCKET, NOVELTY and COVERAGE are structural categories. |
+| `H001` | Rule identifier from the published R/H/C/D/S/X catalog; P001-P009 are declared-practice findings and W001-W014 are unverifiable findings; SOURCE_BUCKET, NOVELTY and COVERAGE are structural categories. |
 | `Checksum Disabled` | Rule name. |
 | `sha256sums=SKIP` | Match reason : the exact text or summary that triggered the rule. |
 

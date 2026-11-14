@@ -13,7 +13,7 @@ The normative standards for a rule change are in [Standards](../standards.md); t
 | S-series  | S001-S008   | `analysis/sabotage.py` | No          | Sabotage: payloads aimed at the machine |
 | X-series  | X001-X034   | `analysis/crossfire.py` | No         | Crossfire: the evasion technique itself |
 | P-series  | P001-P009 (P004 skipped) | `scoring.py` | No          | Declared practice, reported at weight 0 |
-| W-series  | W001-W013   | `analysis/*.py`  | No                | Unverifiable: what this run could not read, weight 0 |
+| W-series  | W001-W014   | `analysis/*.py`  | No                | Unverifiable: what this run could not read, weight 0 |
 
 ## R-series rules (TOML)
 

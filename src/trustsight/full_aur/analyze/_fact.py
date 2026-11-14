@@ -108,6 +108,8 @@ def analyze_package_text(
     manifest_deltas=(),
     workflow_deltas=(),
     upstream_findings=(),
+    verified_upstream_hashes=(),
+    upstream_scan_notes=(),
 ) -> PackageFact:
     """Analyse a package from PKGBUILD text, without a git repository.
 
@@ -484,6 +486,20 @@ def analyze_package_text(
     if archive_trailer_finding:
         pre_filter_findings.append(archive_trailer_finding)
     pre_filter_findings.extend(upstream_findings or ())
+    scan_notes = sorted({str(note) for note in upstream_scan_notes or () if note})
+    if scan_notes:
+        pre_filter_findings.append(stamp({
+            "rule_id": "W014",
+            "name": "Upstream Scan Not Completed",
+            "severity": "INFO",
+            "category": "unverifiable",
+            "match": ("the opt-in upstream scan did not complete: "
+                      + ", ".join(scan_notes)),
+            "file": "PKGBUILD",
+            "line": None,
+            "params": {"notes": scan_notes},
+            "weight_override": 0,
+        }))
     post_filter_findings = list(_temporal_findings(temporal, pkg_name, False))
     post_filter_findings.extend(longitudinal_findings(
         diff_text, pkg_name, breaks, config,
@@ -507,6 +523,7 @@ def analyze_package_text(
             pre_structural=tuple(metadata_findings),
             append_before_filter=tuple(pre_filter_findings),
             append_after_filter=tuple(post_filter_findings),
+            verified_upstream_hashes=frozenset(verified_upstream_hashes),
             typosquat_kwargs={
                 "candidates": popular_candidates,
                 "self_popularity": package_popularity,

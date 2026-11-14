@@ -15,6 +15,14 @@
       "since": "0.27.0",
       "status": "promoted"
     },
+    "G015": {
+      "changelog": "sleeper-adoption-campaign",
+      "promotion": "run the weekly anergic calibration, then set weight and decided_in",
+      "promoted_in": "Unreleased",
+      "signal": "full-AUR benign replay fire-rate < 0.30 plus a positive sleeper-adoption campaign and a benign dormant-reactivation twin",
+      "since": "Unreleased",
+      "status": "anergic"
+    },
     "H009": {
       "changelog": "runtime-surface-lane",
       "promoted_in": "0.28.0",

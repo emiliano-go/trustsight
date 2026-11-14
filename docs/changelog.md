@@ -6,6 +6,14 @@
 
 ### Fixed
 
+- **The upstream lane no longer downgrades a credential failure to an
+  anonymous read.** A keyring that is locked or refuses now records
+  `upstream_scan_token_unavailable` and skips that archive, instead of
+  silently fetching without the configured token. `trustsight auth login
+  --file` also refuses group/other-readable, non-regular or oversized token
+  files, and an invalid `min_checksum_bits` falls back to the 256-bit floor
+  rather than aborting the scan.
+
 - **C022 no longer fires when a signature is introduced.** A diff that drops
   the strongest checksum array while adding a `validpgpkeys` entry *and* a
   detached `.sig`/`.asc` source is an integrity upgrade, not a downgrade:

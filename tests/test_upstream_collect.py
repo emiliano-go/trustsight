@@ -101,6 +101,22 @@ def test_a_weak_checksum_is_never_an_archive_anchor():
     assert texts == [] and called == []
 
 
+def test_a_locked_keyring_refuses_the_read_instead_of_going_anonymous(monkeypatch):
+    from trustsight import credentials
+
+    def locked(provider, **_kwargs):
+        raise credentials.CredentialError("keyring is locked")
+
+    monkeypatch.setattr(credentials, "resolve_token", locked)
+    called = []
+    texts, notes, findings, verified = collect_upstream_manifest_texts(
+        RECIPE, config=CONFIG,
+        fetcher=lambda url, target: called.append(url) or DATA,
+        extractor=_extractor)
+    assert texts == [] and called == []
+    assert notes == ["upstream_scan_token_unavailable"]
+
+
 def test_the_total_manifest_text_is_capped():
     def extractor(_slug, _data):
         return {"manifest_texts": [

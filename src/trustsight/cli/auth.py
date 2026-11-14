@@ -8,7 +8,6 @@ CI job can pass a secret without putting it on an argument list.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Optional
 
 import typer
@@ -18,6 +17,7 @@ from ..credentials import (
     CredentialError,
     delete_token,
     normalize_provider,
+    read_token_file,
     resolve_token,
     store_token,
     token_from_stdin,
@@ -44,11 +44,7 @@ def _read_token(stdin: bool, file: Optional[str]) -> str:
     if stdin:
         return token_from_stdin()
     if file:
-        try:
-            text = Path(file).expanduser().read_text(encoding="utf-8")
-        except OSError as exc:
-            raise CredentialError(f"could not read {file}: {exc}") from exc
-        return text.strip()
+        return read_token_file(file)
     # Hidden prompt: the token is not echoed and is not in argv or history.
     return typer.prompt("Token", hide_input=True, confirmation_prompt=False).strip()
 

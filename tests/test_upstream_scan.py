@@ -133,6 +133,16 @@ def test_choose_fetch_mode_prefers_clone_unless_archive_is_fully_gated():
                              archive_on_allowlisted_host=True).mode == "clone"
     assert choose_fetch_mode(config, declared_checksum_bits=256,
                              archive_on_allowlisted_host=False).mode == "clone"
+
+
+def test_choose_fetch_mode_ignores_an_invalid_or_weak_minimum():
+    config = {"upstream_scan": {"archive_fetch": True,
+                                "min_checksum_bits": "not-a-number"}}
+    assert choose_fetch_mode(config, declared_checksum_bits=512,
+                             archive_on_allowlisted_host=True).mode == "archive"
+    config["upstream_scan"]["min_checksum_bits"] = 128
+    assert choose_fetch_mode(config, declared_checksum_bits=128,
+                             archive_on_allowlisted_host=True).mode == "clone"
     assert choose_fetch_mode(config, declared_checksum_bits=256,
                              archive_on_allowlisted_host=True).mode == "archive"
 

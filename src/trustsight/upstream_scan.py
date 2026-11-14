@@ -253,7 +253,11 @@ def choose_fetch_mode(config: dict | None, *, declared_checksum_bits: int,
     section = section if isinstance(section, dict) else {}
     if not section.get("archive_fetch", False):
         return FetchMode("clone", "archive fetch is disabled")
-    minimum = int(section.get("min_checksum_bits", 256) or 256)
+    try:
+        minimum = int(section.get("min_checksum_bits", 256) or 256)
+    except (TypeError, ValueError):
+        minimum = 256
+    minimum = max(256, minimum)
     if declared_checksum_bits < minimum:
         return FetchMode("clone", "no checksum at the configured strength")
     if not archive_on_allowlisted_host:

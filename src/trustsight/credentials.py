@@ -33,7 +33,7 @@ import stat
 from dataclasses import dataclass
 from pathlib import Path
 
-from .bounded_io import read_file_capped
+from .bounded_io import ReadTooLarge, read_file_capped
 
 _log = logging.getLogger(__name__)
 
@@ -44,6 +44,7 @@ __all__ = [
     "delete_token",
     "normalize_provider",
     "provider_env_names",
+    "read_token_file",
     "resolve_token",
     "store_token",
     "token_from_stdin",
@@ -278,3 +279,32 @@ def token_from_stdin(stream=None) -> str:
     if len(raw) > _MAX_TOKEN_BYTES:
         raise CredentialError("token on stdin is longer than the cap")
     return raw.strip()
+
+
+def read_token_file(path) -> str:
+    """Read one token from a regular file with safe permissions.
+
+    This is the strict path used by ``auth login --file``: unlike the
+    auto-detected token file, it refuses group/other-readable files instead
+    of warning, and it is bounded before the bytes are materialised.
+    """
+    candidate = Path(path).expanduser()
+    try:
+        info = candidate.stat()
+    except OSError as exc:
+        raise CredentialError(f"could not read token file: {exc}") from exc
+    if not stat.S_ISREG(info.st_mode):
+        raise CredentialError("token file is not a regular file")
+    if stat.S_IMODE(info.st_mode) & 0o077:
+        raise CredentialError(
+            "token file is readable by group or others; chmod 600 it")
+    try:
+        raw = read_file_capped(candidate, _MAX_TOKEN_BYTES, "token file")
+    except ReadTooLarge as exc:
+        raise CredentialError(str(exc)) from exc
+    except OSError as exc:
+        raise CredentialError(f"could not read token file: {exc}") from exc
+    value = raw.decode("utf-8", errors="replace").strip()
+    if not value:
+        raise CredentialError("token file is empty")
+    return value

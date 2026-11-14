@@ -34,6 +34,7 @@ from .analysis.upstream_release import (
     declared_upstream_repo,
     is_ci_workflow_path,
 )
+from .credentials import CredentialError
 from .findings import stamp
 from .upstream_fetch import UpstreamFetchError, fetch_bytes
 
@@ -146,12 +147,11 @@ def _token_for(host: str):
     provider = _PROVIDER_BY_HOST.get(host)
     if not provider:
         return None
-    try:
-        from .credentials import CredentialError, resolve_token
+    from .credentials import resolve_token
 
-        return resolve_token(provider)
-    except CredentialError:
-        return None
+    # A locked or refusing keyring raises CredentialError.  Do not turn that
+    # into anonymous access: the caller records a refusal and skips the read.
+    return resolve_token(provider)
 
 
 def collect_upstream_manifest_texts(
@@ -248,9 +248,14 @@ def collect_upstream_manifest_texts(
             notes.append("upstream_scan_deadline")
             break
         try:
+            try:
+                token = _token_for(target.host)
+            except CredentialError:
+                notes.append("upstream_scan_token_unavailable")
+                continue
             if fetcher is None:
                 data = fetch_bytes(
-                    url, allowed_hosts=allowed, token=_token_for(target.host),
+                    url, allowed_hosts=allowed, token=token,
                     max_bytes=_MAX_ARCHIVE_BYTES, deadline_seconds=remaining)
             else:
                 data = fetcher(url, target)

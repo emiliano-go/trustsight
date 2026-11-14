@@ -14,6 +14,7 @@ from trustsight.credentials import (
     Secret,
     delete_token,
     normalize_provider,
+    read_token_file,
     resolve_token,
     store_token,
     token_from_stdin,
@@ -135,3 +136,22 @@ def test_token_from_stdin_is_bounded_and_stripped():
     assert token_from_stdin(io.StringIO("  abc  \n")) == "abc"
     with pytest.raises(CredentialError):
         token_from_stdin(io.StringIO("x" * 5000))
+
+
+def test_read_token_file_refuses_group_or_other_readable_files(tmp_path):
+    token_file = tmp_path / "token"
+    token_file.write_text("secret-value")
+    os.chmod(token_file, 0o644)
+    with pytest.raises(CredentialError):
+        read_token_file(token_file)
+
+    os.chmod(token_file, 0o600)
+    assert read_token_file(token_file) == "secret-value"
+
+
+def test_read_token_file_is_bounded(tmp_path):
+    token_file = tmp_path / "token"
+    token_file.write_text("x" * 5000)
+    os.chmod(token_file, 0o600)
+    with pytest.raises(CredentialError):
+        read_token_file(token_file)

@@ -342,7 +342,7 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_ioc_entries_expires
                 ON ioc_entries(expires_at);
 
-            /* P4: the server-side upstream scan's bounded observations.
+            /* The server-side upstream scan's bounded observations.
                The local tool never fetches; a signed upstream_manifest
                baseline carries the projection, and these rows are what the
                publish step exports.  Keyed by package/repo/version so a

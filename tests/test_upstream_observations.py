@@ -1,4 +1,4 @@
-"""P4: upstream observations, the upstream_manifest IOC type, and U015."""
+"""Upstream observations, the upstream_manifest IOC type, and U015."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Persisted upstream-scan observations (P4).
+"""Persisted upstream-scan observations.
 
 The server-side lane stores a bounded projection of what it read, keyed by
 ``(package, repo, version)``.  A signed baseline export turns these into

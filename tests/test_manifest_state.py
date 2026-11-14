@@ -57,3 +57,25 @@ def test_manifest_state_is_preserved_by_snapshots(tmp_path, monkeypatch):
     assert db.get_pkgbuild_snapshot("demo")["manifest_state"] == state
     db.save_pkgbuild_snapshot("demo", "pkgname=demo\npkgver=1\n", "1")
     assert db.get_pkgbuild_snapshot("demo")["manifest_state"] == state
+
+
+def test_first_upstream_observation_is_a_baseline_not_an_added_manifest():
+    def state(upstream_url):
+        return build_manifest_state(
+            [("Cargo.toml", "[dependencies]\nfoo = { git = \"https://github.com/good/foo\" }\n"),
+             ("upstream/Cargo.toml", f'[dependencies]\nfoo = {{ git = "{upstream_url}" }}\n')],
+            [],
+        )
+
+    first = state("https://github.com/good/foo")
+    # The AUR state before the lane was enabled carries no upstream manifest.
+    before = build_manifest_state(
+        [("Cargo.toml", "[dependencies]\nfoo = { git = \"https://github.com/good/foo\" }\n")],
+        [])
+    assert manifest_state_delta(before, first) == ((), ())
+
+    moved = state("https://github.com/evil/foo")
+    manifests, _ = manifest_state_delta(first, moved)
+    assert len(manifests) == 1
+    assert manifests[0].path == "upstream/Cargo.toml"
+    assert manifests[0].origin_changes

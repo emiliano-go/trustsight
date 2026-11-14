@@ -14,7 +14,11 @@ python scripts/security_gates.py
 |------|-----------|----------------|
 | `no interpreter or shell execution` | A1 | source-wide AST scan, with explicit UTF-8 reads |
 | `version arguments are shape-checked` | A1 | `discovery._VERSION_ARG_RE` |
-| `network confined to the fetch modules` | A2, A3 | `discovery.py`, `fetcher.py`, `full_aur/fetch.py`, `full_aur/metadata.py`, `release.py` |
+| `network confined to the fetch modules` | A2, A3 | `discovery.py`, `fetcher.py`, `full_aur/fetch.py`, `full_aur/metadata.py`, `release.py`, `upstream_fetch.py` |
+| `a declared upstream target is allowlisted and pinned` | A2, A3 | `trustsight.upstream_scan` (`configured_hosts`, `parse_forge_target`, `pin_target`), `tests/test_upstream_scan.py` |
+| `upstream redirects stay on the forge CDN allowlist` | A2, A3 | `trustsight.upstream_fetch.REDIRECT_HOSTS`, `tests/test_upstream_fetch.py` |
+| `an archive is parsed only after its checksum verifies` | A2, A8 | `trustsight.upstream_scan.verify_archive_checksum`, `tests/test_upstream_scan.py` |
+| `provider tokens are redacted and never logged` | A18 | `trustsight.credentials`, `tests/test_credentials.py` |
 | `declared source URLs are never fetched` | A2 | no raw transport in `src/trustsight/analysis/`, and every fetch helper it imports is name-keyed |
 | `every JSON report carries the fingerprint` | B1 | `schema.fact_to_dict`, `reporting.report_body` |
 | `suppression is never hidden by a flag` | B5 | `suppressed_rules` outside any verbosity branch in `cli/review.py` |

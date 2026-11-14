@@ -129,6 +129,36 @@ campaign_min_reactivation_observations = 5
 # clean or malicious verdict.
 enabled = false
 
+[upstream_scan]
+# Optional outbound lane that reads a declared upstream repository or source
+# archive.  The U-series cannot see dependency manifests committed only inside
+# the source archive, which is the common AUR shape, so this lane exists to
+# make those rules real.  Off by default: the default analysis path never
+# fetches (A2).  When enabled it reaches only the allowlisted forge hosts
+# below, reads credentials from the OS keyring or systemd credentials, and
+# verifies a declared sha256 before parsing an archive.
+enabled = false
+
+# Exact registrable domains the lane may reach.  A host not in this list (and
+# not added by allowed_hosts_extra) is never contacted.
+allowed_hosts = ["github.com", "gitlab.com", "codeberg.org", "bitbucket.org"]
+
+# Operator overrides: exact hosts added to the allowlist.  No wildcards, no
+# ports, no IP literals; each entry is validated at load and a bad one is
+# ignored.
+allowed_hosts_extra = []
+
+# Fetch the declared source archive (checksum-verified) in addition to a forge
+# clone.  Off by default: the forge clone is the safer network operation
+# because it only reaches an allowlisted forge.
+archive_fetch = false
+
+# Minimum checksum strength accepted before an archive is parsed: 256 or 512.
+min_checksum_bits = 256
+
+# Per-call bound.  A ceiling, never a target.
+deadline_seconds = 120
+
 [layers]
 # Override a rule's assurance layer. The layer names the
 # kind of evidence the rule represents, L1 (structural coherence) to L8

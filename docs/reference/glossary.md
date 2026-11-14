@@ -47,6 +47,13 @@ of `L1`-`L8`
 finding is labelled by the check that produced it, not by every other check it
 might complement.
 
+**L9 (artifact lane).** The optional build lane that inspects an externally
+built package manifest instead of the diff (`trustsight verify-build
+--manifest`), reporting artifact rules `A001`-`A008`. It is off by default,
+carries no `L1`-`L8` layer, and never changes the static score. With no
+manifest it reports `l9_unavailable`; a disagreement with the static analysis
+adds `l9_divergence`. See [Artifact](rules/artifact.md).
+
 **Evidence tier.** How much external data a scoring signal needs before it
 means anything: `A` (structural, always available), `B` (priors, static lists),
 `C` (history, needs a warm corpus), `D` (declared verification, reported never

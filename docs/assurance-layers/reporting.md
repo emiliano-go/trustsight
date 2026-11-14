@@ -108,6 +108,19 @@ above:
 Every non-`passed` category is named, so the terminal never shows less than the
 JSON. The boundary count moves with the run; only the shape is fixed.
 
+## The optional L9 lane
+
+The eight static categories are always present. The optional **L9 build lane**
+is reported beside them, not inside them:
+
+- `l9_unavailable` - the lane is disabled, no build manifest was supplied, or
+  the sandbox is unavailable. A weight-0 boundary, never "clean".
+- `l9_divergence` - the artifact findings and the static analysis disagree.
+  Both profiles are rendered in full; neither overrides the other.
+
+L9 findings (`A001`-`A008`) carry no `L1`-`L8` layer and never change the
+static score; they are evidence from outside the static analysis.
+
 ## The boundary, beside the layers
 
 The layer profile projects findings; the **boundary** list projects what the

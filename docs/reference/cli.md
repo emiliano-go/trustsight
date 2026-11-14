@@ -1167,6 +1167,46 @@ build lane: the manifest a caller supplies is the whole handoff.
 
 ---
 
+## trustsight auth
+
+Manage provider tokens for the optional upstream-scan lane. A token is never
+taken as an argument: a value on the command line lands in the process table
+and the shell history. `login` prompts with hidden input by default.
+
+```
+trustsight auth login <provider> [--stdin | --file PATH]
+trustsight auth status
+trustsight auth logout <provider>
+```
+
+| Argument / flag | Required | Description |
+|-----------------|----------|-------------|
+| `provider` | Yes | `github`, `gitlab`, `codeberg` or `bitbucket`. |
+| `--stdin` | No | Read the token from stdin, for `read -rsp 'Token: ' TOK \| trustsight auth login github --stdin` or a CI secret. |
+| `--file PATH` | No | Read the token from a file instead of prompting. Prefer `--stdin` so the value is not written to disk. |
+
+`login` stores the token in the OS keyring (install `trustsight[credentials]`)
+and prints only its last four characters. With no usable keyring it fails
+with the `0600` token-file alternative rather than writing plaintext.
+`status` shows each provider's state and source without a value; `logout`
+removes the keyring entry.
+
+For the watcher service, do not use the keyring: install a root-owned
+encrypted credential once and let systemd deliver it. The lane reads
+`$CREDENTIALS_DIRECTORY/<provider>-token` first.
+
+```bash
+printf '%s' "$TOKEN" | systemd-creds encrypt --name=trustsight-github - \
+  /etc/credstore.encrypted/trustsight-github
+```
+
+```
+[Service]
+LoadCredentialEncrypted=trustsight-github
+```
+
+---
+
 ## trustsight lint
 
 Pre-submission hygiene for a local file: parse status, unresolved

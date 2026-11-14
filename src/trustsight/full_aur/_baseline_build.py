@@ -273,6 +273,24 @@ def _run_baseline_build(
             log.debug("could not fetch PKGBUILD for %s (base: %s)", name, _pkg_or_base(meta))
             return "fetch_failed", None
 
+        # The opt-in upstream lane: the AUR snapshot only carries files
+        # committed beside the recipe, so the U-series would never see a
+        # manifest inside the declared source archive.  Off unless
+        # [upstream_scan] enabled; a refusal is logged and never fails the
+        # cycle, and the default local path does not call this.
+        if manifest_texts is not None:
+            try:
+                from ..upstream_collect import collect_upstream_manifest_texts
+
+                upstream_texts, upstream_notes = collect_upstream_manifest_texts(
+                    new_pkgbuild)
+                if upstream_texts:
+                    manifest_texts = list(manifest_texts) + upstream_texts
+                for note in upstream_notes:
+                    log.info("%s: upstream scan boundary %s", name, note)
+            except Exception as exc:  # noqa: BLE001 - never fail the cycle
+                log.warning("%s: upstream scan failed: %s", name, exc)
+
         old_snapshot = get_pkgbuild_snapshot(name)
         old_pkgbuild = old_snapshot["pkgbuild_text"] if old_snapshot else None
         prev_last_modified: Optional[int] = (

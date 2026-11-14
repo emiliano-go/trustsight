@@ -241,6 +241,29 @@ def parse_snapshot(name: str, data: bytes, *, max_members: int = 10_000,
         return _ask(payload)
 
 
+def parse_upstream_archive(name: str, data: bytes, *,
+                           max_members: int = 10_000,
+                           max_file_bytes: int = 512 * 1024,
+                           max_total_bytes: int = 256 * 1024 * 1024,
+                           max_files: int = 64) -> dict:
+    """Extract manifests from a declared source archive in the sandboxed worker."""
+    if len(data) > MAX_SNAPSHOT_PAYLOAD_BYTES:
+        raise ManifestUnavailable(
+            f"archive of {len(data)} bytes exceeds the "
+            f"{MAX_SNAPSHOT_PAYLOAD_BYTES}-byte worker input cap")
+    with _lock:
+        payload = json.dumps(
+            {"path": "__upstream_archive__", "text": name,
+             "data": base64.b64encode(data).decode("ascii"),
+             "max_members": max_members,
+             "max_file_bytes": max_file_bytes,
+             "max_total_bytes": max_total_bytes,
+             "max_files": max_files},
+            ensure_ascii=False, separators=(",", ":"),
+        ).encode("utf-8")
+        return _ask(payload)
+
+
 def parse_manifest(path: str, text: str) -> dict | None:
     """Parse one manifest in the sandboxed worker.
 

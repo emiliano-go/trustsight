@@ -59,6 +59,25 @@ def _handle(body: bytes) -> dict:
         if path == "__srcinfo__":
             from trustsight.srcinfo import _parse_srcinfo_local
             return {"result": _parse_srcinfo_local(text)}
+        if path == "__upstream_archive__":
+            import base64
+            from trustsight.analysis.upstream_archive import parse_upstream_archive
+            data = request.get("data")
+            if not isinstance(data, str):
+                return {"error": "invalid upstream archive request"}
+            try:
+                raw = base64.b64decode(data, validate=True)
+            except Exception:
+                return {"error": "invalid upstream archive encoding"}
+            return {"result": parse_upstream_archive(
+                raw,
+                max_members=request.get("max_members", 10_000),
+                max_file_bytes=request.get(
+                    "max_file_bytes", 512 * 1024),
+                max_total_bytes=request.get(
+                    "max_total_bytes", 256 * 1024 * 1024),
+                max_files=request.get("max_files", 64),
+            )}
         if path == "__snapshot__":
             import base64
             from trustsight.analysis.archive_snapshot import parse_snapshot

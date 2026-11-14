@@ -15,9 +15,10 @@ finding can come from an H heuristic or a T history read, and an integrity
 finding is an integrity finding whichever series produced it.
 
 Two more labels are easy to mistake for a third subject axis. The evidence
-**layer** (`L1`-`L8`) groups findings by the kind of evidence and is derived
-from the series with a small override table; it is a report view, not an
-independent taxonomy, and the numbers are not stages. The evidence **tier**
+**layer** (`L1`-`L8`, plus the optional `L9` artifact lane) groups findings by
+the kind of evidence and is derived from the series with a small override
+table; it is a report view, not an independent taxonomy, and the numbers are
+not stages. L9 is the external-build lane and carries no `L1`-`L8` layer. The evidence **tier**
 (`A`-`D`) describes how a signal is sourced for scoring. The
 [Rule labels explained](../../explanation/rule-taxonomy.md) puts all of them side by
 side.

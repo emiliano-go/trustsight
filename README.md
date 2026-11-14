@@ -110,6 +110,7 @@ TrustSight is **evidence-producing**, not proof-of-safety. Read the [full securi
 | **Sabotage payloads** (fork bombs, `rm -rf /`, disk wiping, permission sabotage, service disruption, coin miners, log wiping) | Command-position matching that distinguishes the build sandbox from the system: `rm -rf "$srcdir/x"` is housekeeping, `rm -rf /` is not (S001-S008) |
 | **Orphan hijacking** (a package adopted from orphan, then its recipe rewritten with no upstream change) | The AUR maintainer field against the last recorded state, plus a recipe-only-change signature and the composition of both with an unpinned build fetch (H086-H088) |
 | **Build steps that fetch unpinned code** (`npm install`, `pip install`, `cargo fetch` in a build function) | Not scored - reported as the `unpinned_build_deps` coverage gap, because what the build will run is not in the analysed text and no checksum covers it |
+| **Risky files in the built package** (setuid, file capabilities, undeclared units, eBPF) | The optional **L9 build lane** inspects an externally built package manifest (`trustsight verify-build --manifest MANIFEST`) and reports artifact rules A001-A008. It is off by default, never blended into the static score, and reports `l9_unavailable` when no manifest is supplied. |
 | **Risk in AUR dependencies** | Dependencies are analysed as packages in their own right, to a configurable [depth](#dependency-depth) |
 
 ## What it cannot detect

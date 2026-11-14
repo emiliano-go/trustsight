@@ -33,7 +33,7 @@ The layer model's invariants are enforced by gates that fail the build:
 
 | Gate | Invariant |
 |------|-----------|
-| `every rule carries exactly one layer` | Every categorised rule maps to exactly one evidence category; M and A have none by design. |
+| `every rule carries exactly one layer` | Every categorised rule maps to exactly one evidence category; M and A have none by design. The L9 artifact lane is outside this set: artifact findings are reported separately and are never assigned an L1-L8 layer. |
 | `layer detection and coverage are independent` | A fired category and an incomplete category are reported as separate facts. |
 | `every rule names its shared dependencies` | Every rule has a mechanism, subject, evidence source and shared-dependency entry. |
 | `docs layer mapping matches the registry` | The Part 1 table is generated from `trustsight.layers`; prose cannot drift from code. |

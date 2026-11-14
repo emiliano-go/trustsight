@@ -31,14 +31,17 @@ def build_manifest_state(manifest_texts, tree_manifest) -> str | None:
         path for path, _head in tree_manifest or ()
         if is_ci_workflow_path(path)
     })
+    has_upstream = any(
+        str(path).startswith("upstream/") for path, _text in manifest_texts or ())
     return json.dumps({
         "version": _STATE_VERSION,
         "documents": documents,
         "workflows": workflows,
+        "upstream": has_upstream,
     }, sort_keys=True, separators=(",", ":"))
 
 
-def _documents(raw: str) -> tuple[dict[str, ManifestDoc], list[str]] | None:
+def _documents(raw: str) -> tuple[dict[str, ManifestDoc], list[str], bool] | None:
     try:
         data = json.loads(raw)
         if not isinstance(data, dict) or data.get("version") != _STATE_VERSION:
@@ -64,7 +67,7 @@ def _documents(raw: str) -> tuple[dict[str, ManifestDoc], list[str]] | None:
             )
             documents[doc.path] = doc
         workflows = [str(path) for path in data.get("workflows", ())]
-        return documents, workflows
+        return documents, workflows, bool(data.get("upstream", False))
     except (ValueError, TypeError, KeyError):
         return None
 
@@ -79,12 +82,16 @@ def manifest_state_delta(
     new = _documents(current)
     if old is None or new is None:
         return (), ()
-    old_docs, old_workflows = old
-    new_docs, new_workflows = new
+    old_docs, old_workflows, old_upstream = old
+    new_docs, new_workflows, _new_upstream = new
     deltas = []
     for path in sorted(old_docs.keys() | new_docs.keys()):
         before, after = old_docs.get(path), new_docs.get(path)
         if before == after:
+            continue
+        # The first state that carries upstream manifests is a baseline, not
+        # a delta: every upstream manifest would otherwise read as "added".
+        if before is None and path.startswith("upstream/") and not old_upstream:
             continue
         status = "added" if before is None else "removed" if after is None else "modified"
         doc = after or before

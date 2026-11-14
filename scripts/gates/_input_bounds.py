@@ -2,12 +2,13 @@
 
 import ast
 import contextlib
+import hashlib
 import io
 import re
 import time
 from scripts.gates._core import Gate, HOSTILE, SRC, _ARTIFACT_MODULES, _ARTIFACT_READ_EXEMPT, _BOUNDED_IO_MODULE, _ENDPOINT_HOST, _FORBIDDEN_CALLS, _MIRROR_HOSTS, _MIRROR_MODULES, _NETWORK_CALLS, _NETWORK_MODULES, _PATH_READ_MODULES, _RELEASE_HOSTS, _RELEASE_MODULES, _URL_LITERAL_RE, _call_name, _enclosing_functions, _hostile_fact, _hostile_result, _python_files, _rel, _render_forget_list, _render_list_rows
 
-__all__ = ['gate_artifact_reads_are_bounded', 'gate_dead_tokenizer_child_fails_the_package', 'gate_every_child_process_gets_an_explicit_environment', 'gate_every_live_regex_is_audited', 'gate_every_stream_read_is_bounded', 'gate_expansion_is_bounded', 'gate_freshness_uses_local_marker', 'gate_git_worker_limit_failures_are_reported', 'gate_git_worker_runs_in_an_os_sandbox', 'gate_fetch_state_is_parent_owned', 'gate_git_worker_startup_is_isolated', 'gate_network_is_confined', 'gate_network_reads_are_bounded', 'gate_no_interpreter_calls', 'gate_no_path_based_archive_extraction', 'gate_regex_patterns_pass_adversarial_audit', 'gate_rich_is_only_in_the_render_worker', 'gate_sandbox_core_limit_failure_refuses', 'gate_sandbox_responses_are_capped_before_framing', 'gate_single_network_host', 'gate_sql_is_parameterised', 'gate_terminal_output_is_inert', 'gate_tokenizer_module_is_isolated', 'gate_tokenizer_pool_wait_is_bounded', 'gate_tokenizer_request_writes_are_bounded', 'gate_tokenizer_smoke_is_deterministic', 'gate_tokenizer_worker_limit_failures_are_reported', 'gate_tokenizer_worker_startup_is_isolated', 'gate_untrusted_text_is_sanitised_where_it_is_rendered']
+__all__ = ['gate_artifact_reads_are_bounded', 'gate_dead_tokenizer_child_fails_the_package', 'gate_every_child_process_gets_an_explicit_environment', 'gate_every_live_regex_is_audited', 'gate_every_stream_read_is_bounded', 'gate_expansion_is_bounded', 'gate_freshness_uses_local_marker', 'gate_git_worker_limit_failures_are_reported', 'gate_git_worker_runs_in_an_os_sandbox', 'gate_fetch_state_is_parent_owned', 'gate_git_worker_startup_is_isolated', 'gate_network_is_confined', 'gate_network_reads_are_bounded', 'gate_provider_tokens_are_redacted', 'gate_no_interpreter_calls', 'gate_no_path_based_archive_extraction', 'gate_regex_patterns_pass_adversarial_audit', 'gate_rich_is_only_in_the_render_worker', 'gate_sandbox_core_limit_failure_refuses', 'gate_sandbox_responses_are_capped_before_framing', 'gate_single_network_host', 'gate_sql_is_parameterised', 'gate_terminal_output_is_inert', 'gate_tokenizer_module_is_isolated', 'gate_tokenizer_pool_wait_is_bounded', 'gate_tokenizer_request_writes_are_bounded', 'gate_tokenizer_smoke_is_deterministic', 'gate_tokenizer_worker_limit_failures_are_reported', 'gate_tokenizer_worker_startup_is_isolated', 'gate_untrusted_text_is_sanitised_where_it_is_rendered', 'gate_a_declared_upstream_target_is_allowlisted_and_pinned', 'gate_an_archive_is_parsed_only_after_its_checksum_verifies', 'gate_upstream_redirects_stay_on_the_forge_cdn_allowlist']
 
 def gate_no_interpreter_calls() -> Gate:
     """No path turns text into code, and nothing is unpickled."""
@@ -369,6 +370,10 @@ def gate_manifest_parsing_is_sandboxed() -> Gate:
         problems.append("the worker has no tokenizer operation")
     if "__snapshot__" not in worker_source:
         problems.append("the worker has no snapshot operation")
+    if "__upstream_archive__" not in worker_source:
+        problems.append("the worker has no upstream archive operation")
+    if "parse_upstream_archive" not in worker_source:
+        problems.append("the worker does not call parse_upstream_archive")
     from trustsight.full_aur import fetch
     fetch_source = inspect.getsource(fetch.fetch_pkgbuild_with_tree)
     if "manifest_client" not in fetch_source:
@@ -1453,3 +1458,105 @@ def gate_rich_is_only_in_the_render_worker() -> Gate:
 
     return Gate("Rich runs only in the render worker", not problems,
                 problems or "no Rich outside render/; worker imports no DB, CLI or network")
+
+
+def gate_provider_tokens_are_redacted() -> Gate:
+    """A18: a provider token never renders, logs, or reaches a child.
+
+    The runtime half is the point: an accidental f-string, log call or
+    traceback sees whatever ``str``/``repr`` returns, so those must redact.
+    ``reveal()`` is the one explicit accessor, used only to send the token.
+    """
+    from trustsight.credentials import Secret
+
+    problems: list[str] = []
+    marker = "s3cr3t-provider-value"
+    secret = Secret("github", marker)
+    if marker in str(secret):
+        problems.append("Secret.__str__ leaks the value")
+    if marker in repr(secret):
+        problems.append("Secret.__repr__ leaks the value")
+    if secret.reveal() != marker:
+        problems.append("Secret.reveal() does not return the value")
+    source = (SRC / "credentials.py").read_text(encoding="utf-8")
+    if "redacted" not in source:
+        problems.append("credentials.py no longer redacts its Secret")
+    if "subprocess" in source or "os.system" in source:
+        problems.append("credentials.py must not spawn a child")
+    return Gate("provider tokens are redacted and never logged", not problems,
+                problems or "Secret redacts; reveal() is the only accessor")
+
+
+def gate_a_declared_upstream_target_is_allowlisted_and_pinned() -> Gate:
+    """A2/A3: only an exact allowlisted forge target is reachable, and it pins."""
+    from trustsight.upstream_scan import (
+        DEFAULT_ALLOWED_HOSTS,
+        UpstreamScanError,
+        parse_forge_target,
+        pin_target,
+    )
+
+    problems: list[str] = []
+    allowed = frozenset(DEFAULT_ALLOWED_HOSTS)
+    target = None
+    try:
+        target = parse_forge_target(
+            "https://github.com/owner/repo", allowed_hosts=allowed)
+    except UpstreamScanError:
+        problems.append("a valid allowlisted target was refused")
+    for bad in (
+        "http://github.com/owner/repo",
+        "https://127.0.0.1/owner/repo",
+        "https://evil.example/owner/repo",
+        "https://user:pass@github.com/owner/repo",
+        "https://github.com:8443/owner/repo",
+    ):
+        try:
+            parse_forge_target(bad, allowed_hosts=allowed)
+            problems.append(f"unsafe target accepted: {bad}")
+        except UpstreamScanError:
+            pass
+    if target is not None:
+        try:
+            pin_target(target, lambda host, port: [(2, 1, 6, "", ("10.0.0.1", port))])
+            problems.append("a private resolution was accepted")
+        except UpstreamScanError:
+            pass
+    return Gate("a declared upstream target is allowlisted and pinned",
+                not problems, problems or "allowlist and pin hold")
+
+
+def gate_an_archive_is_parsed_only_after_its_checksum_verifies() -> Gate:
+    """A2/A8: bytes are parsed only when a strong declared checksum matches."""
+    from trustsight.upstream_scan import verify_archive_checksum
+
+    data = b"archive bytes"
+    good = hashlib.sha256(data).hexdigest()
+    problems: list[str] = []
+    if not verify_archive_checksum(data, good, min_bits=256):
+        problems.append("a matching sha256 was refused")
+    if verify_archive_checksum(data, "00" * 32, min_bits=256):
+        problems.append("a mismatch was accepted")
+    if verify_archive_checksum(data, "ab" * 20, algorithm="sha1", min_bits=256):
+        problems.append("a weak checksum was accepted")
+    return Gate("an archive is parsed only after its checksum verifies",
+                not problems, problems or "checksum gate holds")
+
+
+def gate_upstream_redirects_stay_on_the_forge_cdn_allowlist() -> Gate:
+    """A2/A3: the opt-in lane follows only a fixed set of forge CDNs."""
+    from trustsight.upstream_fetch import REDIRECT_HOSTS
+
+    expected = frozenset({
+        "codeload.github.com",
+        "objects.githubusercontent.com",
+        "raw.githubusercontent.com",
+    })
+    problems: list[str] = []
+    if not REDIRECT_HOSTS:
+        problems.append("the redirect allowlist is empty")
+    extra = sorted(REDIRECT_HOSTS - expected)
+    if extra:
+        problems.append(f"redirect hosts outside the fixed set: {extra}")
+    return Gate("upstream redirects stay on the forge CDN allowlist",
+                not problems, problems or sorted(REDIRECT_HOSTS))

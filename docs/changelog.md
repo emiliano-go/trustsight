@@ -4,7 +4,44 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **C022 no longer fires when a signature is introduced.** A diff that drops
+  the strongest checksum array while adding a `validpgpkeys` entry *and* a
+  detached `.sig`/`.asc` source is an integrity upgrade, not a downgrade:
+  makepkg verifies the signature independently of the hash. The key change is
+  left to H078/T001/T003, so the same diff is not counted twice (the
+  lttng-tools 2.16.0 shape: sha512 -> sha256 + `.asc` + validpgpkeys scored
+  100).
+
 ### Added
+
+- **Provider credentials are safe by default.** `trustsight auth
+  login|status|logout` stores a GitHub/GitLab/Codeberg/Bitbucket token in the
+  OS keyring (optional `keyring` extra), or reads a systemd credential, a
+  `0600` file or the environment. A keyring that refuses fails closed, a
+  `Secret` redacts itself in every rendering, and a token is provider-scoped so
+  it is never sent to another host (A18). The token is never an argument, so it
+  cannot land in `ps` or the shell history.
+
+- **The upstream-scan safety core.** `trustsight.upstream_scan` validates a
+  declared upstream against an exact forge allowlist (with operator
+  `allowed_hosts_extra`), refuses userinfo/ports/IP-literals/non-HTTPS, pins a
+  routable DNS answer (a private/loopback/metadata answer is refused), and
+  exposes a checksum-gated archive fetch that parses nothing until a strong
+  declared digest verifies. The transport is injected, so the core imports no
+  network and the reviewed egress module can be wired separately.
+
+- **The upstream-scan lane reads the declared source archive (opt-in).** With
+  `[upstream_scan] enabled`, the server-side watcher fetches an allowlisted
+  forge source whose strong checksum pins it, verifies the checksum, and
+  extracts dependency manifests in the read-role manifest worker (absolute and
+  `..` paths, links and bombs refused). The texts join the existing
+  manifest-state path as `upstream/<path>`, so U001-U006/U011/U012 finally see
+  the manifests most AUR packages ship only inside the source archive. The
+  first observation is a baseline; a redirect is followed only to a fixed
+  forge CDN and never carries the token. Off by default; the local analysis
+  path stays fetch-free.
 
 - **G015 reports sleeper adoption campaigns.** A multi-account cohort of dormant adopted packages is joined when the same maintainers reactivate most of it after a cooling-off period. The base finding is MEDIUM and alert-only; a curated payload or takeover signal raises it to HIGH. G015 primes campaign state on both severities and never adds its severity to a member's score.
 

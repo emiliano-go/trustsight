@@ -9,7 +9,8 @@ package's history, and patterns shared by several packages.
 
 Every rule carries three labels. Its **family** (the series letter) says *how it
 works*. Its **subject** (category) says *what it looks for*. Its **evidence
-category** (layer, `L1`-`L8`) says *what kind of evidence the finding is*. The
+category** (layer, `L1`-`L8`, plus the optional `L9` artifact lane) says *what
+kind of evidence the finding is*. The
 [glossary](reference/glossary.md) defines the whole vocabulary; this section
 shows how the labels read in a report.
 
@@ -86,6 +87,17 @@ Reading it down:
   was read and stayed silent.
 - **`L8 not_applicable`** because a single package has no neighbours to compare
   against; the check could not run at all. This is different from `passed`.
+
+A ninth category sits outside the static profile: **`L9` (artifact reality)**.
+It is the optional build lane that inspects a package manifest produced by an
+external build (`trustsight verify-build --manifest`), reports artifact rules
+`A001`-`A008`, and is never blended into the L1-L8 score. It is absent from the
+layer profile unless the lane runs; when it is disabled or no manifest is
+supplied, the report carries `l9_unavailable` - a weight-0 boundary, never a
+clean or malicious verdict. When the artifact and the static analysis disagree,
+both profiles stand and the report carries an explicit `l9_divergence` notice.
+See [Artifact](reference/rules/artifact.md) and
+[Reporting](assurance-layers/reporting.md).
 
 ## Detection and coverage are two facts
 

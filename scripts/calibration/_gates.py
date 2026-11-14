@@ -477,6 +477,11 @@ def gate_coverage_expectations(ledger_path: Path | None = None) -> Gate:
         for rid, row in rows.items() if row.get("expected_strata")
     }
     unmet = unmet_expectations(doc, expected)
+    unclassified = sorted(
+        rid for rid, row in rows.items()
+        if not row.get("benign_sources")
+        and not isinstance(row.get("disposition"), dict)
+    )
     missing: list[str] = []
     bad_status: list[str] = []
     bad_plan: list[str] = []
@@ -508,6 +513,9 @@ def gate_coverage_expectations(ledger_path: Path | None = None) -> Gate:
         if status == "resolved" and plan in no_expectation_plans and row.get("expected_strata"):
             stale_expectation.append(rid)
     problems: list[str] = []
+    if unclassified:
+        problems.append(
+            f"unmeasured without disposition: {', '.join(unclassified[:12])}")
     if missing:
         problems.append(f"unmet without disposition: {', '.join(missing[:12])}")
     if bad_status:
@@ -522,6 +530,7 @@ def gate_coverage_expectations(ledger_path: Path | None = None) -> Gate:
     return Gate(
         name, not problems,
         {"expectations": len(expected), "unmet": len(unmet),
+         "unclassified": len(unclassified),
          "missing_disposition": len(missing), "stale_disposition": len(stale_add),
          "stale_expectation": len(stale_expectation)},
         0, "; ".join(problems))

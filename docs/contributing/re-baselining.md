@@ -78,15 +78,18 @@ by a benign source must have an entry in
 `tests/fixtures/coverage-dispositions.json`:
 
 - `deferred` with a plan such as `add_benign_shape`, `add_history_or_warm`,
-  `attack_only`, `not_measurable`, or `known_false_positive`;
+  `add_cycle_corpus`, `add_git_history`, `add_artifact_or_manifest`,
+  `triage_benign_twin`, `attack_only`, or `not_measurable`;
 - `resolved` once the plan has been applied. A resolved `attack_only` or
   `not_measurable` plan must not still appear in `strata.toml` as a benign
   expectation.
 
 The `coverage expectations are met or dispositioned` gate is a ratchet. It
-passes while current gaps are deferred, and fails when an expected rule
-appears without a disposition. When the debt is paid down, remove the
-deferred entries and the gate becomes strict.
+passes while current gaps are deferred, and fails when **any** rule with no
+benign source lacks a disposition - not only a rule named by
+`strata.toml`. A `pseudo` disposition accounts for a boundary or aggregate id
+that is not a corpus rule. When the debt is paid down, remove the deferred
+entries and the gate becomes strict.
 
 Run the coverage gates after building the ledger:
 

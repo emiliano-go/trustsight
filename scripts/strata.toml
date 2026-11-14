@@ -119,3 +119,11 @@ selection = "tree carries vendor+cargo config, go.mod, package-lock/npm-shrinkwr
 source = "grep"
 requires_tree = true
 expected_rules = ["D001", "D002", "H029", "H048", "H053"]
+
+[strata.runtime_carriers]
+description = "Committed service units, timers, sockets and runtime scripts the package starts."
+target = 60
+selection = "tree installs a unit/timer/socket/tmpfiles/udev/dbus/polkit file or a shell/interpreter carrier"
+source = "grep"
+requires_tree = true
+expected_rules = ["H009", "H010", "H011", "H012", "H013", "H066", "H070", "H093", "H095"]

@@ -43,6 +43,16 @@
   forge CDN and never carries the token. Off by default; the local analysis
   path stays fetch-free.
 
+- **The upstream lane is hardened against SSRF and archive bombs.** The
+  transport checks the *connected socket peer* against the pinned address
+  (not just the pre-connect DNS answer), refuses every redirect except to the
+  fixed forge CDNs, sends `Accept-Encoding: identity`, and clamps its byte and
+  time ceilings. Archive extraction caps *decompressed* bytes with a limited
+  reader and counts actual bytes read rather than declared sizes, refuses
+  encrypted/symlink/oversized members, and the collector clamps its deadline,
+  checksum floor and total manifest text. New gate: `upstream reads are
+  bounded and pinned`.
+
 - **G015 reports sleeper adoption campaigns.** A multi-account cohort of dormant adopted packages is joined when the same maintainers reactivate most of it after a cooling-off period. The base finding is MEDIUM and alert-only; a curated payload or takeover signal raises it to HIGH. G015 primes campaign state on both severities and never adds its severity to a member's score.
 
 ## [0.28.8] - 2026-11-13

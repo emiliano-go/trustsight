@@ -32,11 +32,27 @@ class _Response:
         return self._location if name.lower() == "location" else default
 
 
+class _PeerSocket:
+    def __init__(self, address):
+        self.address = address
+        self.timeout = None
+
+    def getpeername(self):
+        return (self.address, 443)
+
+    def settimeout(self, timeout):
+        self.timeout = timeout
+
+
 class _Connection:
-    def __init__(self, host, response, sink):
+    def __init__(self, host, address, response, sink):
         self.host = host
         self.response = response
         self.sink = sink
+        self.sock = _PeerSocket(address)
+
+    def connect(self):
+        self.sink["connected"] = True
 
     def request(self, method, path, headers=None):
         self.sink.setdefault("calls", []).append(
@@ -54,7 +70,7 @@ def _factory(responses, sink):
 
     def build(host, address, timeout):
         sink["address"] = address
-        return _Connection(host, queue.pop(0), sink)
+        return _Connection(host, address, queue.pop(0), sink)
     return build
 
 
@@ -149,3 +165,26 @@ def test_fetch_refuses_a_private_resolution():
             URL, allowed_hosts=ALLOWED, resolver=_resolver("10.0.0.1"),
             connection_factory=_factory([_Response()], sink))
     assert "calls" not in sink
+
+
+def test_fetch_refuses_a_redirect_to_another_allowlisted_forge():
+    sink = {}
+    with pytest.raises(UpstreamFetchError):
+        fetch_bytes(
+            URL, allowed_hosts=ALLOWED, resolver=_resolver("93.184.216.34"),
+            connection_factory=_factory([
+                _Response(status=302,
+                          location="https://gitlab.com/owner/repo/x"),
+                _Response(),
+            ], sink))
+
+
+def test_fetch_refuses_a_peer_that_differs_from_the_pinned_address():
+    sink = {}
+    def build(host, address, timeout):
+        connection = _Connection(host, "10.0.0.1", _Response(), sink)
+        return connection
+    with pytest.raises(UpstreamFetchError):
+        fetch_bytes(
+            URL, allowed_hosts=ALLOWED, resolver=_resolver("93.184.216.34"),
+            connection_factory=build)

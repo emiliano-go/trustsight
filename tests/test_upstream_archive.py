@@ -82,3 +82,40 @@ def test_a_non_archive_is_malformed_not_a_crash():
     out = parse_upstream_archive(b"not an archive")
     assert out["malformed"] is True
     assert out["manifest_texts"] == []
+
+
+def test_zip_with_too_many_entries_is_refused():
+    data = _zip([(f"pkg/f{i}.txt", b"x") for i in range(10)])
+    out = parse_upstream_archive(data, max_members=2)
+    assert out["refused"] is True
+    assert out["complete"] is False
+
+
+def test_gzip_bomb_is_refused_by_the_decompressed_cap():
+    # 50 KiB of zeros compresses to a few hundred bytes.  The decompressed
+    # cap must refuse before the member is materialised.
+    data = _tar([("pkg/Cargo.toml", b"x" * 50_000, "file")])
+    out = parse_upstream_archive(data, max_total_bytes=1024)
+    assert out["refused"] is True
+    assert out["manifest_texts"] == []
+
+
+def test_bounds_are_clamped_to_hard_ceilings():
+    # A caller cannot raise the decompressed cap past the hard ceiling.
+    data = _tar([("pkg/Cargo.toml", b"[package]\n", "file")])
+    out = parse_upstream_archive(data, max_total_bytes=10**12,
+                                 max_members=10**9)
+    assert out["malformed"] is False
+
+
+def test_zip_entry_count_is_read_before_the_archive_is_opened(monkeypatch):
+    data = _zip([(f"pkg/f{i}.txt", b"x") for i in range(10)])
+    import zipfile as _zipfile
+
+    def _boom(*_args, **_kwargs):
+        raise AssertionError("the archive was opened before the count check")
+
+    monkeypatch.setattr(_zipfile, "ZipFile", _boom)
+    out = parse_upstream_archive(data, max_members=2)
+    assert out["refused"] is True
+    assert out["complete"] is False

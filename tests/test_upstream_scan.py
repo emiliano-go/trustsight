@@ -195,3 +195,37 @@ def test_fetch_archive_refuses_an_off_allowlist_url_before_transport():
             expected_hex="00" * 32, algorithm="sha256",
             transport=lambda *a: called.append(a), allowed_hosts=ALLOWED)
     assert called == []
+
+
+def test_configured_hosts_without_config_is_the_defaults():
+    assert configured_hosts(None) == frozenset(DEFAULT_ALLOWED_HOSTS)
+    assert configured_hosts({}) == frozenset(DEFAULT_ALLOWED_HOSTS)
+
+
+@pytest.mark.parametrize("host", ["localhost", "metadata", "127.0.0.1",
+                                  "169.254.169.254", "10.0.0.1"])
+def test_operator_allowlist_refuses_single_labels_and_ip_literals(host):
+    config = {"upstream_scan": {"allowed_hosts_extra": [host]}}
+    assert host not in configured_hosts(config)
+
+
+def test_operator_allowlist_is_bounded():
+    extras = [f"host{i}.example.org" for i in range(50)]
+    config = {"upstream_scan": {"allowed_hosts_extra": extras}}
+    hosts = configured_hosts(config)
+    assert len(hosts - set(DEFAULT_ALLOWED_HOSTS)) <= 16
+
+
+@pytest.mark.parametrize("address", ["100.64.0.1", "192.0.2.1", "192.0.0.1",
+                                     "0.0.0.0", "255.255.255.255"])
+def test_non_global_addresses_are_refused(address):
+    assert is_routable_address(address) is False
+
+
+@pytest.mark.parametrize("url", [
+    "https://github.com/owner/repo\\@evil.example/x",
+    "https://github.com/owner/repo\nx",
+])
+def test_parse_refuses_backslashes_and_control_bytes(url):
+    with pytest.raises(UpstreamScanError):
+        parse_forge_target(url, allowed_hosts=ALLOWED)

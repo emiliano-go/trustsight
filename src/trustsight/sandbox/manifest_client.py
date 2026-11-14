@@ -244,7 +244,7 @@ def parse_snapshot(name: str, data: bytes, *, max_members: int = 10_000,
 def parse_upstream_archive(name: str, data: bytes, *,
                            max_members: int = 10_000,
                            max_file_bytes: int = 512 * 1024,
-                           max_total_bytes: int = 256 * 1024 * 1024,
+                           max_total_bytes: int = 64 * 1024 * 1024,
                            max_files: int = 64) -> dict:
     """Extract manifests from a declared source archive in the sandboxed worker."""
     if len(data) > MAX_SNAPSHOT_PAYLOAD_BYTES:

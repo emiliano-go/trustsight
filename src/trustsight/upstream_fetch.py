@@ -24,6 +24,7 @@ literal constants here, not package-named.
 from __future__ import annotations
 
 import http.client
+import ipaddress
 import socket
 import ssl
 import time
@@ -33,6 +34,7 @@ from urllib.parse import urljoin, urlsplit
 from .upstream_scan import (
     ForgeTarget,
     UpstreamScanError,
+    is_routable_address,
     parse_forge_target,
     pin_target,
 )
@@ -44,6 +46,10 @@ _MAX_BYTES = 67_108_864
 _DEADLINE_SECONDS = 120.0
 _CHUNK = 65_536
 _MAX_REDIRECTS = 3
+#: Hard ceilings: a caller or config value can lower these, never raise them.
+_HARD_MAX_BYTES = 64 * 1024 * 1024
+_HARD_DEADLINE_SECONDS = 300.0
+_HARD_MAX_REDIRECTS = 5
 _USER_AGENT = "trustsight-upstream/1 (+https://docs.trustsight.org)"
 
 #: Fixed forge CDNs a GitHub/GitLab archive redirect may reach.  Literal
@@ -79,6 +85,9 @@ def _pinned_connection(pinned_address: str, port: int):
 
 def _open(host: str, address: str, timeout: float):
     context = ssl.create_default_context()
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
+    context.verify_mode = ssl.CERT_REQUIRED
+    context.check_hostname = True
     connection = http.client.HTTPSConnection(
         host, 443, timeout=timeout, context=context)
     # SNI still names the hostname; only the dialed address is pinned.
@@ -117,8 +126,9 @@ def _redirect_hop(url: str, allowed_hosts) -> _Hop:
     if port not in (None, 443):
         raise UpstreamFetchError("redirect uses a non-default port")
     host = (parts.hostname or "").lower().rstrip(".")
-    allowed = set(allowed_hosts or ()) | REDIRECT_HOSTS
-    if host not in allowed:
+    # A redirect may only land on a fixed forge CDN, never on another
+    # allowlisted forge: the original request already chose its provider.
+    if host not in REDIRECT_HOSTS:
         raise UpstreamFetchError(f"redirect host is not allowed: {host or '?'}")
     path = parts.path or "/"
     if ".." in path.split("/"):
@@ -126,11 +136,15 @@ def _redirect_hop(url: str, allowed_hosts) -> _Hop:
     return _Hop(host, path + (f"?{parts.query}" if parts.query else ""), False)
 
 
-def _read_body(response, deadline: float, max_bytes: int) -> bytes:
+def _read_body(response, deadline: float, max_bytes: int, sock,
+               timeout: float) -> bytes:
     body = bytearray()
     while True:
-        if time.monotonic() > deadline:
+        now = time.monotonic()
+        if now > deadline:
             raise UpstreamFetchError("fetch exceeded its deadline")
+        if sock is not None:
+            sock.settimeout(max(0.1, min(timeout, deadline - now)))
         chunk = response.read(_CHUNK)
         if not chunk:
             break
@@ -160,6 +174,9 @@ def fetch_bytes(
     """
     if max_bytes <= 0 or deadline_seconds <= 0:
         raise UpstreamFetchError("fetch bounds must be positive")
+    max_bytes = min(int(max_bytes), _HARD_MAX_BYTES)
+    deadline_seconds = min(float(deadline_seconds), _HARD_DEADLINE_SECONDS)
+    max_redirects = max(0, min(int(max_redirects), _HARD_MAX_REDIRECTS))
     deadline = time.monotonic() + deadline_seconds
     factory = connection_factory or _open
     try:
@@ -170,6 +187,8 @@ def fetch_bytes(
         raise UpstreamFetchError(str(exc)) from exc
     current = url
     for attempt in range(max_redirects + 1):
+        if time.monotonic() > deadline:
+            raise UpstreamFetchError("fetch exceeded its deadline")
         try:
             addresses = pin_target(
                 ForgeTarget(hop.host, "", ""), resolver)
@@ -179,10 +198,33 @@ def fetch_bytes(
             raise UpstreamFetchError(str(exc)) from exc
         connection = factory(
             hop.host, addresses[0], min(timeout, deadline_seconds))
-        headers = {"User-Agent": _USER_AGENT, "Accept": "*/*"}
+        headers = {
+            "User-Agent": _USER_AGENT,
+            "Accept": "*/*",
+            "Accept-Encoding": "identity",
+        }
         if hop.send_token and token is not None:
             headers["Authorization"] = f"Bearer {token.reveal()}"
         try:
+            # Connect before sending so the actual socket peer can be checked
+            # against the address pin_target validated (DNS-rebinding close).
+            connection.connect()
+            peer_socket = getattr(connection, "sock", None)
+            if peer_socket is None:
+                raise UpstreamFetchError("connection has no socket")
+            peer = peer_socket.getpeername()[0]
+            try:
+                same = (ipaddress.ip_address(peer)
+                        == ipaddress.ip_address(addresses[0]))
+            except ValueError as exc:
+                raise UpstreamFetchError(
+                    "socket peer is not an IP address") from exc
+            if not same:
+                raise UpstreamFetchError(
+                    "socket peer changed after address validation")
+            if not is_routable_address(peer):
+                raise UpstreamFetchError(
+                    "socket peer is not a globally routable address")
             connection.request("GET", hop.path, headers=headers)
             response = connection.getresponse()
             status = int(getattr(response, "status", 0))
@@ -198,7 +240,9 @@ def fetch_bytes(
                 continue
             if status != 200:
                 raise UpstreamFetchError(f"upstream returned HTTP {status}")
-            return _read_body(response, deadline, max_bytes)
+            return _read_body(
+                response, deadline, max_bytes,
+                getattr(connection, "sock", None), timeout)
         except (OSError, http.client.HTTPException, ssl.SSLError) as exc:
             raise UpstreamFetchError(
                 f"fetch failed: {type(exc).__name__}") from exc

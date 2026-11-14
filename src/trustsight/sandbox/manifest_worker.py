@@ -75,7 +75,7 @@ def _handle(body: bytes) -> dict:
                 max_file_bytes=request.get(
                     "max_file_bytes", 512 * 1024),
                 max_total_bytes=request.get(
-                    "max_total_bytes", 256 * 1024 * 1024),
+                    "max_total_bytes", 64 * 1024 * 1024),
                 max_files=request.get("max_files", 64),
             )}
         if path == "__snapshot__":

@@ -366,7 +366,7 @@ If none of these settings are explicitly configured, the tool scans foreign pack
 
 ### `[upstream_scan]`
 
-The optional lane that reads a declared upstream repository or source archive.
+The optional lane that reads a declared upstream source archive (a forge clone is future work).
 Off by default: the default analysis path never fetches a URL a package
 declares. When enabled, only the hosts below are reachable, a declared
 upstream is reduced to an exact `host/owner/repo` and pinned, and an archive
@@ -379,9 +379,9 @@ strength. Provider tokens are never stored in this file; see
 | `enabled` | bool | `false` | Enable the upstream-scan lane. The default `review`/`inspect` path stays fetch-free. |
 | `allowed_hosts` | list of hosts | the four forge domains | Exact registrable domains the lane may reach. |
 | `allowed_hosts_extra` | list of hosts | `[]` | Operator additions to the allowlist. Exact hosts only: no wildcard, port or IP literal; a malformed entry is ignored. |
-| `archive_fetch` | bool | `false` | Fetch the declared source archive in addition to a forge clone. The forge clone is the safer default because it reaches only an allowlisted forge. |
+| `archive_fetch` | bool | `false` | Fetch the declared source archive. This is the implemented acquisition mode; it requires a strong declared checksum and reads the archive in the sandboxed worker under a decompressed-byte cap. |
 | `min_checksum_bits` | int | `256` | Minimum checksum strength an archive read requires before parsing. |
-| `deadline_seconds` | int | `120` | Wall-clock budget for one scan call. |
+| `deadline_seconds` | int | `120` | Wall-clock budget for one scan call. The lane clamps it (and the archive byte/text caps) to hard ceilings, so a config value can lower a bound but never remove it. |
 
 ### `[layers]`
 

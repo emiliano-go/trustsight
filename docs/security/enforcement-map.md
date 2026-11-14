@@ -17,6 +17,7 @@ python scripts/security_gates.py
 | `network confined to the fetch modules` | A2, A3 | `discovery.py`, `fetcher.py`, `full_aur/fetch.py`, `full_aur/metadata.py`, `release.py`, `upstream_fetch.py` |
 | `a declared upstream target is allowlisted and pinned` | A2, A3 | `trustsight.upstream_scan` (`configured_hosts`, `parse_forge_target`, `pin_target`), `tests/test_upstream_scan.py` |
 | `upstream redirects stay on the forge CDN allowlist` | A2, A3 | `trustsight.upstream_fetch.REDIRECT_HOSTS`, `tests/test_upstream_fetch.py` |
+| `upstream reads are bounded and pinned` | A2, A3, A8 | `trustsight.upstream_fetch` (peer check), `trustsight.analysis.upstream_archive` (decompressed cap), `trustsight.upstream_collect` (text cap) |
 | `an archive is parsed only after its checksum verifies` | A2, A8 | `trustsight.upstream_scan.verify_archive_checksum`, `tests/test_upstream_scan.py` |
 | `provider tokens are redacted and never logged` | A18 | `trustsight.credentials`, `tests/test_credentials.py` |
 | `declared source URLs are never fetched` | A2 | no raw transport in `src/trustsight/analysis/`, and every fetch helper it imports is name-keyed |

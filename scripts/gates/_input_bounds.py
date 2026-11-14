@@ -8,7 +8,7 @@ import re
 import time
 from scripts.gates._core import Gate, HOSTILE, SRC, _ARTIFACT_MODULES, _ARTIFACT_READ_EXEMPT, _BOUNDED_IO_MODULE, _ENDPOINT_HOST, _FORBIDDEN_CALLS, _MIRROR_HOSTS, _MIRROR_MODULES, _NETWORK_CALLS, _NETWORK_MODULES, _PATH_READ_MODULES, _RELEASE_HOSTS, _RELEASE_MODULES, _URL_LITERAL_RE, _call_name, _enclosing_functions, _hostile_fact, _hostile_result, _python_files, _rel, _render_forget_list, _render_list_rows
 
-__all__ = ['gate_artifact_reads_are_bounded', 'gate_dead_tokenizer_child_fails_the_package', 'gate_every_child_process_gets_an_explicit_environment', 'gate_every_live_regex_is_audited', 'gate_every_stream_read_is_bounded', 'gate_expansion_is_bounded', 'gate_freshness_uses_local_marker', 'gate_git_worker_limit_failures_are_reported', 'gate_git_worker_runs_in_an_os_sandbox', 'gate_fetch_state_is_parent_owned', 'gate_git_worker_startup_is_isolated', 'gate_network_is_confined', 'gate_network_reads_are_bounded', 'gate_provider_tokens_are_redacted', 'gate_no_interpreter_calls', 'gate_no_path_based_archive_extraction', 'gate_regex_patterns_pass_adversarial_audit', 'gate_rich_is_only_in_the_render_worker', 'gate_sandbox_core_limit_failure_refuses', 'gate_sandbox_responses_are_capped_before_framing', 'gate_single_network_host', 'gate_sql_is_parameterised', 'gate_terminal_output_is_inert', 'gate_tokenizer_module_is_isolated', 'gate_tokenizer_pool_wait_is_bounded', 'gate_tokenizer_request_writes_are_bounded', 'gate_tokenizer_smoke_is_deterministic', 'gate_tokenizer_worker_limit_failures_are_reported', 'gate_tokenizer_worker_startup_is_isolated', 'gate_untrusted_text_is_sanitised_where_it_is_rendered', 'gate_a_declared_upstream_target_is_allowlisted_and_pinned', 'gate_an_archive_is_parsed_only_after_its_checksum_verifies', 'gate_upstream_redirects_stay_on_the_forge_cdn_allowlist']
+__all__ = ['gate_artifact_reads_are_bounded', 'gate_dead_tokenizer_child_fails_the_package', 'gate_every_child_process_gets_an_explicit_environment', 'gate_every_live_regex_is_audited', 'gate_every_stream_read_is_bounded', 'gate_expansion_is_bounded', 'gate_freshness_uses_local_marker', 'gate_git_worker_limit_failures_are_reported', 'gate_git_worker_runs_in_an_os_sandbox', 'gate_fetch_state_is_parent_owned', 'gate_git_worker_startup_is_isolated', 'gate_network_is_confined', 'gate_network_reads_are_bounded', 'gate_provider_tokens_are_redacted', 'gate_no_interpreter_calls', 'gate_no_path_based_archive_extraction', 'gate_regex_patterns_pass_adversarial_audit', 'gate_rich_is_only_in_the_render_worker', 'gate_sandbox_core_limit_failure_refuses', 'gate_sandbox_responses_are_capped_before_framing', 'gate_single_network_host', 'gate_sql_is_parameterised', 'gate_terminal_output_is_inert', 'gate_tokenizer_module_is_isolated', 'gate_tokenizer_pool_wait_is_bounded', 'gate_tokenizer_request_writes_are_bounded', 'gate_tokenizer_smoke_is_deterministic', 'gate_tokenizer_worker_limit_failures_are_reported', 'gate_tokenizer_worker_startup_is_isolated', 'gate_untrusted_text_is_sanitised_where_it_is_rendered', 'gate_a_declared_upstream_target_is_allowlisted_and_pinned', 'gate_an_archive_is_parsed_only_after_its_checksum_verifies', 'gate_upstream_redirects_stay_on_the_forge_cdn_allowlist', 'gate_upstream_reads_are_bounded_and_pinned']
 
 def gate_no_interpreter_calls() -> Gate:
     """No path turns text into code, and nothing is unpickled."""
@@ -1560,3 +1560,33 @@ def gate_upstream_redirects_stay_on_the_forge_cdn_allowlist() -> Gate:
         problems.append(f"redirect hosts outside the fixed set: {extra}")
     return Gate("upstream redirects stay on the forge CDN allowlist",
                 not problems, problems or sorted(REDIRECT_HOSTS))
+
+
+def gate_upstream_reads_are_bounded_and_pinned() -> Gate:
+    """A2/A3/A8: every upstream read is bounded and pinned, not just declared.
+
+    The structural half of the upstream lane: the transport checks the socket
+    peer against the pinned address, clamps its own ceilings and refuses
+    compressed transfer; the archive parser caps *decompressed* bytes (not
+    just declared sizes) and streams the tar; the collector caps the text it
+    puts into the state.
+    """
+    fetch = (SRC / "upstream_fetch.py").read_text(encoding="utf-8")
+    archive = (SRC / "analysis" / "upstream_archive.py").read_text(
+        encoding="utf-8")
+    collect = (SRC / "upstream_collect.py").read_text(encoding="utf-8")
+    problems: list[str] = []
+    for token in ("getpeername", "is_routable_address", "_HARD_MAX_BYTES",
+                  "_HARD_DEADLINE_SECONDS", "REDIRECT_HOSTS",
+                  "Accept-Encoding"):
+        if token not in fetch:
+            problems.append(f"upstream_fetch.py lacks {token}")
+    for token in ("_LimitedReader", 'mode="r|"', "_ArchiveTooLarge",
+                  "_HARD_TOTAL_BYTES", "infolist"):
+        if token not in archive:
+            problems.append(f"upstream_archive.py lacks {token}")
+    for token in ("_MAX_TEXT_BYTES", "deadline_at", "_HARD_MIN_CHECKSUM_BITS"):
+        if token not in collect:
+            problems.append(f"upstream_collect.py lacks {token}")
+    return Gate("upstream reads are bounded and pinned", not problems,
+                problems or "peer check, decompressed cap and text cap present")

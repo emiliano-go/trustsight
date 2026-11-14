@@ -148,9 +148,10 @@ allowed_hosts = ["github.com", "gitlab.com", "codeberg.org", "bitbucket.org"]
 # ignored.
 allowed_hosts_extra = []
 
-# Fetch the declared source archive (checksum-verified) in addition to a forge
-# clone.  Off by default: the forge clone is the safer network operation
-# because it only reaches an allowlisted forge.
+# Fetch the declared source archive.  This is the implemented acquisition
+# mode; a forge clone is future work.  Off by default: a strong declared
+# checksum is required before any bytes are parsed, and the archive is read in
+# the sandboxed worker under a decompressed-byte cap.
 archive_fetch = false
 
 # Minimum checksum strength accepted before an archive is parsed: 256 or 512.

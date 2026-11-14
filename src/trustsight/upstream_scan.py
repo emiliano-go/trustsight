@@ -57,6 +57,10 @@ _DOMAIN_RE = re.compile(r"^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$")
 _SEGMENT_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 _HEX_RE = re.compile(r"^[0-9a-fA-F]+$")
 
+#: Operator allowlist additions are bounded: an allowlist is not a config file
+#: to grow without limit, and each entry is still validated.
+_MAX_EXTRA_HOSTS = 16
+
 
 class UpstreamScanError(RuntimeError):
     """The declared upstream cannot be reached under the lane's policy."""
@@ -81,6 +85,16 @@ def _clean_host(value: object) -> str:
     host = value.strip().lower().rstrip(".")
     if not host or "/" in host or ":" in host or "@" in host:
         return ""
+    # An operator override is still a host, not a single label or a literal.
+    # "localhost", "metadata" and IP literals are not allowlist entries; a
+    # dotted name is required and then still has to pass the address policy.
+    if "." not in host or ".." in host:
+        return ""
+    try:
+        ipaddress.ip_address(host)
+        return ""
+    except ValueError:
+        pass
     return host if _DOMAIN_RE.match(host) else ""
 
 
@@ -92,15 +106,20 @@ def configured_hosts(config: dict | None = None) -> frozenset[str]:
     """
     hosts = set(DEFAULT_ALLOWED_HOSTS)
     section = (config or {}).get("upstream_scan") if isinstance(config, dict) else None
-    if isinstance(section, dict):
-        for key in ("allowed_hosts", "allowed_hosts_extra"):
-            values = section.get(key)
-            if not isinstance(values, (list, tuple)):
-                continue
-            for value in values:
-                host = _clean_host(value)
-                if host:
-                    hosts.add(host)
+    if not isinstance(section, dict):
+        return frozenset(hosts)
+    added = 0
+    for key in ("allowed_hosts", "allowed_hosts_extra"):
+        values = section.get(key)
+        if not isinstance(values, (list, tuple)):
+            continue
+        for value in values:
+            if added >= _MAX_EXTRA_HOSTS:
+                break
+            host = _clean_host(value)
+            if host:
+                hosts.add(host)
+                added += 1
     return frozenset(hosts)
 
 
@@ -117,7 +136,12 @@ def parse_forge_target(url: str, *, allowed_hosts=None) -> ForgeTarget:
                         else allowed_hosts)
     if not isinstance(url, str) or not url.strip():
         raise UpstreamScanError("empty upstream URL")
-    parts = urlsplit(url.strip())
+    value = url.strip()
+    # A backslash or a control byte is never part of a URL this lane fetches;
+    # some parsers normalize them differently, so refuse rather than guess.
+    if "\\" in value or any(ch in value for ch in ("\x00", "\n", "\r", "\t")):
+        raise UpstreamScanError("upstream URL carries a control character")
+    parts = urlsplit(value)
     if parts.scheme.lower() != "https":
         raise UpstreamScanError("upstream URL is not https")
     if parts.username or parts.password:
@@ -152,14 +176,10 @@ def is_routable_address(value: str) -> bool:
         return False
     if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped:
         address = address.ipv4_mapped
-    return not (
-        address.is_private
-        or address.is_loopback
-        or address.is_link_local
-        or address.is_multicast
-        or address.is_reserved
-        or address.is_unspecified
-    )
+    # ``is_global`` rejects loopback, RFC 1918, link-local, CGNAT
+    # (100.64.0.0/10), documentation, benchmarking, reserved, unspecified and
+    # metadata ranges in one maintained predicate.
+    return address.is_global
 
 
 def pin_target(target: ForgeTarget, resolver):

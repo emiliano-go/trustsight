@@ -4,7 +4,15 @@ from __future__ import annotations
 
 import hashlib
 
+import pytest
+
 from trustsight.upstream_collect import collect_upstream_manifest_texts
+
+
+@pytest.fixture(autouse=True)
+def _online_lane(monkeypatch):
+    """These tests inject their own fetcher; opt back into the online path."""
+    monkeypatch.delenv("TRUSTSIGHT_OFFLINE", raising=False)
 
 DATA = b"archive-bytes"
 SHA256 = hashlib.sha256(DATA).hexdigest()
@@ -81,3 +89,38 @@ def test_archive_fetch_must_be_enabled():
         fetcher=lambda url, target: called.append(url) or DATA,
         extractor=_extractor)
     assert texts == [] and called == []
+
+
+def test_a_weak_checksum_is_never_an_archive_anchor():
+    weak = RECIPE.replace("sha256sums", "md5sums").replace(SHA256, "0" * 32)
+    called = []
+    texts, _ = collect_upstream_manifest_texts(
+        weak, config=CONFIG,
+        fetcher=lambda url, target: called.append(url) or DATA,
+        extractor=_extractor)
+    assert texts == [] and called == []
+
+
+def test_the_total_manifest_text_is_capped():
+    def extractor(_slug, _data):
+        return {"manifest_texts": [
+            (f"pkg/m{i}.toml", "x" * (64 * 1024)) for i in range(80)],
+            "complete": True, "refused": False, "malformed": False}
+
+    texts, notes = collect_upstream_manifest_texts(
+        RECIPE, config=CONFIG, fetcher=lambda url, target: DATA,
+        extractor=extractor)
+    assert sum(len(text) for _, text in texts) <= 2 * 1024 * 1024
+    assert "upstream_scan_partial" in notes
+
+
+def test_offline_never_opens_a_connection(monkeypatch):
+    monkeypatch.setenv("TRUSTSIGHT_OFFLINE", "1")
+    called = []
+    texts, notes = collect_upstream_manifest_texts(
+        RECIPE, config=CONFIG,
+        fetcher=lambda url, target: called.append(url) or DATA,
+        extractor=_extractor)
+    assert texts == []
+    assert notes == ["upstream_scan_offline"]
+    assert called == []

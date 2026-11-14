@@ -17,7 +17,9 @@ default analysis path.  A refusal is returned as a note, not hidden.
 
 from __future__ import annotations
 
+import os
 import re
+import time
 
 from .upstream_scan import (
     UpstreamScanError,
@@ -31,6 +33,13 @@ from .upstream_fetch import UpstreamFetchError, fetch_bytes
 __all__ = ["collect_upstream_manifest_texts"]
 
 _MAX_ARCHIVES = 4
+_MAX_SOURCE_ENTRIES = 64
+#: A cap on the manifest text one package may add to its state, so a hostile
+#: archive cannot turn into a multi-megabyte state document.
+_MAX_TEXT_BYTES = 2 * 1024 * 1024
+#: Hard ceilings: config can lower these, never raise them.
+_HARD_DEADLINE_SECONDS = 300.0
+_HARD_MIN_CHECKSUM_BITS = 256
 #: The sandboxed worker accepts at most this many base64 bytes in one frame.
 _MAX_ARCHIVE_BYTES = 16 * 1024 * 1024
 
@@ -97,6 +106,11 @@ def collect_upstream_manifest_texts(
     section = (config or {}).get("upstream_scan") if isinstance(config, dict) else None
     if not isinstance(section, dict) or not section.get("enabled", False):
         return [], []
+    # The operator's offline switch is absolute: the lane never opens a
+    # connection when TRUSTSIGHT_OFFLINE is set, whatever the config says.
+    if os.environ.get("TRUSTSIGHT_OFFLINE", "").strip().lower() in (
+            "1", "true", "yes"):
+        return [], ["upstream_scan_offline"]
 
     from .expansion import resolve_text
     from .recipedoc import parse_recipe
@@ -111,8 +125,29 @@ def collect_upstream_manifest_texts(
     texts: list[tuple[str, str]] = []
     notes: list[str] = []
     seen = 0
+    text_bytes = 0
+
+    def _bounded(value, default: float, ceiling: float) -> float:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return default
+        if number <= 0:
+            return default
+        return min(number, ceiling)
+
+    try:
+        minimum = max(
+            _HARD_MIN_CHECKSUM_BITS, int(section.get("min_checksum_bits", 256)))
+    except (TypeError, ValueError):
+        minimum = _HARD_MIN_CHECKSUM_BITS
+    deadline_at = time.monotonic() + _bounded(
+        section.get("deadline_seconds", 120), 120.0, _HARD_DEADLINE_SECONDS)
+
     for index, entry in enumerate(recipe.arrays.get("source") or ()):
-        if seen >= _MAX_ARCHIVES:
+        if index >= _MAX_SOURCE_ENTRIES:
+            break
+        if seen >= _MAX_ARCHIVES or time.monotonic() >= deadline_at:
             break
         raw = str(entry)
         url = _resolve(raw, recipe, resolve_text)
@@ -137,13 +172,15 @@ def collect_upstream_manifest_texts(
         )
         if mode.mode != "archive":
             continue
-        minimum = int(section.get("min_checksum_bits", 256) or 256)
-        deadline = float(section.get("deadline_seconds", 120) or 120)
+        remaining = deadline_at - time.monotonic()
+        if remaining <= 0:
+            notes.append("upstream_scan_deadline")
+            break
         try:
             if fetcher is None:
                 data = fetch_bytes(
                     url, allowed_hosts=allowed, token=_token_for(target.host),
-                    max_bytes=_MAX_ARCHIVE_BYTES, deadline_seconds=deadline)
+                    max_bytes=_MAX_ARCHIVE_BYTES, deadline_seconds=remaining)
             else:
                 data = fetcher(url, target)
         except (UpstreamFetchError, UpstreamScanError):
@@ -165,7 +202,12 @@ def collect_upstream_manifest_texts(
         if parsed.get("refused") or parsed.get("malformed"):
             notes.append("upstream_scan_partial")
         for path, text in parsed.get("manifest_texts") or ():
+            size = len(text.encode("utf-8", "replace"))
+            if text_bytes + size > _MAX_TEXT_BYTES:
+                notes.append("upstream_scan_partial")
+                return texts, sorted(set(notes))
             texts.append((f"upstream/{path}", text))
+            text_bytes += size
         seen += 1
     return texts, sorted(set(notes))
 

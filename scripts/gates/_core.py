@@ -70,6 +70,10 @@ _NETWORK_MODULES = {
     "feed_signer_client.py",
     "feed_signer_service.py",
     "token_broker_service.py",
+    # A local Unix-socket SQLite writer/client; neither opens an internet
+    # socket.
+    "db_writer_service.py",
+    "db_writer_client.py",
     # The isolated git worker clones the AUR repository (A16), but only
     # through its own loopback bridge and the parent CONNECT proxy pinned to
     # aur.archlinux.org:443.

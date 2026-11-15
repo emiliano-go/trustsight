@@ -1268,6 +1268,31 @@ with `token` and optional `expires_at`, or a plain token on the first line.
 
 ---
 
+## trustsight db-writer
+
+Own the writable SQLite handle for an isolated watcher. The watcher reads the
+database through a read-only mount and sends `INSERT`/`UPDATE` statements to
+this process over a Unix socket. `DELETE`, schema changes, `PRAGMA`, and
+`ATTACH` are refused; every accepted statement is appended to a hash-chained
+audit log.
+
+```
+trustsight db-writer --db PATH [--socket PATH] [--audit-log PATH]
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--db` | Path to the SQLite database the writer owns. |
+| `--socket` | Unix socket to listen on. Default `/run/trustsight-db/db-writer.sock`. |
+| `--audit-log` | Append one hash-chained JSON record per accepted statement. |
+
+The watcher selects this mode with `TRUSTSIGHT_DB_WRITER_SOCKET`; it does not
+open the database for writing itself.
+
+---
+
 ## trustsight audit-anchor
 
 Compare the signer's published `head.json` with an off-host expected chain,

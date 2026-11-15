@@ -518,6 +518,12 @@ modules = [
   "sandbox/store_client.py",
 ]
 [[exempt]]
+reason = "narrow database writer: tracks whether the client socket has an open transaction; it is protocol state, not persistent application state"
+modules = [
+  "db_writer_service.py",
+]
+
+[[exempt]]
 reason = "one-pass IOC match merge: a local seen list dedupes matches across recipe and upstream texts within a single call"
 modules = [
   "full_aur/analyze/_fact.py",

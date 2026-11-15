@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Optional
 from ._common import log
 
+from ..db_writer_client import WriterClient, decode_value
+
 __all__ = ['DEFAULT_HASH_ALGORITHM', 'MAX_SEED_BYTES', 'MAX_SEED_MEMBERS', 'MAX_SEED_MEMBER_BYTES', 'SEED_META_HASH_ALGORITHM_KEY', 'SEED_META_SALT_KEY', '_ADDED_COLUMNS', '_SCHEMA_VERSION', '_SYNC_MODES', '_SYNC_SQL', '_ensure_salt', '_generate_salt', '_get_salt', '_hash_maintainer_rows', '_hash_maintainer_value', '_local', '_migrate', '_migrate_plaintext_maintainers', '_migrate_rule_ids', '_new_connection', '_synchronous_mode', 'close_connections', 'get_connection', 'get_db_path', 'get_read_only_connection', 'init_db', 'write_batch']
 
 MAX_SEED_BYTES = 2 * 1024 * 1024 * 1024
@@ -32,6 +34,114 @@ def get_db_path() -> Path:
     return DATA_DIR / "trustsight.db"
 
 _local = threading.local()
+
+
+class _WriterRow(dict):
+    """A row from the writer that supports both mapping and index access."""
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return list(self.values())[key]
+        return super().__getitem__(key)
+
+
+class _WriterResult:
+    def __init__(self, *, rows, columns, lastrowid=None, rowcount=-1):
+        self._rows = [
+            _WriterRow({column: value for column, value in zip(columns, row)})
+            for row in rows
+        ]
+        self.lastrowid = lastrowid
+        self.rowcount = rowcount
+        self.description = [(column, None, None, None, None, None, None)
+                            for column in columns] or None
+
+    def fetchall(self):
+        return self._rows
+
+    def fetchone(self):
+        return self._rows[0] if self._rows else None
+
+    def __iter__(self):
+        return iter(self._rows)
+
+
+def _read_sql(sql: str) -> bool:
+    text = sql.lstrip()
+    while text.startswith("--"):
+        text = text.split("\n", 1)[1] if "\n" in text else ""
+        text = text.lstrip()
+    first = text.split(None, 1)[0].upper() if text else ""
+    if first in {"SELECT", "WITH", "EXPLAIN"}:
+        return True
+    if first == "PRAGMA":
+        return "=" not in text.split("\n", 1)[0]
+    return False
+
+
+class _WriterConnection:
+    """A read-only handle whose writes go to the separate writer process."""
+
+    def __init__(self, db_path: Path, socket_path: str):
+        self.db_path = db_path
+        self.client = WriterClient(socket_path)
+        self._read = None
+        self.row_factory = sqlite3.Row
+
+    def _reader(self):
+        if self._read is None:
+            uri = f"file:{self.db_path}?mode=ro"
+            conn = sqlite3.connect(uri, uri=True,
+                                   timeout=_busy_timeout_ms() / 1000)
+            conn.row_factory = sqlite3.Row
+            _harden_connection(conn, read_only=True)
+            self._read = conn
+        return self._read
+
+    def execute(self, sql, params=()):
+        if _read_sql(sql):
+            cur = self._reader().execute(sql, params)
+            return _WriterResult(
+                rows=cur.fetchall(),
+                columns=[column[0] for column in (cur.description or ())],
+                lastrowid=cur.lastrowid, rowcount=cur.rowcount)
+        response = self.client.execute(sql, tuple(params))
+        return _WriterResult(
+            rows=[[decode_value(value) for value in row]
+                  for row in (response.get("rows") or ())],
+            columns=response.get("columns") or (),
+            lastrowid=response.get("lastrowid"),
+            rowcount=response.get("rowcount", -1))
+
+    def executemany(self, sql, rows):
+        if _read_sql(sql):
+            cur = self._reader().executemany(sql, rows)
+            return _WriterResult(rows=[], columns=[], rowcount=cur.rowcount)
+        response = self.client.executemany(sql, rows)
+        return _WriterResult(
+            rows=[[decode_value(value) for value in row]
+                  for row in (response.get("rows") or ())],
+            columns=response.get("columns") or (),
+            lastrowid=response.get("lastrowid"),
+            rowcount=response.get("rowcount", -1))
+
+    def executescript(self, script):
+        raise sqlite3.OperationalError(
+            "schema changes are not available through the database writer")
+
+    def begin(self):
+        self.client.begin()
+
+    def commit(self):
+        self.client.commit()
+
+    def rollback(self):
+        self.client.rollback()
+
+    def close(self):
+        if self._read is not None:
+            self._read.close()
+            self._read = None
 
 class _BatchConnection(sqlite3.Connection):
     """A connection whose ``commit()`` is deferred inside :func:`write_batch`.
@@ -234,13 +344,20 @@ def get_read_only_connection():
 def close_connections() -> None:
     """Close the cached connection held by the current thread."""
     cached = getattr(_local, "cached", None)
-    if cached is None:
-        return
-    _local.cached = None
-    try:
-        cached[1].close()
-    except sqlite3.Error:
-        pass
+    if cached is not None:
+        _local.cached = None
+        try:
+            cached[1].close()
+        except sqlite3.Error:
+            pass
+    writer = getattr(_local, "writer", None)
+    if writer is not None:
+        _local.writer = None
+        writer[1].close()
+
+def _writer_socket() -> str:
+    return os.environ.get("TRUSTSIGHT_DB_WRITER_SOCKET", "").strip()
+
 
 @contextmanager
 def get_connection():
@@ -266,6 +383,19 @@ def get_connection():
         with get_read_only_connection() as conn:
             yield conn
         return
+    socket_path = _writer_socket()
+    if socket_path:
+        conn = _cached_writer_connection(socket_path)
+        try:
+            yield conn
+        except Exception:
+            if not getattr(_local, "batch_depth", 0):
+                try:
+                    conn.rollback()
+                except sqlite3.Error:
+                    pass
+            raise
+        return
     conn = _cached_connection()
     try:
         yield conn
@@ -273,6 +403,17 @@ def get_connection():
         if not getattr(_local, "batch_depth", 0):
             conn.rollback()
         raise
+
+def _cached_writer_connection(socket_path: str) -> _WriterConnection:
+    db_path = get_db_path()
+    key = (str(db_path), socket_path)
+    cached = getattr(_local, "writer", None)
+    if cached is None or cached[0] != key:
+        if cached is not None:
+            cached[1].close()
+        _local.writer = (key, _WriterConnection(db_path, socket_path))
+    return _local.writer[1]
+
 
 def _cached_connection() -> sqlite3.Connection:
     """The cached connection for the current path, opened on first use."""
@@ -301,9 +442,13 @@ def write_batch():
     partial commit.
     """
     depth = getattr(_local, "batch_depth", 0)
-    conn: Optional[sqlite3.Connection] = None
+    conn = None
     if depth == 0:
-        conn = _cached_connection()
+        socket_path = _writer_socket()
+        conn = (_cached_writer_connection(socket_path) if socket_path
+                else _cached_connection())
+        if socket_path:
+            conn.begin()
     _local.batch_depth = depth + 1
     try:
         yield

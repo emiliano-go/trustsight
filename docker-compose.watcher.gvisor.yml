@@ -13,6 +13,10 @@ services:
     runtime: runsc
     environment:
       TRUSTSIGHT_REQUIRE_GVISOR: "1"
+  db-writer:
+    runtime: runsc
+    environment:
+      TRUSTSIGHT_REQUIRE_GVISOR: "1"
   upstream-fetcher:
     runtime: runsc
     environment:

@@ -11,6 +11,11 @@ from ._common import log
 
 def init_db():
     """Create all tables and indexes if they do not exist."""
+    import os
+
+    if os.environ.get("TRUSTSIGHT_DB_WRITER_SOCKET"):
+        # The writer owns schema creation and migration before it binds.
+        return
     from ._connection import get_connection
 
     with get_connection() as conn:

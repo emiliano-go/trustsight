@@ -177,16 +177,16 @@ jobs:
           set -eu
           export TRUSTSIGHT_IMAGE="ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}"
           export TRUSTSIGHT_PROXY_TOKEN="compose-ci"
-          mkdir -p run/trustsight run/trustsight-token
+          mkdir -p run/trustsight run/trustsight-token run/trustsight-db
           cleanup() {
             docker compose -f docker-compose.watcher.yml down -v >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
           docker compose -f docker-compose.watcher.yml \
-            up -d egress-proxy token-broker feed-signer
+            up -d db-writer egress-proxy token-broker feed-signer
           sleep 3
           running="$(docker compose -f docker-compose.watcher.yml ps --status running --services)"
-          for service in egress-proxy token-broker feed-signer; do
+          for service in db-writer egress-proxy token-broker feed-signer; do
             echo "$running" | grep -qx "$service"
           done
 

@@ -73,8 +73,8 @@ def test_the_gvisor_overlay_covers_every_service():
         (ROOT / "docker-compose.watcher.gvisor.yml").read_text())
     services = overlay["services"]
     assert set(services) == {
-        "trustsight-watch", "upstream-fetcher", "egress-proxy", "feed-signer",
-        "token-broker",
+        "trustsight-watch", "db-writer", "upstream-fetcher", "egress-proxy",
+        "feed-signer", "token-broker",
     }
     assert all(item["runtime"] == "runsc" for item in services.values())
     assert all(item["environment"]["TRUSTSIGHT_REQUIRE_GVISOR"] == "1"
@@ -135,3 +135,21 @@ def test_the_main_services_require_active_seccomp():
                  "feed-signer", "token-broker"):
         assert services[name]["environment"][
             "TRUSTSIGHT_REQUIRE_SECCOMP"] == "1", name
+
+
+def test_the_watcher_has_no_writable_database_volume():
+    services = _compose()["services"]
+    volumes = services["trustsight-watch"]["volumes"]
+    assert any(volume.startswith("trustsight-data:") and
+               volume.endswith(":ro") for volume in volumes)
+    assert services["trustsight-watch"]["environment"][
+        "TRUSTSIGHT_DB_WRITER_SOCKET"].endswith("db-writer.sock")
+
+
+def test_the_database_writer_is_isolated_and_owns_the_volume():
+    writer = _compose()["services"]["db-writer"]
+    assert writer["network_mode"] == "none"
+    assert writer["read_only"] is True
+    assert "ALL" in writer["cap_drop"]
+    assert any(volume.startswith("trustsight-data:") and
+               not volume.endswith(":ro") for volume in writer["volumes"])

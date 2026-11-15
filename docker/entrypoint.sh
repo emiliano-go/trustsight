@@ -88,6 +88,18 @@ if [ "${TRUSTSIGHT_REQUIRE_HARDENED:-}" = "1" ]; then
     fi
 fi
 
+if [ -n "${TRUSTSIGHT_DB_WRITER_SOCKET:-}" ]; then
+    i=0
+    while [ ! -S "${TRUSTSIGHT_DB_WRITER_SOCKET}" ] && [ "$i" -lt 60 ]; do
+        sleep 1
+        i=$((i + 1))
+    done
+    if [ ! -S "${TRUSTSIGHT_DB_WRITER_SOCKET}" ]; then
+        echo "trustsight-entrypoint: database writer socket is not ready" >&2
+        exit 2
+    fi
+fi
+
 src="${TRUSTSIGHT_CONFIG_SRC:-}"
 dst="${TRUSTSIGHT_CONFIG_DIR:-}"
 if [ -n "$src" ] && [ -n "$dst" ] && [ -d "$src" ]; then

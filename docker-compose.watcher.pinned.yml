@@ -10,6 +10,8 @@ services:
     environment:
       TRUSTSIGHT_REQUIRE_PINNED: "1"
       TRUSTSIGHT_IMAGE: ${TRUSTSIGHT_IMAGE:?set TRUSTSIGHT_IMAGE to a digest-pinned image}
+  db-writer:
+    image: ${TRUSTSIGHT_IMAGE:?set TRUSTSIGHT_IMAGE to a digest-pinned image}
   upstream-fetcher:
     image: ${TRUSTSIGHT_IMAGE:?set TRUSTSIGHT_IMAGE to a digest-pinned image}
   feed-signer:

@@ -28,6 +28,7 @@ services:
     command: ["full-aur", "--watch", "--interval", "1800", "--depth", "-1"]
     restart: unless-stopped
     depends_on:
+      - db-writer
       - upstream-fetcher
       - feed-signer
       - egress-proxy
@@ -71,7 +72,8 @@ services:
     # runs the version it first pulled, however far behind the channel moves.
     pull_policy: always
     volumes:
-      - trustsight-data:/home/ts/.local/share/trustsight
+      - trustsight-data:/data:ro
+      - ./run/trustsight-db:/run/trustsight-db
       # Read-only source: the entrypoint copies it into the writable tmpfs
       # config dir, so an RCE cannot persist by editing config/rules.
       - ./trustsight-config:/config-src:ro
@@ -85,6 +87,8 @@ services:
       TMPDIR: "/tmp"
       TRUSTSIGHT_CONFIG_SRC: "/config-src"
       TRUSTSIGHT_CONFIG_DIR: "/tmp/trustsight-config"
+      TRUSTSIGHT_DB_PATH: "/data/trustsight.db"
+      TRUSTSIGHT_DB_WRITER_SOCKET: "/run/trustsight-db/db-writer.sock"
       TRUSTSIGHT_UPSTREAM_FETCHER_SOCKET: "/run/trustsight/upstream.sock"
       # AUR, release-channel, feed and ntfy traffic goes through the proxy;
       # the watcher has no default route.
@@ -125,6 +129,41 @@ services:
       options:
         max-size: "10m"
         max-file: "5"
+
+  db-writer:
+    image: ghcr.io/emiliano-go/trustsight:latest
+    container_name: trustsight-db-writer
+    command: ["db-writer", "--socket", "/run/trustsight-db/db-writer.sock",
+              "--db", "/data/trustsight.db",
+              "--audit-log", "/var/lib/trustsight/db-writer.jsonl"]
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid,nodev
+    user: "1000:1000"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=./docker/seccomp-fetcher.json
+      - apparmor=docker-default
+    network_mode: none
+    pids_limit: 64
+    mem_limit: 256m
+    cpus: 0.5
+    volumes:
+      - trustsight-data:/data
+      - ./run/trustsight-db:/run/trustsight-db
+      - trustsight-db-audit:/var/lib/trustsight
+    environment:
+      TRUSTSIGHT_LOG_TIMESTAMPS: "1"
+      TMPDIR: "/tmp"
+      TRUSTSIGHT_REQUIRE_SECCOMP: "1"
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
 
   upstream-fetcher:
     image: ${TRUSTSIGHT_IMAGE:-ghcr.io/emiliano-go/trustsight:latest}
@@ -359,3 +398,4 @@ volumes:
   trustsight-data:
   trustsight-signer-audit:
   trustsight-egress-audit:
+  trustsight-db-audit:

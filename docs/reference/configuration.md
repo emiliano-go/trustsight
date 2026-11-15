@@ -658,5 +658,6 @@ The full default config is embedded in `src/trustsight/config/_default_config.py
 
 | Variable | Meaning |
 |---|---|
-| `TRUSTSIGHT_DB_PATH` | Exact SQLite file the analysis store worker opens. Set by the parent; not normally set by hand. |
+| `TRUSTSIGHT_DB_PATH` | Exact SQLite file the analysis store worker opens. The compose watcher sets `/data/trustsight.db`. |
+| `TRUSTSIGHT_DB_WRITER_SOCKET` | Unix socket of the narrow database writer. When set, the watcher holds only a read-only database handle; writes go through the writer. |
 | `TRUSTSIGHT_STORE_READ_ONLY` | Internal mode flag; the store worker sets it for read operations so the connection is opened read-only. |

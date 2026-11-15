@@ -17,7 +17,6 @@ from scripts.gates._state import (
 from scripts.state_machines import (
     Registry,
     check_registry,
-    load_registry,
     resolve_anchor,
     resolve_test,
 )

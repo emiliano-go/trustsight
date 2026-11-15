@@ -40,7 +40,7 @@ The pipeline is deliberately split: the reporter supplies the package and the ev
 
 ## Step 1: Check fire rates
 
-Start from the measured corpus fire rates in [Fire Rates](../explanation/historical-and-behavioral-analysis.md), then check how often the rule fires across your own reviewed packages:
+Start from the measured corpus fire rates in [Fire Rates](../reports/fire-rates.md), then check how often the rule fires across your own reviewed packages:
 
 ```bash
 trustsight review --verbose
@@ -148,7 +148,7 @@ TrustSight's current test suite has a zero-rate of **74.0%** (benign packages sc
 uv run --extra dev pytest tests/
 ```
 
-Ensure CRITICAL recall stays at **100%**: every known malicious pattern must still fire. The corpus benchmarks in the [explanation section](../explanation/detection-and-evidence.md) define the expected p5/p95 separations:
+Ensure CRITICAL recall stays at **100%**: every known malicious pattern must still fire. The corpus benchmarks in the [benchmarks report](../reports/benchmarks-and-methodology.md) define the expected p5/p95 separations:
 
 | Metric | Value |
 |--------|-------|

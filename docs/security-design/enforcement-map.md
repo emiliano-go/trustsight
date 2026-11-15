@@ -152,7 +152,7 @@ How each gate is scoped, and the recurring mistake that lets one pass while its 
 
 The last row is the one that keeps the rest honest: a gate with no entry here is an unstated guarantee, and an entry with no gate is an unsupported promise. Both fail the build.
 
-Detection calibration is enforced separately by `scripts/calibration_gates.py`; see [fire rates](../explanation/historical-and-behavioral-analysis.md). The taxonomy and the adversarial thread of this model are developed at three depths: [evidence tiers](../reference/evidence-tiers.md) describes the signals; [what TrustSight cannot see](../explanation/limitations-and-uncertainty.md) describes the limits; this page describes the whole.
+Detection calibration is enforced separately by `scripts/calibration_gates.py`; see [fire rates](../reports/fire-rates.md). The taxonomy and the adversarial thread of this model are developed at three depths: [evidence tiers](../reference/evidence-tiers.md) describes the signals; [what TrustSight cannot see](../explanation/limitations-and-uncertainty.md) describes the limits; this page describes the whole.
 
 The security and regex audits read repository text as UTF-8. Security-gate
 path allowlists use forward slashes on every platform. These checks do not

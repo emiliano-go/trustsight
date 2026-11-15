@@ -131,4 +131,4 @@ whole-corpus claim.
 - [Part 3: Reporting](reporting.md)
 - [The security enforcement map](../enforcement-map.md) - the
   threat-model gates this section complements
-- [Fire rates](../../explanation/historical-and-behavioral-analysis.md) - the calibration gates
+- [Fire rates](../../reports/fire-rates.md) - the calibration gates

@@ -1,12 +1,13 @@
-<!-- description: How findings become alerts: the alert kinds and budget, campaign and neighborhood modes, the immune-inspired design, the H-series intake freeze, and the evaluation methodology. -->
+<!-- description: How findings become alerts: the alert kinds and budget, campaign and neighborhood modes, the immune-inspired design, and the H-series intake freeze. -->
 
 # Detection and Evidence
 
 
 Detection is more than a rule firing. This page explains the alert kinds
 and budget, how a corroborated campaign changes the surrounding packages, the
-immune-inspired design behind correlation, why the H-series is under an intake
-freeze, and how the result is measured against a locked corpus.
+immune-inspired design behind correlation, and why the H-series is under an
+intake freeze. The measurement of the resulting detection is a separate
+[report](../reports/benchmarks-and-methodology.md).
 
 ## Kinds of Alerts
 
@@ -501,128 +502,7 @@ and the [Rule Series](../rules/series.md).
 
 ## Benchmarks and Methodology
 
-### Scope of this evaluation
-
-These results are regression measurements, not an independent efficacy study.
-The malicious side consists of **self-authored, labelled fixtures**: historical
-cases represented as fixtures plus holdout, evasion, synthetic, and campaign
-fixtures maintained in this repository. Labels express what each fixture is
-intended to exercise; they do not establish prevalence, real-world recall, or
-adversarially independent performance. The benign side is a locked,
-point-in-time AUR-derived corpus. Its measurements describe that snapshot and
-the shipped configuration, not all AUR updates or future traffic.
-
-An external blinded evaluation is the route for evidence beyond this internal
-regression suite; see [Blinded Evaluation](../contributing/blinded-evaluation.md).
-
-### How separation is measured: per-class, not pooled
-
-The lesson that made the evaluation converge.
-
-Early benchmarks pooled all malicious-class packages together and compared the pooled mean and median against the benign mean and median. This produced a misleading picture: the gap appeared to be approximately 5 points, which was not useful for decision-making.
-
-#### Why pooling hid the separation
-
-The malicious test corpus includes packages at multiple severity levels: CRITICAL (clear malicious patterns like curl pipe bash), HIGH (checksum manipulation), MEDIUM (unusual sources), and LOW (minor anomalies). Pooling them together averaged the high scores from CRITICAL packages with the lower scores from MEDIUM and LOW packages. The average was dominated by the low-severity tail, making it look like the tool did not separate malicious from benign.
-
-The benign corpus includes package updates that are not perfectly clean: routine dependency changes, source URL format changes, and maintainer updates. The tail of the benign distribution (packages that score 5 to 20) pulled the benign average up. The pooled comparison compared the middle of both distributions, which overlapped significantly.
-
-The fix was to split by class. When CRITICAL-only packages were isolated from the rest, the separation became meaningful:
-
-- **CRITICAL** p5 = 40
-- **Benign** p95 = 30
-- Gap = +10 points
-
-Pooling was hiding the separation. Advisory-level and low-severity malware dragged the malicious-class average down, while the benign tail dragged the benign average up. Per-class measurement revealed that the tool cleanly separates the threats that matter.
-
-### Why benign-p95-versus-malicious-p5 is the number that matters
-
-Absolute p95 on either class is not useful in isolation. A tool that scores everything 50 would have a benign p95 of 50 and a malicious p95 of 50, showing zero separation.
-
-The gap between the bottom 5th percentile of malicious scores and the top 95th percentile of benign scores is the operational separation. It answers the question: how much room is there to set a threshold that catches real threats without false-positive burden?
-
-If the CRITICAL p5 is 40 and the benign p95 is 30, a threshold set inside the gap catches every CRITICAL-class sample in the benchmark set while labeling only 5% of benign packages as FLAGGED. The 10-point gap provides margin for error: moving the threshold within it trades false-positive rate against headroom while still catching all CRITICAL samples.
-
-The gap is measured as p5 of the worst class (CRITICAL) versus p95 of the benign class because these are the tails that matter for threshold setting. The center of the distribution is irrelevant for operational decision-making.
-
-### Per-class CI gates
-
-The benchmark enforces three gates:
-
-| Gate | Requirement | What it prevents |
-|------|-------------|------------------|
-| Malicious fixture coverage | Every labelled malicious fixture still detects what it is labelled for (skips known_gap) | A change that weakens detection of a labelled fixture is rejected. The committed corpus is 213 self-authored fixtures across historical, holdout, evasion, synthetic, campaign and warm groups; `scripts/verify_fixtures.py` enforces record-to-diff completeness. This is not independently sampled recall. |
-| Separation | benign p95 stays below malicious p5 (strict; currently 30 < 40, a 10-point margin) | A change that narrows the gap (by reducing malicious scores or inflating benign scores) is rejected. |
-| Benign fire rates | No scoring rule fires on >= 30% of benign diffs | Prevents weight inflation: a rule that becomes a census on benign packages is rejected. |
-| Score-not-size + weight-zero annotations | \|Pearson(score, diff_lines)\| < 0.30; weight-0 rules move the score by exactly 0 | Prevents measuring activity instead of risk. |
-
-A known-gaps gate additionally requires each `known_gap` fixture to *still*
-fail its label, so closing a gap forces an explicit relabel.
-
-#### Why several gates and not one
-
-A single gate (for example, "CRITICAL recall >= 100%") would allow weight inflation: making all rules fire harder would increase malicious scores but would also increase benign scores. The separation gate (benign p95 < malicious p5) prevents this by requiring the gap to stay positive. The fire-rate cap prevents any single rule from becoming a false-positive census on the benign corpus.
-
-The gates together enforce three distinct properties: detection (no missed labelled attacks), separation (meaningful threshold gap), and baseline (low false-positive rate). Each gate independently blocks regressions in its dimension.
-
-#### Current numbers
-
-Measured against the locked benign corpus as `tests/fixtures/corpus.lock` records it - **8,393** diffs - with the same code path the calibration gates use. Re-derive with `scripts/rebaseline.py` when scoring changes; `test_the_documented_corpus_size_matches_the_lock` keeps the figure and the lock from drifting apart.
-
-| Metric | Value | Benchmark target |
-|--------|-------|------------------|
-| Benign zero-rate | 74.0% | no minimum; fire-rate cap controls FPs |
-| Ruleset trigger rate | 30.1% | benign diffs that fire at least one non-INFO entry (rule or annotation) |
-| Benign flag rate | 6.7% | about **1 in 15** benign corpus diffs exceed the default profile's 20-point threshold |
-| Labelled-fixture detection | 100% | 100% of labelled fixtures; not independent recall |
-| CRITICAL p5 | 40 | > benign p95 |
-| Benign p95 | 30 | < CRITICAL p5 (margin: 10) |
-| Tests | Run `uv run --extra dev pytest` for the current checkout | n/a |
-
-The numbers are not aspirational; they are the measured state of the current rule set and scoring model on this corpus and fixture set. CI rejects gate regressions, not changes to an external performance claim.
-
-In one line: 74.0% benign zero-rate, benign p95 = 30 against malicious p5 = 40 on the 8,393-diff locked corpus.
-
-### Reproducible methodology
-
-- **Corpus pinned** via `corpus.lock`: the AUR snapshot is versioned and reproducible. The same lock names the same packages and diffs on any machine, but a rebuild is not byte-stable across git versions (`git diff -W` output moves), so reproducible numbers come from the packed corpus release asset, not a local rebuild.
-- **Baseline committed** as `baseline.json`: benchmark results are checked into the repository. Every commit can be compared against the baseline to detect regressions.
-- **Regeneration** is monthly: `corpus-drift.yml` downloads the packed corpus release asset (the same bytes `calibration.yml` uses, not a rebuild whose `git diff -W` output is not byte-stable across git versions), re-derives the baseline and compares it against the committed `baseline.json`, filing an issue on any change. Reproducibility comes from that committed baseline plus git history.
-
-The pinned corpus prevents a common failure mode in security tooling: benchmarks that improve over time because the corpus drifted toward easier samples. Pinning freezes the corpus, so any improvement or regression is from the tool, not the data.
-
-### Per-stratum evaluation
-
-The locked corpus is divided into sixteen strata: the original eight (`source_patched`, `bin_repack`, `vcs_git`, `lang_ecosystem`, `data_fonts`, `dkms_kernel`, `autotools`, `large_electron`) plus eight expansion cohorts (`persist_surface`, `signed_sources`, `multi_client_fetch`, `maintainer_churn`, `dependency_heavy`, `vcs_other`, `appimage_repack`, `lang_deep`). The next lock adds a seventeenth, `runtime_carriers`, for committed units, timers, sockets and runtime scripts. Every catalog id is accounted for in `tests/fixtures/coverage-ledger.json` as measured, zero-fire with a reason, cold-only, or adversarial-only; the ledger is the expansion's control panel and is checked by the `coverage ledger is complete` gate. Breaking the corpus down by package shape keeps a rule that is loud on one shape from hiding inside an aggregate rate: `scripts/rebaseline.py` records fire rates per stratum under `strata.<name>.rules` in `baseline.json`, and [Fire Rates](historical-and-behavioral-analysis.md) reports them per rule.
-
-A stratum is selected by packaging shape, never by a rule target. The provenance screen rejects any candidate or diff already on a compromised-package, IOC or watchlist list, and records the `N of M` exclusion count. A `vcs_other` cohort is deliberately labelled low-power because Mercurial/Subversion/Bazaar/Fossil packaging is rare; padding it would measure duplicates, not the ecosystem.
-
-The corpus-level gate is the `>= 30%` benign fire-rate cap (`scripts/calibration_gates.py`): no scoring rule may fire on 30% or more of the benign diffs, so a rule cannot become a census on ordinary packaging.
-
-Per-rule fire rates (false-positive rate of each rule on the benign corpus) are tracked separately in [Fire Rates](historical-and-behavioral-analysis.md). The 74.0% zero-rate means 74.0% of benign diffs score 0, while **6.7% exceed the 20-point threshold**: roughly one reviewer workload item per fifteen benign corpus diffs. A score of 0 and a clean fire record are not the same thing: the largest contributors to the remaining fires are H015 (Build Function Modified, INFO/weight 0, fires on 19.7% of diffs but never moves a score) and R010/R011 (curl/wget in PKGBUILD, LOW, fire on <2%).
-
-### The methodology habit
-
-1. Pool results, get suspicious. If pooled numbers look good, they are hiding a problem.
-2. Split by class, find the truth. The real separation is in the tails, not the center.
-3. Measure the gap, not the absolute. The gap between classes is the operational metric; absolute scores are meaningless in isolation.
-4. Enforce per-stratum, not aggregate. Aggregate recall hides blind spots.
-
-This methodology generalizes beyond TrustSight. Any security tool that claims a recall number should be asked: recall on what class, against what corpus, pinned at what version, and measured against which tail of the benign distribution?
-
-## Benchmark performance
-
-Measured against the TrustSight test corpus.
-
-!!! warning "Two rows measure a narrower configuration"
-
-    The recall rows above were measured with `observation_count` unpopulated, so Tier C novelty contributed zero to every score (see [Cold Start and Maturity](scoring-and-verdicts.md#cold-start-and-maturity)), and against a smaller ruleset than the one documented here. Read them as a floor, not as current recall. The three distribution rows below are re-measured by the calibration gates against the current 8,393-diff corpus on every push.
-
-| Rule | Recall | Notes |
-|------|--------|-------|
-| CRITICAL class (all) | 100 % | Every CRITICAL-class sample detected. |
-| R012 (prompt injection) | 17 % | Tripwire; catches obvious patterns only. Low recall is intentional. |
-| R013 (unicode bidi) | 88 % | Misses some bidi variants. |
-| Benign zero-rate | 74.0 % | Percentage of benign diffs scoring 0. |
-| Benign p95 | 30 | 95th percentile score on benign corpus. |
-| CRITICAL p5 | 40 | 5th percentile score on CRITICAL-class corpus. |
+The measured separation, CI gates and current figures are a report over the
+locked corpus; they live with the other measurements in [Benchmarks and
+Methodology](../reports/benchmarks-and-methodology.md). This page explains the
+alert model those benchmarks evaluate.

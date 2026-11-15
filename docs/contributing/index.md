@@ -9,8 +9,8 @@ whether a package is safe; a person does. Every contribution is measured against
 the same thesis, which the [security model](../security-design/security-model.md) states and each part
 below applies to work on the tool itself.
 
-- [Development Setup](development-setup.md): getting started, running tests,
-  linting, and evaluation
+- [Development Setup](development-setup.md): getting started, building the
+  `trustsight-dev` package, running tests, linting, and evaluation
 - [Writing a Rule](writing-a-rule.md): how to add R-series, H-series or C-series rules,
   fixture guidelines, fire-rate gate
 - [Re-baselining](re-baselining.md): when and how to re-baseline after config or
@@ -89,12 +89,3 @@ benign corpus and real case reports are the arguments that matter.
 | Rules              | 206 scoring rules across R/H/C/D/S/X, plus P001-P009 declared practice (P004 is skipped) and W001-W014 unverifiable |
 | Rule config        | `rules.toml`                    |
 | Benign corpus lock | `tests/fixtures/corpus.lock`    |
-
-## Project records
-
-- [In the Wild](../reports/in-the-wild.md): field notes from real AUR
-  incidents.
-- [2026-10-14: AUR name-clone waves](../reports/2026-10-14-aur-name-clone-waves.md):
-  a worked campaign report.
-- [Hot-path performance baseline](../reports/hot-path-baseline.md): the
-  measured cost of a review, and what changed it.

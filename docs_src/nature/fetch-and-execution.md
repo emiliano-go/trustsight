@@ -32,6 +32,6 @@ measured against.
 
 ## See also
 
-- [Fire Rates](../explanation/historical-and-behavioral-analysis.md); how H rules are calibrated
+- [Fire Rates](../reports/fire-rates.md); how H rules are calibrated
 - [Reducing the H-Series](../explanation/detection-and-evidence.md)
 - [Fetch and Execution category page](fetch-and-execution.md)

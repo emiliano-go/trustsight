@@ -181,6 +181,18 @@ Reference = [
 ]
 
 [[project.nav]]
+Reports = [
+  {Overview = "reports/index.md"},
+  {"In the Wild" = [
+    {Overview = "reports/in-the-wild.md"},
+    {"AUR name-clone waves" = "reports/2026-10-14-aur-name-clone-waves.md"},
+  ]},
+  {"Fire Rates" = "reports/fire-rates.md"},
+  {"Benchmarks and Methodology" = "reports/benchmarks-and-methodology.md"},
+  {"Hot-path baseline" = "reports/hot-path-baseline.md"},
+]
+
+[[project.nav]]
 Contributing = [
   {Overview = "contributing/index.md"},
   {"Development Setup" = "contributing/development-setup.md"},
@@ -192,11 +204,6 @@ Contributing = [
   {Releasing = "contributing/releasing.md"},
   {Documentation = [
     {"Documentation Policy" = "contributing/documentation-policy.md"},
-  ]},
-  {"Project Records" = [
-    {"In the Wild" = "reports/in-the-wild.md"},
-    {"AUR name-clone waves" = "reports/2026-10-14-aur-name-clone-waves.md"},
-    {"Hot-path baseline" = "reports/hot-path-baseline.md"},
   ]},
 ]
 

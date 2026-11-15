@@ -228,7 +228,7 @@ No rendered output says or implies “safe”, “clean”, or “nothing to rev
 
 Benign p95 must stay below malicious p5. A change that moves both populations is not a detection improvement.
 
-**Enforced by:** `scripts/calibration/_gates.py` and [Benchmarks and Methodology](explanation/detection-and-evidence.md).
+**Enforced by:** `scripts/calibration/_gates.py` and [Benchmarks and Methodology](reports/benchmarks-and-methodology.md).
 
 ### CRITICAL recall stays at 100%
 

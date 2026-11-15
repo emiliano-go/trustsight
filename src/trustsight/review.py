@@ -379,10 +379,18 @@ def prefetch(pkgs: list[dict], progress_callback: Optional[ProgressCallback] = N
             project.close()
 
     # Split packages share one AUR git repository.  Fetch it once even when
-    # several installed outputs of the same base are being reviewed.
+    # several installed outputs of the same base are being reviewed.  The RPC
+    # fallback discovery carries no package_base, so resolve it here too.
+    provider = None
     groups: dict[str, list[dict]] = {}
     for entry in pkgs:
-        base = entry.get("package_base") or entry["name"]
+        base = entry.get("package_base")
+        if not base:
+            if provider is None:
+                from .depth import default_metadata
+
+                provider = default_metadata()
+            base = provider.package_base(entry["name"])
         groups.setdefault(base, []).append(entry)
 
     hints: dict[str, int] = {}

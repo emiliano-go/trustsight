@@ -80,6 +80,16 @@ def test_a_finished_progress_bar_ends_with_a_newline(monkeypatch):
     assert stream.getvalue() == "\n"
 
 
+def test_print_colored_cleans_untrusted_message_text():
+    text = render_client.render("print_colored", {
+        "msg": "package\x1b[2Jname\x07",
+        "color": "red",
+    })
+    assert "package" in text and "name" in text
+    assert "\x1b[2J" not in text
+    assert "\x07" not in text
+
+
 def test_a_failed_review_card_names_the_error():
     text = render_client.render("review_results", {
         "results": [{

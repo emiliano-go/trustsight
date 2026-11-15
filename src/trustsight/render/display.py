@@ -69,7 +69,7 @@ def print_colored(*, msg: str, color: str = "", stderr: bool = False) -> None:
 
     style = f"[{color}]" if color else ""
     target = err_console() if stderr else console()
-    target.print(f"{style}{escape(msg)}[/]")
+    target.print(f"{style}{escape(clean(msg))}[/]")
 
 
 def severity_text(severity: str):

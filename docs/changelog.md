@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+### Security
+
+- **One-line notices are cleaned before Rich sees them.** The sandboxed `print_colored` renderer escaped markup but did not remove terminal escape sequences, so a package-derived message passed through a CLI notice could still repaint the terminal. It now runs the message through `clean` first.
+- **Gate targets cannot be option-shaped.** Target names read from `.SRCINFO` are validated before they reach a command line, and the `pacman -Qq` probe now uses `--` so a name beginning with `-` cannot be read as a flag.
+- **Seed archives cannot smuggle Windows paths.** Member names containing NUL or backslashes are refused, and the resolved extraction target must stay under the destination.
+- **Package-derived notices cannot carry terminal escapes.** The render boundary strips control sequences before printing.
+
 ### Fixed
 
 - **The upstream lane no longer downgrades a credential failure to an
@@ -104,6 +111,7 @@
 - **Dependency and naming rules stop reading declared companions as impersonation.** D001/D002 stand down for names the watcher already has a `packages` row for; H064 reports an added `conflicts` entry at weight 0 (a refusal is not a name claim), and D005 skips a conflict whose name the recipe also provides/replaces.
 - **Published figures are recalibrated to the narrowed rules.** The locked-corpus measurement moved to 74.0% benign zero-rate, 6.7% above the 20-point threshold, 30.1% ruleset trigger rate and 93.3th percentile; `tests/fixtures/published-figures.json` and the docs that quote it carry the measured values. The suite figure is 9,168 tests across 259 files.
 - **The six upstream-lane rules are classified in the coverage ledger.** A009/A010 (archive ELF and setuid files) and U013/U014/U015 (local upstream workflow and manifest signals) carry deferred `add_artifact_or_manifest` plans; W014 is a boundary and classified `pseudo`. The ledger now covers all 313 catalog ids, and the rebuilt ledger also records the post-C022 fire rate (22 -> 6 on the locked corpus) that the earlier ledger predated.
+
 
 ## [0.28.8] - 2026-11-13
 

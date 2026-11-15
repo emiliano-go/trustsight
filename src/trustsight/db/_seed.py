@@ -169,12 +169,21 @@ def _extract_v2_archive(archive: Path, dest: Path) -> Optional[Path]:
             # Path containment: a member name must be a relative path inside
             # the destination.  Absolute names or ``..`` segments would let a
             # crafted archive write anywhere the user can write.
-            member_parts = PurePosixPath(member.name).parts
-            if PurePosixPath(member.name).is_absolute() or ".." in member_parts:
+            member_name = member.name
+            member_parts = PurePosixPath(member_name).parts
+            if ("\x00" in member_name or "\\" in member_name
+                    or PurePosixPath(member_name).is_absolute()
+                    or ".." in member_parts):
                 raise ValueError(
-                    f"seed archive member escapes the extraction directory: {member.name}"
+                    f"seed archive member escapes the extraction directory: {member_name}"
                 )
-            target = dest / member.name
+            target = dest / member_name
+            root = dest.resolve()
+            resolved = target.resolve()
+            if resolved != root and root not in resolved.parents:
+                raise ValueError(
+                    f"seed archive member escapes the extraction directory: {member_name}"
+                )
             if member.isdir():
                 target.mkdir(parents=True, exist_ok=True)
             elif member.isfile():

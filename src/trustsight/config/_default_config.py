@@ -160,6 +160,24 @@ min_checksum_bits = 256
 # Per-call bound.  A ceiling, never a target.
 deadline_seconds = 120
 
+# Cycle-wide budget across every package in one watch cycle.  Per-package
+# limits alone still let an AUR-wide cycle issue tens of thousands of
+# requests, so the lane stops cleanly when any of these is exhausted and
+# records upstream_scan_budget rather than continuing.
+max_archives_per_cycle = 500
+max_bytes_per_cycle = 268435456
+max_seconds_per_cycle = 1800
+
+# Unix socket of the separate upstream fetcher.  When set, the watcher sends
+# URL/checksum/bounds requests there and the provider token stays out of this
+# process.  Empty means the in-process bounded transport.
+fetcher_socket = ""
+
+# Optional HTTP CONNECT proxy for the separate fetcher, e.g.
+# "http://egress-proxy:3128".  Empty means direct egress (only safe when the
+# container has a network policy of its own).
+proxy = ""
+
 [layers]
 # Override a rule's assurance layer. The layer names the
 # kind of evidence the rule represents, L1 (structural coherence) to L8

@@ -61,6 +61,10 @@ from .rules import register_commands as _register_rules
 from .verdict import register_commands as _register_verdict
 from .hook import register_commands as _register_hook
 from .auth import register_commands as _register_auth
+from .upstream_fetcher import register_commands as _register_upstream_fetcher
+from .egress_proxy import register_commands as _register_egress_proxy
+from .feed_signer import register_commands as _register_feed_signer
+from .token_broker import register_commands as _register_token_broker
 
 _register_review(app)
 _register_inspect(app)
@@ -79,6 +83,10 @@ _register_rules(app)
 _register_verdict(app)
 _register_hook(app)
 _register_auth(app)
+_register_upstream_fetcher(app)
+_register_egress_proxy(app)
+_register_feed_signer(app)
+_register_token_broker(app)
 
 
 class _StderrHandler(logging.StreamHandler):

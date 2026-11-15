@@ -9,6 +9,7 @@ manifest texts.
 
 from __future__ import annotations
 
+import hashlib
 import json
 
 from ._connection import get_connection
@@ -19,8 +20,9 @@ __all__ = [
     "save_upstream_observation",
 ]
 
-#: One observation's detail is a compact projection; anything larger is a
-#: defect in the producer, so it is truncated rather than stored whole.
+#: One observation's detail is a compact projection.  Anything larger is
+#: replaced by a valid JSON marker with the original length and digest, so a
+#: consumer never receives a half-cut document.
 MAX_UPSTREAM_DETAIL_BYTES = 16 * 1024
 
 
@@ -34,8 +36,11 @@ def _bounded_detail(detail) -> str:
             detail = str(detail)
     raw = detail.encode("utf-8", "replace")
     if len(raw) > MAX_UPSTREAM_DETAIL_BYTES:
-        raw = raw[:MAX_UPSTREAM_DETAIL_BYTES]
-        return raw.decode("utf-8", "ignore")
+        return json.dumps({
+            "truncated": True,
+            "bytes": len(raw),
+            "sha256": hashlib.sha256(raw).hexdigest(),
+        }, sort_keys=True, separators=(",", ":"))
     return detail
 
 

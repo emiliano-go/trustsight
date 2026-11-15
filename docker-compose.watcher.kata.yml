@@ -1,0 +1,11 @@
+# Optional Kata Containers overlay: run the watcher and its parser workers
+# inside a microVM. Install Kata and register kata-runtime with Docker first:
+#
+#   docker compose -f docker-compose.watcher.yml \
+#     -f docker-compose.watcher.kata.yml up -d
+#
+# The fetcher, proxy, signer and broker run in their own locked-down
+# containers and do not need a microVM.
+services:
+  trustsight-watch:
+    runtime: kata-runtime

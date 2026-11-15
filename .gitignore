@@ -48,5 +48,7 @@ release/
 
 # Local deployment files never belong in the repository.
 deploy/
+# Shared Unix-socket directory for the watcher and upstream fetcher.
+run/
 .env
 .env.*

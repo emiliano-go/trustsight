@@ -75,6 +75,7 @@ _FEED_URL_ENV = "TRUSTSIGHT_FEED_URL"
 _FEED_KEY_ENV = "TRUSTSIGHT_FEED_KEY"
 _FEED_KEY_ID_ENV = "TRUSTSIGHT_FEED_KEY_ID"
 _FEED_KEY_FILE_ENV = "TRUSTSIGHT_FEED_KEY_FILE"
+_FEED_SIGNER_ENV = "TRUSTSIGHT_FEED_SIGNER_SOCKET"
 
 
 def _cycle_alert_cap() -> int:
@@ -656,7 +657,7 @@ def maybe_publish_scans(cycle, url: str | None = None) -> bool:
         return False
     feed = feed_url()
     key_id, key = _feed_key()
-    if not feed or not key:
+    if not feed or not (key or _signer_socket()):
         return False
     try:
         from .db import enqueue_alert_payload
@@ -785,6 +786,8 @@ def feed_url(config: dict | None = None) -> str:
 
 def _feed_key() -> tuple[str, str]:
     """``(key_id, base64_pkcs8)`` from the environment or a secret file."""
+    if _signer_socket():
+        return "", ""
     key_id = os.environ.get(_FEED_KEY_ID_ENV, "").strip()
     key = os.environ.get(_FEED_KEY_ENV, "").strip()
     if not key:
@@ -809,7 +812,7 @@ def _feed_key() -> tuple[str, str]:
     return key_id, key
 
 
-def _sign_feed(
+def _sign_feed_local(
     key_b64: str, key_id: str, body: bytes,
     timestamp: int | None = None, webhook_id: str | None = None,
 ) -> dict:
@@ -833,6 +836,25 @@ def _sign_feed(
         "webhook-key-id": key_id,
         "webhook-signature": "v1=" + base64.b64encode(signature).decode(),
     }
+
+
+def _signer_socket() -> str:
+    return os.environ.get(_FEED_SIGNER_ENV, "").strip()
+
+
+def _sign_feed(
+    key_b64: str, key_id: str, body: bytes,
+    timestamp: int | None = None, webhook_id: str | None = None,
+) -> dict:
+    """Sign through the separate signer when configured, else locally."""
+    socket_path = _signer_socket()
+    if socket_path:
+        from .feed_signer_client import sign_via_socket
+
+        return sign_via_socket(
+            socket_path, body, timestamp=timestamp, webhook_id=webhook_id)
+    return _sign_feed_local(
+        key_b64, key_id, body, timestamp=timestamp, webhook_id=webhook_id)
 
 
 def post_feed(url: str, payload: dict, key_b64: str, key_id: str,
@@ -876,7 +898,7 @@ def _deliver_sinks(
     if not key:
         key_id, key = _feed_key()
     feed_ok = True
-    feed_configured = bool(feed and key) and not skip_feed
+    feed_configured = bool(feed and (key or _signer_socket())) and not skip_feed
     if feed_configured:
         try:
             post_feed(
@@ -918,8 +940,8 @@ def maybe_notify(cycle, url: str | None = None) -> bool:
         return flush_outbox(effective)
     payload = alert_payload(cycle)
     key_id, key = _feed_key()
-    feed = feed_url() if key else ""
-    if not effective and not (feed and key):
+    feed = feed_url() if (key or _signer_socket()) else ""
+    if not effective and not feed:
         return False
     try:
         from .db import enqueue_alert_payload
@@ -927,7 +949,7 @@ def maybe_notify(cycle, url: str | None = None) -> bool:
         body = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
         webhook_id = None
         timestamp = None
-        if feed and key:
+        if feed and (key or _signer_socket()):
             headers = _sign_feed(key, key_id, body)
             webhook_id = headers["webhook-id"]
             timestamp = int(headers["webhook-timestamp"])

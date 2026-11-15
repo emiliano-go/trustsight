@@ -383,6 +383,11 @@ strength. Provider tokens are never stored in this file; see
 | `archive_fetch` | bool | `false` | Fetch the declared source archive. This is the implemented acquisition mode; it requires a strong declared checksum and reads the archive in the sandboxed worker under a decompressed-byte cap. |
 | `min_checksum_bits` | int | `256` | Minimum checksum strength an archive read requires before parsing. |
 | `deadline_seconds` | int | `120` | Wall-clock budget for one scan call. The lane clamps it (and the archive byte/text caps) to hard ceilings, so a config value can lower a bound but never remove it. |
+| `max_archives_per_cycle` | int | `500` | Cycle-wide cap across every package; the lane stops and records `upstream_scan_budget` when it is reached. |
+| `max_bytes_per_cycle` | int | `268435456` | Cycle-wide cap on fetched archive bytes. |
+| `max_seconds_per_cycle` | int | `1800` | Cycle-wide wall-clock budget for the upstream lane. |
+| `fetcher_socket` | A path | Unix socket of the separate upstream fetcher. When set, the watcher sends URL/checksum/bounds requests there and no provider token is read in the watcher process. Empty uses the in-process transport. |
+| `proxy` | An `http://host:port` URL | CONNECT proxy used by the separate fetcher. Empty means direct egress. The shipped compose puts the fetcher on an internal network and points this at `egress-proxy:3128`. |
 
 In containers, `TRUSTSIGHT_UPSTREAM_SCAN_ENABLED` and
 `TRUSTSIGHT_UPSTREAM_SCAN_ARCHIVE_FETCH` override `enabled` and
@@ -574,6 +579,14 @@ changes behaviour is a config key or a command flag.
 | `FORCE_COLOR` | Any non-empty value | Forces Rich output even when stdout is not a terminal. |
 | `TRUSTSIGHT_FORCE_RICH` | Any non-empty value | The same as `FORCE_COLOR`, for callers that already use `FORCE_COLOR` for something else. |
 | `TRUSTSIGHT_DOC_CACHE` | A directory path | Overrides where the parsed-document cache stores its JSON entries. Default: `$XDG_CACHE_HOME/trustsight/documents`. |
+| `TRUSTSIGHT_CONFIG_DIR` | A directory path | Overrides the config directory (`~/.config/trustsight`). The watcher container points this at its tmpfs copy so the read-only source can stay immutable. |
+| `TRUSTSIGHT_CONFIG_SRC` | A directory path | Read-only config source the watcher entrypoint copies into `TRUSTSIGHT_CONFIG_DIR` before starting. Unset means no copy. |
+| `TRUSTSIGHT_UPSTREAM_FETCHER_SOCKET` | A Unix socket path | Overrides `[upstream_scan] fetcher_socket` for the separate fetcher. The compose file points the watcher at the shared `trustsight-run` socket. |
+| `TRUSTSIGHT_UPSTREAM_PROXY` | An `http://host:port` URL | Overrides `[upstream_scan] proxy` for the separate fetcher. |
+| `TRUSTSIGHT_FEED_SIGNER_SOCKET` | A Unix socket path | Sends feed bodies to the separate signer for signature headers instead of reading `TRUSTSIGHT_FEED_KEY*` in the watcher. |
+| `TRUSTSIGHT_EGRESS_ALLOW` | Comma-separated exact hostnames | Extra hosts the container egress proxy may CONNECT to, for operator webhooks/ntfy. IP literals, wildcards, ports and paths are ignored. |
+| `HTTPS_PROXY` | An `http://host:port` URL | Standard proxy used by the watcher's URL reads and its AUR git proxy. The compose file points it at `egress-proxy:3128`. |
+| `TRUSTSIGHT_WATCHER_PROXY` | An `http://host:port` URL | Watcher-specific proxy override for the AUR git proxy; takes precedence over `HTTPS_PROXY`. |
 | `TRUSTSIGHT_DEV_BUILD` | `1` | Set by the `packaging/dev` wrappers. Appends `-dev` to the `--version` output; the released package does not set it. |
 | `TRUSTSIGHT_BIN` | A path | The `trustsight` executable `trustsight-gate` runs. Default: `trustsight` on `PATH`, else the running interpreter's `-m trustsight` module. |
 | `TRUSTSIGHT_GATE_DISABLE` | `1` | Skip the `trustsight-gate` approval step. It logs that it did; the bypass is for emergencies, not routine use. |
@@ -593,6 +606,9 @@ changes behaviour is a config key or a command flag.
 | `CREDENTIALS_DIRECTORY` | A directory path | systemd sets this for a service using `LoadCredential=`/`LoadCredentialEncrypted=`. The upstream-scan lane reads `<provider>-token` from it first, so a service token is root-owned and never in a file the user can read. |
 | `TRUSTSIGHT_<PROVIDER>_TOKEN` | A provider token | The least-safe source: an environment variable is visible to same-UID processes. Use it for CI/containers only; prefer [`trustsight auth`](cli.md) (OS keyring) or a `0600` token file. `<PROVIDER>` is `GITHUB`, `GITLAB`, `CODEBERG` or `BITBUCKET`. |
 | `TRUSTSIGHT_<PROVIDER>_TOKEN_FILE` | A file path | Read the token from a `0600` file instead of the environment. A file readable by group or others is named in a warning; `trustsight auth status` shows only the token's last four characters. |
+| `TRUSTSIGHT_<PROVIDER>_TOKEN_EXPIRES_AT` | A Unix timestamp | Refuse an expired token without falling back to another source. A malformed value also fails closed. Rotate the file/token and update the timestamp. |
+| `TRUSTSIGHT_<PROVIDER>_TOKEN_SOCKET` | A Unix socket path | Ask a local broker for a short-lived token and expiry. The broker is contacted on every resolution; unavailable, malformed, or expired responses fail closed. |
+| `TRUSTSIGHT_CANARY_TOKEN` | A sentinel token value | Refuse to use the sentinel as a live provider token. A canary planted in a token file/source therefore fails closed and is logged rather than sent. |
 
 Rich output is the default only when the target stream is a terminal:
 renderers look at stdout, and progress bars look at stderr. A pipe, a

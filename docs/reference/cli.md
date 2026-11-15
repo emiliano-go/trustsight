@@ -1168,6 +1168,98 @@ build lane: the manifest a caller supplies is the whole handoff.
 
 ---
 
+## trustsight upstream-fetcher
+
+Run the separate upstream archive fetcher. It owns the provider token and
+the HTTP/TLS path; the watcher talks to it over a Unix socket and never reads
+the token itself.
+
+```
+trustsight upstream-fetcher [--socket PATH]
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--socket` | Unix socket to listen on. Default `/run/trustsight/upstream.sock`; mount the same path into the watcher. |
+
+The service accepts a URL, expected checksum/algorithm and bounds, re-validates
+the forge allowlist, resolves and pins the address, fetches under the byte and
+time caps, verifies the checksum, and returns the bytes. It has no database,
+config write path, feed key or parser worker.
+
+---
+
+## trustsight egress-proxy
+
+Run the CONNECT-only egress proxy used by the upstream fetcher. It accepts
+only HTTPS on port 443 to the exact forge and CDN allowlist, resolves the
+target once, refuses non-routable addresses, and tunnels the TLS connection
+without terminating it.
+
+```
+trustsight egress-proxy [--listen HOST:PORT]
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--listen` | Address to listen on. Default `0.0.0.0:3128`; the compose file keeps it on the internal network. |
+| `--audit-log` | Append one JSON record per allowed or refused CONNECT (`ts`, `host`, `address`, `allowed`, `reason`). The compose file points it at `/var/lib/trustsight/proxy.jsonl`. If an allowed CONNECT cannot be audited, it is refused; the log rotates at 64 MiB. |
+
+---
+
+## trustsight feed-signer
+
+Run the separate feed signer. It owns the Ed25519 feed key and returns
+`webhook-*` signature headers for a bounded body; the watcher never reads the
+private key.
+
+```
+trustsight feed-signer [--socket PATH]
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--socket` | Unix socket to listen on. Default `/run/trustsight/feed-signer.sock`; mount the same path into the watcher. |
+| `--audit-log` | Append one JSON record per signed body and refuse to sign if it cannot be written. The compose file points it at `/var/lib/trustsight/signer/signatures.jsonl`. |
+| `--audit-head` | Atomically publish the latest chain value to this path so an external anchor can read it. The compose file uses `/var/lib/trustsight/signer/head.json`. |
+
+The signer has no network and no database. The watcher still builds and POSTs
+the document; the signature binds the exact body it was asked to sign.
+It accepts only the known `trustsight.*` events with their expected shape,
+rate-limits the socket to 120 signatures per minute, and refuses to sign if
+its audit record cannot be written. Audit records are hash-chained, so a
+deleted or reordered record is detectable and a corrupt log fails closed.
+
+---
+
+## trustsight token-broker
+
+Serve provider tokens over a local Unix socket. The fetcher asks for a
+provider and receives `{"token": "...", "expires_at": ...}`; files are
+re-read on every request so they can be rotated.
+
+```
+trustsight token-broker [--socket PATH] [--token-dir DIR]
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--socket` | Unix socket to listen on. Default `/run/trustsight/token-broker.sock`. |
+| `--token-dir` | Directory holding `<provider>.token` and optional `<provider>.expires`. Default `/run/trustsight/tokens`. |
+
+The broker has no network. An expired, missing or malformed token/expiry is
+refused; the fetcher treats that as a hard credential failure.
+
+---
+
 ## trustsight auth
 
 Manage provider tokens for the optional upstream-scan lane. A token is never

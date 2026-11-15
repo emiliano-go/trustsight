@@ -108,13 +108,81 @@ def test_a_locked_keyring_refuses_the_read_instead_of_going_anonymous(monkeypatc
         raise credentials.CredentialError("keyring is locked")
 
     monkeypatch.setattr(credentials, "resolve_token", locked)
-    called = []
     texts, notes, findings, verified = collect_upstream_manifest_texts(
-        RECIPE, config=CONFIG,
-        fetcher=lambda url, target: called.append(url) or DATA,
-        extractor=_extractor)
-    assert texts == [] and called == []
+        RECIPE, config=CONFIG, extractor=_extractor)
+    assert texts == []
     assert notes == ["upstream_scan_token_unavailable"]
+
+
+def test_the_cycle_budget_stops_a_second_archive():
+    recipe = (
+        "pkgname=demo\n"
+        "pkgver=1.0\n"
+        'source=("https://github.com/owner/repo/archive/v1.tar.gz"\n'
+        '        "https://github.com/owner/other/archive/v1.tar.gz")\n'
+        f"sha256sums=('{SHA256}' '{SHA256}')\n"
+    )
+    config = {"upstream_scan": dict(CONFIG["upstream_scan"],
+                                    max_archives_per_cycle=1)}
+    calls = []
+    texts, notes, _findings, _verified = collect_upstream_manifest_texts(
+        recipe, config=config,
+        fetcher=lambda url, target: calls.append(url) or DATA,
+        extractor=_extractor)
+    assert len(calls) == 1
+    assert "upstream_scan_budget" in notes
+
+
+def test_the_cycle_budget_stops_an_over_budget_archive():
+    config = {"upstream_scan": dict(CONFIG["upstream_scan"],
+                                    max_bytes_per_cycle=len(DATA) - 1)}
+    calls = []
+    texts, notes, _findings, _verified = collect_upstream_manifest_texts(
+        RECIPE, config=config,
+        fetcher=lambda url, target: calls.append(url) or DATA,
+        extractor=_extractor)
+    assert len(calls) == 1
+    assert texts == []
+    assert "upstream_scan_budget" in notes
+
+
+def test_a_429_stops_the_lane_for_the_cycle():
+    from trustsight.upstream_fetch import UpstreamFetchError
+
+    calls = []
+
+    def fetcher(url, target):
+        calls.append(url)
+        raise UpstreamFetchError("upstream returned HTTP 429", status=429)
+
+    texts, notes, _findings, _verified = collect_upstream_manifest_texts(
+        RECIPE, config=CONFIG, fetcher=fetcher, extractor=_extractor)
+    assert texts == []
+    assert len(calls) == 1
+    assert "upstream_scan_rate_limited" in notes
+
+
+def test_a_configured_fetcher_socket_keeps_the_token_out_of_the_watcher(monkeypatch):
+    import trustsight.upstream_fetcher_client as client
+
+    calls = []
+
+    def fake_socket(path, **kwargs):
+        calls.append(path)
+        return DATA
+
+    monkeypatch.setattr(client, "fetch_from_socket", fake_socket)
+    monkeypatch.setattr(
+        "trustsight.upstream_collect._token_for",
+        lambda host: (_ for _ in ()).throw(AssertionError("token used")),
+    )
+    config = {"upstream_scan": dict(CONFIG["upstream_scan"],
+                                    fetcher_socket="/run/upstream.sock")}
+    texts, notes, _findings, _verified = collect_upstream_manifest_texts(
+        RECIPE, config=config, extractor=_extractor)
+    assert calls == ["/run/upstream.sock"]
+    assert texts == [("upstream/pkg/Cargo.toml", "[package]\nname='x'\n")]
+    assert notes == []
 
 
 def test_the_total_manifest_text_is_capped():

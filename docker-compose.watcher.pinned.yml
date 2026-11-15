@@ -1,0 +1,18 @@
+# Digest-pinned watcher overlay. Resolve once with scripts/pin_watcher_image.py
+# and deploy with:
+#
+#   export TRUSTSIGHT_IMAGE=$(python scripts/pin_watcher_image.py)
+#   docker compose -f docker-compose.watcher.yml \
+#     -f docker-compose.watcher.pinned.yml up -d
+services:
+  trustsight-watch:
+    image: ${TRUSTSIGHT_IMAGE:?set TRUSTSIGHT_IMAGE to a digest-pinned image}
+    environment:
+      TRUSTSIGHT_REQUIRE_PINNED: "1"
+      TRUSTSIGHT_IMAGE: ${TRUSTSIGHT_IMAGE:?set TRUSTSIGHT_IMAGE to a digest-pinned image}
+  upstream-fetcher:
+    image: ${TRUSTSIGHT_IMAGE:?set TRUSTSIGHT_IMAGE to a digest-pinned image}
+  feed-signer:
+    image: ${TRUSTSIGHT_IMAGE:?set TRUSTSIGHT_IMAGE to a digest-pinned image}
+  token-broker:
+    image: ${TRUSTSIGHT_IMAGE:?set TRUSTSIGHT_IMAGE to a digest-pinned image}

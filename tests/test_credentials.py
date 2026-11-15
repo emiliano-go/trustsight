@@ -96,6 +96,107 @@ def test_no_source_returns_none():
     assert resolve_token("github", environ={}, keyring_backend=_FakeKeyring()) is None
 
 
+def _broker(tmp_path, payload):
+    import json
+    import socket
+    import threading
+
+    path = str(tmp_path / "token.sock")
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    server.bind(path)
+    server.listen(1)
+
+    def serve():
+        conn, _ = server.accept()
+        with conn:
+            conn.recv(4096)
+            conn.sendall(json.dumps(payload).encode() + b"\n")
+        server.close()
+
+    threading.Thread(target=serve, daemon=True).start()
+    return path
+
+
+def test_the_canary_is_never_used_as_a_live_token(caplog):
+    environ = {
+        "TRUSTSIGHT_GITHUB_TOKEN": "canary-value",
+        "TRUSTSIGHT_CANARY_TOKEN": "canary-value",
+    }
+    with caplog.at_level("CRITICAL"), pytest.raises(CredentialError):
+        resolve_token("github", environ=environ, keyring_backend=_FakeKeyring())
+    assert "canary" in caplog.text
+    assert "canary-value" not in caplog.text
+
+
+def test_a_real_token_still_works_with_a_canary_configured():
+    environ = {
+        "TRUSTSIGHT_GITHUB_TOKEN": "real-value",
+        "TRUSTSIGHT_CANARY_TOKEN": "canary-value",
+    }
+    secret = resolve_token(
+        "github", environ=environ, keyring_backend=_FakeKeyring())
+    assert secret.reveal() == "real-value"
+
+
+def test_a_broker_token_is_used(tmp_path):
+    path = _broker(tmp_path, {"token": "broker-value", "expires_at": 9999999999})
+    secret = resolve_token(
+        "github",
+        environ={"TRUSTSIGHT_GITHUB_TOKEN_SOCKET": path},
+        keyring_backend=_FakeKeyring(),
+    )
+    assert secret.reveal() == "broker-value"
+
+
+def test_an_expired_broker_token_is_refused(tmp_path):
+    path = _broker(tmp_path, {"token": "broker-value", "expires_at": 1})
+    with pytest.raises(CredentialError):
+        resolve_token(
+            "github",
+            environ={"TRUSTSIGHT_GITHUB_TOKEN_SOCKET": path},
+            keyring_backend=_FakeKeyring(),
+        )
+
+
+def test_a_missing_broker_fails_closed(tmp_path):
+    with pytest.raises(CredentialError):
+        resolve_token(
+            "github",
+            environ={"TRUSTSIGHT_GITHUB_TOKEN_SOCKET": str(tmp_path / "none.sock")},
+            keyring_backend=_FakeKeyring(),
+        )
+
+
+def test_an_expired_token_is_refused_without_fallback():
+    environ = {
+        "TRUSTSIGHT_GITHUB_TOKEN": "env-value",
+        "TRUSTSIGHT_GITHUB_TOKEN_EXPIRES_AT": "1",
+    }
+    with pytest.raises(CredentialError):
+        resolve_token("github", environ=environ, keyring_backend=_FakeKeyring())
+
+
+def test_a_future_expiry_is_accepted():
+    import time
+
+    environ = {
+        "TRUSTSIGHT_GITHUB_TOKEN": "env-value",
+        "TRUSTSIGHT_GITHUB_TOKEN_EXPIRES_AT": str(int(time.time()) + 3600),
+    }
+    secret = resolve_token(
+        "github", environ=environ, keyring_backend=_FakeKeyring())
+    assert secret.reveal() == "env-value"
+
+
+def test_a_malformed_expiry_fails_closed():
+    environ = {
+        "TRUSTSIGHT_GITHUB_TOKEN": "env-value",
+        "TRUSTSIGHT_GITHUB_TOKEN_EXPIRES_AT": "tomorrow",
+    }
+    with pytest.raises(CredentialError):
+        resolve_token("github", environ=environ, keyring_backend=_FakeKeyring())
+
+
 def test_a_locked_keyring_fails_closed():
     with pytest.raises(CredentialError):
         resolve_token(

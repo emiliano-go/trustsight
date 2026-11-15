@@ -158,14 +158,16 @@ docker run --rm -it \
   --security-opt=apparmor=unconfined \
   --pids-limit=512 --memory=2g --cpus=2 \
   -v trustsight-data:/home/ts/.local/share/trustsight \
-  -v trustsight-config:/home/ts/.config/trustsight \
+  -v trustsight-config:/config-src:ro \
+  -e TRUSTSIGHT_CONFIG_SRC=/config-src \
+  -e TRUSTSIGHT_CONFIG_DIR=/tmp/trustsight-config \
   --pull=always \
   ghcr.io/emiliano-go/trustsight:latest \
   inspect PACKAGE_NAME --allow-uninstalled --full-recipe
 ```
 
 Podman accepts the same flags; rootless Podman usually needs no seccomp
-override. The data and config volumes and the two tmpfs mounts (`/tmp` and
+override. The data volume, the read-only config source and the two tmpfs mounts (`/tmp` and
 `/home/ts/.cache`) are the writable paths; the root filesystem stays
 read-only, and nothing from your home directory is mounted. `--user
 1000:1000` matches the image and the watcher compose file, so a volume

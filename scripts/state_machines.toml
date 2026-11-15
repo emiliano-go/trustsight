@@ -517,3 +517,8 @@ modules = [
   "sandbox/render_worker.py",
   "sandbox/store_client.py",
 ]
+[[exempt]]
+reason = "one-shot Unix-socket request/response: the only state is a local connect/send/recv sequence with no cross-call lifecycle"
+modules = [
+  "upstream_fetcher_client.py",
+]

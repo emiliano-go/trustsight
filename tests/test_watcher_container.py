@@ -7,6 +7,7 @@ mount defeats that: the sync fails open, logs the permission error, and the
 watcher keeps the rules the volume was created with.
 """
 
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -304,3 +305,11 @@ def test_the_seccomp_guard_refuses_no_filter(tmp_path):
 def test_the_image_normalises_source_permissions():
     text = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     assert "chmod -R a+rX /app" in text
+
+
+def test_the_fetcher_profile_lets_glibc_fall_back_for_threads():
+    profile = json.loads((ROOT / "docker" / "seccomp-fetcher.json").read_text())
+    rule = next(rule for rule in profile["syscalls"]
+                if "clone3" in rule["names"])
+    assert rule["action"] == "SCMP_ACT_ERRNO"
+    assert rule["errnoRet"] == 38

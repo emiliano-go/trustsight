@@ -129,6 +129,26 @@ jobs:
             >"$RUNNER_TEMP/manifest.json"
           grep -q 'left-pad' "$RUNNER_TEMP/manifest.json"
 
+      # The proxy is threaded; the strict fetcher profile must return ENOSYS
+      # for clone3 so glibc falls back to clone. A denied host proves both
+      # startup under that profile and the allowlist response.
+      - name: Exercise the egress proxy under the fetcher profile
+        run: |
+          set -eu
+          image="ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}"
+          name="ts-proxy-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cleanup() { docker rm -f "$name" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          docker run -d --name "$name" --read-only \
+            --tmpfs /tmp:size=16m,noexec,nosuid,nodev \
+            --tmpfs /home/ts/.cache:size=16m,noexec,nosuid,nodev \
+            --cap-drop=all --security-opt=no-new-privileges \
+            --security-opt=seccomp="$PWD/docker/seccomp-fetcher.json" \
+            --user 1000:1000 "$image" egress-proxy --listen 127.0.0.1:3128
+          docker exec "$name" /app/.venv/bin/python -c \
+            'import socket; s=socket.create_connection(("127.0.0.1",3128),5); s.sendall(b"CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n\r\n"); print(s.recv(200).decode())' \
+            | grep -q '403'
+
       # The read-only recipe in docs/workflows/reducing-blast-radius.md.  Two
       # passes against the same volumes: a recreated container must stay
       # writable with the state the first run wrote, and a change to the image

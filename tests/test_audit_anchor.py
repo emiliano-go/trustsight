@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from trustsight.audit_anchor import AnchorError, check
+from trustsight.audit_anchor import AnchorError, check, watch
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -48,3 +48,16 @@ def test_the_module_checks_and_refuses(tmp_path):
     assert check(str(head), expected=chain) == chain
     with pytest.raises(AnchorError):
         check(str(head), expected="d" * 64)
+
+
+def test_watch_alerts_before_exiting_on_a_mismatch(tmp_path, monkeypatch):
+    head = _head(tmp_path, "c" * 64)
+    calls = []
+    import trustsight.alerts as alerts
+    monkeypatch.setattr(alerts, "send",
+                        lambda url, payload: calls.append((url, payload)) or True)
+    with pytest.raises(AnchorError):
+        watch(str(head), expected="d" * 64,
+              notify_url="https://alerts.example/anchor")
+    assert calls[0][0] == "https://alerts.example/anchor"
+    assert calls[0][1]["event"] == "trustsight.anchor"

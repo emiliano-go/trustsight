@@ -42,11 +42,13 @@ def watch_cmd(
     expected_file: str | None = typer.Option(None, "--expected-file"),
     interval: float = typer.Option(300.0, "--interval",
                                    help="Seconds between checks."),
+    notify_url: str | None = typer.Option(
+        None, "--notify-url", help="POST a mismatch alert to this URL."),
 ):
     """Poll the head; a mismatch exits non-zero."""
     try:
         watch(head, expected=expected, expected_file=expected_file,
-              interval_seconds=interval)
+              interval_seconds=interval, notify_url=notify_url)
     except KeyboardInterrupt:
         raise typer.Exit(code=0) from None
     except AnchorError as exc:

@@ -1273,7 +1273,7 @@ or poll it so a rollback exits non-zero.
 
 ```
 trustsight audit-anchor check --head PATH [--expected CHAIN] [--expected-file PATH]
-trustsight audit-anchor watch --head PATH [--expected CHAIN] [--expected-file PATH] [--interval SECONDS]
+trustsight audit-anchor watch --head PATH [--expected CHAIN] [--expected-file PATH] [--interval SECONDS] [--notify-url URL]
 ```
 
 ### Flags
@@ -1284,6 +1284,7 @@ trustsight audit-anchor watch --head PATH [--expected CHAIN] [--expected-file PA
 | `--expected` | Expected `chain_sha256` value. |
 | `--expected-file` | File holding the expected `chain_sha256`; overrides `--expected`. |
 | `--interval` | Seconds between checks in `watch`. Default `300`. |
+| `--notify-url` | POST a mismatch alert to this URL before `watch` exits. |
 
 `check` exits `2` on a mismatch or unreadable head. `watch` does the same
 instead of continuing to poll.

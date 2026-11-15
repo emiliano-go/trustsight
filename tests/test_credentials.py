@@ -256,3 +256,28 @@ def test_read_token_file_is_bounded(tmp_path):
     os.chmod(token_file, 0o600)
     with pytest.raises(CredentialError):
         read_token_file(token_file)
+
+
+def test_the_canary_can_send_an_alert_without_leaking_it(monkeypatch):
+    calls = []
+
+    class Response:
+        def __enter__(self): return self
+        def __exit__(self, *args): return False
+        def read(self, size): return b""
+
+    def fake(request, timeout):
+        calls.append((request.full_url, request.data))
+        return Response()
+
+    import trustsight.alerts as alerts
+    monkeypatch.setattr(alerts.urllib.request, "urlopen", fake)
+    environ = {
+        "TRUSTSIGHT_GITHUB_TOKEN": "canary-value",
+        "TRUSTSIGHT_CANARY_TOKEN": "canary-value",
+        "TRUSTSIGHT_CANARY_ALERT_URL": "https://alerts.example/canary",
+    }
+    with pytest.raises(CredentialError):
+        resolve_token("github", environ=environ, keyring_backend=_FakeKeyring())
+    assert calls[0][0] == "https://alerts.example/canary"
+    assert b"canary-value" not in calls[0][1]

@@ -307,9 +307,23 @@ def resolve_token(
         _log.critical(
             "%s credential is the configured canary token; refusing to use it",
             provider)
+        _send_canary_alert(provider, environ)
         raise CredentialError(
             f"{provider} resolved to the configured canary token; refusing")
     return secret
+
+
+def _send_canary_alert(provider: str, environ) -> None:
+    url = (environ.get("TRUSTSIGHT_CANARY_ALERT_URL", "") or "").strip()
+    if not url:
+        return
+    from .alerts import send
+
+    send(url, {
+        "event": "trustsight.canary",
+        "provider": provider,
+        "ts": int(time.time()),
+    })
 
 
 def store_token(provider: str, token: str, *, keyring_backend=None) -> None:

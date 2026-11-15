@@ -460,7 +460,9 @@ docker compose -f docker-compose.watcher.yml \
 ```
 
 It exits non-zero when the head no longer matches the mounted
-`./anchor/expected` file.
+`./anchor/expected` file. Run the same check with
+`--notify-url https://…` (or the `watch` command) to deliver a
+`trustsight.anchor` alert to a pager or webhook.
 
 ### Reading the logs
 

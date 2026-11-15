@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 import typer
 
 from ..token_broker_service import DEFAULT_SOCKET, serve
@@ -24,10 +26,14 @@ def register_commands(app: typer.Typer):
 def token_broker_cmd(
     socket_path: str = typer.Option(DEFAULT_SOCKET, "--socket"),
     token_dir: str = typer.Option("/run/trustsight/tokens", "--token-dir"),
+    token_command: str | None = typer.Option(
+        os.environ.get("TRUSTSIGHT_TOKEN_COMMAND") or None,
+        "--token-command",
+        help="Credential process run when <provider>.token is absent."),
 ):
     """Serve `<provider>.token` and optional `<provider>.expires` files."""
     try:
-        serve(socket_path, token_dir)
+        serve(socket_path, token_dir, token_command)
     except KeyboardInterrupt:
         raise typer.Exit(code=0) from None
     except Exception as exc:  # noqa: BLE001

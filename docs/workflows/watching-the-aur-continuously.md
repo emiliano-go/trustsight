@@ -376,6 +376,10 @@ Then set
 on the fetcher. The token-broker socket lives on its own volume, not the
 watcher's; rotate a file and its expiry without restarting anything, and an
 absent, expired, or unreadable token fails closed.
+For a short-lived credential helper, set
+`TRUSTSIGHT_TOKEN_COMMAND='vault read -field=token secret/aur/{provider}'`
+on the broker; it runs without a shell when the token file is absent and must
+print the token or a JSON object with `token` and `expires_at`.
 
 The lane reads a declared source archive only when the recipe names an
 allowlisted forge host and a checksum at or above 256 bits pins it.  It never

@@ -12,8 +12,10 @@ import argparse
 import json
 import os
 import re
+import shlex
 import socket
 import stat
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -35,7 +37,53 @@ def _read_bounded(path: Path, cap: int) -> str:
     return data.decode("utf-8", errors="replace").strip()
 
 
-def handle_request(request: object, token_dir: str) -> dict:
+def _from_command(command: str, provider: str) -> dict:
+    """Ask a credential process for a short-lived token.
+
+    ``{provider}`` is substituted as one argument.  The process is never run
+    through a shell; it may print a JSON object with ``token`` and optional
+    ``expires_at``, or a plain token on the first line.
+    """
+    argv = [part.replace("{provider}", provider) for part in shlex.split(command)]
+    if not argv:
+        return {"ok": False, "error": "token command is empty"}
+    try:
+        result = subprocess.run(
+            argv, capture_output=True, timeout=5, check=False,
+            text=True, errors="replace",
+        )
+    except (OSError, subprocess.SubprocessError):
+        return {"ok": False, "error": "token command failed"}
+    if result.returncode != 0:
+        return {"ok": False, "error": "token command failed"}
+    output = result.stdout.strip()
+    if not output or len(output) > MAX_TOKEN_BYTES + 256:
+        return {"ok": False, "error": "token command returned no token"}
+    token = output.splitlines()[0].strip()
+    expires_at = None
+    try:
+        document = json.loads(output)
+    except json.JSONDecodeError:
+        document = None
+    if isinstance(document, dict):
+        token = str(document.get("token") or "").strip()
+        raw = document.get("expires_at")
+        if isinstance(raw, (int, float)):
+            expires_at = float(raw)
+        elif isinstance(raw, str) and raw:
+            try:
+                expires_at = time.mktime(time.strptime(raw, "%Y-%m-%dT%H:%M:%SZ"))
+            except ValueError:
+                return {"ok": False, "error": "token command returned a bad expiry"}
+    if not token:
+        return {"ok": False, "error": "token command returned no token"}
+    if expires_at is not None and time.time() >= expires_at:
+        return {"ok": False, "error": "token is expired"}
+    return {"ok": True, "token": token, "expires_at": expires_at}
+
+
+def handle_request(request: object, token_dir: str,
+                   token_command: str | None = None) -> dict:
     if not isinstance(request, dict):
         return {"ok": False, "error": "invalid request"}
     provider = request.get("provider")
@@ -45,6 +93,8 @@ def handle_request(request: object, token_dir: str) -> dict:
     try:
         token = _read_bounded(base / f"{provider}.token", MAX_TOKEN_BYTES)
     except FileNotFoundError:
+        if token_command:
+            return _from_command(token_command, provider)
         return {"ok": False, "error": "token is not configured"}
     except (OSError, ValueError):
         return {"ok": False, "error": "token cannot be read"}
@@ -81,7 +131,8 @@ def _read_line(conn: socket.socket) -> bytes:
     return bytes(data).split(b"\n", 1)[0]
 
 
-def _serve_connection(conn: socket.socket, token_dir: str) -> None:
+def _serve_connection(conn: socket.socket, token_dir: str,
+                      token_command: str | None = None) -> None:
     conn.settimeout(10.0)
     try:
         line = _read_line(conn)
@@ -90,7 +141,7 @@ def _serve_connection(conn: socket.socket, token_dir: str) -> None:
         except (UnicodeDecodeError, json.JSONDecodeError):
             response = {"ok": False, "error": "invalid JSON"}
         else:
-            response = handle_request(request, token_dir)
+            response = handle_request(request, token_dir, token_command)
     except Exception as exc:  # noqa: BLE001
         response = {"ok": False, "error": f"channel failure: {type(exc).__name__}"}
     try:
@@ -99,7 +150,8 @@ def _serve_connection(conn: socket.socket, token_dir: str) -> None:
         pass
 
 
-def serve(path: str = DEFAULT_SOCKET, token_dir: str = DEFAULT_TOKEN_DIR) -> None:
+def serve(path: str = DEFAULT_SOCKET, token_dir: str = DEFAULT_TOKEN_DIR,
+          token_command: str | None = None) -> None:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     try:
@@ -118,7 +170,7 @@ def serve(path: str = DEFAULT_SOCKET, token_dir: str = DEFAULT_TOKEN_DIR) -> Non
         while True:
             conn, _ = server.accept()
             with conn:
-                _serve_connection(conn, token_dir)
+                _serve_connection(conn, token_dir, token_command)
     finally:
         server.close()
 
@@ -127,9 +179,10 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--socket", default=DEFAULT_SOCKET)
     parser.add_argument("--token-dir", default=DEFAULT_TOKEN_DIR)
+    parser.add_argument("--token-command", default=None)
     args = parser.parse_args(argv)
     try:
-        serve(args.socket, args.token_dir)
+        serve(args.socket, args.token_dir, args.token_command)
     except KeyboardInterrupt:
         return 0
     except Exception as exc:  # noqa: BLE001

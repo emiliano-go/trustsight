@@ -308,6 +308,7 @@ services:
       TRUSTSIGHT_LOG_TIMESTAMPS: "1"
       TMPDIR: "/tmp"
       TRUSTSIGHT_REQUIRE_SECCOMP: "1"
+      TRUSTSIGHT_TOKEN_COMMAND: "${TRUSTSIGHT_TOKEN_COMMAND:-}"
     logging:
       driver: json-file
       options:

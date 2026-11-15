@@ -1247,7 +1247,7 @@ provider and receives `{"token": "...", "expires_at": ...}`; files are
 re-read on every request so they can be rotated.
 
 ```
-trustsight token-broker [--socket PATH] [--token-dir DIR]
+trustsight token-broker [--socket PATH] [--token-dir DIR] [--token-command CMD]
 ```
 
 ### Flags
@@ -1256,9 +1256,13 @@ trustsight token-broker [--socket PATH] [--token-dir DIR]
 |------|-------------|
 | `--socket` | Unix socket to listen on. Default `/run/trustsight/token-broker.sock`. |
 | `--token-dir` | Directory holding `<provider>.token` and optional `<provider>.expires`. Default `/run/trustsight/tokens`. |
+| `--token-command` | Credential process run when `<provider>.token` is absent. Defaults to `TRUSTSIGHT_TOKEN_COMMAND`. |
 
 The broker has no network. An expired, missing or malformed token/expiry is
 refused; the fetcher treats that as a hard credential failure.
+`--token-command` supports Vault/STS/KMS credential helpers: it is split with
+`shlex` (never a shell), receives `{provider}`, and must print a JSON object
+with `token` and optional `expires_at`, or a plain token on the first line.
 
 ---
 

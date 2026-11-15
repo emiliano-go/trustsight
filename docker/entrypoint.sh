@@ -43,11 +43,11 @@ fi
 
 _has_default_route() {
     route="${TRUSTSIGHT_PROC_NET_ROUTE:-/proc/net/route}"
-    if [ -r "$route" ] && awk 'NR > 1 && $2 == "00000000" && $8 == "00000000" { found = 1 } END { exit found ? 0 : 1 }' "$route"; then
+    if [ -r "$route" ] && awk 'NR > 1 && $1 != "lo" && $2 == "00000000" && $8 == "00000000" { found = 1 } END { exit found ? 0 : 1 }' "$route"; then
         return 0
     fi
     route6="${TRUSTSIGHT_PROC_NET_IPV6_ROUTE:-/proc/net/ipv6_route}"
-    if [ -r "$route6" ] && awk '$1 ~ /^0+$/ && $2 == "00" { found = 1 } END { exit found ? 0 : 1 }' "$route6"; then
+    if [ -r "$route6" ] && awk '$NF != "lo" && $1 ~ /^0+$/ && $2 == "00" { found = 1 } END { exit found ? 0 : 1 }' "$route6"; then
         return 0
     fi
     return 1

@@ -50,3 +50,12 @@ def test_missing_controls_are_false(tmp_path):
     assert value["apparmor_profile"] == "unconfined"
     assert value["default_route"] is False
     assert value["root_readonly"] is False
+
+
+def test_a_loopback_default_route_is_not_a_default_route(tmp_path):
+    files = _files(tmp_path, default_route=False)
+    files["route6_path"] = str(tmp_path / "route6")
+    (tmp_path / "route6").write_text(
+        "0" * 32 + " 00 " + "0" * 32 + " 00 " + "0" * 32
+        + " ffffffff 00000001 00000000 00200200       lo\n")
+    assert status(**files)["default_route"] is False

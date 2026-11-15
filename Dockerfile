@@ -39,6 +39,10 @@ RUN uv sync --locked --no-install-project --python /usr/local/bin/python3
 COPY . .
 RUN uv sync --locked --python /usr/local/bin/python3
 
+# Source files created with a restrictive umask can arrive as 0600; the
+# image runs as the non-root `ts` user, so normalise readability here.
+RUN chmod -R a+rX /app
+
 COPY docker/entrypoint.sh /usr/local/bin/trustsight-entrypoint
 RUN chmod 755 /usr/local/bin/trustsight-entrypoint
 

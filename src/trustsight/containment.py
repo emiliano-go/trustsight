@@ -30,11 +30,13 @@ def _apparmor(path: str) -> str:
 def _has_default_route(route: str, route6: str) -> bool:
     for line in _read(route).split("\n")[1:]:
         parts = line.split()
-        if len(parts) > 7 and parts[1] == "00000000" and parts[7] == "00000000":
+        if (len(parts) > 7 and parts[0] != "lo"
+                and parts[1] == "00000000" and parts[7] == "00000000"):
             return True
     for line in _read(route6).split("\n"):
         parts = line.split()
-        if len(parts) > 1 and set(parts[0]) == {"0"} and parts[1] == "00":
+        if (len(parts) > 1 and parts[-1] != "lo"
+                and set(parts[0]) == {"0"} and parts[1] == "00"):
             return True
     return False
 

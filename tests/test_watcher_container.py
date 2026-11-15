@@ -299,3 +299,8 @@ def test_the_seccomp_guard_refuses_no_filter(tmp_path):
     status = tmp_path / "status"
     status.write_text("Name:\tpython\nSeccomp:\t0\n")
     assert _seccomp_entrypoint(status).returncode == 2
+
+
+def test_the_image_normalises_source_permissions():
+    text = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    assert "chmod -R a+rX /app" in text

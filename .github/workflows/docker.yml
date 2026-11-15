@@ -172,6 +172,32 @@ jobs:
             'import socket; s=socket.socket(socket.AF_UNIX); s.connect("/run/trustsight/token.sock"); s.sendall(b"{\"provider\":\"github\"}\n"); print(s.recv(4096).decode())' \
             | grep -q 'tok-ci'
 
+      - name: Exercise the feed signer under the fetcher profile
+        run: |
+          set -eu
+          image="ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}"
+          name="ts-signer-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          key="$(openssl genpkey -algorithm ED25519 2>/dev/null \
+            | openssl pkcs8 -topk8 -nocrypt -outform DER \
+            | base64 -w0)"
+          cleanup() { docker rm -f "$name" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          docker run -d --name "$name" --read-only \
+            --tmpfs /run/trustsight:size=8m \
+            --tmpfs /audit:size=8m \
+            --tmpfs /tmp:size=8m,noexec,nosuid,nodev \
+            --cap-drop=all --security-opt=no-new-privileges \
+            --security-opt=seccomp="$PWD/docker/seccomp-fetcher.json" \
+            --user 1000:1000 \
+            -e "TRUSTSIGHT_FEED_KEY=$key" -e TRUSTSIGHT_FEED_KEY_ID=ci \
+            --entrypoint /app/.venv/bin/trustsight "$image" \
+            feed-signer --socket /run/trustsight/feed-signer.sock \
+              --audit-log /audit/log.json --audit-head /audit/head.json
+          docker exec "$name" /app/.venv/bin/python -c \
+            'import base64,json,socket; body=json.dumps({"event":"trustsight.heartbeat","scans":[]}).encode(); req=json.dumps({"body":base64.b64encode(body).decode(),"webhook_id":"ci"}).encode()+b"\n"; s=socket.socket(socket.AF_UNIX); s.connect("/run/trustsight/feed-signer.sock"); s.sendall(req); print(s.recv(4096).decode())' \
+            | grep -q '"ok": true'
+          docker exec "$name" /bin/cat /audit/head.json | grep -q chain_sha256
+
       # The read-only recipe in docs/workflows/reducing-blast-radius.md.  Two
       # passes against the same volumes: a recreated container must stay
       # writable with the state the first run wrote, and a change to the image

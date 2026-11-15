@@ -415,7 +415,10 @@ docker compose -f docker-compose.watcher.yml \
 Install and register `runsc` as a Docker runtime first, and validate
 `unshare`/`mount` for the parser workers on the target version. The overlay
 covers the watcher, fetcher, proxy and signer; it changes the kernel boundary,
-not the service configuration.
+not the service configuration. Each service also sets
+`TRUSTSIGHT_REQUIRE_GVISOR=1`; the entrypoint refuses to start unless
+`/proc/version` identifies gVisor/runsc, so a silently missing runtime does
+not downgrade the deployment.
 
 `docker-compose.watcher.kata.yml` is the equivalent microVM overlay for the
 watcher and its parser workers (`runtime: kata-runtime`). Install Kata and

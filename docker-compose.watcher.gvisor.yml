@@ -11,11 +11,21 @@
 services:
   trustsight-watch:
     runtime: runsc
+    environment:
+      TRUSTSIGHT_REQUIRE_GVISOR: "1"
   upstream-fetcher:
     runtime: runsc
+    environment:
+      TRUSTSIGHT_REQUIRE_GVISOR: "1"
   egress-proxy:
     runtime: runsc
+    environment:
+      TRUSTSIGHT_REQUIRE_GVISOR: "1"
   feed-signer:
     runtime: runsc
+    environment:
+      TRUSTSIGHT_REQUIRE_GVISOR: "1"
   token-broker:
     runtime: runsc
+    environment:
+      TRUSTSIGHT_REQUIRE_GVISOR: "1"

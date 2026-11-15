@@ -77,6 +77,8 @@ def test_the_gvisor_overlay_covers_every_service():
         "token-broker",
     }
     assert all(item["runtime"] == "runsc" for item in services.values())
+    assert all(item["environment"]["TRUSTSIGHT_REQUIRE_GVISOR"] == "1"
+               for item in services.values())
 
 
 def test_the_kata_overlay_puts_the_watcher_in_a_microvm():

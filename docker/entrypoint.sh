@@ -7,6 +7,14 @@
 # it disappears with the container.
 set -eu
 
+if [ "${TRUSTSIGHT_REQUIRE_GVISOR:-}" = "1" ]; then
+    version="${TRUSTSIGHT_PROC_VERSION:-/proc/version}"
+    if [ ! -r "$version" ] || ! grep -qi 'gvisor\|runsc' "$version"; then
+        echo "trustsight-entrypoint: gVisor/runsc is not the active runtime" >&2
+        exit 2
+    fi
+fi
+
 if [ "${TRUSTSIGHT_REQUIRE_APPARMOR:-}" = "1" ]; then
     attr="${TRUSTSIGHT_PROC_SELF_ATTR:-/proc/self/attr/current}"
     if [ ! -r "$attr" ] || ! grep -q 'trustsight-watcher' "$attr"; then

@@ -253,3 +253,26 @@ def test_the_hardened_entrypoint_refuses_a_writable_config_source(tmp_path):
         },
         capture_output=True, text=True, timeout=30)
     assert result.returncode == 2
+
+
+def _gvisor_entrypoint(version):
+    return subprocess.run(
+        ["sh", str(ROOT / "docker" / "entrypoint.sh"), "/bin/true"],
+        env={
+            "PATH": "/usr/bin:/bin",
+            "TRUSTSIGHT_REQUIRE_GVISOR": "1",
+            "TRUSTSIGHT_PROC_VERSION": str(version),
+        },
+        capture_output=True, text=True, timeout=30)
+
+
+def test_the_gvisor_guard_accepts_gvisor(tmp_path):
+    version = tmp_path / "version"
+    version.write_text("Linux version 4.4.0 (gVisor)\n")
+    assert _gvisor_entrypoint(version).returncode == 0
+
+
+def test_the_gvisor_guard_refuses_the_host_kernel(tmp_path):
+    version = tmp_path / "version"
+    version.write_text("Linux version 6.12.0-generic\n")
+    assert _gvisor_entrypoint(version).returncode == 2

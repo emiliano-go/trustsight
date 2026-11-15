@@ -90,13 +90,13 @@ def _ioc_matches_for(pkg_name: str, pkgbuild: str,
                      upstream_texts: tuple[str, ...]) -> list:
     """Match the recipe and, when upstream is active, its manifest texts."""
     matches = ioc_baseline_matches("", pkg_name, current_text=pkgbuild)
-    seen = {(m.type, m.value, m.source, m.surface) for m in matches}
+    seen = [(m.type, m.value, m.source, m.surface) for m in matches]
     for text in upstream_texts:
         for match in ioc_baseline_matches("", pkg_name, current_text=text):
             key = (match.type, match.value, match.source, match.surface)
             if key in seen:
                 continue
-            seen.add(key)
+            seen.append(key)
             matches.append(match)
     return matches
 

@@ -120,3 +120,144 @@ technical information that is absent elsewhere:
 
 No technical definition, rule, configuration field, security guarantee,
 example or table row was found missing after these checks.
+
+## Per-file audit
+
+Every Markdown page on `master` (119 files) is listed below with its current
+destination and result. "Moved" means the page kept its content and only its
+links changed; "merged" means its prose lives on a consolidated page;
+"split" means its sections now live on more than one focused page; "rewritten"
+means the page was replaced by a new landing or policy page.
+
+| Result | Files |
+|---|---:|
+| Unchanged | 4 |
+| Updated in place (links or wording) | 20 |
+| Moved, content preserved | 30 |
+| Merged into a consolidated page | 38 |
+| Canonical rule category pages (all definitions and nature prose) | 22 |
+| Split across focused pages | 2 |
+| Rewritten as an entry point or policy page | 3 |
+| **Total** | **119** |
+
+| Master file | Destination | Audit result |
+|---|---|---|
+| `docs/assurance-layers.md` | `docs/security-design/assurance-layers.md` | Moved; content preserved and links updated (93% paragraphs verbatim) |
+| `docs/assurance-layers/diversity.md` | `docs/security-design/assurance-layers/diversity.md` | Moved; content preserved and links updated (92% paragraphs verbatim) |
+| `docs/assurance-layers/enforcement.md` | `docs/security-design/assurance-layers/enforcement.md` | Moved; content preserved and links updated (100% paragraphs verbatim) |
+| `docs/assurance-layers/evidence-categories.md` | `docs/reference/evidence-categories.md` | Moved; content preserved and links updated (91% paragraphs verbatim) |
+| `docs/assurance-layers/reporting.md` | `docs/security-design/assurance-layers/reporting.md` | Moved; content preserved and links updated (100% paragraphs verbatim) |
+| `docs/changelog.md` | `docs/changelog.md` | Unchanged; version link definitions added |
+| `docs/contributing/blinded-evaluation.md` | `docs/contributing/blinded-evaluation.md` | Updated in place; 100% of paragraphs verbatim, remainder link or navigation updates |
+| `docs/contributing/development-setup.md` | `docs/contributing/development-setup.md` | Unchanged |
+| `docs/contributing/index.md` | `docs/contributing/index.md` | Updated in place; 100% of paragraphs verbatim, remainder link or navigation updates |
+| `docs/contributing/publishing-baselines.md` | `docs/contributing/publishing-baselines.md` | Updated in place; 100% of paragraphs verbatim, remainder link or navigation updates |
+| `docs/contributing/re-baselining.md` | `docs/contributing/re-baselining.md` | Unchanged |
+| `docs/contributing/releasing.md` | `docs/contributing/releasing.md` | Updated in place; 100% of paragraphs verbatim, remainder link or navigation updates |
+| `docs/contributing/security-review.md` | `docs/contributing/security-review.md` | Updated in place; 90% of paragraphs verbatim, remainder link or navigation updates |
+| `docs/contributing/writing-a-rule.md` | `docs/contributing/writing-a-rule.md` | Updated in place; the obsolete Rule Nature instructions replaced with the merged-page workflow, all rule-authoring guidance preserved |
+| `docs/explanation/alert-budget.md` | `docs/explanation/detection-and-evidence.md` | Merged; prose preserved |
+| `docs/explanation/benchmarks-and-methodology.md` | `docs/explanation/detection-and-evidence.md` | Merged; prose preserved |
+| `docs/explanation/campaign-alert-mode.md` | `docs/explanation/detection-and-evidence.md` | Merged; prose preserved |
+| `docs/explanation/cold-start-and-maturity.md` | `docs/explanation/scoring-and-verdicts.md` | Merged; prose preserved |
+| `docs/explanation/corpus-and-priors.md` | `docs/explanation/historical-and-behavioral-analysis.md` | Merged; prose preserved |
+| `docs/explanation/cross-file-consistency.md` | `docs/explanation/architecture-and-pipeline.md` | Merged; prose preserved |
+| `docs/explanation/escalation-licensing.md` | `docs/explanation/scoring-and-verdicts.md` | Merged; prose preserved |
+| `docs/explanation/fire-rates.md` | `docs/explanation/historical-and-behavioral-analysis.md` | Moved; content preserved and links updated (96% paragraphs verbatim) |
+| `docs/explanation/immune-inspired-design.md` | `docs/explanation/detection-and-evidence.md` | Merged; prose preserved |
+| `docs/explanation/index.md` | `docs/security-design/how-it-works.md` | Moved; content preserved and links updated (100% paragraphs verbatim) |
+| `docs/explanation/kinds-of-alerts.md` | `docs/explanation/detection-and-evidence.md` | Merged; prose preserved |
+| `docs/explanation/neighborhood-elevation.md` | `docs/explanation/detection-and-evidence.md` | Merged; prose preserved |
+| `docs/explanation/override-tolerance.md` | `docs/explanation/scoring-and-verdicts.md` | Merged; prose preserved |
+| `docs/explanation/reducing-the-h-series.md` | `docs/explanation/detection-and-evidence.md` | Merged; prose preserved |
+| `docs/explanation/rule-taxonomy.md` | `docs/rules/interpretation.md` | Moved; the System/Nature section replaced by One canonical page per subject, all label sections preserved |
+| `docs/explanation/sandboxing-the-parsers.md` | `docs/explanation/static-analysis-and-resolution.md` | Merged; prose preserved |
+| `docs/explanation/sandboxing-the-tokenizer.md` | `docs/explanation/static-analysis-and-resolution.md` | Merged; prose preserved |
+| `docs/explanation/scoring-philosophy.md` | `docs/explanation/scoring-and-verdicts.md` | Moved; content preserved and links updated (100% paragraphs verbatim) |
+| `docs/explanation/seed-provenance.md` | `docs/explanation/threat-intelligence.md` | Moved; content preserved and links updated (100% paragraphs verbatim) |
+| `docs/explanation/structural-user-rules.md` | `docs/explanation/static-analysis-and-resolution.md` | Merged; prose preserved |
+| `docs/explanation/the-typed-core.md` | `docs/explanation/architecture-and-pipeline.md` | Moved; content preserved and links updated (100% paragraphs verbatim) |
+| `docs/explanation/what-trustsight-cannot-see.md` | `docs/explanation/limitations-and-uncertainty.md` | Moved; content preserved and links updated (100% paragraphs verbatim) |
+| `docs/explanation/why-static-analysis.md` | `docs/explanation/static-analysis-and-resolution.md` | Moved; content preserved and links updated (100% paragraphs verbatim) |
+| `docs/guides/acting-on-a-flag.md` | `docs/workflows/acting-on-a-flag.md` | Moved; content preserved and links updated (100% paragraphs verbatim) |
+| `docs/guides/auditing-before-update.md` | `docs/workflows/auditing-before-update.md` | Moved; content preserved and links updated (100% paragraphs verbatim) |
+| `docs/guides/configuring-rules-and-weights.md` | `docs/workflows/configuring-rules-and-weights.md` | Moved; content preserved and links updated (100% paragraphs verbatim) |
+| `docs/guides/gating-yay-paru.md` | `docs/workflows/integrating-yay-and-paru.md` | Moved; content preserved and links updated (100% paragraphs verbatim) |
+| `docs/guides/index.md` | `docs/workflows/index.md` | Updated in place; intro reworded for Workflows, page table preserved with new links |
+| `docs/guides/reducing-blast-radius.md` | `docs/workflows/reducing-blast-radius.md` | Moved; content preserved and links updated (100% paragraphs verbatim) |
+| `docs/guides/tuning-false-positives.md` | `docs/workflows/tuning-false-positives.md` | Moved; content preserved and links updated (100% paragraphs verbatim) |
+| `docs/guides/using-in-ci.md` | `docs/workflows/using-in-ci.md` | Moved; content preserved and links updated (100% paragraphs verbatim) |
+| `docs/guides/watching-the-aur.md` | `docs/workflows/watching-the-aur-continuously.md` | Moved; content preserved and links updated (100% paragraphs verbatim) |
+| `docs/index.md` | `docs/index.md`, `docs/start-here/what-is-trustsight.md` | Rewritten as an entry point; platform paragraphs and report description moved to the listed pages, inventories to Rules and Security & Design |
+| `docs/license.md` | `docs/license.md` | Unchanged |
+| `docs/reference/baseline-keys.md` | `docs/reference/baseline-keys.md` | Updated in place; 100% of paragraphs verbatim, remainder link or navigation updates |
+| `docs/reference/cli.md` | `docs/reference/cli.md` | Updated in place; 100% of paragraphs verbatim, remainder link or navigation updates |
+| `docs/reference/configuration.md` | `docs/reference/configuration.md` | Updated in place; 100% of paragraphs verbatim, remainder link or navigation updates |
+| `docs/reference/evidence-tiers.md` | `docs/reference/evidence-tiers.md` | Updated in place; 100% of paragraphs verbatim, remainder link or navigation updates |
+| `docs/reference/exit-codes.md` | `docs/reference/exit-codes.md` | Updated in place; 100% of paragraphs verbatim, remainder link or navigation updates |
+| `docs/reference/glossary.md` | `docs/reference/glossary.md` | Updated in place; 95% of paragraphs verbatim, remainder link or navigation updates |
+| `docs/reference/index.md` | `docs/reference/index.md` | Updated in place; one bullet added (Evidence Categories), every prior entry unchanged |
+| `docs/reference/ioc.md` | `docs/reference/ioc.md` | Updated in place; 100% of paragraphs verbatim, remainder link or navigation updates |
+| `docs/reference/nature/artifact.md` | `docs/rules/artifact.md` | Merged into the category page; 2/2 prose sections preserved, routing line and self-link removed |
+| `docs/reference/nature/composition.md` | `docs/rules/composition.md` | Merged into the category page; 2/2 prose sections preserved, routing line and self-link removed |
+| `docs/reference/nature/corpus-behavioral.md` | `docs/rules/corpus-behavioral.md` | Merged into the category page; 2/2 prose sections preserved, routing line and self-link removed |
+| `docs/reference/nature/correlation.md` | `docs/rules/correlation.md` | Merged into the category page; 2/2 prose sections preserved, routing line and self-link removed |
+| `docs/reference/nature/count-based.md` | `docs/rules/count-based.md` | Merged into the category page; 2/2 prose sections preserved, routing line and self-link removed |
+| `docs/reference/nature/crossfire.md` | `docs/rules/crossfire.md` | Merged into the category page; 2/2 prose sections preserved, routing line and self-link removed |
+| `docs/reference/nature/deception.md` | `docs/rules/deception.md` | Merged into the category page; 2/2 prose sections preserved, routing line and self-link removed |
+| `docs/reference/nature/entropy.md` | `docs/rules/entropy.md` | Merged into the category page; 2/2 prose sections preserved, routing line and self-link removed |
+| `docs/reference/nature/fetch-and-execution.md` | `docs/rules/fetch-and-execution.md` | Merged into the category page; 2/2 prose sections preserved, routing line and self-link removed |
+| `docs/reference/nature/index.md` | `docs/rules/categories.md` | Merged; prose preserved |
+| `docs/reference/nature/indicator.md` | `docs/rules/indicator.md` | Merged into the category page; 2/2 prose sections preserved, routing line and self-link removed |
+| `docs/reference/nature/install-and-persist.md` | `docs/rules/install-and-persist.md` | Merged into the category page; 2/2 prose sections preserved, routing line and self-link removed |
+| `docs/reference/nature/integrity.md` | `docs/rules/integrity.md` | Merged into the category page; 2/2 prose sections preserved, routing line and self-link removed |
+| `docs/reference/nature/maintainer-and-metadata.md` | `docs/rules/maintainer-and-metadata.md` | Merged into the category page; 2/2 prose sections preserved, routing line and self-link removed |
+| `docs/reference/nature/meta.md` | `docs/rules/meta.md` | Merged into the category page; 2/2 prose sections preserved, routing line and self-link removed |
+| `docs/reference/nature/naming-and-dependency.md` | `docs/rules/naming-and-dependency.md` | Merged into the category page; 2/2 prose sections preserved, routing line and self-link removed |
+| `docs/reference/nature/obfuscation.md` | `docs/rules/obfuscation.md` | Merged into the category page; 2/2 prose sections preserved, routing line and self-link removed |
+| `docs/reference/nature/sabotage.md` | `docs/rules/sabotage.md` | Merged into the category page; 2/2 prose sections preserved, routing line and self-link removed |
+| `docs/reference/nature/staging-and-recon.md` | `docs/rules/staging-and-recon.md` | Merged into the category page; 2/2 prose sections preserved, routing line and self-link removed |
+| `docs/reference/nature/temporal.md` | `docs/rules/temporal.md` | Merged into the category page; 2/2 prose sections preserved, routing line and self-link removed |
+| `docs/reference/nature/unverifiable.md` | `docs/rules/unverifiable.md` | Merged into the category page; 2/2 prose sections preserved, routing line and self-link removed |
+| `docs/reference/nature/upstream-manifests.md` | `docs/rules/upstream-manifests.md` | Merged into the category page; 2/2 prose sections preserved, routing line and self-link removed |
+| `docs/reference/nature/upstream-release.md` | `docs/rules/upstream-release.md` | Merged into the category page; 2/2 prose sections preserved, routing line and self-link removed |
+| `docs/reference/python-api.md` | `docs/reference/python-api.md` | Updated in place; 100% of paragraphs verbatim, remainder link or navigation updates |
+| `docs/reference/report-schema.md` | `docs/reference/report-schema.md` | Updated in place; 100% of paragraphs verbatim, remainder link or navigation updates |
+| `docs/reference/rules/artifact.md` | `docs/rules/artifact.md` | Rule category page; all rule sections and nature prose preserved |
+| `docs/reference/rules/composition.md` | `docs/rules/composition.md` | Rule category page; all rule sections and nature prose preserved |
+| `docs/reference/rules/corpus-behavioral.md` | `docs/rules/corpus-behavioral.md` | Rule category page; all rule sections and nature prose preserved |
+| `docs/reference/rules/correlation.md` | `docs/rules/correlation.md` | Rule category page; all rule sections and nature prose preserved |
+| `docs/reference/rules/count-based.md` | `docs/rules/count-based.md` | Rule category page; all rule sections and nature prose preserved |
+| `docs/reference/rules/crossfire.md` | `docs/rules/crossfire.md` | Rule category page; all rule sections and nature prose preserved |
+| `docs/reference/rules/deception.md` | `docs/rules/deception.md` | Rule category page; all rule sections and nature prose preserved |
+| `docs/reference/rules/entropy.md` | `docs/rules/entropy.md` | Rule category page; all rule sections and nature prose preserved |
+| `docs/reference/rules/fetch-and-execution.md` | `docs/rules/fetch-and-execution.md` | Rule category page; all rule sections and nature prose preserved |
+| `docs/reference/rules/index.md` | `docs/rules/index.md`, `docs/rules/definitions.md`, `docs/rules/categories.md`, `docs/rules/identifiers.md` | Split: catalog moved to definitions.md (301/301 rows), taxonomy to categories.md and interpretation, identifiers to identifiers.md, overview rewritten |
+| `docs/reference/rules/indicator.md` | `docs/rules/indicator.md` | Rule category page; all rule sections and nature prose preserved |
+| `docs/reference/rules/install-and-persist.md` | `docs/rules/install-and-persist.md` | Rule category page; all rule sections and nature prose preserved |
+| `docs/reference/rules/integrity.md` | `docs/rules/integrity.md` | Rule category page; all rule sections and nature prose preserved |
+| `docs/reference/rules/maintainer-and-metadata.md` | `docs/rules/maintainer-and-metadata.md` | Rule category page; all rule sections and nature prose preserved |
+| `docs/reference/rules/meta.md` | `docs/rules/meta.md` | Rule category page; all rule sections and nature prose preserved |
+| `docs/reference/rules/naming-and-dependency.md` | `docs/rules/naming-and-dependency.md` | Rule category page; all rule sections and nature prose preserved |
+| `docs/reference/rules/nature.md` | `docs/rules/series.md` | Moved to Series; See also links updated |
+| `docs/reference/rules/obfuscation.md` | `docs/rules/obfuscation.md` | Rule category page; all rule sections and nature prose preserved |
+| `docs/reference/rules/sabotage.md` | `docs/rules/sabotage.md` | Rule category page; all rule sections and nature prose preserved |
+| `docs/reference/rules/staging-and-recon.md` | `docs/rules/staging-and-recon.md` | Rule category page; all rule sections and nature prose preserved |
+| `docs/reference/rules/system.md` | `docs/rules/scoring.md`, `docs/rules/matching.md`, `docs/rules/configuration.md`, `docs/rules/identifiers.md`, `docs/rules/series.md`, `docs/reference/rules/system.md` | Split by responsibility; every table, anchor and 43-row fire table preserved; compatibility anchors retained |
+| `docs/reference/rules/temporal.md` | `docs/rules/temporal.md` | Rule category page; all rule sections and nature prose preserved |
+| `docs/reference/rules/unverifiable.md` | `docs/rules/unverifiable.md` | Rule category page; all rule sections and nature prose preserved |
+| `docs/reference/rules/upstream-manifests.md` | `docs/rules/upstream-manifests.md` | Rule category page; all rule sections and nature prose preserved |
+| `docs/reference/rules/upstream-release.md` | `docs/rules/upstream-release.md` | Rule category page; all rule sections and nature prose preserved |
+| `docs/reports/2026-10-14-aur-name-clone-waves.md` | `docs/reports/2026-10-14-aur-name-clone-waves.md` | Updated in place; 100% of paragraphs verbatim, remainder link or navigation updates |
+| `docs/reports/hot-path-baseline.md` | `docs/reports/hot-path-baseline.md` | Updated in place; 100% of paragraphs verbatim, remainder link or navigation updates |
+| `docs/reports/in-the-wild.md` | `docs/reports/in-the-wild.md` | Updated in place; 100% of paragraphs verbatim, remainder link or navigation updates |
+| `docs/security.md` | `docs/security-design/security-model.md` | Moved; content preserved and links updated (96% paragraphs verbatim) |
+| `docs/security/enforcement-map.md` | `docs/security-design/enforcement-map.md` | Moved; content preserved and links updated (100% paragraphs verbatim) |
+| `docs/security/program-under-attack.md` | `docs/security-design/security-boundaries.md` | Moved; content preserved and links updated (100% paragraphs verbatim) |
+| `docs/security/release-signing.md` | `docs/security-design/release-signing.md` | Moved; content preserved and links updated (100% paragraphs verbatim) |
+| `docs/security/vulnerability-reporting.md` | `docs/security-design/vulnerability-reporting.md` | Moved; content preserved and links updated (100% paragraphs verbatim) |
+| `docs/security/what-a-result-claims.md` | `docs/security-design/what-a-result-claims.md` | Moved; content preserved and links updated (100% paragraphs verbatim) |
+| `docs/standards.md` | `docs/standards.md` | Updated in place; 99% of paragraphs verbatim, remainder link or navigation updates |
+| `docs/tutorial/installation.md` | `docs/start-here/installation.md` | Moved; content preserved and links updated (100% paragraphs verbatim) |
+| `docs/tutorial/quickstart.md` | `docs/start-here/quickstart.md` | Moved; content preserved and links updated (100% paragraphs verbatim) |
+| `docs/tutorial/reading-a-report.md` | `docs/start-here/understanding-your-first-report.md` | Moved; content preserved and links updated (100% paragraphs verbatim) |

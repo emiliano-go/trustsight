@@ -106,6 +106,7 @@ services:
       # only asks it for signature headers.
       TRUSTSIGHT_FEED_SIGNER_SOCKET: "/run/trustsight/feed-signer.sock"
       TRUSTSIGHT_REQUIRE_HARDENED: "1"
+      TRUSTSIGHT_REQUIRE_SECCOMP: "1"
       TRUSTSIGHT_REQUIRE_READONLY_CONFIG: "1"
       # TRUSTSIGHT_LOG_LEVEL: "INFO"
       # TRUSTSIGHT_OFFLINE: "1"
@@ -169,6 +170,7 @@ services:
       TRUSTSIGHT_UPSTREAM_SCAN_ENABLED: "1"
       TRUSTSIGHT_UPSTREAM_SCAN_ARCHIVE_FETCH: "1"
       TRUSTSIGHT_UPSTREAM_PROXY: "http://egress-proxy:3128"
+      TRUSTSIGHT_REQUIRE_SECCOMP: "1"
       # A 0600 token file mounted read-only; the fetcher is the only process
       # that sees it.  Uncomment and add the mount:
       # TRUSTSIGHT_GITHUB_TOKEN_FILE: "/run/secrets/github_token"
@@ -215,6 +217,7 @@ services:
     environment:
       TRUSTSIGHT_LOG_TIMESTAMPS: "1"
       TMPDIR: "/tmp"
+      TRUSTSIGHT_REQUIRE_SECCOMP: "1"
       # Optional comma-separated exact hosts for operator webhooks/ntfy.
       TRUSTSIGHT_EGRESS_ALLOW: "${TRUSTSIGHT_EGRESS_ALLOW:-}"
     logging:
@@ -260,6 +263,7 @@ services:
     environment:
       TRUSTSIGHT_LOG_TIMESTAMPS: "1"
       TMPDIR: "/tmp"
+      TRUSTSIGHT_REQUIRE_SECCOMP: "1"
       # TRUSTSIGHT_FEED_KEY_ID: "k1"
       # TRUSTSIGHT_FEED_KEY_FILE: "/run/secrets/feed_key"
     logging:
@@ -303,6 +307,7 @@ services:
     environment:
       TRUSTSIGHT_LOG_TIMESTAMPS: "1"
       TMPDIR: "/tmp"
+      TRUSTSIGHT_REQUIRE_SECCOMP: "1"
     logging:
       driver: json-file
       options:

@@ -355,6 +355,9 @@ route. Running it on a bridge with direct internet access therefore fails
 closed instead of silently bypassing the proxy.
 It also refuses a writable `/config-src`, so the operator config mount must
 really be read-only rather than merely intended to be.
+Every main service also sets `TRUSTSIGHT_REQUIRE_SECCOMP=1`; the entrypoint
+refuses to start unless `/proc/self/status` reports an active seccomp filter,
+so a silently ignored profile does not downgrade the deployment.
 
 ### Rotating provider tokens through the broker
 

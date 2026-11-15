@@ -276,3 +276,26 @@ def test_the_gvisor_guard_refuses_the_host_kernel(tmp_path):
     version = tmp_path / "version"
     version.write_text("Linux version 6.12.0-generic\n")
     assert _gvisor_entrypoint(version).returncode == 2
+
+
+def _seccomp_entrypoint(status):
+    return subprocess.run(
+        ["sh", str(ROOT / "docker" / "entrypoint.sh"), "/bin/true"],
+        env={
+            "PATH": "/usr/bin:/bin",
+            "TRUSTSIGHT_REQUIRE_SECCOMP": "1",
+            "TRUSTSIGHT_PROC_SELF_STATUS": str(status),
+        },
+        capture_output=True, text=True, timeout=30)
+
+
+def test_the_seccomp_guard_accepts_filter_mode(tmp_path):
+    status = tmp_path / "status"
+    status.write_text("Name:\tpython\nSeccomp:\t2\n")
+    assert _seccomp_entrypoint(status).returncode == 0
+
+
+def test_the_seccomp_guard_refuses_no_filter(tmp_path):
+    status = tmp_path / "status"
+    status.write_text("Name:\tpython\nSeccomp:\t0\n")
+    assert _seccomp_entrypoint(status).returncode == 2

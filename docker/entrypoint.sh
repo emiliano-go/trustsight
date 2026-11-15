@@ -7,6 +7,14 @@
 # it disappears with the container.
 set -eu
 
+if [ "${TRUSTSIGHT_REQUIRE_SECCOMP:-}" = "1" ]; then
+    status="${TRUSTSIGHT_PROC_SELF_STATUS:-/proc/self/status}"
+    if [ ! -r "$status" ] || ! grep -Eq '^Seccomp:[[:space:]]*2$' "$status"; then
+        echo "trustsight-entrypoint: seccomp filter is not active" >&2
+        exit 2
+    fi
+fi
+
 if [ "${TRUSTSIGHT_REQUIRE_GVISOR:-}" = "1" ]; then
     version="${TRUSTSIGHT_PROC_VERSION:-/proc/version}"
     if [ ! -r "$version" ] || ! grep -qi 'gvisor\|runsc' "$version"; then

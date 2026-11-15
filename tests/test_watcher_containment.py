@@ -127,3 +127,11 @@ def test_the_anchor_monitor_is_networkless_and_opt_in():
     assert service["profiles"] == ["anchor-monitor"]
     assert any("trustsight-signer-audit" in volume
                for volume in service["volumes"])
+
+
+def test_the_main_services_require_active_seccomp():
+    services = _compose()["services"]
+    for name in ("trustsight-watch", "upstream-fetcher", "egress-proxy",
+                 "feed-signer", "token-broker"):
+        assert services[name]["environment"][
+            "TRUSTSIGHT_REQUIRE_SECCOMP"] == "1", name

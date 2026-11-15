@@ -162,11 +162,11 @@ The [evidence tiers](../reference/evidence-tiers.md) are the sensor catalogue; [
 
 ## Parts A to D
 
-The model is split across four pages. The thesis above stays here; each part below moved to its own page, and every anchor that used to point into it still resolves.
+The model is split across four pages. The thesis above stays here; each part is documented on its own page, and every anchor that used to point into it still resolves.
 
 ## Part A: TrustSight as a program under attack {#part-a-trustsight-as-a-program-under-attack}
 
-Moved to [Part A: TrustSight as a program under attack](security-boundaries.md).
+See [Part A: TrustSight as a program under attack](security-boundaries.md).
 
 ### The adversary {#the-adversary}
 
@@ -186,7 +186,7 @@ See [Part A: TrustSight as a program under attack](security-boundaries.md#what-t
 
 ## Part B: What the result claims {#part-b-what-the-result-claims}
 
-Moved to [Part B: What the result claims](what-a-result-claims.md).
+See [Part B: What the result claims](what-a-result-claims.md).
 
 ### B1. A score is a sum of matched evidence, nothing more {#b1-a-score-is-a-sum-of-matched-evidence-nothing-more}
 
@@ -234,11 +234,11 @@ See [Part B: What the result claims](what-a-result-claims.md#b11-every-surface-r
 
 ## Part C: The enforcement map {#part-c-the-enforcement-map}
 
-Moved to [Part C: The enforcement map](enforcement-map.md).
+See [Part C: The enforcement map](enforcement-map.md).
 
 ## Part D: Vulnerability reporting {#part-d-vulnerability-reporting}
 
-Moved to [Part D: Vulnerability reporting](vulnerability-reporting.md).
+See [Part D: Vulnerability reporting](vulnerability-reporting.md).
 
 ### How to report {#how-to-report}
 

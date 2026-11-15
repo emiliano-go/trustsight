@@ -4,7 +4,7 @@ TrustSight is a security tool with published limits. Contributions that touch an
 
 The normative standards every change is held to are collected in [Standards](docs/standards.md). The most important one is that a detection is never tuned for a package: fix the shape, or document the false positive.
 
-If you only want to use the tool, start with the README and the [Start Here](docs/start-here/quickstart.md) section. If your change affects analysis behavior or the security model, read `docs/security-design/security-model.md` first.
+If you only want to use the tool, start with the README and the [Overview](docs/start-here/quickstart.md) section. If your change affects analysis behavior or the security model, read `docs/security-design/security-model.md` first.
 
 ## Quick Start
 

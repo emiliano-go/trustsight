@@ -172,7 +172,7 @@ MIT
 
 | Section | Description |
 |---|---|
-| [Start Here](https://docs.trustsight.org/start-here/quickstart/) | Install TrustSight, run a first review, understand the report |
+| [Overview](https://docs.trustsight.org/start-here/quickstart/) | Install TrustSight, run a first review, understand the report |
 | [Workflows](https://docs.trustsight.org/workflows/) | Auditing before update, yay and paru, CI, triage, configuration |
 | [Security & Design](https://docs.trustsight.org/security-design/security-model/) | The security model, boundaries, evidence model and threat model |
 | [Rules](https://docs.trustsight.org/rules/) | Categories, series, mechanics and every rule definition |

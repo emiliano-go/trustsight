@@ -140,4 +140,4 @@ shown.
 ## Related documentation
 
 - [Corpus and Priors](../explanation/historical-and-behavioral-analysis.md)
-- [Fire Rates](../explanation/historical-and-behavioral-analysis.md)
+- [Fire Rates](../reports/fire-rates.md)

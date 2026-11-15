@@ -119,7 +119,7 @@ The tokenizer and regex checks are deliberately separate from the broad rule mat
 
 Detection rules are calibration, not security invariants, and go through
 [writing a rule](writing-a-rule.md) and the
-[calibration gates](../explanation/historical-and-behavioral-analysis.md) instead. The one security
+[calibration gates](../reports/fire-rates.md) instead. The one security
 question a rule raises is the A5 one: if it compiles a pattern, it must match
 against text that has been through `rules.clamp_text`, which every current
 call site does. A rule that reads a file, opens a socket, or spawns a process

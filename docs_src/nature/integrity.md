@@ -34,5 +34,5 @@ reviewer can no longer reason about what was fetched.
 
 ## See also
 
-- [Fire Rates](../explanation/historical-and-behavioral-analysis.md)
+- [Fire Rates](../reports/fire-rates.md)
 - [Integrity category page](integrity.md)

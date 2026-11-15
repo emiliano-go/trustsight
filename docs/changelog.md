@@ -817,7 +817,7 @@
 
 - A source URL on the registered domain of the package's `url=` is classified `declared_upstream` (+5) instead of `unknown` (+20), unless the same diff changes `url=`.
 - The published seed (`baseline-2026-09-24`) now carries the source-URL and dependency-name corpora, not maintainers alone: 185,902 source URLs, 215,504 dependency names and 36,912 hashed maintainers, so `seed fetch` warms novelty and the D-series rules on a fresh install.
-- The seeded fire-rate tables in [Measured fire rates](explanation/historical-and-behavioral-analysis.md) and [Fire Rates](explanation/historical-and-behavioral-analysis.md) are re-measured against the published 215,504-name corpus: D001 10 hits (0.27 %), D002 0, D003 18 (0.48 %), D004 2 (0.05 %), H030 5 (0.13 %), H029 2/202 (0.99 %). The D-series numbers are not covered by the cold-database CI gate, so these are point-in-time records.
+- The seeded fire-rate tables in [Measured fire rates](reports/fire-rates.md) and [Fire Rates](reports/fire-rates.md) are re-measured against the published 215,504-name corpus: D001 10 hits (0.27 %), D002 0, D003 18 (0.48 %), D004 2 (0.05 %), H030 5 (0.13 %), H029 2/202 (0.99 %). The D-series numbers are not covered by the cold-database CI gate, so these are point-in-time records.
 
 ### Security
 
@@ -5556,7 +5556,7 @@ and a database written by 0.15.x is read unchanged.
   | R063 | HIGH | 0.00 % | 0/3246 |
   | R064 | MEDIUM | 0.03 % | 1/3246 |
 
-  See [Fire Rates](explanation/historical-and-behavioral-analysis.md) for the full reference.
+  See [Fire Rates](reports/fire-rates.md) for the full reference.
 
 - **Baseline regenerated** with the new defaults.  The eight rules now appear
   in per-stratum fire-rate records.  Aggregate metrics (`zero_pct`, `p95`)

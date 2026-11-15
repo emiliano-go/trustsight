@@ -109,7 +109,7 @@ The property the calibration gates actually enforce is the one that matters for 
 
 **The 6.7% benign flag rate is a security property, not just a workload characteristic.** About one in fifteen benign updates flagging means a reviewer who hits several in a row is reading mostly noise, and a reviewer who skims because almost every flag turned out benign is precisely the fatigue failure [B9](#b9-no-output-grants-permission-to-skip-review) spends a section preventing structurally. The separation metric (p95 30 < p5 40) is the gate that matters for detection quality; it does not bound what the reader will still be reading at month three. This rate is accepted because the alternative - subtractive weights that let a package declare its way under the threshold - would corrupt the calibration (see [B10](#b10-positive-evidence-is-reported-never-credited)), and because the tool's design (evidence first, score on request) makes each individual flag cheap to triage. But the rate itself is a cost the model imposes on the reviewer, and a reviewer who stops reading carefully is a failure mode the model does not currently bound.
 
-Be precise about what is automated here. `scripts/calibration_gates.py` re-computes **benign p95 and malicious p5 on every push** and fails the build if they cross. The other figures in the table above are a point-in-time measurement, not a per-push one; they are published in [fire rates](../explanation/historical-and-behavioral-analysis.md) and have to be re-derived with `scripts/rebaseline.py` when scoring changes. A number in this table is only as current as the last person who ran that script.
+Be precise about what is automated here. `scripts/calibration_gates.py` re-computes **benign p95 and malicious p5 on every push** and fails the build if they cross. The other figures in the table above are a point-in-time measurement, not a per-push one; they are published in [fire rates](../reports/fire-rates.md) and have to be re-derived with `scripts/rebaseline.py` when scoring changes. A number in this table is only as current as the last person who ran that script.
 
 ### B3. Inconclusive is not presented as UNFLAGGED
 
@@ -140,7 +140,7 @@ A suppressed finding is returned and reported, never discarded. A silent suppres
 ### B6. What a result does not claim
 
 - **It does not claim the package is safe.** It claims no published rule matched the evidence it examined. An UNFLAGGED result is a *detection outcome*, not a certificate - absence of alerts is not a statement about airworthiness.
-- **It does not claim the ruleset is complete.** Fire rates and known gaps are published in [fire rates](../explanation/historical-and-behavioral-analysis.md) and enforced by `scripts/calibration_gates.py`. Detection has documented ceilings.
+- **It does not claim the ruleset is complete.** Fire rates and known gaps are published in [fire rates](../reports/fire-rates.md) and enforced by `scripts/calibration_gates.py`. Detection has documented ceilings.
 - **It does not claim runtime behaviour was observed.** Nothing is executed.
 - **It does not claim the build will fetch what the recipe says.** Where that cannot be determined statically, B2 applies.
 - **The exit code is not a verdict.** `trustsight review` exits 0 when the analysis completed and 2 when it could not. A package that flags is reported in the output, not in the exit status. Gate CI on the JSON, as [using TrustSight in CI](../workflows/using-in-ci.md) shows.

@@ -1,4 +1,4 @@
-<!-- description: Setting up a TrustSight development environment: editable install, test suite, linter and docs build. -->
+<!-- description: Setting up a TrustSight development environment: editable install, the development package, test suite, linter and docs build. -->
 
 # Development Setup
 
@@ -22,6 +22,34 @@ uv sync --locked --extra dev
 ```
 
 This installs the package in editable mode along with `pytest`, `ruff`, and other dev tooling.
+
+## Build the development package
+
+`packaging/dev/PKGBUILD` builds the checkout you are already in, without
+fetching a second copy of the sources. It installs a separate
+`trustsight-dev` package under `/opt/trustsight-dev` and adds the
+`trustsight-dev` and `trustsight-gate-dev` commands; the stable `trustsight`
+commands are left untouched.
+
+```bash
+cd packaging/dev
+makepkg -si
+```
+
+The recipe derives `pkgver` from `git describe` (falling back to a
+commit-derived version when a shallow clone has no tags), builds the parent
+checkout in place, and runs the test suite from the wheel it just built. Its
+wrappers keep config, database and cache under
+`~/.local/share/trustsight-dev/home`, so the development build can sit beside a
+released install without sharing state. It prints a warning in `prepare()` and
+on install because it is not a release.
+
+The release recipe in `packaging/aur/PKGBUILD` is the other half: it pins one
+published tarball so a release build is reproducible. Use it for a release
+candidate, not for day-to-day work on the checkout.
+
+Remove the development package with `pacman -R trustsight-dev`; its state under
+`~/.local/share/trustsight-dev/home` is kept.
 
 ## Run the test suite
 

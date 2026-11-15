@@ -105,4 +105,4 @@ and its effective threshold are reported beside the `flagged` decision. See
 [the configuration reference](../reference/configuration.md#review).
 
 Measured fire rates and the 30 percent gate are owned by
-[Historical and Behavioral Analysis](../explanation/historical-and-behavioral-analysis.md#fire-rates).
+[Fire Rates](../reports/fire-rates.md).

@@ -663,5 +663,5 @@ without any egress must stay quiet.
 
 ## Related documentation
 
-- [Fire Rates](../explanation/historical-and-behavioral-analysis.md); how H rules are calibrated
+- [Fire Rates](../reports/fire-rates.md); how H rules are calibrated
 - [Reducing the H-Series](../explanation/detection-and-evidence.md)

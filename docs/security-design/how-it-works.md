@@ -164,10 +164,11 @@ The score, evidence breakdown, and verification metadata are rendered into a str
 |------|----------------|
 | [Architecture and Pipeline](../explanation/architecture-and-pipeline.md) | The typed core, single-read parsing and cross-file consistency |
 | [Static Analysis and Resolution](../explanation/static-analysis-and-resolution.md) | Resolution, tokenizer and parser sandboxing, recipe-targeted user rules |
-| [Detection and Evidence](../explanation/detection-and-evidence.md) | Alert kinds, budgets, campaigns, immune-inspired design and evaluation |
+| [Detection and Evidence](../explanation/detection-and-evidence.md) | Alert kinds, budgets, campaigns and the immune-inspired design |
 | [Scoring and Verdicts](../explanation/scoring-and-verdicts.md) | Why the score is additive, maturity gating and escalation |
 | [Threat Intelligence](../explanation/threat-intelligence.md) | Seed provenance and signed indicator data |
-| [Historical and Behavioral Analysis](../explanation/historical-and-behavioral-analysis.md) | Corpus, priors, novelty and measured fire rates |
+| [Historical and Behavioral Analysis](../explanation/historical-and-behavioral-analysis.md) | Corpus, priors and novelty |
+| [Reports](../reports/index.md) | Detection records and measured evaluations |
 | [Limitations and Uncertainty](../explanation/limitations-and-uncertainty.md) | The reasoned ceiling of the tool |
 | [Security Model](security-model.md) | The guarantees and their enforcement |
 | [Assurance Layers](assurance-layers.md) | How evidence is grouped into layers |

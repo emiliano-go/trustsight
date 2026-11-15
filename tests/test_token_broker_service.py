@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from typer.testing import CliRunner
 
 from trustsight import token_broker_service as service
 from trustsight.cli.app import app
@@ -46,6 +45,7 @@ def test_path_like_provider_names_are_refused(tmp_path):
 
 
 def test_the_broker_command_is_registered():
-    result = CliRunner().invoke(app, ["token-broker", "--help"], terminal_width=200)
-    assert result.exit_code == 0
-    assert "--token-dir" in result.stdout
+    from typer.main import get_command
+
+    params = get_command(app).commands["token-broker"].params
+    assert "--token-dir" in {opt for param in params for opt in param.opts}

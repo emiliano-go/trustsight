@@ -9,7 +9,6 @@ import socket
 import threading
 
 import pytest
-from typer.testing import CliRunner
 
 from trustsight import feed_signer_service as service
 from trustsight.cli.app import app
@@ -189,6 +188,7 @@ def test_the_watcher_uses_the_signer_and_has_no_feed_key():
 
 
 def test_the_feed_signer_command_is_registered():
-    result = CliRunner().invoke(app, ["feed-signer", "--help"], terminal_width=200)
-    assert result.exit_code == 0
-    assert "--socket" in result.stdout
+    from typer.main import get_command
+
+    params = get_command(app).commands["feed-signer"].params
+    assert "--socket" in {opt for param in params for opt in param.opts}

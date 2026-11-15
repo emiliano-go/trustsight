@@ -8,7 +8,6 @@ import json
 import socket
 import threading
 
-from typer.testing import CliRunner
 
 from trustsight import upstream_fetcher_service as service
 from trustsight.cli.app import app
@@ -92,6 +91,7 @@ def test_client_reads_a_socket_response(tmp_path):
 
 
 def test_the_fetcher_command_is_registered():
-    result = CliRunner().invoke(app, ["upstream-fetcher", "--help"], terminal_width=200)
-    assert result.exit_code == 0
-    assert "--socket" in result.stdout
+    from typer.main import get_command
+
+    params = get_command(app).commands["upstream-fetcher"].params
+    assert "--socket" in {opt for param in params for opt in param.opts}

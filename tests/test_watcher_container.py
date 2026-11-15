@@ -31,7 +31,7 @@ def test_the_watcher_config_mount_is_writable():
             "rules.toml; mount it writable"
         )
 
-    guide = (ROOT / "docs" / "guides" / "watching-the-aur.md").read_text()
+    guide = (ROOT / "docs" / "workflows" / "watching-the-aur-continuously.md").read_text()
     assert f"{CONFIG_DIR_IN_CONTAINER}:ro" not in guide, (
         "the docker run example mounts the config directory read-only"
     )

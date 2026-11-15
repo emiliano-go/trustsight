@@ -64,8 +64,8 @@
       "| Zero-rate (benign scored 0) | percentage | **74.0%** |",
       "the published figures separate the two tails by 10 points: benign p95 = 30, CRITICAL p5 = 40, measured on the locked 8,393-diff corpus"
     ],
-    "docs/index.md": [
-      "277 documented detection rules across eleven families"
+    "docs/rules/index.md": [
+      "277 of them contribute to the heuristic score"
     ],
     "docs/reference/configuration.md": [
       "about 6.7% of locked benign-corpus diffs enter the review queue"

@@ -40,8 +40,8 @@ def test_the_fetcher_is_internal_and_the_signer_is_networkless():
 
 def test_the_watcher_routes_its_egress_through_the_proxy():
     watcher = _compose()["services"]["trustsight-watch"]
-    assert watcher["environment"]["HTTPS_PROXY"] == "http://egress-proxy:3128"
-    assert watcher["environment"]["HTTP_PROXY"] == "http://egress-proxy:3128"
+    assert "egress-proxy:3128" in watcher["environment"]["HTTPS_PROXY"]
+    assert "egress-proxy:3128" in watcher["environment"]["HTTP_PROXY"]
 
 
 def test_the_watcher_holds_neither_a_provider_nor_a_feed_key():

@@ -336,7 +336,9 @@ mkdir -p run/trustsight run/trustsight-token
 ```
 
 The watcher, fetcher and signer have no default route: they sit on
-`watcher-internal` and reach the internet only through `egress-proxy`. Set
+`watcher-internal` and reach the internet only through `egress-proxy`. On the
+host, `scripts/host_egress_guard.py --bridge <br> --proxy-ip <ip> --apply`
+drops all other forwarded traffic from that bridge as a backstop. Set
 `TRUSTSIGHT_PROXY_TOKEN` to require `Basic` proxy authentication, so another
 container on that network cannot borrow the proxy.
 The proxy accepts CONNECT on 443 to the exact forge/CDN plus AUR, release and

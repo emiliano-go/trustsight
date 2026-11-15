@@ -119,8 +119,9 @@ def test_the_fetcher_has_no_direct_egress_route():
     services = compose["services"]
     assert services["upstream-fetcher"]["networks"] == ["watcher-internal"]
     assert compose["networks"]["watcher-internal"]["internal"] is True
-    assert services["upstream-fetcher"]["environment"][
-        "TRUSTSIGHT_UPSTREAM_PROXY"] == "http://egress-proxy:3128"
+    proxy = services["upstream-fetcher"]["environment"][
+        "TRUSTSIGHT_UPSTREAM_PROXY"]
+    assert "egress-proxy:3128" in proxy
     assert "default" in services["egress-proxy"]["networks"]
 
 

@@ -172,6 +172,24 @@ jobs:
             'import socket; s=socket.socket(socket.AF_UNIX); s.connect("/run/trustsight/token.sock"); s.sendall(b"{\"provider\":\"github\"}\n"); print(s.recv(4096).decode())' \
             | grep -q 'tok-ci'
 
+      - name: Start the auxiliary compose topology
+        run: |
+          set -eu
+          export TRUSTSIGHT_IMAGE="ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}"
+          export TRUSTSIGHT_PROXY_TOKEN="compose-ci"
+          mkdir -p run/trustsight run/trustsight-token
+          cleanup() {
+            docker compose -f docker-compose.watcher.yml down -v >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          docker compose -f docker-compose.watcher.yml \
+            up -d egress-proxy token-broker feed-signer
+          sleep 3
+          running="$(docker compose -f docker-compose.watcher.yml ps --status running --services)"
+          for service in egress-proxy token-broker feed-signer; do
+            echo "$running" | grep -qx "$service"
+          done
+
       - name: Exercise the feed signer under the fetcher profile
         run: |
           set -eu

@@ -107,3 +107,13 @@ def test_the_apparmor_overlay_selects_the_shipped_profile():
     service = overlay["services"]["trustsight-watch"]
     assert "apparmor=trustsight-watcher" in service["security_opt"]
     assert service["environment"]["TRUSTSIGHT_REQUIRE_APPARMOR"] == "1"
+
+
+def test_the_token_broker_socket_is_not_visible_to_the_watcher():
+    services = _compose()["services"]
+    watcher_volumes = " ".join(services["trustsight-watch"]["volumes"])
+    assert "trustsight-token" not in watcher_volumes
+    assert any("trustsight-token" in volume
+               for volume in services["upstream-fetcher"]["volumes"])
+    assert any("trustsight-token" in volume
+               for volume in services["token-broker"]["volumes"])

@@ -154,6 +154,7 @@ services:
         hard: 0
     volumes:
       - ./run/trustsight:/run/trustsight
+      - ./run/trustsight-token:/run/trustsight-token
       - ./trustsight-config:/config-src:ro
     networks:
       - watcher-internal
@@ -171,7 +172,7 @@ services:
       # that sees it.  Uncomment and add the mount:
       # TRUSTSIGHT_GITHUB_TOKEN_FILE: "/run/secrets/github_token"
       # TRUSTSIGHT_GITHUB_TOKEN_EXPIRES_AT: "1790000000"
-      # TRUSTSIGHT_GITHUB_TOKEN_SOCKET: "/run/trustsight/token-broker.sock"
+      # TRUSTSIGHT_GITHUB_TOKEN_SOCKET: "/run/trustsight-token/token-broker.sock"
     logging:
       driver: json-file
       options:
@@ -269,8 +270,8 @@ services:
   token-broker:
     image: ${TRUSTSIGHT_IMAGE:-ghcr.io/emiliano-go/trustsight:latest}
     container_name: trustsight-token-broker
-    command: ["token-broker", "--socket", "/run/trustsight/token-broker.sock",
-              "--token-dir", "/run/trustsight/tokens"]
+    command: ["token-broker", "--socket", "/run/trustsight-token/token-broker.sock",
+              "--token-dir", "/run/trustsight-token/tokens"]
     restart: unless-stopped
     init: true
     read_only: true
@@ -295,9 +296,9 @@ services:
         soft: 0
         hard: 0
     volumes:
-      - ./run/trustsight:/run/trustsight
+      - ./run/trustsight-token:/run/trustsight-token
       # Mount rotated provider token files (and optional .expires) read-only:
-      # - ./secrets/tokens:/run/trustsight/tokens:ro
+      # - ./secrets/tokens:/run/trustsight-token/tokens:ro
     environment:
       TRUSTSIGHT_LOG_TIMESTAMPS: "1"
       TMPDIR: "/tmp"

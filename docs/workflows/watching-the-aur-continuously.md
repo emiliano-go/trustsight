@@ -329,7 +329,7 @@ The fetcher owns the HTTP/TLS path and the provider token; the watcher has
 neither. Create the shared socket directory before starting the watcher:
 
 ```bash
-mkdir -p run/trustsight
+mkdir -p run/trustsight run/trustsight-token
 ```
 
 The watcher, fetcher and signer have no default route: they sit on
@@ -361,9 +361,11 @@ secrets/tokens/github.token
 secrets/tokens/github.expires   # optional Unix timestamp
 ```
 
-Then set `TRUSTSIGHT_GITHUB_TOKEN_SOCKET=/run/trustsight/token-broker.sock`
-on the fetcher. Rotate a file and its expiry without restarting anything;
-an absent, expired, or unreadable token fails closed.
+Then set
+`TRUSTSIGHT_GITHUB_TOKEN_SOCKET=/run/trustsight-token/token-broker.sock`
+on the fetcher. The token-broker socket lives on its own volume, not the
+watcher's; rotate a file and its expiry without restarting anything, and an
+absent, expired, or unreadable token fails closed.
 
 The lane reads a declared source archive only when the recipe names an
 allowlisted forge host and a checksum at or above 256 bits pins it.  It never

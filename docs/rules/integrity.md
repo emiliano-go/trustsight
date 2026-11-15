@@ -893,4 +893,4 @@ comment deletion is never a finding. The locked benign corpus adjudicates it; th
 
 ## Related documentation
 
-- [Fire Rates](../explanation/historical-and-behavioral-analysis.md)
+- [Fire Rates](../reports/fire-rates.md)

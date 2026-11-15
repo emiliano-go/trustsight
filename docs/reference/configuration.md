@@ -165,7 +165,7 @@ unrelated rule.
 
 ### `[code_rules]`
 
-Rules emitted from code rather than `rules.toml`, so the `experimental` flag above cannot reach them. They are **not** experimental: all default to `true`, a value set by corpus calibration; see [Fire Rates](../explanation/historical-and-behavioral-analysis.md).
+Rules emitted from code rather than `rules.toml`, so the `experimental` flag above cannot reach them. They are **not** experimental: all default to `true`, a value set by corpus calibration; see [Fire Rates](../reports/fire-rates.md).
 
 A config written before this section existed still gets these defaults: `load_config()` reads the file verbatim without merging defaults, so the fallbacks live in code (`_CODE_RULE_DEFAULTS` in `src/trustsight/analysis/base.py`). Setting a key here always overrides them.
 

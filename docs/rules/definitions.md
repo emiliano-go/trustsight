@@ -334,7 +334,7 @@ Every definition states the same facts in the same order:
 - **Fire rate**, where measured: hits on the current 8,393-diff benign corpus,
   unless a page explicitly identifies a historical measurement. These are
   false-positive rates. The full table is in
-  [measured fire rates](../explanation/historical-and-behavioral-analysis.md#fire-rates).
+  [measured fire rates](../reports/fire-rates.md).
 
 ## Non-rule findings
 

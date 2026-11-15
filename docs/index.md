@@ -91,6 +91,8 @@ the tool cannot see.
 - [Workflows](workflows/index.md): task-oriented guides for everyday use.
 - [Reference](reference/index.md): CLI, Python API, configuration, report
   schema, evidence tiers, IOC federation and exit codes.
+- [Reports](reports/index.md): detection records from the wild and measured
+  evaluations of the rule set.
 - [Glossary](reference/glossary.md): the vocabulary used across the docs.
 
 ## Contributing and project resources

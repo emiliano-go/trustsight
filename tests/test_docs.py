@@ -669,7 +669,7 @@ def test_the_llms_txt_generator_covers_every_page():
 
 
 def test_navigation_entries_exist_and_pages_are_reachable():
-    """Six primary sections, and no page left without an inbound link.
+    """Seven primary sections, and no page left without an inbound link.
 
     The old check required every page to be a top-navigation child, which
     made advanced reference pages compete with the primary journey.  The new
@@ -685,12 +685,12 @@ def test_navigation_entries_exist_and_pages_are_reachable():
     meta = _config()
     docs = ROOT / meta.get("docs_dir", "docs")
     sections = _sections(meta)
-    assert len(sections) == 6, f"expected six primary sections, got {len(sections)}"
+    assert len(sections) == 7, f"expected seven primary sections, got {len(sections)}"
 
     nav_paths = [path for _, pages in sections for _, path in pages]
     # Advanced pages are nested under their subject in the sidebar, so the
     # leaf count is expected to approach the page count.  The primary
-    # structure is the six sections above, not a cap on nested leaves.
+    # structure is the seven sections above, not a cap on nested leaves.
     missing = sorted({p for p in nav_paths if not (docs / p).is_file()})
     assert missing == [], f"nav entries with no file: {missing}"
 
@@ -781,7 +781,7 @@ def test_the_readme_rule_count_matches_the_catalog():
 
 # --- documentation structure --------------------------------------------
 #
-# The rework made the site smaller and the pages more opinionated: six primary
+# The rework made the site smaller and the pages more opinionated: seven primary
 # sections, one canonical page per concept, and advanced pages reachable from
 # section landings rather than every one promoted to global navigation.  The
 # checks below keep that contract cheap to verify: every page declares who it

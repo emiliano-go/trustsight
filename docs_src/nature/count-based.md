@@ -31,5 +31,5 @@ from intuition.
 ## See also
 
 - [Corpus and Priors](../explanation/historical-and-behavioral-analysis.md)
-- [Fire Rates](../explanation/historical-and-behavioral-analysis.md)
+- [Fire Rates](../reports/fire-rates.md)
 - [Count-Based category page](count-based.md)

@@ -106,7 +106,7 @@ Field by field, it is documented in the
 
 ## Per-class CI regression
 
-For teams that want a statistical gate, TrustSight publishes benchmark distributions for each severity class on the [benchmarks page](../explanation/detection-and-evidence.md):
+For teams that want a statistical gate, TrustSight publishes benchmark distributions for each severity class on the [benchmarks page](../reports/benchmarks-and-methodology.md):
 
 | Class | Metric | Value |
 |-------|--------|-------|

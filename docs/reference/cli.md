@@ -1235,6 +1235,8 @@ It accepts only the known `trustsight.*` events with their expected shape,
 rate-limits the socket to 120 signatures per minute, and refuses to sign if
 its audit record cannot be written. Audit records are hash-chained, so a
 deleted or reordered record is detectable and a corrupt log fails closed.
+Each record also carries an Ed25519 signature over its canonical content, so
+an attacker without the signing key cannot rewrite the chain.
 
 ---
 

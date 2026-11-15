@@ -53,7 +53,7 @@ _LIMITER = SignerLimiter()
 
 
 def _audit(path: str | None, document: dict, headers: dict, body: bytes,
-           head_path: str | None = None) -> None:
+           head_path: str | None = None, key_b64: str = "") -> None:
     """Append one signed-body record, or refuse to sign if it cannot be kept."""
     if not path:
         return
@@ -76,6 +76,8 @@ def _audit(path: str | None, document: dict, headers: dict, body: bytes,
         "prev": previous,
     }
     payload = json.dumps(record, sort_keys=True, separators=(",", ":"))
+    record["record_signature"] = _sign_record(key_b64, payload)
+    payload = json.dumps(record, sort_keys=True, separators=(",", ":"))
     record["chain_sha256"] = hashlib.sha256(
         (previous + payload).encode()).hexdigest()
     fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
@@ -86,6 +88,17 @@ def _audit(path: str | None, document: dict, headers: dict, body: bytes,
         os.close(fd)
     if head_path:
         _write_head(Path(head_path), record["chain_sha256"])
+
+
+def _sign_record(key_b64: str, payload: str) -> str:
+    if not key_b64:
+        return ""
+    from cryptography.hazmat.primitives.serialization import (
+        load_der_private_key,
+    )
+
+    key = load_der_private_key(base64.b64decode(key_b64), password=None)
+    return base64.b64encode(key.sign(payload.encode())).decode()
 
 
 def _write_head(target: Path, chain: str) -> None:
@@ -194,7 +207,7 @@ def handle_request(request: object, *, audit_log: str | None = None,
     try:
         headers = _sign_feed_local(
             key, key_id, body, timestamp=timestamp, webhook_id=webhook_id)
-        _audit(audit_log, document, headers, body, audit_head)
+        _audit(audit_log, document, headers, body, audit_head, key)
     except Exception as exc:  # noqa: BLE001 - one bad request is not a crash
         return {"ok": False, "error": f"{type(exc).__name__}: signing failed"}
     return {"ok": True, "headers": headers}

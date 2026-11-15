@@ -69,7 +69,7 @@ def test_signer_records_a_bounded_audit_line(monkeypatch, tmp_path):
 
 
 def test_signer_audit_records_are_chained(monkeypatch, tmp_path):
-    key_b64, _priv = _keypair()
+    key_b64, priv = _keypair()
     monkeypatch.setenv("TRUSTSIGHT_FEED_KEY", key_b64)
     monkeypatch.setenv("TRUSTSIGHT_FEED_KEY_ID", "k1")
     audit = tmp_path / "signatures.jsonl"
@@ -86,6 +86,11 @@ def test_signer_audit_records_are_chained(monkeypatch, tmp_path):
     unsigned = {k: v for k, v in first.items() if k != "chain_sha256"}
     payload = json.dumps(unsigned, sort_keys=True, separators=(",", ":"))
     assert first["chain_sha256"] == hashlib.sha256(payload.encode()).hexdigest()
+    signature = base64.b64decode(first["record_signature"])
+    signed = {k: v for k, v in unsigned.items() if k != "record_signature"}
+    priv.public_key().verify(
+        signature,
+        json.dumps(signed, sort_keys=True, separators=(",", ":")).encode())
 
 
 def test_signer_publishes_the_chain_head(monkeypatch, tmp_path):

@@ -308,6 +308,40 @@ services:
         max-size: "5m"
         max-file: "3"
 
+  anchor-monitor:
+    image: ${TRUSTSIGHT_IMAGE:-ghcr.io/emiliano-go/trustsight:latest}
+    container_name: trustsight-anchor-monitor
+    command: ["audit-anchor", "watch", "--head", "/audit/head.json",
+              "--expected-file", "/audit/expected", "--interval", "300"]
+    profiles:
+      - anchor-monitor
+    restart: "no"
+    read_only: true
+    tmpfs:
+      - /tmp:size=8m,noexec,nosuid,nodev
+    user: "1000:1000"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=./docker/seccomp-fetcher.json
+      - apparmor=docker-default
+    network_mode: none
+    pids_limit: 32
+    mem_limit: 64m
+    cpus: 0.25
+    volumes:
+      - trustsight-signer-audit:/audit:ro
+      - ./anchor/expected:/audit/expected:ro
+    environment:
+      TRUSTSIGHT_LOG_TIMESTAMPS: "1"
+      TMPDIR: "/tmp"
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
 networks:
   watcher-internal:
     internal: true

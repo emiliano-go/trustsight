@@ -117,3 +117,11 @@ def test_the_token_broker_socket_is_not_visible_to_the_watcher():
                for volume in services["upstream-fetcher"]["volumes"])
     assert any("trustsight-token" in volume
                for volume in services["token-broker"]["volumes"])
+
+
+def test_the_anchor_monitor_is_networkless_and_opt_in():
+    service = _compose()["services"]["anchor-monitor"]
+    assert service["network_mode"] == "none"
+    assert service["profiles"] == ["anchor-monitor"]
+    assert any("trustsight-signer-audit" in volume
+               for volume in service["volumes"])

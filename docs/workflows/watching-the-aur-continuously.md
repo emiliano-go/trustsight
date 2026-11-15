@@ -434,6 +434,17 @@ Exit `2` means the head moved without the anchor being updated, or the head
 is unreadable. Publish the new value only after the signer's audit log has
 been reviewed.
 
+The compose file also has an opt-in `anchor-monitor` profile that polls every
+five minutes, mounts the signed audit volume read-only, and has no network:
+
+```bash
+docker compose -f docker-compose.watcher.yml \
+  --profile anchor-monitor up -d anchor-monitor
+```
+
+It exits non-zero when the head no longer matches the mounted
+`./anchor/expected` file.
+
 ### Reading the logs
 
 The watcher logs every cycle to stderr, so `docker logs -f trustsight-watch`

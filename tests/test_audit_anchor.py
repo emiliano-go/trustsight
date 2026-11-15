@@ -6,6 +6,10 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
+
+from trustsight.audit_anchor import AnchorError, check
+
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -36,3 +40,11 @@ def test_a_mismatched_head_is_refused(tmp_path):
 
 def test_an_unreadable_head_is_refused(tmp_path):
     assert _module().main([str(tmp_path / "missing.json")]) == 2
+
+
+def test_the_module_checks_and_refuses(tmp_path):
+    chain = "c" * 64
+    head = _head(tmp_path, chain)
+    assert check(str(head), expected=chain) == chain
+    with pytest.raises(AnchorError):
+        check(str(head), expected="d" * 64)

@@ -1262,6 +1262,30 @@ refused; the fetcher treats that as a hard credential failure.
 
 ---
 
+## trustsight audit-anchor
+
+Compare the signer's published `head.json` with an off-host expected chain,
+or poll it so a rollback exits non-zero.
+
+```
+trustsight audit-anchor check --head PATH [--expected CHAIN] [--expected-file PATH]
+trustsight audit-anchor watch --head PATH [--expected CHAIN] [--expected-file PATH] [--interval SECONDS]
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--head` | Path to the signer's `head.json`. |
+| `--expected` | Expected `chain_sha256` value. |
+| `--expected-file` | File holding the expected `chain_sha256`; overrides `--expected`. |
+| `--interval` | Seconds between checks in `watch`. Default `300`. |
+
+`check` exits `2` on a mismatch or unreadable head. `watch` does the same
+instead of continuing to poll.
+
+---
+
 ## trustsight auth
 
 Manage provider tokens for the optional upstream-scan lane. A token is never

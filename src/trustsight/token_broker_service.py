@@ -48,9 +48,18 @@ def _from_command(command: str, provider: str) -> dict:
     if not argv:
         return {"ok": False, "error": "token command is empty"}
     try:
+        child_env = {
+            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+            "HOME": "/tmp",
+            "TRUSTSIGHT_TOKEN_PROVIDER": provider,
+        }
+        child_env.update({
+            key: value for key, value in os.environ.items()
+            if key.startswith(("VAULT_", "AWS_", "GOOGLE_"))
+        })
         result = subprocess.run(
             argv, capture_output=True, timeout=5, check=False,
-            text=True, errors="replace",
+            text=True, errors="replace", env=child_env,
         )
     except (OSError, subprocess.SubprocessError):
         return {"ok": False, "error": "token command failed"}
@@ -59,7 +68,7 @@ def _from_command(command: str, provider: str) -> dict:
     output = result.stdout.strip()
     if not output or len(output) > MAX_TOKEN_BYTES + 256:
         return {"ok": False, "error": "token command returned no token"}
-    token = output.splitlines()[0].strip()
+    token = output.split("\n", 1)[0].strip()
     expires_at = None
     try:
         document = json.loads(output)

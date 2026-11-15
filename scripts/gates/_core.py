@@ -61,6 +61,7 @@ _NETWORK_MODULES = {
     "full_aur/fetch.py",
     "full_aur/metadata.py",
     "notify.py",
+    "alerts.py",
     "release.py",
     "upstream_fetch.py",
     "upstream_fetcher_client.py",

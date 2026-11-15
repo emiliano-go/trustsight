@@ -587,6 +587,7 @@ changes behaviour is a config key or a command flag.
 | `TRUSTSIGHT_EGRESS_ALLOW` | Comma-separated exact hostnames | Extra hosts the container egress proxy may CONNECT to, for operator webhooks/ntfy. IP literals, wildcards, ports and paths are ignored. |
 | `TRUSTSIGHT_PROXY_TOKEN` | A shared secret | Requires Basic proxy auth on every CONNECT and is embedded in the watcher/fetcher proxy URL. Empty means no proxy auth. |
 | `TRUSTSIGHT_PROXY_ALERT_URL` | An HTTPS webhook URL | POSTs one `trustsight.proxy_denied` alert per refused CONNECT; failures are logged and swallowed. |
+| `TRUSTSIGHT_TOKEN_COMMAND` | A credential-helper command | Token broker runs it when `<provider>.token` is absent; `{provider}` is substituted, no shell is used, and it must print a token or JSON `{token,expires_at}`. |
 | `HTTPS_PROXY` | An `http://host:port` URL | Standard proxy used by the watcher's URL reads and its AUR git proxy. The compose file points it at `egress-proxy:3128`. |
 | `TRUSTSIGHT_WATCHER_PROXY` | An `http://host:port` URL | Watcher-specific proxy override for the AUR git proxy; takes precedence over `HTTPS_PROXY`. |
 | `TRUSTSIGHT_DEV_BUILD` | `1` | Set by the `packaging/dev` wrappers. Appends `-dev` to the `--version` output; the released package does not set it. |

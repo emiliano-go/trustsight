@@ -9,7 +9,7 @@ reworked tree and lists the differences that are intentional.
 ## Method
 
 - **Page inventory**: every `docs/**/*.md` on `master` was compared with the
-  current tree. Master has 119 pages; the rework has 94, because 22 Rule
+  current tree. Master has 120 pages; the rework has 95, because 22 Rule
   System plus 22 Rule Nature pages became 22 canonical category pages, and 22
   explanation pages became 7 conceptual pages.
 - **Rule definitions**: every `### <ID>:` body was extracted from both trees
@@ -123,7 +123,7 @@ example or table row was found missing after these checks.
 
 ## Per-file audit
 
-Every Markdown page on `master` (119 files) is listed below with its current
+Every Markdown page on `master` (120 files) is listed below with its current
 destination and result. "Moved" means the page kept its content and only its
 links changed; "merged" means its prose lives on a consolidated page;
 "split" means its sections now live on more than one focused page; "rewritten"
@@ -132,13 +132,13 @@ means the page was replaced by a new landing or policy page.
 | Result | Files |
 |---|---:|
 | Unchanged | 4 |
-| Updated in place (links or wording) | 20 |
+| Updated in place (links or wording) | 21 |
 | Moved, content preserved | 30 |
 | Merged into a consolidated page | 38 |
 | Canonical rule category pages (all definitions and nature prose) | 22 |
 | Split across focused pages | 2 |
 | Rewritten as an entry point or policy page | 3 |
-| **Total** | **119** |
+| **Total** | **120** |
 
 | Master file | Destination | Audit result |
 |---|---|---|
@@ -176,6 +176,7 @@ means the page was replaced by a new landing or policy page.
 | `docs/explanation/scoring-philosophy.md` | `docs/explanation/scoring-and-verdicts.md` | Moved; content preserved and links updated (100% paragraphs verbatim) |
 | `docs/explanation/seed-provenance.md` | `docs/explanation/threat-intelligence.md` | Moved; content preserved and links updated (100% paragraphs verbatim) |
 | `docs/explanation/structural-user-rules.md` | `docs/explanation/static-analysis-and-resolution.md` | Merged; prose preserved |
+| `docs/explanation/state-and-lifecycles.md` | `docs/explanation/state-and-lifecycles.md` | Added on master after the rework branched; preserved in full, links updated to the new security paths, and nested under How TrustSight Works |
 | `docs/explanation/the-typed-core.md` | `docs/explanation/architecture-and-pipeline.md` | Moved; content preserved and links updated (100% paragraphs verbatim) |
 | `docs/explanation/what-trustsight-cannot-see.md` | `docs/explanation/limitations-and-uncertainty.md` | Moved; content preserved and links updated (100% paragraphs verbatim) |
 | `docs/explanation/why-static-analysis.md` | `docs/explanation/static-analysis-and-resolution.md` | Moved; content preserved and links updated (100% paragraphs verbatim) |

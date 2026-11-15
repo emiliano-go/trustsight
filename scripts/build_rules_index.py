@@ -52,6 +52,8 @@ TABLE_START = "<!-- generated: catalog -->"
 TABLE_END = "<!-- /generated: catalog -->"
 PAGE_START = "<!-- generated: page-index -->"
 PAGE_END = "<!-- /generated: page-index -->"
+SERIES_START = "<!-- generated: series-counts -->"
+SERIES_END = "<!-- /generated: series-counts -->"
 NATURE_START = "<!-- generated: nature-rules -->"
 NATURE_END = "<!-- /generated: nature-rules -->"
 NATURE_RE = re.compile(
@@ -75,6 +77,7 @@ SERIES_NAMES = {
     "G": "Correlation",
     "A": "Artifact",
     "I": "Indicator",
+    "U": "Upstream",
 }
 
 
@@ -235,16 +238,36 @@ def render_page(page_name: str, layout, blocks) -> str:
 
 
 def render_index(text: str, catalog) -> str:
-    """*text* with the generated category legend replaced."""
+    """*text* with the generated category legend and series counts replaced."""
     legend = "\n".join(
         f"| [{c.title}]({c.doc_page}) | `{c.value}` | {len(rules_in(c))} | {c.summary} |"
         for c in RuleCategory
     )
-    return _replace(
+    counts: dict[str, int] = {}
+    for row in catalog:
+        counts[row[3]] = counts.get(row[3], 0) + 1
+    series = "\n".join(
+        f"| `{letter}` | {name} | {counts.get(name, 0)} |"
+        for letter, name in SERIES_NAMES.items()
+    )
+    text = _replace(
         text, LEGEND_START, LEGEND_END,
         "| Category | Slug | Rules | What a rule here claims |\n"
         "|----------|------|-------|-------------------------|\n"
         + legend,
+    )
+    scoring = sum(
+        1 for row in catalog
+        if row[4] not in (RuleCategory.UNVERIFIABLE, RuleCategory.ARTIFACT)
+    )
+    return _replace(
+        text, SERIES_START, SERIES_END,
+        "| Series | Mechanism | Rules |\n"
+        "|--------|-----------|-------|\n"
+        + series
+        + f"\nThe catalog lists {len(catalog)} rule IDs across "
+        f"{len(SERIES_NAMES)} series; {scoring} of them contribute to the "
+        "heuristic score.",
     )
 
 

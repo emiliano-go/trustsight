@@ -24,6 +24,24 @@ what changed, what matched, and what it could not see.
   credited. A declaration an attacker can assert for free must not lower a
   score.
 
+## A platform, not only a diff check
+
+TrustSight is a security analysis and intelligence platform for the Arch User
+Repository ecosystem. It combines static analysis, supply-chain intelligence,
+behavioral heuristics, dependency graph analysis, threat intelligence, and
+historical correlation to uncover suspicious package updates and emerging
+threats.
+
+Beyond package analysis, TrustSight tracks ecosystem activity and lifecycle
+signals, including maintainer histories and changes, package adoptions and
+orphan status, ownership transitions, release patterns, and dependency
+relationships. It uses these signals to identify unusual behavior, suspicious
+takeovers, stale package revivals, and coordinated activity across packages.
+
+It transforms package changes and ecosystem signals into deterministic,
+evidence-linked security assessments, helping you understand what changed, who
+is behind it, and what it might mean before you install.
+
 ## What a run produces
 
 A review is a deterministic, evidence-linked report:
@@ -37,15 +55,20 @@ A review is a deterministic, evidence-linked report:
 - **A template verdict**: the findings rendered into a review direction. It
   describes what fired; it never grants permission to skip review.
 
-The default output is evidence, not a verdict. See
-[Understanding Your First Report](understanding-your-first-report.md).
+The default output is evidence, not a verdict, and nothing it prints is a
+promise of safety. The evidence is what you decide on. See
+[How TrustSight Works](../security-design/how-it-works.md) for the full
+pipeline and [Understanding Your First Report](understanding-your-first-report.md).
 
 ## What it is not
 
-TrustSight is an **instrument, not a judge**. It reports evidence and the
-absence of evidence. It does not decide whether a package is safe, and a quiet
-result is not a certificate: it means no monitored condition matched in the
-material examined.
+TrustSight is an **instrument, not a judge**. It reports evidence, and the
+absence of evidence, and never substitutes its report for your decision.
+Absence of alerts is not a promise of safety. It does not decide whether a
+package is safe, and a quiet result is not a certificate: it means no
+monitored condition matched in the material examined. The
+[security model](../security-design/security-model.md) states the boundaries
+behind that promise, and how each one is enforced.
 
 The [security model](../security-design/security-model.md) states the
 guarantees and their enforcement. The

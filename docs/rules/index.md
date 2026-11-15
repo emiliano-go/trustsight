@@ -61,16 +61,53 @@ A series is the **mechanism**: the leading letter of the rule ID. The series
 determines what you can tune and what a finding costs to replay. Every series
 is described, with its detection characteristics, in [Rule Series](series.md).
 
-| Series | Mechanism | Series | Mechanism |
-|---|---|---|---|
-| [R](series.md#r-series) | Regex pattern | [G](series.md#g-series) | Cross-package correlation |
-| [H](series.md#h-series) | Heuristic | [E](series.md#e-series) | Entropy and distribution |
-| [C](series.md#c-series) | Structural invariant | [I](series.md#i-series) | Signed indicator membership |
-| [D](series.md#d-series) | Dependency graph | [M](series.md#m-series) | Meta, over other findings |
-| [S](series.md#s-series) | Sabotage impact | [A](series.md#a-series) | Built-artifact inspection |
-| [X](series.md#x-series) | Crossfire evasion | [U](series.md#u-series) | Upstream surfaces |
-| [T](series.md#t-series) | Temporal history | [P](series.md#p-series) | Declared practice |
-| [W](series.md#w-series) | Analysis boundary | | |
+The identifier space is intentionally non-contiguous, so a range is not a
+count; the [catalog](definitions.md) is authoritative. The counts below are
+generated from it.
+
+<!-- generated: series-counts -->
+| Series | Mechanism | Rules |
+|--------|-----------|-------|
+| `C` | Integrity-change | 34 |
+| `R` | Regex | 37 |
+| `H` | Heuristic | 108 |
+| `D` | Dependency | 5 |
+| `S` | Sabotage | 8 |
+| `X` | Crossfire | 34 |
+| `W` | Unverifiable | 14 |
+| `P` | Declared-practice | 0 |
+| `M` | Meta | 6 |
+| `E` | Entropy | 3 |
+| `T` | Temporal | 12 |
+| `G` | Correlation | 15 |
+| `A` | Artifact | 10 |
+| `I` | Indicator | 0 |
+| `U` | Upstream | 15 |
+The catalog lists 301 rule IDs across 15 series; 277 of them contribute to the heuristic score.
+<!-- /generated: series-counts -->
+
+`P` and `I` carry no catalog IDs in this build: declared-practice findings
+are rendered from `DECLARED_REASONS` (P001-P009, P004 skipped), and the
+shipped indicator mechanism is H056, filed under [Indicators](indicator.md).
+
+Two further families are reported but never weighted: declared-practice
+findings P001-P009 (P004 is skipped) and unverifiable findings W001-W014. The
+optional L9 build lane adds artifact rules A001-A010, reported outside the
+heuristic when enabled.
+
+## How rules contribute
+
+Each rule contributes according to its severity weight, match target and
+scope, except the P and W series and the weight-0 M annotations, which are
+weight 0 and report rather than score. The U-series is mostly the same shape:
+U003 (a new remote source), U004 (a redirected resolver), U007 (a federated CI
+exfil shape), U008 (a federated history sweep) and U010 (an unauditable source
+transport) score; the rest are weight 0. The A and I series are reported
+outside the heuristic score.
+
+Crossfire is the anti-evasion family introduced in the current ruleset. Its
+34 rules detect tokenizer defeat and command reconstruction; see
+[Crossfire](crossfire.md) for the family boundary and rule descriptions.
 
 ## Scoring, matching and configuration
 

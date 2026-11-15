@@ -46,6 +46,8 @@ Put the review in front of an update, a package manager, or a CI pipeline.
 - [Integrating with yay and paru](workflows/integrating-yay-and-paru.md)
 - [Using TrustSight in CI/CD](workflows/using-in-ci.md)
 
+Ready to get started? Head over to the [Quickstart](start-here/quickstart.md) for installation and your first review.
+
 ## What TrustSight produces
 
 Every review is a deterministic, structured **evidence report**, computed

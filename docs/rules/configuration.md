@@ -8,11 +8,19 @@ When both set the same field, `config.toml` wins. The complete key reference,
 including every non-rule key, is in the
 [Configuration Reference](../reference/configuration.md).
 
-## The `rules.toml` rule fields
+Two namespaces are distinguished by mechanism rather than by subject. An
+**R-series** rule is a regex defined in `~/.config/trustsight/rules.toml` and
+loaded at runtime by `load_rules()` in `src/trustsight/config/__init__.py`;
+you can read it, retune it, or switch it off. An **H-series** rule is a
+heuristic emitted by an analysis module because it needs diff context a
+single-line regex cannot see (what changed, what it changed relative to, what
+the corpus has seen before), and it has no entry in `rules.toml`.
 
 The fields below describe an R-series rule. H-series rules carry the same
 severity, category and weight vocabulary in their findings, but they are not
 configured through this file.
+
+## The `rules.toml` rule fields
 
 Each rule supports these fields:
 

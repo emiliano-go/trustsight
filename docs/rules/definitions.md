@@ -247,21 +247,21 @@ exactly one category page; this catalog only points at it.
 | [T010](naming-and-dependency.md#t010) | Dependency Redirection | Temporal | INFO | [Naming and Dependencies](naming-and-dependency.md) |
 | [T011](temporal.md#t011) | Package Reappearance | Temporal | INFO | [Temporal Context](temporal.md) |
 | [T012](temporal.md#t012) | Trust Erosion Sequence | Temporal | INFO | [Temporal Context](temporal.md) |
-| [U001](upstream-manifests.md#u001) | Manifest Added Or Removed | U | INFO | [Upstream Manifests](upstream-manifests.md) |
-| [U002](upstream-manifests.md#u002) | Upstream Dependency Delta | U | INFO | [Upstream Manifests](upstream-manifests.md) |
-| [U003](upstream-manifests.md#u003) | New Remote Source In Manifest | U | MEDIUM | [Upstream Manifests](upstream-manifests.md) |
-| [U004](upstream-manifests.md#u004) | Registry Redirect | U | MEDIUM | [Upstream Manifests](upstream-manifests.md) |
-| [U005](upstream-manifests.md#u005) | Dependency Surface Jump | U | INFO | [Upstream Manifests](upstream-manifests.md) |
-| [U006](upstream-manifests.md#u006) | Manifest Changed Without Its Lockfile | U | INFO | [Upstream Manifests](upstream-manifests.md) |
-| [U007](upstream-release.md#u007) | CI Exfil Shape | U | MEDIUM | [Upstream Release Integrity](upstream-release.md) |
-| [U008](upstream-release.md#u008) | Git-History Credential Sweep | U | MEDIUM | [Upstream Release Integrity](upstream-release.md) |
-| [U009](upstream-release.md#u009) | New CI Surface Committed | U | LOW | [Upstream Release Integrity](upstream-release.md) |
-| [U010](upstream-release.md#u010) | Unauditable Upstream | U | MEDIUM | [Upstream Release Integrity](upstream-release.md) |
-| [U011](upstream-manifests.md#u011) | Upstream Origin Changed | U | - | [Upstream Manifests](upstream-manifests.md) |
-| [U012](upstream-manifests.md#u012) | Lockfile Integrity Weakened | U | - | [Upstream Manifests](upstream-manifests.md) |
-| [U013](upstream-release.md#u013) | CI Exfil Shape (Local) | U | MEDIUM | [Upstream Release Integrity](upstream-release.md) |
-| [U014](upstream-release.md#u014) | Git-History Credential Sweep (Local) | U | MEDIUM | [Upstream Release Integrity](upstream-release.md) |
-| [U015](upstream-manifests.md#u015) | Federated Upstream Manifest Delta | U | INFO | [Upstream Manifests](upstream-manifests.md) |
+| [U001](upstream-manifests.md#u001) | Manifest Added Or Removed | Upstream | INFO | [Upstream Manifests](upstream-manifests.md) |
+| [U002](upstream-manifests.md#u002) | Upstream Dependency Delta | Upstream | INFO | [Upstream Manifests](upstream-manifests.md) |
+| [U003](upstream-manifests.md#u003) | New Remote Source In Manifest | Upstream | MEDIUM | [Upstream Manifests](upstream-manifests.md) |
+| [U004](upstream-manifests.md#u004) | Registry Redirect | Upstream | MEDIUM | [Upstream Manifests](upstream-manifests.md) |
+| [U005](upstream-manifests.md#u005) | Dependency Surface Jump | Upstream | INFO | [Upstream Manifests](upstream-manifests.md) |
+| [U006](upstream-manifests.md#u006) | Manifest Changed Without Its Lockfile | Upstream | INFO | [Upstream Manifests](upstream-manifests.md) |
+| [U007](upstream-release.md#u007) | CI Exfil Shape | Upstream | MEDIUM | [Upstream Release Integrity](upstream-release.md) |
+| [U008](upstream-release.md#u008) | Git-History Credential Sweep | Upstream | MEDIUM | [Upstream Release Integrity](upstream-release.md) |
+| [U009](upstream-release.md#u009) | New CI Surface Committed | Upstream | LOW | [Upstream Release Integrity](upstream-release.md) |
+| [U010](upstream-release.md#u010) | Unauditable Upstream | Upstream | MEDIUM | [Upstream Release Integrity](upstream-release.md) |
+| [U011](upstream-manifests.md#u011) | Upstream Origin Changed | Upstream | - | [Upstream Manifests](upstream-manifests.md) |
+| [U012](upstream-manifests.md#u012) | Lockfile Integrity Weakened | Upstream | - | [Upstream Manifests](upstream-manifests.md) |
+| [U013](upstream-release.md#u013) | CI Exfil Shape (Local) | Upstream | MEDIUM | [Upstream Release Integrity](upstream-release.md) |
+| [U014](upstream-release.md#u014) | Git-History Credential Sweep (Local) | Upstream | MEDIUM | [Upstream Release Integrity](upstream-release.md) |
+| [U015](upstream-manifests.md#u015) | Federated Upstream Manifest Delta | Upstream | INFO | [Upstream Manifests](upstream-manifests.md) |
 | [W001](unverifiable.md#w001) | Executes Code This Analysis Did Not Read | Unverifiable | - | [Unverifiable](unverifiable.md) |
 | [W002](unverifiable.md#w002) | Build Resolves Dependencies From A Registry | Unverifiable | - | [Unverifiable](unverifiable.md) |
 | [W003](unverifiable.md#w003) | Applies A Patch This Analysis Did Not Read | Unverifiable | - | [Unverifiable](unverifiable.md) |
@@ -311,6 +311,10 @@ exactly one category page; this catalog only points at it.
 | [X033](crossfire.md#x033) | File With No Provenance Executed | Crossfire | - | [Crossfire](crossfire.md) |
 | [X034](crossfire.md#x034) | Fetch Laundered Through An Archival Service | Crossfire | - | [Crossfire](crossfire.md) |
 <!-- /generated: catalog -->
+
+Every documented rule appears below with the category page that defines it.
+The identifier space is deliberately non-contiguous; see
+[Rule Identifiers](identifiers.md) for the reserved and retired ranges.
 
 ## Reading a rule entry
 

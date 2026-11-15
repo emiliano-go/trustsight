@@ -162,6 +162,6 @@ own signature is consulted.
 ## Not the PGP disclosure key
 
 The ed25519 baseline key here is distinct from the PGP key used for private
-[vulnerability reporting](../security.md#how-to-report)
+[vulnerability reporting](../security-design/security-model.md#how-to-report)
 (`F759D6D49B0A395AB922414A5CC3B4C50D37E793`). One signs release artifacts; the
 other encrypts security reports. They are not interchangeable.

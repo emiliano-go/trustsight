@@ -1,3 +1,5 @@
+<!-- description: The measured hot-path baseline for a review on the locked benign corpus, and the first optimization applied to it. -->
+
 # Hot-path baseline and first optimization
 
 Measured on the checkout, serial, against the fetched locked benign corpus

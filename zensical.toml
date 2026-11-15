@@ -70,99 +70,95 @@ name = "trustsight on PyPI"
 [[project.nav]]
 Overview = [
   {Home = "index.md"},
-  {Changelog = "changelog.md"},
-  {License = "license.md"},
+  {"What is TrustSight?" = "start-here/what-is-trustsight.md"},
+  {Installation = "start-here/installation.md"},
+  {Quickstart = "start-here/quickstart.md"},
+  {"Understanding Your First Report" = "start-here/understanding-your-first-report.md"},
 ]
 
 [[project.nav]]
-Security = [
-  {"Security Model" = "security.md"},
-  {"Program Under Attack" = "security/program-under-attack.md"},
-  {"What a Result Claims" = "security/what-a-result-claims.md"},
-  {"Enforcement Map" = "security/enforcement-map.md"},
-  {"Vulnerability Reporting" = "security/vulnerability-reporting.md"},
-  {"Release Signing" = "security/release-signing.md"},
+Workflows = [
+  {Overview = "workflows/index.md"},
+  {"Auditing Before Update" = "workflows/auditing-before-update.md"},
+  {"Integrating with yay and paru" = "workflows/integrating-yay-and-paru.md"},
+  {"Using TrustSight in CI/CD" = "workflows/using-in-ci.md"},
+  {"Acting on a Flag" = "workflows/acting-on-a-flag.md"},
+  {"Configuring Rules and Weights" = "workflows/configuring-rules-and-weights.md"},
+  {"Tuning False Positives" = "workflows/tuning-false-positives.md"},
+  {"Watching the AUR Continuously" = "workflows/watching-the-aur-continuously.md"},
+  {"Reducing Blast Radius" = "workflows/reducing-blast-radius.md"},
 ]
 
 [[project.nav]]
-Standards = [
-  {Standards = "standards.md"},
+"Security & Design" = [
+  {Overview = "security-design/index.md"},
+  {"Security Model" = [
+    {Overview = "security-design/security-model.md"},
+    {"Part A: TrustSight as a Program Under Attack" = "security-design/security-boundaries.md"},
+    {"Part B: What a Result Claims" = "security-design/what-a-result-claims.md"},
+    {"Part C: Enforcement Map" = "security-design/enforcement-map.md"},
+    {"Part D: Vulnerability Reporting" = "security-design/vulnerability-reporting.md"},
+    {"Release Signing" = "security-design/release-signing.md"},
+  ]},
+  {"How TrustSight Works" = [
+    {Overview = "security-design/how-it-works.md"},
+    {"Architecture and Pipeline" = "explanation/architecture-and-pipeline.md"},
+    {"Static Analysis and Resolution" = "explanation/static-analysis-and-resolution.md"},
+    {"Detection and Evidence" = "explanation/detection-and-evidence.md"},
+    {"Scoring and Verdicts" = "explanation/scoring-and-verdicts.md"},
+    {"Threat Intelligence" = "explanation/threat-intelligence.md"},
+    {"Historical and Behavioral Analysis" = "explanation/historical-and-behavioral-analysis.md"},
+    {"State and Lifecycles" = "explanation/state-and-lifecycles.md"},
+    {"Limitations and Uncertainty" = "explanation/limitations-and-uncertainty.md"},
+  ]},
+  {"Evidence and Confidence" = "security-design/evidence-and-confidence.md"},
+  {"Assurance Layers" = [
+    {Overview = "security-design/assurance-layers.md"},
+    {"Part 2: Adding a Detector" = "security-design/assurance-layers/diversity.md"},
+    {"Part 3: Reporting" = "security-design/assurance-layers/reporting.md"},
+    {"Part 4: Tests and Evaluation" = "security-design/assurance-layers/enforcement.md"},
+  ]},
+  {"Threat Model and Limitations" = "security-design/threat-model.md"},
 ]
 
 [[project.nav]]
-Tutorial = [
-  {Installation = "tutorial/installation.md"},
-  {Quickstart = "tutorial/quickstart.md"},
-  {"Reading a Report" = "tutorial/reading-a-report.md"},
-]
-
-[[project.nav]]
-Guides = [
-  {Overview = "guides/index.md"},
-  {"Auditing Before Update" = "guides/auditing-before-update.md"},
-  {"Gating yay and paru" = "guides/gating-yay-paru.md"},
-  {"Using in CI" = "guides/using-in-ci.md"},
-  {"Acting on a Flag" = "guides/acting-on-a-flag.md"},
-  {"Configuring Rules and Weights" = "guides/configuring-rules-and-weights.md"},
-  {"Tuning False Positives" = "guides/tuning-false-positives.md"},
-  {"Watching the AUR Continuously" = "guides/watching-the-aur.md"},
-  {"Reducing Blast Radius" = "guides/reducing-blast-radius.md"},
-]
-
-[[project.nav]]
-"Rule System" = [
-  {"Rules Overview" = "reference/rules/index.md"},
-  {"Rule Series (mechanism)" = "reference/rules/nature.md"},
-  {"Rule System" = "reference/rules/system.md"},
-  {"Fetch and Execution" = "reference/rules/fetch-and-execution.md"},
-  {Obfuscation = "reference/rules/obfuscation.md"},
-  {"Deception and Anti-Analysis" = "reference/rules/deception.md"},
-  {"Install and Persistence" = "reference/rules/install-and-persist.md"},
-  {"Staging and Reconnaissance" = "reference/rules/staging-and-recon.md"},
-  {"Integrity and Verification" = "reference/rules/integrity.md"},
-  {"Naming and Dependencies" = "reference/rules/naming-and-dependency.md"},
-  {"Maintainer and Metadata" = "reference/rules/maintainer-and-metadata.md"},
-  {"Temporal Context" = "reference/rules/temporal.md"},
-  {Composition = "reference/rules/composition.md"},
-  {"Count-Based" = "reference/rules/count-based.md"},
-  {"Corpus Behavioral" = "reference/rules/corpus-behavioral.md"},
-  {Crossfire = "reference/rules/crossfire.md"},
-  {Sabotage = "reference/rules/sabotage.md"},
-  {Unverifiable = "reference/rules/unverifiable.md"},
-  {"Meta and Confluence" = "reference/rules/meta.md"},
-  {Entropy = "reference/rules/entropy.md"},
-  {Correlation = "reference/rules/correlation.md"},
-  {Artifact = "reference/rules/artifact.md"},
-  {Indicators = "reference/rules/indicator.md"},
-  {"Upstream Manifests" = "reference/rules/upstream-manifests.md"},
-  {"Upstream Release Integrity" = "reference/rules/upstream-release.md"},
-]
-
-[[project.nav]]
-"Rule Nature" = [
-  {"Rule Nature Overview" = "reference/nature/index.md"},
-  {"Fetch and Execution" = "reference/nature/fetch-and-execution.md"},
-  {Obfuscation = "reference/nature/obfuscation.md"},
-  {"Deception and Anti-Analysis" = "reference/nature/deception.md"},
-  {"Install and Persistence" = "reference/nature/install-and-persist.md"},
-  {"Staging and Reconnaissance" = "reference/nature/staging-and-recon.md"},
-  {"Integrity and Verification" = "reference/nature/integrity.md"},
-  {"Naming and Dependencies" = "reference/nature/naming-and-dependency.md"},
-  {"Maintainer and Metadata" = "reference/nature/maintainer-and-metadata.md"},
-  {"Temporal Context" = "reference/nature/temporal.md"},
-  {Composition = "reference/nature/composition.md"},
-  {"Count-Based" = "reference/nature/count-based.md"},
-  {"Corpus Behavioral" = "reference/nature/corpus-behavioral.md"},
-  {Crossfire = "reference/nature/crossfire.md"},
-  {Sabotage = "reference/nature/sabotage.md"},
-  {Unverifiable = "reference/nature/unverifiable.md"},
-  {"Meta and Confluence" = "reference/nature/meta.md"},
-  {Entropy = "reference/nature/entropy.md"},
-  {Correlation = "reference/nature/correlation.md"},
-  {Artifact = "reference/nature/artifact.md"},
-  {Indicators = "reference/nature/indicator.md"},
-  {"Upstream Manifests" = "reference/nature/upstream-manifests.md"},
-  {"Upstream Release Integrity" = "reference/nature/upstream-release.md"},
+Rules = [
+  {Overview = "rules/index.md"},
+  {"Rule Categories" = "rules/categories.md"},
+  {"Rule Series" = "rules/series.md"},
+  {"Rule Mechanics" = [
+    {Overview = "rules/mechanics.md"},
+    {Scoring = "rules/scoring.md"},
+    {Matching = "rules/matching.md"},
+    {Configuration = "rules/configuration.md"},
+    {Identifiers = "rules/identifiers.md"},
+  ]},
+  {"Rule Interpretation" = "rules/interpretation.md"},
+  {"Individual Rule Definitions" = [
+    {Overview = "rules/definitions.md"},
+    {"Fetch and Execution" = "rules/fetch-and-execution.md"},
+    {"Obfuscation" = "rules/obfuscation.md"},
+    {"Deception and Anti-Analysis" = "rules/deception.md"},
+    {"Install and Persistence" = "rules/install-and-persist.md"},
+    {"Staging and Reconnaissance" = "rules/staging-and-recon.md"},
+    {"Integrity and Verification" = "rules/integrity.md"},
+    {"Naming and Dependencies" = "rules/naming-and-dependency.md"},
+    {"Maintainer and Metadata" = "rules/maintainer-and-metadata.md"},
+    {"Temporal Context" = "rules/temporal.md"},
+    {"Composition" = "rules/composition.md"},
+    {"Count-Based" = "rules/count-based.md"},
+    {"Corpus Behavioral" = "rules/corpus-behavioral.md"},
+    {"Crossfire" = "rules/crossfire.md"},
+    {"Sabotage" = "rules/sabotage.md"},
+    {"Unverifiable" = "rules/unverifiable.md"},
+    {"Meta and Confluence" = "rules/meta.md"},
+    {"Entropy" = "rules/entropy.md"},
+    {"Correlation" = "rules/correlation.md"},
+    {"Artifact" = "rules/artifact.md"},
+    {"Indicators" = "rules/indicator.md"},
+    {"Upstream Manifests" = "rules/upstream-manifests.md"},
+    {"Upstream Release Integrity" = "rules/upstream-release.md"},
+  ]},
 ]
 
 [[project.nav]]
@@ -172,55 +168,16 @@ Reference = [
   {"Python API" = "reference/python-api.md"},
   {"Configuration Reference" = "reference/configuration.md"},
   {"Report Schema" = "reference/report-schema.md"},
-  {"Glossary" = "reference/glossary.md"},
-  {"Evidence Tiers" = "reference/evidence-tiers.md"},
-  {"Baseline Keys" = "reference/baseline-keys.md"},
+  {Evidence = [
+    {"Evidence Tiers" = "reference/evidence-tiers.md"},
+    {"Evidence Categories" = "reference/evidence-categories.md"},
+  ]},
   {"IOC Federation" = "reference/ioc.md"},
   {"Exit Codes" = "reference/exit-codes.md"},
-]
-
-[[project.nav]]
-"Assurance Layers" = [
-  {Overview = "assurance-layers.md"},
-  {"Part 1: Evidence Categories" = "assurance-layers/evidence-categories.md"},
-  {"Part 2: Adding A Detector" = "assurance-layers/diversity.md"},
-  {"Part 3: Reporting" = "assurance-layers/reporting.md"},
-  {"Part 4: Tests and Evaluation" = "assurance-layers/enforcement.md"},
-]
-
-[[project.nav]]
-Explanation = [
-  {Overview = "explanation/index.md"},
-  {"Rule Labels and Taxonomy" = "explanation/rule-taxonomy.md"},
-  {"Scoring Philosophy" = "explanation/scoring-philosophy.md"},
-  {"Cold Start and Maturity" = "explanation/cold-start-and-maturity.md"},
-  {"Corpus and Priors" = "explanation/corpus-and-priors.md"},
-  {"Fire Rates" = "explanation/fire-rates.md"},
-  {"What TrustSight Cannot See" = "explanation/what-trustsight-cannot-see.md"},
-  {"Why Static Analysis" = "explanation/why-static-analysis.md"},
-  {"Seed Provenance" = "explanation/seed-provenance.md"},
-  {"Benchmarks and Methodology" = "explanation/benchmarks-and-methodology.md"},
-  {"Sandboxing the Tokenizer" = "explanation/sandboxing-the-tokenizer.md"},
-  {"Sandboxing the Parser Stack" = "explanation/sandboxing-the-parsers.md"},
-  {"Recipe-Targeted User Rules" = "explanation/structural-user-rules.md"},
-  {"Cross-File Consistency" = "explanation/cross-file-consistency.md"},
-  {"The Typed Core" = "explanation/the-typed-core.md"},
-  {"State and Lifecycles" = "explanation/state-and-lifecycles.md"},
-  {"Kinds of Alerts" = "explanation/kinds-of-alerts.md"},
-  {"Alert Budget" = "explanation/alert-budget.md"},
-  {"Campaign Alert Mode" = "explanation/campaign-alert-mode.md"},
-  {"Neighborhood Elevation" = "explanation/neighborhood-elevation.md"},
-  {"Immune-Inspired Design" = "explanation/immune-inspired-design.md"},
-  {"Reducing the H-Series" = "explanation/reducing-the-h-series.md"},
-  {"Override Tolerance" = "explanation/override-tolerance.md"},
-  {"Escalation Licensing" = "explanation/escalation-licensing.md"},
-]
-
-[[project.nav]]
-Reports = [
-  {"In the Wild" = "reports/in-the-wild.md"},
-  {"2026-10-14: AUR name-clone waves" = "reports/2026-10-14-aur-name-clone-waves.md"},
-  {"Hot-path performance baseline" = "reports/hot-path-baseline.md"},
+  {Glossary = "reference/glossary.md"},
+  {"Additional Reference" = [
+    {"Baseline Keys" = "reference/baseline-keys.md"},
+  ]},
 ]
 
 [[project.nav]]
@@ -229,10 +186,18 @@ Contributing = [
   {"Development Setup" = "contributing/development-setup.md"},
   {"Writing a Rule" = "contributing/writing-a-rule.md"},
   {"Re-baselining" = "contributing/re-baselining.md"},
-  {"Publishing Baselines" = "contributing/publishing-baselines.md"},
-  {Releasing = "contributing/releasing.md"},
-  {"Reviewing a Security Control" = "contributing/security-review.md"},
   {"Blinded Evaluation" = "contributing/blinded-evaluation.md"},
+  {"Publishing Baselines" = "contributing/publishing-baselines.md"},
+  {"Reviewing a Security Control" = "contributing/security-review.md"},
+  {Releasing = "contributing/releasing.md"},
+  {Documentation = [
+    {"Documentation Policy" = "contributing/documentation-policy.md"},
+  ]},
+  {"Project Records" = [
+    {"In the Wild" = "reports/in-the-wild.md"},
+    {"AUR name-clone waves" = "reports/2026-10-14-aur-name-clone-waves.md"},
+    {"Hot-path baseline" = "reports/hot-path-baseline.md"},
+  ]},
 ]
 
 # ==============================================================================

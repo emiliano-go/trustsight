@@ -95,7 +95,7 @@ One-time setup, or changes rarely. The guide below assumes all of it holds.
   `commit.gpgsign = true`), and the tarball is signed by hand. The trailing
   `!` forces the primary key: a signature by the Ed25519 signing subkey does
   not verify against the committed public key. See
-  [release signing](../security/release-signing.md).
+  [release signing](../security-design/release-signing.md).
 - **GitHub repository settings.** Secret scanning with push protection,
   Dependabot alerts and security updates, CodeQL, private vulnerability
   reporting, actions pinned to a full-length commit SHA, and a branch ruleset

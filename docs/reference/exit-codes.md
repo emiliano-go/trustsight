@@ -11,10 +11,10 @@
 **The exit code is not a verdict.** A FLAGGED or INCONCLUSIVE package still exits
 0, because the exit code answers "did the tool run", not "is this package safe".
 Findings are reported in the output and in `--json`. To gate a pipeline, read the
-JSON; see [using TrustSight in CI](../guides/using-in-ci.md).
+JSON; see [using TrustSight in CI](../workflows/using-in-ci.md).
 
 This is a deliberate choice, and it is stated as an invariant in
-[the security model](../security.md#b6-what-a-result-does-not-claim): a verdict
+[the security model](../security-design/security-model.md#b6-what-a-result-does-not-claim): a verdict
 is evidence for a human decision, not an authority that halts a build on its own.
 
 ---

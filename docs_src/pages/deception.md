@@ -2,7 +2,6 @@
 
 # Deception and Anti-Analysis
 
-Where these rules come from and what a finding means: [Rule Nature](../nature/deception.md).
 
 These rules target the reviewer, not the shell. R012 and R013 are the two
 FATAL rules: reviewer-directed template text, and codepoints that make displayed
@@ -16,7 +15,7 @@ H067 and the reserved H012/H013 are the inverse direction: the recipe
 checking whether it is being watched. A build script that probes for a
 debugger, a VM or a CI runner has no legitimate reason to care.
 
-See [the rule system reference](system.md) for the field table, the
+See [Rule Mechanics](mechanics.md) for the field table, the
 severity weights and the reserved identifier ranges.
 
 ---

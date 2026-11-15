@@ -3,13 +3,13 @@
 blank_issues_enabled: false
 contact_links:
   - name: Report a security vulnerability (private)
-    url: https://github.com/emiliano-go/trustsight/blob/master/docs/security.md#how-to-report
+    url: https://github.com/emiliano-go/trustsight/blob/master/docs/security-design/vulnerability-reporting.md#how-to-report
     about: >
       Code execution, an unexpected network host, terminal-escape injection, a
       resource-exhaustion crash, or an integrity breach. Do NOT open a public
       issue. Email e@emiliano-go.com (PGP F759D6D49B0A395AB922414A5CC3B4C50D37E793).
   - name: What TrustSight cannot see
-    url: https://github.com/emiliano-go/trustsight/blob/master/docs/explanation/what-trustsight-cannot-see.md
+    url: https://github.com/emiliano-go/trustsight/blob/master/docs/explanation/limitations-and-uncertainty.md
     about: >
       Before filing a missed detection, check the documented limits. "It missed
       a compromised upstream tarball" is a known ceiling, not a defect.

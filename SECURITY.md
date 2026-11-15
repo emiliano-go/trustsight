@@ -14,7 +14,7 @@ description. Acknowledgement within 72 hours, triage within 7 days. Only the
 latest release is supported; fixes ship in a new version, with no backports.
 
 What counts as a vulnerability, and what is a rule request instead, is
-defined in [Part D: Vulnerability reporting](https://docs.trustsight.org/security/vulnerability-reporting/).
+defined in [Part D: Vulnerability reporting](https://docs.trustsight.org/security-design/vulnerability-reporting/).
 In short: a defect is a case where the tool moved between taxonomy rows
 silently, or failed to protect the machine while doing it. "It missed
 something" is usually a rule request, not a vulnerability.
@@ -38,5 +38,5 @@ gpg --recv-keys F759D6D49B0A395AB922414A5CC3B4C50D37E793
 gpg --verify trustsight-<version>.tar.gz.sig trustsight-<version>.tar.gz
 ```
 
-See [Release signing](https://docs.trustsight.org/security/release-signing/) for
+See [Release signing](https://docs.trustsight.org/security-design/release-signing/) for
 the full model.

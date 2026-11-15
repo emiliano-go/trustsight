@@ -1,11 +1,11 @@
 """The generated rule pages cannot drift from their sources.
 
-Every rule page and ``index.md`` is assembled by
-``scripts/build_rules_index.py`` from ``docs_src/sections/``,
-``docs_src/pages/`` and ``docs_src/layout.json``.  These render from those
-sources and assert the committed pages already match, so a section edited
-without rebuilding fails here instead of shipping a page that disagrees with
-its source.
+Every category page, the overview legend, the full catalog and the
+compatibility anchor page are assembled by ``scripts/build_rules_index.py``
+from ``docs_src/sections/``, ``docs_src/pages/``, ``docs_src/nature/`` and
+``docs_src/layout.json``.  These render from those sources and assert the
+committed pages already match, so a section edited without rebuilding fails
+here instead of shipping a page that disagrees with its source.
 """
 
 from __future__ import annotations
@@ -48,30 +48,26 @@ def test_index_matches_the_generator():
     build = _generator()
     on_disk = build.INDEX.read_text()
     assert on_disk == build.render_index(on_disk, build._catalog()), (
-        "docs/reference/rules/index.md is stale; "
+        "docs/rules/index.md is stale; "
         "run python scripts/build_rules_index.py"
     )
 
 
-def test_every_nature_page_matches_the_generator():
+def test_definitions_match_the_generator():
     build = _generator()
-    blocks = build._nature_blocks(build._catalog())
-    stale = [
-        page_name
-        for page_name, block in blocks.items()
-        if (build.NATURE_DIR / page_name).read_text()
-        != build.render_nature_page(page_name, block)
-    ]
-    assert stale == [], (
-        f"stale nature pages: {stale}; run python scripts/build_rules_index.py"
+    on_disk = build.DEFINITIONS.read_text()
+    assert on_disk == build.render_definitions(on_disk, build._catalog()), (
+        "docs/rules/definitions.md is stale; "
+        "run python scripts/build_rules_index.py"
     )
 
 
-def test_nature_indexes_cover_every_category():
+def test_compatibility_page_matches_the_generator():
     build = _generator()
-    blocks = build._nature_blocks(build._catalog())
-    expected = {f"{category.value}.md" for category in build.RuleCategory}
-    assert set(blocks) == expected
+    assert build.COMPAT.read_text() == build.render_compat(build._catalog()), (
+        "docs/rules/mechanics.md is stale; "
+        "run python scripts/build_rules_index.py"
+    )
 
 
 def test_every_page_matches_its_sources():
@@ -87,3 +83,15 @@ def test_every_page_matches_its_sources():
     assert stale == [], (
         f"stale pages: {stale}; run python scripts/build_rules_index.py"
     )
+
+
+def test_every_category_page_merges_mechanics_and_interpretation():
+    """The consolidation contract: one page, both halves, no Nature tab."""
+    build = _generator()
+    missing = []
+    for category in build.RuleCategory:
+        text = (build.RULES_DIR / category.doc_page).read_text()
+        for heading in ("## Threat context", "## Individual rules", "## Interpretation"):
+            if heading not in text:
+                missing.append(f"{category.doc_page}: {heading}")
+    assert missing == [], missing

@@ -1,7 +1,7 @@
 """The security model, tested.
 
 ``scripts/security_gates.py`` is the enforcement surface and CI runs it
-whole.  This file runs it too, so a claim in ``docs/security.md`` cannot
+whole.  This file runs it too, so a claim in ``docs/security-design/security-model.md`` cannot
 break without a local ``pytest`` noticing, and adds the behavioural cases
 the gates assert only the shape of.
 """

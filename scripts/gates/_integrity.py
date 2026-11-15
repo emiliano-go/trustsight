@@ -325,7 +325,7 @@ def gate_maturity_numbers_are_not_duplicated() -> Gate:
     problems = []
     half = _MATURITY_THRESHOLD // 2
 
-    doc = (ROOT / "docs" / "security" / "what-a-result-claims.md").read_text(encoding="utf-8")
+    doc = (ROOT / "docs" / "security-design" / "what-a-result-claims.md").read_text(encoding="utf-8")
     section = doc.split("### B3.")[-1].split("\n### ")[0]
     if f"**{_MATURITY_THRESHOLD}**" not in section:
         problems.append(f"B3 does not state the threshold ({_MATURITY_THRESHOLD})")

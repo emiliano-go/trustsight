@@ -74,9 +74,13 @@ jobs:
           python-version: "3.13"
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
       - uses: ./.github/actions/enable-userns
-      - run: uv sync --locked --extra docs --python 3.13
-      - run: uv run --extra docs zensical build
+      - run: uv sync --locked --extra docs --extra dev --python 3.13
+      # A documentation change is checked like code: structure, links,
+      # anchors, rule ownership, generated pages and the inventory.
+      - run: uv run --extra docs --extra dev pytest tests/test_docs.py tests/test_generated_docs.py
+      - run: uv run --extra docs zensical build --strict
       - run: uv run --extra docs python scripts/build_llms_txt.py
+      - run: uv run --extra docs python scripts/build_llms_txt.py --check
 
   # The malicious .diff bodies are committed source (fixture-reproducibility
   # fallback). Regenerating them must be a no-op: if any generator drifts from

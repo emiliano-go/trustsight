@@ -2,7 +2,6 @@
 
 # Artifact
 
-Where these rules come from and what a finding means: [Rule Nature](../nature/artifact.md).
 
 A rules inspect the **built package manifest**, not the diff. They are the
 optional **L9 build lane**: off by default, run only inside the project's
@@ -14,7 +13,7 @@ run, the report says `l9_unavailable` rather than implying the artifact was
 clean.
 
 This is a reference page. For how weight and scope work, see
-[Rule System](system.md).
+[Rule Mechanics](mechanics.md).
 
 ## Reading an A finding
 

@@ -89,7 +89,7 @@ jobs:
           docker run --rm --security-opt seccomp=unconfined --security-opt apparmor=unconfined "ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}" --version
           docker run --rm --security-opt seccomp=unconfined --security-opt apparmor=unconfined "ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}" lint-rules
 
-      # The read-only recipe in docs/guides/reducing-blast-radius.md.  Two
+      # The read-only recipe in docs/workflows/reducing-blast-radius.md.  Two
       # passes against the same volumes: a recreated container must stay
       # writable with the state the first run wrote, and a change to the image
       # UID or required paths must fail here before the image is published.

@@ -2,7 +2,6 @@
 
 # Entropy
 
-Where these rules come from and what a finding means: [Rule Nature](../nature/entropy.md).
 
 E rules read the **distribution** of the added content. No patterns, no
 refusal semantics: an attacker who writes resolvable-but-obfuscated code
@@ -13,7 +12,7 @@ This is the statistical twin of [Crossfire](crossfire.md): X catches what
 the tokenizer refuses to fold, E catches what folds cleanly but weirdly.
 
 This is a reference page. For how weight and scope work, see
-[Rule System](system.md).
+[Rule Mechanics](mechanics.md).
 
 ## Reading an E finding
 

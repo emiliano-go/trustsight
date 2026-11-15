@@ -62,7 +62,7 @@ def test_every_emitter_is_reachable_through_the_dispatch():
     persistence_engine.PERSISTENCE_INSTANCES = tuple(
         persistence_engine.PersistenceInstance(
             "H004", "spy", "privilege", False, "CRITICAL",
-            "docs/reference/rules/fetch-and-execution.md",
+            "docs/rules/fetch-and-execution.md",
             ("tests/test_persistence_engine.py",), spy)
         for _ in range(3)
     )

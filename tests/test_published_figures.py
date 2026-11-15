@@ -104,7 +104,7 @@ def test_the_rules_index_legend_matches_the_catalog():
     the membership check in ``test_docs`` does not catch because the rule
     still has a row.
     """
-    index = (ROOT / "docs" / "reference" / "rules" / "index.md").read_text()
+    index = (ROOT / "docs" / "rules" / "index.md").read_text()
     rows = re.findall(r"^\| \[([^\]]+)\]\([^)]+\) \| `([a-z-]+)` \| (\d+) \|",
                       index, re.M)
     assert rows, "index.md no longer carries the generated category legend"

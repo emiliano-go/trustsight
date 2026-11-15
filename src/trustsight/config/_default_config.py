@@ -298,7 +298,7 @@ experimental = false
 # Rules emitted from code rather than rules.toml, so the [rules]
 # experimental flag above cannot reach them.  They are not experimental:
 # all default to true since v0.7.0 after each was measured against the
-# 3739-diff benign corpus (see docs/explanation/fire-rates.md).  The
+# 3739-diff benign corpus (see docs/explanation/historical-and-behavioral-analysis.md).  The
 # pre-rename name of this table was [experimental_rules], still read as a
 # fallback.
 #

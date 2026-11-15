@@ -2,7 +2,6 @@
 
 # Correlation
 
-Where these rules come from and what a finding means: [Rule Nature](../nature/correlation.md).
 
 G rules take the **set** of recent analyses as their input. D walks one
 package's dependency graph; T reads one package's history; G asks what
@@ -17,7 +16,7 @@ single package cannot supply it. G007 is the exception: a `review` run inside
 an active campaign reads that campaign's stored scope, so it fires there too.
 
 This is a reference page. For how weight and scope work, see
-[Rule System](system.md).
+[Rule Mechanics](mechanics.md).
 
 ## Reading a G finding
 

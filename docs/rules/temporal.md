@@ -1,0 +1,297 @@
+<!-- description: Rules reading how recently the package or this revision appeared, from AUR commit timestamps alone. None of them needs a diff. -->
+
+# Temporal Context
+
+## Overview
+
+
+How recently the package or this revision appeared. These read git commit
+timestamps on the AUR repository and nothing else, so none of them needs a
+diff. H020 and H021 also fire on first-seen packages through
+`_make_fresh_analysis()` in `src/trustsight/analysis/pipeline/_analyze_helpers.py`; H022 needs a prior commit, so it
+fires only on the incremental path.
+
+None is calibrated against the benign corpus, because each one is a
+function of when the scan runs rather than of what the package contains.
+H020 and H021 are INFO for that reason: recency has no meaning on its own,
+and only escalates a package once another signal fires alongside it.
+
+Release cadence is a related but separate claim and is not scored at all;
+see [H028](corpus-behavioral.md#h028).
+
+See [Rule Mechanics](mechanics.md) for the field table, the
+severity weights and the reserved identifier ranges.
+
+---
+
+## Threat context
+
+The idea comes from **forensics**: an alibi is checked against the clock, and
+a timeline puts events in an order that a single photograph cannot. Some
+attacks are only visible in time. A commit made at 03:00, a burst of
+publications inside one minute, a change reverted and reapplied, an update
+that lands days after the maintainer went quiet: none of these is anomalous on
+its own line, but the *when* is data a single-snapshot review throws away.
+
+There is an immune reading here too. The adaptive immune system protects you
+because it *remembers* what it has already met. Temporal rules are TrustSight's
+memory: the same observation store that lets the alerting layer recognise a
+returning infection is what lets a single run notice that this package is
+behaving unlike its own past.
+
+The rules compare the current run against a baseline in the observation store,
+so they need history to say anything. On a cold store they stay quiet by
+construction rather than guessing.
+
+## Detection mechanisms
+
+The rules that make up this category are listed below, each with the series that implements it and the severity it carries. Scoring, matching and identifier allocation are shared across every category: see [Rule Mechanics](mechanics.md).
+
+## Individual rules
+
+<!-- generated: page-index -->
+| Rule | Name | Severity |
+|---|---|---|
+| [H020](#h020) | Very Recent Update | INFO |
+| [H021](#h021) | Brand New Package | INFO |
+| [H022](#h022) | Stale Package Revived | MEDIUM |
+| [T001](#t001) | Signing-Key Novelty | HIGH |
+| [T002](#t002) | Maintainer Domain Novelty | MEDIUM |
+| [T003](#t003) | Signing Key Rotated | HIGH |
+| [T004](#t004) | Vouch Surface Removed | MEDIUM |
+| [T005](#t005) | Scheme Downgrade | MEDIUM |
+| [T006](#t006) | Metadata-Git Divergence | MEDIUM |
+| [T007](#t007) | Packager Not In History | INFO |
+| [T008](#t008) | Delayed Payload Adoption | INFO |
+| [T009](#t009) | High-Value Dormant Takeover | INFO |
+| [T011](#t011) | Package Reappearance | INFO |
+| [T012](#t012) | Trust Erosion Sequence | INFO |
+<!-- /generated: page-index -->
+
+### H020: Very Recent Update {#h020}
+
+- **Target:** programmatic (commit timestamp)
+- **Severity:** INFO (weight 0)
+- **Category:** `temporal`
+
+- **Condition:** AUR HEAD commit is less than 72 hours old.
+
+Packages updated moments ago have not been visible to the community long enough
+for anyone to vet them. Combined with other signals - maintainer change, new
+source domains - recency escalates suspicion.
+
+### H021: Brand New Package {#h021}
+
+- **Target:** programmatic (root commit timestamp)
+- **Severity:** INFO (weight 0)
+- **Category:** `temporal`
+
+- **Condition:** The package's first commit on AUR is less than 30 days old.
+
+A package that barely exists has no reputation. An established package with a
+recent update is routine; a package uploaded last week has zero track record.
+
+### H022: Stale Package Revived {#h022}
+
+- **Target:** programmatic (commit timestamp gap)
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `temporal`
+
+- **Condition:** The previously analyzed commit is more than 365 days older than
+  the new HEAD - an abandoned package that suddenly has activity.
+
+Account takeovers happen on stale packages: a maintainer stops responding,
+someone else adopts the AUR record, and the new maintainer may be malicious.
+A gap of a year or more between the version you already have and the one being
+offered is worth a medium-weight flag, independent of any diff signal.
+
+### T001: Signing-Key Novelty {#t001}
+
+- **Target:** programmatic (ecosystem signing-key ledger)
+- **Severity:** HIGH (weight 25)
+- **Category:** `temporal`
+
+- **Condition:** A `validpgpkeys` fingerprint added in this diff has never
+  been observed in the ecosystem key index.
+
+This is distinct from package novelty: the xz lesson is a *key* story. A
+key that has signed nothing else in the ecosystem, appearing on this
+package, is worth a high-weight flag even when the package itself is old.
+
+The index is cold on a fresh install; the rule declines (silently) until
+`[thresholds] t_key.min_observations` keys are recorded, so it never fires
+on every key a new install sees.
+
+### T002: Maintainer Domain Novelty {#t002}
+
+- **Target:** programmatic (ecosystem maintainer-domain ledger)
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `temporal`
+
+- **Condition:** The maintainer email's domain first appeared in the
+  ecosystem within the observation window (`[thresholds] t_dom.window_days`,
+  default 30) - a domain never seen before first appears now, and one first
+  seen this week is as novel as brand new.
+
+A first-seen domain is a weak but real signal about a maintainer with no
+prior footprint. Cold index declines, like T001.
+
+### T003: Signing Key Rotated {#t003}
+
+- **Target:** programmatic (`validpgpkeys` pre/post)
+- **Severity:** HIGH (weight 25)
+- **Category:** `temporal`
+
+- **Condition:** A `validpgpkeys` key is removed *and* a different one is
+  added in the same diff.
+
+The xz backdoor's shape: the trusted signer is swapped, not merely widened
+(H078) or narrowed (H024). Unlike T001 it needs no ecosystem history - the
+rotation of trust inside one commit is its own fact - so it fires cold.
+
+### T004: Vouch Surface Removed {#t004}
+
+- **Target:** programmatic (validpgpkeys pre/post)
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `temporal`
+
+- **Condition:** A `validpgpkeys` entry is removed while at least one key
+  remains declared. A widening (more keys than before) is not a loss; a
+  one-for-one replacement reports, because a decoy addition is
+  indistinguishable from a real rotation offline.
+
+The missing-self shape: the recipe used to prove something about its signer
+and now proves less. Whole-array removal is H024; T003/H078 still describe a real rotation, but
+T004 reports it too rather than giving a decoy a free pass. Checksum loss is
+H091/H001/C004. This rule owns only the partial-key gap, so the same change is
+never scored twice by two different names. The locked benign corpus adjudicates it; the measured rate is recorded in the changelog.
+
+### T005: Scheme Downgrade {#t005}
+
+- **Target:** programmatic (source URL pre/post)
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `temporal`
+
+- **Condition:** A source URL moves from `https://` to `http://` on the same
+  host and is not the exact H019 swap. Sources are paired by host, not array
+  position, and a fragment-only change still reports.
+
+H019 owns the exact `https://x` -> `http://x` swap. This covers the quieter
+version of the same move, where a new filename, version or fragment hides the
+scheme fall. The host must be routable, the origin must have been TLS, and a host
+change is not this shape. The locked benign corpus adjudicates it; the measured rate is recorded in the changelog.
+
+### T006: Metadata-Git Divergence {#t006}
+
+- **Target:** programmatic (AUR LastModified vs git tip commit date)
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `temporal`
+
+- **Condition:** The AUR `LastModified` timestamp is ahead of the git tip
+  commit date by at least `[thresholds] t006.min_divergence_hours` (default
+  24) hours.
+
+In aurweb, pushes set both `LastModified` and the git commit timestamp, so
+divergence means commits were pushed and later stripped (a history rewrite).
+The benign explanations (staff reset, maintainer cleanup force-push) are
+themselves security-relevant, so this is MEDIUM, review-queue verdict. The
+finding's output is designed to be pasted into a report to AUR security,
+where push logs survive even when git history does not.
+
+### T007: Packager Not In History {#t007}
+
+- **Target:** programmatic (AUR maintainer vs git commit identities)
+- **Severity:** INFO (weight 0)
+- **Category:** `temporal`
+
+- **Condition:** The AUR maintainer name does not appear in any commit
+  message, author identity or committer identity in the retained git
+  history of the package.
+
+A weight-0 corroboration signal: the AUR says this account packaged the
+project, but no commit in history names them. The message is only one place
+an identity appears, so the author and committer names and addresses count
+too; a maintainer who imported the package often signs the commit and
+writes no message at all. Name matching is fuzzy (display name vs email vs
+git config), so this corroborates T006 and G008 but never scores alone. On
+its own tier it is nearly a confession; as a solo scorer it would
+eventually burn someone with an unusual committer setup.
+
+### T008: Delayed Payload Adoption {#t008}
+
+- **Target:** programmatic (full-AUR maintainer history and current cycle findings)
+- **Severity:** INFO (weight 0)
+- **Category:** `temporal`
+
+- **Condition:** A package has a current payload rule, no maintainer transition
+  in the current cycle, and its latest recorded maintainer adoption is at least
+  `[thresholds] t008.min_delay_days` (default 14) days old.
+
+Delayed execution separates the takeover from the payload, so same-cycle
+adoption heuristics no longer see the two events together. T008 joins the
+stored transition to the later payload without reading recipe content. It is
+full-AUR history/cycle context, report-only and anergic pending benign replay;
+missing or malformed history produces no finding.
+
+### T009: High-Value Dormant Takeover {#t009}
+
+- **Target:** programmatic (full-AUR metadata transitions and dependency graph)
+- **Severity:** INFO (weight 0)
+- **Category:** `temporal`
+
+- **Condition:** A package gains a non-empty maintainer after exceeding
+  `[thresholds] t009.dormant_days` (default 180) days since its previous
+  `LastModified`, and meets at least one exposure floor: `min_votes` (100),
+  `min_popularity` (1.0), or `min_dependents` (10 direct dependents).
+
+Dormancy alone is common and popularity alone is not compromise. Their join
+with an ownership transition prioritises review of a high-blast-radius target.
+This is full-AUR history/cycle context, not a content judgement; it remains
+INFO and anergic pending benign replay.
+
+### T011: Package Reappearance {#t011}
+
+- **Target:** programmatic (full-AUR package cycle-event history)
+- **Severity:** INFO (weight 0)
+- **Category:** `temporal`
+
+- **Condition:** A package marked added in the current full-AUR cycle has an
+  earlier recorded removal event. The latest valid removal supplies the cycle
+  and maintainer context; current metadata supplies the new maintainer and
+  `FirstSubmitted` value.
+
+Reappearance can be an ordinary resurrection or a name returning under new
+control. The rule states the historical fact without choosing between those
+explanations. It does not inspect recipe content and remains INFO, weight 0 and
+anergic pending benign replay.
+
+### T012: Trust Erosion Sequence {#t012}
+
+- **Target:** programmatic (full-AUR prior-rule history and current findings)
+- **Severity:** INFO (weight 0)
+- **Category:** `temporal`
+
+- **Condition:** Earlier package history contains an integrity, provenance,
+  build-flag, dependency-exposure or claim-expansion precursor, and the current
+  cycle contains a terminal payload or sabotage rule. Duplicate history rows
+  contribute only once.
+
+The sequence preserves the order that isolated findings lose: verification or
+provenance eroded first, then a payload arrived. It is corroborating full-AUR
+history/cycle context, not independent proof of compromise. Missing precursor
+history or a missing current terminal rule is silent; the rule is INFO, weight
+0 and anergic pending benign replay.
+
+## Interpretation
+
+- The finding compares this run to what came before: a change of behaviour,
+  a burst, a near-simultaneous edit to many packages.
+- Temporal findings are contextual and weak in isolation; they matter as
+  corroboration for a code change that already looked odd.
+- An empty history is not a clean bill of health. It means the temporal rules
+  cannot see yet, which the run reports as reduced coverage.
+
+## Related documentation
+
+- [Cold Start and Maturity](../explanation/scoring-and-verdicts.md)
+- [Corpus and Priors](../explanation/historical-and-behavioral-analysis.md)

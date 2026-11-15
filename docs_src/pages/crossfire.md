@@ -2,7 +2,6 @@
 
 # Crossfire
 
-Where these rules come from and what a finding means: [Rule Nature](../nature/crossfire.md).
 
 Crossfire rules fire on **how a diff is written**, not on what it does.
 
@@ -13,7 +12,7 @@ pipeline whose sink has no name the analyser knows - each is evidence on its
 own, whatever payload sits behind it.
 
 This is a reference page. For how rules are weighted and scoped, see
-[Rule System](system.md). For the families that match payloads, start at
+[Rule Mechanics](mechanics.md). For the families that match payloads, start at
 [All Rules](index.md).
 
 ## Why the family exists

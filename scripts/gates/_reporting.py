@@ -373,7 +373,7 @@ def gate_flag_threshold_is_derived() -> Gate:
     """
     from trustsight.scoring import FLAG_THRESHOLD
 
-    doc = (ROOT / "docs" / "security" / "what-a-result-claims.md").read_text(encoding="utf-8")
+    doc = (ROOT / "docs" / "security-design" / "what-a-result-claims.md").read_text(encoding="utf-8")
     problems = []
     if f"at or below {FLAG_THRESHOLD} points" not in doc:
         problems.append(f"security.md does not state the threshold ({FLAG_THRESHOLD})")

@@ -2,7 +2,7 @@
 
 Curated indicator lists that `scripts/build_ioc_baseline.py` turns into signed
 IOC federation baselines (see [the IOC reference](../../docs/reference/ioc.md)
-and A13b in [the security model](../../docs/security.md)).
+and A13b in [the security model](../../docs/security-design/security-model.md)).
 
 **These files must contain only primary-sourced, confirmed indicators.** An IOC
 match is stated to the user as attribution ("this artifact is on curator X's

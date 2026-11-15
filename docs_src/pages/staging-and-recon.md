@@ -2,7 +2,6 @@
 
 # Staging and Reconnaissance
 
-Where these rules come from and what a finding means: [Rule Nature](../nature/staging-and-recon.md).
 
 A packaging step may write inside `$srcdir` and `$pkgdir` and nowhere else.
 These rules are the boundary (R058, H038, H076, H085), the hidden case
@@ -15,7 +14,7 @@ redirects, and the verb-substitution forms `tee`, `dd of=`, `mkdir -p`,
 `touch`, `rsync` and `sed -i`. Every match is command-position anchored, so
 a quoted string such as `'cp x ~/.zshrc'` never reads as a write.
 
-See [the rule system reference](system.md) for the field table, the
+See [Rule Mechanics](mechanics.md) for the field table, the
 severity weights and the reserved identifier ranges.
 
 ---

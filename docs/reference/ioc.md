@@ -12,7 +12,7 @@ no band, and no probability language. This is detection, not inference.
 The design rests on four principles:
 
 - **State, not rules.** IOCs are observations about the world, so they live in
-  the baseline layer next to the corpus baseline ([A13/A13b](../security.md#the-invariants)),
+  the baseline layer next to the corpus baseline ([A13/A13b](../security-design/security-model.md#the-invariants)),
   never in the rule config. A rule override or weight cannot reach them.
 - **Attribution, not aggregation.** Every match names the curator that flagged
   the artifact. The user sees who called it bad, and can follow the incident
@@ -153,7 +153,7 @@ These properties are enforced by the gates `an IOC match carries its source`,
 `IOC matches never contribute to the score`, `an expired IOC is never silent`,
 `IOCs are not in the rule config layer`, and `a pattern IOC that risks ReDoS
 is refused` (see the
-[enforcement map](../security.md#part-c-the-enforcement-map)).
+[enforcement map](../security-design/security-model.md#part-c-the-enforcement-map)).
 
 ---
 
@@ -185,7 +185,7 @@ in TrustSight decides what belongs on the list.
 The indicator tier (I-series) formalizes what this page
 describes: signed external data as a first-class tier, matched outside the
 heuristic score and reported at maximum alert priority. The [Indicators
-reference](rules/indicator.md) documents the tier and H056.
+reference](../rules/indicator.md) documents the tier and H056.
 
 A **federated** source is a publisher's signed indicator set, fetched with
 `ioc update --federation <url> --publisher-key KEY.pem`. The set is verified

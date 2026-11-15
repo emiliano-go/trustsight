@@ -1,137 +1,105 @@
-<!-- description: Security analysis and intelligence platform for the Arch User Repository ecosystem: static analysis, supply-chain intelligence, ecosystem lifecycle signals, and deterministic evidence-linked assessments. -->
+<!-- description: TrustSight audits AUR PKGBUILDs before you update: catches careless malice and structural risk, and tells you what it could not verify. See beyond the package. -->
 
 # TrustSight
 
 **See beyond the package.**
 
-TrustSight is a security analysis and intelligence platform for the Arch User Repository ecosystem. It combines static analysis, supply-chain intelligence, behavioral heuristics, dependency graph analysis, threat intelligence, and historical correlation to uncover suspicious package updates and emerging threats.
+TrustSight is a security analysis and intelligence platform for the Arch User
+Repository ecosystem. It audits a package update before you build it, reads the
+recipe and the change around it, and reports deterministic, evidence-linked
+findings: what changed, what matched, and what the analysis could not see.
 
-Beyond package analysis, TrustSight tracks ecosystem activity and lifecycle signals, including maintainer histories and changes, package adoptions and orphan status, ownership transitions, release patterns, and dependency relationships. It uses these signals to identify unusual behavior, suspicious takeovers, stale package revivals, and coordinated activity across packages.
-
-It transforms package changes and ecosystem signals into deterministic, evidence-linked security assessments, helping you understand what changed, who is behind it, and what it might mean before you install.
-
-TrustSight is still an **instrument, not a judge**. It reports evidence, and the absence of evidence, and never substitutes its report for your decision. Absence of alerts is not a promise of safety. The [security model](security.md) states the boundaries behind that promise, and how each one is enforced.
+It is an **instrument, not a judge**. A quiet result is not a certificate of
+safety, and no report authorizes skipping review. TrustSight gives you the
+evidence; the decision stays with you.
 
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white&style=for-the-badge)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/License-MIT-10AC84?style=for-the-badge)](https://github.com/emiliano-go/trustsight/blob/master/LICENSE)
 [![Release tests](https://img.shields.io/github/actions/workflow/status/emiliano-go/trustsight/release-tests.yml?style=for-the-badge&logo=github&label=Release%20tests)](https://github.com/emiliano-go/trustsight/actions/workflows/release-tests.yml)
 [![PyPI](https://img.shields.io/badge/PyPI-trustsight-3776AB?logo=pypi&logoColor=white&style=for-the-badge)](https://pypi.org/project/trustsight/)
 
-Ready to get started? Head over to the [Tutorial](tutorial/installation.md) for installation and your first review.
+## Three ways in
 
----
+### Get started
 
-## What a run produces
+Install TrustSight and run a first review. You do not need to understand the
+detection engine to get a useful answer.
+
+- [What is TrustSight?](start-here/what-is-trustsight.md)
+- [Installation](start-here/installation.md)
+- [Quickstart](start-here/quickstart.md)
+
+### Understand a finding
+
+Learn what a report claims, how to read a finding, and what to do when a rule
+fires.
+
+- [Understanding Your First Report](start-here/understanding-your-first-report.md)
+- [Rule Interpretation](rules/interpretation.md)
+- [Acting on a Flag](workflows/acting-on-a-flag.md)
+
+### Integrate TrustSight
+
+Put the review in front of an update, a package manager, or a CI pipeline.
+
+- [Auditing Before Update](workflows/auditing-before-update.md)
+- [Integrating with yay and paru](workflows/integrating-yay-and-paru.md)
+- [Using TrustSight in CI/CD](workflows/using-in-ci.md)
+
+Ready to get started? Head over to the [Quickstart](start-here/quickstart.md) for installation and your first review.
+
+## What TrustSight produces
 
 Every review is a deterministic, structured **evidence report**, computed
-locally from the bytes on disk. Findings come first:
+locally from the bytes on disk:
 
-- **Findings** - each is a named rule with the file, side and line it matched,
+- **Findings**: each is a named rule with the file, side and line it matched,
   and a plain-English description of what it saw.
-- **The change summary** - what the update altered: modified files, source and
-  checksum array moves, dependency additions, and maintainer or version changes.
-- **Coverage gaps** - what the run could not fully assess, stated outright so an
+- **The change summary**: modified files, source and checksum moves,
+  dependency additions, and maintainer or version changes.
+- **Coverage gaps**: what the run could not fully assess, stated so an
   incomplete analysis is never mistaken for a clean one.
-- **A template verdict** - the findings rendered into a review direction. It
+- **A template verdict**: the findings rendered into a review direction. It
   describes what fired; it never grants permission to skip review.
 
-The default output is evidence, not a verdict, and nothing it prints is a
-promise of safety. The evidence is what you decide on. See
-[How TrustSight Works](explanation/index.md) for the full pipeline and the
-[security model](security.md) for what a result does and does not claim.
+The report keeps detection and coverage as separate facts. A finding records
+what matched; a coverage state records what was read. See
+[Assurance Layers](security-design/assurance-layers.md) for how findings are
+grouped and [Report Schema](reference/report-schema.md) for the exact payload.
 
-!!! tip "Rules Reference"
+## Security philosophy
 
-    TrustSight ships 277 documented detection rules across eleven families: 37 R-series detection rules, 108 H-series heuristics, 34 C-series structural rules, five D-series dependency rules, eight S-series sabotage rules, 34 X-series crossfire rules, six M-series meta rules, three E-series entropy rules, twelve T-series temporal rules, and fifteen G-series correlation rules, and fifteen U-series rules (nine manifest, six upstream-release). The identifier space is intentionally non-contiguous, so a range is not a count; the [catalog](reference/rules/index.md) is authoritative. Two further families are reported but never weighted: declared-practice findings P001-P009 (eight findings; P004 is skipped) and unverifiable findings W001-W014. The optional L9 build lane adds eight artifact rules A001-A010, reported outside the heuristic when enabled. Each rule has a severity, match target, and scope that determine how it fires and what it reports.
+TrustSight reads hostile input without trusting it. It never executes a
+`PKGBUILD`, never fetches a declared URL during analysis, and never writes
+outside its data directories. Every finding is tied to a line and every gap is
+reported rather than guessed. Positive evidence is reported and never
+credited, because anything an attacker can declare costs them nothing.
 
-    [Browse the full rule catalog &rarr;](reference/rules/index.md)
+Those are guarantees with gates, not slogans. The
+[Security Model](security-design/security-model.md) states each one and links
+to the enforcement that proves it; the
+[Threat Model and Limitations](security-design/threat-model.md) states what
+the tool cannot see.
 
----
+## Go deeper
 
-## Assurance layers
+- [How TrustSight Works](security-design/how-it-works.md): the analysis
+  pipeline end to end.
+- [Rules Overview](rules/index.md): the rule system, categories and series.
+- [Rule Mechanics](rules/mechanics.md): matching, scoring, configuration and
+  identifiers.
+- [Workflows](workflows/index.md): task-oriented guides for everyday use.
+- [Reference](reference/index.md): CLI, Python API, configuration, report
+  schema, evidence tiers, IOC federation and exit codes.
+- [Glossary](reference/glossary.md): the vocabulary used across the docs.
 
-Every rule also carries an **evidence layer**, `L1`-`L8`, naming the kind of
-evidence a finding is. Layers are not ordered barriers: a finding at `L4` does
-not mean `L1`-`L3` were passed, and a layer that stayed silent is not proof of
-safety.
+## Contributing and project resources
 
-| Layer | The question its evidence answers | Rule families |
-|---|---|---|
-| `L1` Structural coherence | Does the change hang together as an honest edit? | `C`, `M` |
-| `L2` Readability | Was anything hidden from the reader? | `W`, and the refusal rules `X026`/`X027` |
-| `L3` Payload signature | Does it do a known-bad thing? | `R`, `S` |
-| `L4` Evasion shape | Was it *written* to defeat reading? | `X`, `E` |
-| `L5` Behavioral suspicion | Does the package's story make sense? | `H` |
-| `L6` Ecosystem memory | Has the ecosystem seen this before? | `D`, `T` |
-| `L7` Known indicators | Is it on the list? | `I` |
-| `L8` Campaign correlation | Do other packages tell the same story? | `G` |
+TrustSight is measured against the same thesis it reports on. Contributions are
+welcome, including rules, tests, documentation and adversarial evaluation.
 
-The report keeps detection and coverage independent - `L3 fired` records the
-check that matched, `L1 passed` records that a check was read in full and stayed
-silent, and `L8 not_applicable` records a check that could not run - and the
-optional `L9` build lane inspects the built package rather than the diff.
-[How TrustSight groups security evidence](assurance-layers.md) covers the labels,
-the coverage states, and a worked report example.
-
----
-
-## Tutorial
-
-| Page | What it covers |
-|------|----------------|
-| [Installation](tutorial/installation.md) | Build the repository's PKGBUILD with `makepkg`. |
-| [Quickstart](tutorial/quickstart.md) | Run your first review, read the output table, understand the verdicts. |
-| [Reading a Report](tutorial/reading-a-report.md) | Deep dive into the findings, evidence tiers, rule firings, and novelty context. |
-
-## Explanation
-
-| Page | What it covers |
-|------|----------------|
-| [How TrustSight Works](explanation/index.md) | Full pipeline: parse, analyse, classify, translate. |
-| [Assurance Layers](assurance-layers.md) | How rules group into L1-L8 evidence categories, detection vs coverage, and what a layer label does and does not mean. |
-| [Security Model](security.md) | What TrustSight guarantees while reading hostile input, why every result is deterministic and reproducible, what a verdict claims, and how each invariant is enforced. |
-| [Cold Start and Maturity](explanation/cold-start-and-maturity.md) | Why novelty is meaningless on run one; maturity gating. |
-| [Corpus and Priors](explanation/corpus-and-priors.md) | AUR-wide snapshot, global priors, local novelty weighting. |
-| [Fire Rates](explanation/fire-rates.md) | Per-rule false-positive rates on the benign corpus. |
-| [What TrustSight Cannot See](explanation/what-trustsight-cannot-see.md) | The reasoned ceiling of the tool. |
-| [Why Static Analysis](explanation/why-static-analysis.md) | SAST by design, customization surface. |
-| [Benchmarks and Methodology](explanation/benchmarks-and-methodology.md) | Per-class separation, CI gates, reproducible evaluation. |
-| [Recipe-Targeted User Rules](explanation/structural-user-rules.md) | A second rule kind that matches typed recipe structure, its five primitives, and the HIGH cap. |
-| [Cross-File Consistency](explanation/cross-file-consistency.md) | How the recipe is compared against `.SRCINFO`, the committed tree and shipped hooks. |
-| [The Typed Core](explanation/the-typed-core.md) | Why the diff and the PKGBUILD are each read once, so every finding cites the real file, side and line and unreadable structure is reported, never guessed. |
-
-## Guides
-
-| Guide | When to use it |
-|-------|----------------|
-| [Auditing Before Update](guides/auditing-before-update.md) | Everyday workflow: scan AUR packages before `yay -Syu`. |
-| [Using in CI](guides/using-in-ci.md) | Gate package installs in CI/CD on the JSON report. |
-| [Acting on a Flag](guides/acting-on-a-flag.md) | A package flagged above the review bar or returned INCONCLUSIVE - next steps. |
-| [Configuring Rules and Weights](guides/configuring-rules-and-weights.md) | Edit `rules.toml` or `config.toml` to match your threat model. |
-| [Tuning False Positives](guides/tuning-false-positives.md) | A rule is firing too often on your packages - identify and fix it. |
-
-## Reference
-
-| Page | What it covers |
-|------|----------------|
-| [Rules](reference/rules/index.md) | Complete R/H/C/D/S/X catalog with severity, weight, and description. |
-| [Rule Series (mechanism)](reference/rules/nature.md) | How each series detects: Regex, Heuristic, Check, Dependency, Sabotage, Crossfire, Practice, and Warning. |
-| [Rule Nature (by category)](reference/nature/index.md) | Where each category's rules come from and what a finding means in the world. |
-| [CLI](reference/cli.md) | Full command reference for review, inspect, history, config. |
-| [Configuration](reference/configuration.md) | config.toml and its sibling rule, host, pattern, naming, threshold, and domain files. |
-| [Report Schema](reference/report-schema.md) | Stored PackageFact and CLI/API report JSON shapes. |
-| [Glossary](reference/glossary.md) | The vocabulary: rule family, subject, evidence category, evidence tier, detection, coverage, boundary. |
-| [Evidence Tiers](reference/evidence-tiers.md) | A/B/C/D evidence taxonomy with maturity gating. |
-| [Exit Codes](reference/exit-codes.md) | 0 (analysis completed), 2 (error), and why a flag is not an exit code. |
-
-## Contributing
-
-| Page | What it covers |
-|------|----------------|
-| [Development Setup](contributing/development-setup.md) | Set up a local dev environment. |
-| [Writing a Rule](contributing/writing-a-rule.md) | R-series regex, H-series heuristic and C-series rule guidelines. |
-| [Re-baselining](contributing/re-baselining.md) | Update benchmarks after detection changes. |
-
----
-
-[Changelog](changelog.md) &middot; [Security](security.md) &middot; [License](license.md)
+- [Contributing](contributing/index.md)
+- [Writing a Rule](contributing/writing-a-rule.md)
+- [Documentation Policy](contributing/documentation-policy.md)
+- [Changelog](changelog.md) &middot; [License](license.md) &middot;
+  [Vulnerability Reporting](security-design/vulnerability-reporting.md)

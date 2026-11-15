@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        TrustSight is an evidence tool with [published limits](https://github.com/emiliano-go/trustsight/blob/master/docs/explanation/what-trustsight-cannot-see.md).
+        TrustSight is an evidence tool with [published limits](https://github.com/emiliano-go/trustsight/blob/master/docs/explanation/limitations-and-uncertainty.md).
         "It missed something" is usually a rule request, not a vulnerability.
 
         If a rule fired but you think it was wrong, use the *False positive*
@@ -14,7 +14,7 @@ body:
         not a rule bug. See [Tuning False Positives](https://docs.trustsight.org/guides/tuning-false-positives/).
 
         If the miss lets a package **execute code on the reviewing machine**
-        or breach an invariant in [Part A/B](https://github.com/emiliano-go/trustsight/blob/master/docs/security.md),
+        or breach an invariant in [Part A/B](https://github.com/emiliano-go/trustsight/blob/master/docs/security-design/security-boundaries.md),
         that is a security issue: report it privately, not here.
   - type: dropdown
     id: kind

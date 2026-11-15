@@ -26,7 +26,7 @@ and it must not become an excuse to stop. A payload written plainly and hidden
 by a technique nobody anticipated still gets through; crossfire raises the cost
 of evasion, it does not bound it. And it deliberately claims no bytes another
 rule already claims: bidi overrides and homoglyphs are absent because
-[R013](../../docs/reference/rules/deception.md) is FATAL and already covers
+[R013](../../docs/rules/deception.md) is FATAL and already covers
 those codepoints, and scoring the same characters twice would corrupt the
 calibration the project measures.  X008 exists for the codepoints R013 does
 *not* cover - whitespace a shell will not split on - which is a disjoint

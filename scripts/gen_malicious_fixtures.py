@@ -188,7 +188,7 @@ add("H005-validpgpkeys-added",
 
 # ── D-series: dependency additions ───────────────────────────────────────────
 
-# R015 is a reserved ID (docs/reference/rules/system.md).  A plain depends addition
+# R015 is a reserved ID (docs/rules/mechanics.md).  A plain depends addition
 # is reported as a fact and scored only by the stateful D001 (novelty needs a
 # seeded corpus), so under the gates' cold DB it is silent by design.
 add("R015-depends-added",

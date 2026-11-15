@@ -142,16 +142,16 @@ def emit_version_in_url(ctx: URLContext, add: Callable) -> None:
 #: The per-diff URL predicates.  Order is the dispatch order.
 URL_INSTANCES: tuple[URLInstance, ...] = (
     URLInstance("H003", "Insecure Download Protocol", "scheme", "LOW",
-                "docs/reference/rules/fetch-and-execution.md",
+                "docs/rules/fetch-and-execution.md",
                 ("tests/test_url_acks.py",), emit_insecure_protocol),
     URLInstance("H019", "Source URL Downgraded To HTTP", "scheme_transition",
-                "MEDIUM", "docs/reference/rules/fetch-and-execution.md",
+                "MEDIUM", "docs/rules/fetch-and-execution.md",
                 ("tests/test_deps_rules.py",), emit_scheme_downgrade),
     URLInstance("H034", "Exotic Source Protocol", "scheme_allowlist", "MEDIUM",
-                "docs/reference/rules/fetch-and-execution.md",
+                "docs/rules/fetch-and-execution.md",
                 ("tests/test_network.py",), emit_exotic_protocol),
     URLInstance("H031", "Version-In-URL Injection", "declaration", "MEDIUM",
-                "docs/reference/rules/fetch-and-execution.md",
+                "docs/rules/fetch-and-execution.md",
                 ("tests/test_network.py",), emit_version_in_url),
 )
 

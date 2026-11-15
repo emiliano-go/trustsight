@@ -219,88 +219,88 @@ CYCLE_INSTANCES: tuple[TemporalInstance, ...] = (
         "H045", "Mass Adoption", "rate_deviation", "cycle", "HIGH", "adoption",
         _mass_adoption,
         parameters=("h045.min_packages", "h045.window_days"),
-        doc="docs/reference/rules/count-based.md",
+        doc="docs/rules/count-based.md",
         fixtures=("tests/test_class_d.py",)),
     TemporalInstance(
         "H055", "Attribute Burst", "rate_deviation", "cycle", "MEDIUM", "adoption",
         _attribute_burst,
         parameters=("h055.min_packages", "h055.window_hours"),
-        doc="docs/reference/rules/count-based.md",
+        doc="docs/rules/count-based.md",
         fixtures=("tests/test_class_d.py",)),
     TemporalInstance(
         "H052", "Shared Source Repo Cluster", "rate_deviation", "cycle", "HIGH", "corpus",
         _shared_repo_cluster,
         parameters=("h052.min_packages",),
-        doc="docs/reference/rules/count-based.md",
+        doc="docs/rules/count-based.md",
         fixtures=("tests/test_class_d.py",)),
     TemporalInstance(
         "H073", "Introduction-Rate Deviation", "baseline_deviation", "cycle", "MEDIUM", "corpus",
         _introduction_deviation,
         parameters=("h073.min_history_cycles", "h073.z_score", "h073.min_introduced"),
-        doc="docs/reference/rules/corpus-behavioral.md",
+        doc="docs/rules/corpus-behavioral.md",
         fixtures=("tests/test_class_d.py",)),
     TemporalInstance(
         "H058", "Maintainer Baseline Deviation", "baseline_deviation", "cycle", "MEDIUM", "adoption",
         _maintainer_deviation_findings,
         parameters=("h058.min_history_cycles", "h058.z_score", "h058.min_activity",
                     "h058.min_surge"),
-        doc="docs/reference/rules/maintainer-and-metadata.md",
+        doc="docs/rules/maintainer-and-metadata.md",
         fixtures=("tests/test_class_d.py",)),
     TemporalInstance(
         "H044", "Ownership Transition", "transition", "cycle", "MEDIUM", "maintainer",
         _ownership_transition_findings,
-        doc="docs/reference/rules/maintainer-and-metadata.md",
+        doc="docs/rules/maintainer-and-metadata.md",
         fixtures=("tests/test_class_d.py",)),
     # H026 ships from the same producer as H044 (one transition, two claims);
     # the emitter above emits both, so this row documents the id without a
     # second call.
     TemporalInstance(
         "H026", "New Maintainer Without Prior History", "transition", "cycle", "HIGH", "maintainer",
-        doc="docs/reference/rules/maintainer-and-metadata.md",
+        doc="docs/rules/maintainer-and-metadata.md",
         fixtures=("tests/test_class_d.py",)),
     TemporalInstance(
         "H074", "Adopt-then-Modify", "transition", "cycle", "MEDIUM", "maintainer",
         _adopt_then_modify_findings,
         parameters=("h074.window_days",),
-        doc="docs/reference/rules/maintainer-and-metadata.md",
+        doc="docs/rules/maintainer-and-metadata.md",
         fixtures=("tests/test_class_d.py",)),
     TemporalInstance(
         "H053", "Ecosystem/Host Divergence", "consensus", "cycle", "MEDIUM", "naming",
         _name_host_divergence_findings,
-        doc="docs/reference/rules/naming-and-dependency.md",
+        doc="docs/rules/naming-and-dependency.md",
         fixtures=("tests/test_class_d.py",)),
     TemporalInstance(
         "H059", "Name/Repo Divergence", "consensus", "cycle", "MEDIUM", "naming",
         _name_repo_divergence_findings,
-        doc="docs/reference/rules/naming-and-dependency.md",
+        doc="docs/rules/naming-and-dependency.md",
         fixtures=("tests/test_class_d.py",)),
     TemporalInstance(
         "T008", "Delayed Payload Adoption", "transition", "cycle", "INFO", "temporal",
         _delayed_adoption_findings,
         parameters=("t008.min_delay_days",),
-        doc="docs/reference/rules/temporal.md",
+        doc="docs/rules/temporal.md",
         fixtures=("tests/test_temporal_campaigns.py",)),
     TemporalInstance(
         "T009", "High-Value Dormant Takeover", "transition", "cycle", "INFO", "temporal",
         _dormant_takeover_findings,
         parameters=("t009.dormant_days", "t009.min_votes",
                     "t009.min_popularity", "t009.min_dependents"),
-        doc="docs/reference/rules/temporal.md",
+        doc="docs/rules/temporal.md",
         fixtures=("tests/test_temporal_campaigns.py",)),
     TemporalInstance(
         "T010", "Dependency Redirection", "transition", "cycle", "INFO", "dependency",
         _dependency_redirection_findings,
-        doc="docs/reference/rules/naming-and-dependency.md",
+        doc="docs/rules/naming-and-dependency.md",
         fixtures=("tests/test_temporal_campaigns.py",)),
     TemporalInstance(
         "T011", "Package Reappearance", "transition", "cycle", "INFO", "temporal",
         _reappearance_findings,
-        doc="docs/reference/rules/temporal.md",
+        doc="docs/rules/temporal.md",
         fixtures=("tests/test_temporal_campaigns.py",)),
     TemporalInstance(
         "T012", "Trust Erosion Sequence", "transition", "cycle", "INFO", "temporal",
         _trust_erosion_findings,
-        doc="docs/reference/rules/temporal.md",
+        doc="docs/rules/temporal.md",
         fixtures=("tests/test_temporal_campaigns.py",)),
 )
 
@@ -308,22 +308,22 @@ CYCLE_INSTANCES: tuple[TemporalInstance, ...] = (
 GRAPH_INSTANCES: tuple[TemporalInstance, ...] = (
     TemporalInstance(
         "H046", "Orphan/Adoption Dependency", "graph_reachability", "cycle", "MEDIUM", "dependency",
-        doc="docs/reference/rules/corpus-behavioral.md",
+        doc="docs/rules/corpus-behavioral.md",
         fixtures=("tests/test_class_d.py",)),
     TemporalInstance(
         "H057", "Transitive Exposure", "graph_reachability", "cycle", "INFO", "dependency",
         parameters=("h057.min_hops",),
-        doc="docs/reference/rules/corpus-behavioral.md",
+        doc="docs/rules/corpus-behavioral.md",
         fixtures=("tests/test_class_d.py",)),
     TemporalInstance(
         "H060", "Transitive Orphan Risk", "graph_reachability", "cycle", "INFO", "dependency",
         parameters=("h060.min_hops",),
-        doc="docs/reference/rules/corpus-behavioral.md",
+        doc="docs/rules/corpus-behavioral.md",
         fixtures=("tests/test_class_d.py",)),
     TemporalInstance(
         "H061", "Dependency Centrality", "graph_reachability", "cycle", "INFO", "dependency",
         parameters=("h061.min_dependents",),
-        doc="docs/reference/rules/corpus-behavioral.md",
+        doc="docs/rules/corpus-behavioral.md",
         fixtures=("tests/test_class_d.py",)),
 )
 
@@ -335,75 +335,75 @@ PER_PACKAGE_INSTANCES: tuple[TemporalInstance, ...] = (
     TemporalInstance(
         "H020", "Very Recent Update", "gap_revival", "package", "INFO", "temporal",
         parameters=("fixed:72h",),
-        doc="docs/reference/rules/temporal.md",
+        doc="docs/rules/temporal.md",
         fixtures=("tests/regressions/test_checksum_and_evasion.py",)),
     TemporalInstance(
         "H021", "Brand New Package", "gap_revival", "package", "INFO", "temporal",
         parameters=("fixed:30d",),
-        doc="docs/reference/rules/temporal.md",
+        doc="docs/rules/temporal.md",
         fixtures=("tests/regressions/test_checksum_and_evasion.py",)),
     TemporalInstance(
         "H022", "Stale Package Revived", "gap_revival", "package", "MEDIUM", "temporal",
         parameters=("fixed:365d",),
-        doc="docs/reference/rules/temporal.md",
+        doc="docs/rules/temporal.md",
         fixtures=("tests/fixtures/history_corpus.py",)),
     # H028 (recent commit burst) is a metadata flag on the fact, never a
     # scored finding; the row records the predicate without an emitter.
     TemporalInstance(
         "H028", "Commit Burst", "rate_deviation", "package", "INFO", "corpus",
         parameters=("fixed:24h burst",),
-        doc="docs/reference/rules/corpus-behavioral.md",
+        doc="docs/rules/corpus-behavioral.md",
         fixtures=("tests/test_full_aur.py",)),
     TemporalInstance(
         "H026", "New Maintainer Without Prior History", "transition", "package", "HIGH", "maintainer",
-        doc="docs/reference/rules/maintainer-and-metadata.md",
+        doc="docs/rules/maintainer-and-metadata.md",
         fixtures=("tests/test_class_d.py",)),
     TemporalInstance(
         "H037", "Long-Stable Property Changed", "baseline_deviation", "package", "MEDIUM", "temporal",
         parameters=("longitudinal.stability_floor",),
-        doc="docs/reference/rules/temporal.md",
+        doc="docs/rules/temporal.md",
         fixtures=("tests/test_longitudinal.py",)),
     TemporalInstance(
         "H047", "Security-Relevant Build Flag Change", "baseline_deviation", "package", "HIGH", "build",
         parameters=("longitudinal.stability_floor",),
-        doc="docs/reference/rules/integrity.md",
+        doc="docs/rules/integrity.md",
         fixtures=("tests/test_longitudinal.py",)),
     TemporalInstance(
         "H048", "Dependency Vendored Into Source", "baseline_deviation", "package", "MEDIUM", "dependency",
         parameters=("longitudinal.stability_floor",),
-        doc="docs/reference/rules/naming-and-dependency.md",
+        doc="docs/rules/naming-and-dependency.md",
         fixtures=("tests/test_longitudinal.py",)),
     TemporalInstance(
         "H049", "Source Host Changed", "baseline_deviation", "package", "MEDIUM", "source",
         parameters=("longitudinal.stability_floor",),
-        doc="docs/reference/rules/maintainer-and-metadata.md",
+        doc="docs/rules/maintainer-and-metadata.md",
         fixtures=("tests/test_longitudinal.py",)),
     TemporalInstance(
         "H050", "Version Scheme Changed", "baseline_deviation", "package", "INFO", "context",
         parameters=("longitudinal.stability_floor",),
-        doc="docs/reference/rules/maintainer-and-metadata.md",
+        doc="docs/rules/maintainer-and-metadata.md",
         fixtures=("tests/test_longitudinal.py",)),
     TemporalInstance(
         "H051", "Package Description Changed", "baseline_deviation", "package", "MEDIUM", "integrity",
         parameters=("longitudinal.stability_floor",),
-        doc="docs/reference/rules/maintainer-and-metadata.md",
+        doc="docs/rules/maintainer-and-metadata.md",
         fixtures=("tests/test_longitudinal.py",)),
     TemporalInstance(
         "H054", "Build System Changed", "baseline_deviation", "package", "MEDIUM", "build",
         parameters=("longitudinal.stability_floor",),
-        doc="docs/reference/rules/maintainer-and-metadata.md",
+        doc="docs/rules/maintainer-and-metadata.md",
         fixtures=("tests/test_longitudinal.py",)),
     TemporalInstance(
         "H086", "Adopted From Orphan", "transition", "package", "MEDIUM", "maintainer",
-        doc="docs/reference/rules/maintainer-and-metadata.md",
+        doc="docs/rules/maintainer-and-metadata.md",
         fixtures=("tests/test_june_2026_campaign.py",)),
     TemporalInstance(
         "H087", "Recipe Changed Without Upstream", "baseline_deviation", "package", "MEDIUM", "integrity",
-        doc="docs/reference/rules/integrity.md",
+        doc="docs/rules/integrity.md",
         fixtures=("tests/test_june_2026_campaign.py",)),
     TemporalInstance(
         "H088", "Adopted, Recipe Rewritten, Unpinned Fetch", "transition", "package", "HIGH", "takeover",
-        doc="docs/reference/rules/maintainer-and-metadata.md",
+        doc="docs/rules/maintainer-and-metadata.md",
         fixtures=("tests/test_june_2026_campaign.py",)),
 )
 

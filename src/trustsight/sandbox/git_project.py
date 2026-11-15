@@ -659,7 +659,7 @@ def collect_tree_files(
     say the tree was not fully examined instead of implying it was.  A blob
     larger than *max_file_bytes* is streamed for its head rather than skipped
     (a committed payload is far more likely to be large than small), and an
-    incomplete read reports as incomplete ([B2](../../docs/security.md)).
+    incomplete read reports as incomplete ([B2](../../docs/security-design/security-model.md)).
 
     *max_entries* is enforced **during** the walk, not after it: a repository
     is free to commit millions of tiny blobs, so a cap applied to the finished

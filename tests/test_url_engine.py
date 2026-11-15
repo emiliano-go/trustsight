@@ -57,7 +57,7 @@ def test_every_url_emitter_is_dispatched():
     original = url_engine.URL_INSTANCES
     url_engine.URL_INSTANCES = tuple(
         url_engine.URLInstance("H034", "spy", "scheme", "MEDIUM",
-                               "docs/reference/rules/fetch-and-execution.md",
+                               "docs/rules/fetch-and-execution.md",
                                ("tests/test_url_engine.py",), spy)
         for _ in range(3)
     )

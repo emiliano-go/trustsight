@@ -10,15 +10,15 @@ from scripts.gates._core import Gate, H_SERIES_REDUCTION_TARGET, ROOT, SRC, _GIT
 __all__ = ['gate_a_critical_finding_never_reads_medium', 'gate_a_fatal_finding_names_itself', 'gate_a_truncated_history_walk_is_a_declared_gap', 'gate_an_audit_does_not_write_history', 'gate_api_and_cli_emit_the_same_body', 'gate_api_and_cli_share_the_analysis', 'gate_ci_installs_from_the_lock', 'gate_companion_reads_are_bounded_before_data', 'gate_critical_paths_are_synchronised', 'gate_doc_lists_every_gate', 'gate_every_invariant_is_defined', 'gate_every_render_reports_the_same_information', 'gate_generated_diff_is_bounded_before_assembly', 'gate_h_series_intake_is_frozen', 'gate_h_series_reduction_residue', 'gate_libgit2_stays_behind_the_sandbox', 'gate_retired_ids_resolve_to_live_survivors', 'gate_run_diff_assembly_is_bounded', 'gate_score_is_withheld_by_default', 'gate_the_history_walk_is_bounded', 'gate_unpinned_build_deps_is_a_declared_gap']
 
 def gate_doc_lists_every_gate(gates: list[Gate]) -> Gate:
-    """``docs/security/enforcement-map.md`` names exactly the invariants enforced here.
+    """``docs/security-design/enforcement-map.md`` names exactly the invariants enforced here.
 
     The document is the claim and this script is the proof, so a gate with
     no entry is an unstated guarantee and an entry with no gate is an
     unbacked promise.  Both are failures.  The map is its own page since
     the model was split by part, and its only table is the gate list.
     """
-    name = "docs/security.md matches the gates"
-    doc = ROOT / "docs" / "security" / "enforcement-map.md"
+    name = "docs/security-design/security-model.md matches the gates"
+    doc = ROOT / "docs" / "security-design" / "enforcement-map.md"
     if not doc.exists():
         return Gate(name, False, "missing")
     text = doc.read_text(encoding="utf-8")
@@ -36,14 +36,14 @@ def gate_doc_lists_every_gate(gates: list[Gate]) -> Gate:
 def gate_every_invariant_is_defined() -> Gate:
     """Every invariant the enforcement map cites is defined in its Part.
 
-    Part A lives in ``program-under-attack.md`` (``**A<n>.`` and ``**P1.``),
+    Part A lives in ``security-boundaries.md`` (``**A<n>.`` and ``**P1.``),
     Part B in ``what-a-result-claims.md`` (``### B<n>.``).  The map cites all
     three families, so checking only A left a cited B or P invariant able to
     point at nothing.
     """
-    part = ROOT / "docs" / "security" / "program-under-attack.md"
-    claims = ROOT / "docs" / "security" / "what-a-result-claims.md"
-    enforcement = ROOT / "docs" / "security" / "enforcement-map.md"
+    part = ROOT / "docs" / "security-design" / "security-boundaries.md"
+    claims = ROOT / "docs" / "security-design" / "what-a-result-claims.md"
+    enforcement = ROOT / "docs" / "security-design" / "enforcement-map.md"
     if not part.exists() or not claims.exists() or not enforcement.exists():
         return Gate("every cited invariant is defined", False, "missing")
     part_text = part.read_text(encoding="utf-8")
@@ -745,7 +745,7 @@ def gate_h_series_intake_is_frozen() -> Gate:
         problems.append(
             f"new H id(s) beyond the intake freeze: {new}; file it as an "
             "instance of an existing family or in another series "
-            "(docs/reference/rules/nature.md)"
+            "(docs/rules/series.md)"
         )
     return Gate("H-series intake is frozen", not problems,
                 {"frozen": len(FROZEN_H_IDS)}, problems)

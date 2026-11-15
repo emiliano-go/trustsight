@@ -35,11 +35,11 @@
 /src/trustsight/db/_seed.py @emiliano-go
 /src/trustsight/db/_history.py @emiliano-go
 /src/trustsight/db/_profiles.py @emiliano-go
-/docs/security.md @emiliano-go
-/docs/security/program-under-attack.md @emiliano-go
-/docs/security/what-a-result-claims.md @emiliano-go
-/docs/security/enforcement-map.md @emiliano-go
-/docs/security/vulnerability-reporting.md @emiliano-go
+/docs/security-design/security-model.md @emiliano-go
+/docs/security-design/security-boundaries.md @emiliano-go
+/docs/security-design/what-a-result-claims.md @emiliano-go
+/docs/security-design/enforcement-map.md @emiliano-go
+/docs/security-design/vulnerability-reporting.md @emiliano-go
 /.github/workflows/security.yml @emiliano-go
 /.github/workflows/calibration.yml @emiliano-go
 /.github/workflows/harness-regression.yml @emiliano-go

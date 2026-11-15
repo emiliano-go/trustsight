@@ -48,7 +48,7 @@ The aggregate baseline is current at 8,393 diffs. Detailed rule rows below retai
 | R003 | Base64 Decode and Execute | CRITICAL | ~0 % | |
 | H001 | Checksum Disabled | HIGH/INFO | <1 % | Corpus-dependent |
 | H002 | Checksum Emptied | HIGH | ~0 % | |
-| H003 | Insecure Download Protocol | LOW | Not yet published | Added `http://` source without newly added checksum backing; programmatic, diff-aware rule |
+| H003 | Insecure Download Protocol | LOW | 0.31 % | 26/8,393 benign diffs; added `http://` source without newly added checksum backing. Programmatic, diff-aware rule |
 | R007 | Install File Modification | MEDIUM | <2 % | |
 | R008 | Unexpected File Download | HIGH | ~0 % | |
 | H004 | Privilege Escalation | CRITICAL | <1 % | Function-body scoped |

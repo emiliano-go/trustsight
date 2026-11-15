@@ -171,6 +171,9 @@ with no new alerts send nothing. A package matching an IOC baseline entry
 is listed in the document's `ioc_matches` whatever it scored: the IOC tier
 reports outside the heuristic score, so it would otherwise never cross the
 bar, and the match is a fact to read rather than a higher priority.
+When the upstream lane is active, the fetched manifest and workflow texts are
+IOC surfaces too, so campaign indicators such as GhostAction's injected
+workflow addresses are enforced even when the PKGBUILD diff is clean.
 Single-shot cycles (a bootstrap chunk, a plain `full-aur` run) notify like
 watch cycles.
 

@@ -279,6 +279,7 @@ def _run_baseline_build(
         # manifest inside the declared source archive.  Off unless
         # [upstream_scan] enabled; a refusal is logged and never fails the
         # cycle, and the default local path does not call this.
+        upstream_texts: list[tuple[str, str]] = []
         upstream_findings: list[dict] = []
         upstream_notes: list[str] = []
         verified_upstream_hashes: frozenset[str] = frozenset()
@@ -380,6 +381,8 @@ def _run_baseline_build(
                 old_install_text=(old_snapshot.get("install_text")
                                   if old_snapshot else None),
                 upstream_manifest_incomplete=manifest_incomplete,
+                upstream_manifest_texts=tuple(
+                    text for _path, text in upstream_texts),
                 manifest_deltas=manifest_deltas,
                 workflow_deltas=workflow_deltas,
                 upstream_findings=upstream_findings,

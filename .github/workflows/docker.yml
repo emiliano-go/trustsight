@@ -89,6 +89,33 @@ jobs:
           docker run --rm --security-opt seccomp="$PWD/docker/seccomp-watcher.json" --security-opt apparmor=docker-default "ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}" --version
           docker run --rm --security-opt seccomp="$PWD/docker/seccomp-watcher.json" --security-opt apparmor=docker-default "ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}" lint-rules
 
+      # The parser/tokenizer sandbox is exercised under the same seccomp and
+      # read-only root the watcher uses, not only the rule-corpus commands.
+      - name: Exercise the parser under the shipped profile
+        run: |
+          set -eu
+          image="ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}"
+          {
+            echo 'pkgname=lint-fixture'
+            echo 'pkgver=1.0'
+            echo 'pkgrel=1'
+            echo "arch=('any')"
+            echo 'package() {'
+            echo '  install -Dm644 /dev/null "$pkgdir/usr/share/lint-fixture"'
+            echo '}'
+          } >"$RUNNER_TEMP/PKGBUILD"
+          docker run --rm --network none --read-only \
+            --tmpfs /tmp:size=64m,noexec,nosuid,nodev \
+            --tmpfs /home/ts/.cache:size=64m,noexec,nosuid,nodev \
+            --tmpfs /home/ts/.config:size=8m \
+            --user 1000:1000 --cap-drop=all \
+            --security-opt=no-new-privileges \
+            --security-opt=seccomp="$PWD/docker/seccomp-watcher.json" \
+            --security-opt=apparmor=docker-default \
+            -v "$RUNNER_TEMP:/work:ro" \
+            "$image" lint /work/PKGBUILD --json >"$RUNNER_TEMP/lint.json"
+          grep -q 'lint-fixture' "$RUNNER_TEMP/lint.json"
+
       # The read-only recipe in docs/workflows/reducing-blast-radius.md.  Two
       # passes against the same volumes: a recreated container must stay
       # writable with the state the first run wrote, and a change to the image

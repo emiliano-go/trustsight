@@ -205,12 +205,13 @@ is shipped as `docker/apparmor/trustsight-watcher`; load it and opt in:
 
 ```bash
 sudo apparmor_parser -r docker/apparmor/trustsight-watcher
-TRUSTSIGHT_APPARMOR_PROFILE=trustsight-watcher docker compose \
-  -f docker-compose.watcher.yml up -d
+docker compose -f docker-compose.watcher.yml \
+  -f docker-compose.watcher.apparmor.yml up -d
 ```
 
-The default stays `unconfined` until the profile is loaded, so a host without
-AppArmor support still starts. The profile allows only the mount/userns the
+The default stays `unconfined` until the overlay is used, so a host without
+AppArmor support still starts. With the overlay, the entrypoint checks
+`/proc/self/attr/current` and refuses to run unless the profile is active. The profile allows only the mount/userns the
 parser workers need and limits the rest of the filesystem to the read-only
 app, config and runtime paths.
 

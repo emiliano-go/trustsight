@@ -99,3 +99,11 @@ def test_ci_smoke_uses_the_shipped_security_profiles():
     assert "seccomp=unconfined" not in text
     assert "apparmor=unconfined" not in text
     assert "seccomp=\"$PWD/docker/seccomp-watcher.json\"" in text
+
+
+def test_the_apparmor_overlay_selects_the_shipped_profile():
+    overlay = yaml.safe_load(
+        (ROOT / "docker-compose.watcher.apparmor.yml").read_text())
+    service = overlay["services"]["trustsight-watch"]
+    assert "apparmor=trustsight-watcher" in service["security_opt"]
+    assert service["environment"]["TRUSTSIGHT_REQUIRE_APPARMOR"] == "1"

@@ -204,3 +204,26 @@ def test_the_hardened_entrypoint_refuses_a_watcher_token_file(tmp_path):
         "TRUSTSIGHT_GITHUB_TOKEN_FILE": "/run/secrets/token",
     })
     assert result.returncode == 2
+
+
+def _apparmor_entrypoint(attr):
+    return subprocess.run(
+        ["sh", str(ROOT / "docker" / "entrypoint.sh"), "/bin/true"],
+        env={
+            "PATH": "/usr/bin:/bin",
+            "TRUSTSIGHT_REQUIRE_APPARMOR": "1",
+            "TRUSTSIGHT_PROC_SELF_ATTR": str(attr),
+        },
+        capture_output=True, text=True, timeout=30)
+
+
+def test_the_apparmor_guard_accepts_the_shipped_profile(tmp_path):
+    attr = tmp_path / "current"
+    attr.write_text("trustsight-watcher (enforce)\n")
+    assert _apparmor_entrypoint(attr).returncode == 0
+
+
+def test_the_apparmor_guard_refuses_unconfined(tmp_path):
+    attr = tmp_path / "current"
+    attr.write_text("unconfined\n")
+    assert _apparmor_entrypoint(attr).returncode == 2

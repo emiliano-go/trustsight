@@ -7,6 +7,14 @@
 # it disappears with the container.
 set -eu
 
+if [ "${TRUSTSIGHT_REQUIRE_APPARMOR:-}" = "1" ]; then
+    attr="${TRUSTSIGHT_PROC_SELF_ATTR:-/proc/self/attr/current}"
+    if [ ! -r "$attr" ] || ! grep -q 'trustsight-watcher' "$attr"; then
+        echo "trustsight-entrypoint: AppArmor profile trustsight-watcher is not active" >&2
+        exit 2
+    fi
+fi
+
 if [ "${TRUSTSIGHT_REQUIRE_PINNED:-}" = "1" ]; then
     case "${TRUSTSIGHT_IMAGE:-}" in
         *@sha256:*) ;;

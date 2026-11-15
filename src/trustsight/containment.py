@@ -16,7 +16,7 @@ def _read(path: str) -> str:
 
 
 def _seccomp(path: str) -> bool:
-    for line in _read(path).splitlines():
+    for line in _read(path).split("\n"):
         if line.startswith("Seccomp:"):
             return line.split(":", 1)[1].strip() == "2"
     return False
@@ -28,11 +28,11 @@ def _apparmor(path: str) -> str:
 
 
 def _has_default_route(route: str, route6: str) -> bool:
-    for line in _read(route).splitlines()[1:]:
+    for line in _read(route).split("\n")[1:]:
         parts = line.split()
         if len(parts) > 7 and parts[1] == "00000000" and parts[7] == "00000000":
             return True
-    for line in _read(route6).splitlines():
+    for line in _read(route6).split("\n"):
         parts = line.split()
         if len(parts) > 1 and set(parts[0]) == {"0"} and parts[1] == "00":
             return True
@@ -40,7 +40,7 @@ def _has_default_route(route: str, route6: str) -> bool:
 
 
 def _root_readonly(mountinfo: str) -> bool:
-    for line in _read(mountinfo).splitlines():
+    for line in _read(mountinfo).split("\n"):
         parts = line.split()
         if len(parts) < 7 or parts[4] != "/":
             continue

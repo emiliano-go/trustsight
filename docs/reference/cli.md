@@ -1199,7 +1199,7 @@ target once, refuses non-routable addresses, and tunnels the TLS connection
 without terminating it.
 
 ```
-trustsight egress-proxy [--listen HOST:PORT] [--auth-token TOKEN]
+trustsight egress-proxy [--listen HOST:PORT] [--auth-token TOKEN] [--alert-url URL]
 ```
 
 ### Flags
@@ -1209,6 +1209,7 @@ trustsight egress-proxy [--listen HOST:PORT] [--auth-token TOKEN]
 | `--listen` | Address to listen on. Default `0.0.0.0:3128`; the compose file keeps it on the internal network. |
 | `--audit-log` | Append one JSON record per allowed or refused CONNECT (`ts`, `host`, `address`, `allowed`, `reason`). The compose file points it at `/var/lib/trustsight/proxy.jsonl`. If an allowed CONNECT cannot be audited, it is refused; the log rotates at 64 MiB. |
 | `--auth-token` | Require `Proxy-Authorization: Basic trustsight:<token>`. Defaults to `TRUSTSIGHT_PROXY_TOKEN`. |
+| `--alert-url` | POST a `trustsight.proxy_denied` alert for each refused CONNECT. Defaults to `TRUSTSIGHT_PROXY_ALERT_URL`. |
 
 ---
 

@@ -161,7 +161,8 @@ def _tunnel(left: socket.socket, right: socket.socket) -> None:
 def handle_client(conn: socket.socket, *, resolver=socket.getaddrinfo,
                   connector=socket.create_connection, allowed=None,
                   audit_log: str | None = None,
-                  auth_token: str | None = None) -> None:
+                  auth_token: str | None = None,
+                  alert_url: str | None = None) -> None:
     conn.settimeout(CONNECT_TIMEOUT)
     upstream = None
     data = b""
@@ -198,6 +199,14 @@ def handle_client(conn: socket.socket, *, resolver=socket.getaddrinfo,
             })
         except ProxyError as audit_exc:
             log.warning("CONNECT denial audit failed: %s", audit_exc)
+        if alert_url:
+            from .alerts import send
+            send(alert_url, {
+                "event": "trustsight.proxy_denied",
+                "host": (data.split(b" ")[1].decode("latin-1")
+                         if b" " in data else ""),
+                "reason": str(exc),
+            })
         try:
             conn.sendall(
                 f"HTTP/1.1 403 Forbidden\r\nContent-Length: {len(str(exc))}\r\n"
@@ -221,7 +230,8 @@ def handle_client(conn: socket.socket, *, resolver=socket.getaddrinfo,
 
 
 def serve(listen: str = "0.0.0.0:3128", audit_log: str | None = None,
-          auth_token: str | None = None) -> None:
+          auth_token: str | None = None,
+          alert_url: str | None = None) -> None:
     host, _, port_text = listen.rpartition(":")
     if not host:
         host = "0.0.0.0"
@@ -242,7 +252,7 @@ def serve(listen: str = "0.0.0.0:3128", audit_log: str | None = None,
                 try:
                     handle_client(
                         client, allowed=allowed, audit_log=audit_log,
-                        auth_token=auth_token)
+                        auth_token=auth_token, alert_url=alert_url)
                 finally:
                     slots.release()
 

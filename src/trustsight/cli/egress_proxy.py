@@ -30,10 +30,13 @@ def egress_proxy_cmd(
     auth_token: str | None = typer.Option(
         os.environ.get("TRUSTSIGHT_PROXY_TOKEN") or None,
         "--auth-token", help="Require Basic proxy auth with this password."),
+    alert_url: str | None = typer.Option(
+        os.environ.get("TRUSTSIGHT_PROXY_ALERT_URL") or None,
+        "--alert-url", help="POST refused CONNECT alerts to this URL."),
 ):
     """Serve CONNECT only to the forge/CDN allowlist."""
     try:
-        serve(listen, audit_log, auth_token)
+        serve(listen, audit_log, auth_token, alert_url)
     except KeyboardInterrupt:
         raise typer.Exit(code=0) from None
     except Exception as exc:  # noqa: BLE001

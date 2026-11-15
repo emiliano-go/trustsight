@@ -169,3 +169,22 @@ def test_proxy_auth_requires_a_matching_password():
     assert egress_proxy._authorised(request, "other") is False
     assert egress_proxy._authorised(_request("github.com:443"), "secret") is False
     assert egress_proxy._authorised(_request("github.com:443"), None) is True
+
+
+def test_a_refused_connect_can_alert(monkeypatch):
+    import trustsight.alerts as alerts
+
+    calls = []
+    monkeypatch.setattr(alerts, "send",
+                        lambda url, payload: calls.append((url, payload)) or True)
+    client, server = socket.socketpair()
+    try:
+        client.sendall(_request("evil.example:443"))
+        egress_proxy.handle_client(
+            server, resolver=lambda *a, **k: [],
+            alert_url="https://alerts.example/proxy")
+        client.recv(4096)
+    finally:
+        client.close()
+    assert calls[0][0] == "https://alerts.example/proxy"
+    assert calls[0][1]["event"] == "trustsight.proxy_denied"

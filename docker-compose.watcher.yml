@@ -219,6 +219,7 @@ services:
       TMPDIR: "/tmp"
       TRUSTSIGHT_REQUIRE_SECCOMP: "1"
       TRUSTSIGHT_PROXY_TOKEN: "${TRUSTSIGHT_PROXY_TOKEN:-}"
+      TRUSTSIGHT_PROXY_ALERT_URL: "${TRUSTSIGHT_PROXY_ALERT_URL:-}"
       # Optional comma-separated exact hosts for operator webhooks/ntfy.
       TRUSTSIGHT_EGRESS_ALLOW: "${TRUSTSIGHT_EGRESS_ALLOW:-}"
     logging:

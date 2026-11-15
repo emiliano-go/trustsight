@@ -127,6 +127,7 @@ def _entrypoint(tmp_path, extra):
     src = tmp_path / "cfg"
     src.mkdir()
     (src / "config.toml").write_text("")
+    src.chmod(0o555)
     dst = tmp_path / "dst"
     route = tmp_path / "route"
     route.write_text(
@@ -227,3 +228,28 @@ def test_the_apparmor_guard_refuses_unconfined(tmp_path):
     attr = tmp_path / "current"
     attr.write_text("unconfined\n")
     assert _apparmor_entrypoint(attr).returncode == 2
+
+
+def test_the_hardened_entrypoint_refuses_a_writable_config_source(tmp_path):
+    src = tmp_path / "writable"
+    src.mkdir()
+    src.chmod(0o755)
+    dst = tmp_path / "dst"
+    route = tmp_path / "route"
+    route.write_text(
+        "Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\n")
+    route6 = tmp_path / "ipv6"
+    route6.write_text("")
+    result = subprocess.run(
+        ["sh", str(ROOT / "docker" / "entrypoint.sh"), "/bin/true"],
+        env={
+            "PATH": "/usr/bin:/bin",
+            "TRUSTSIGHT_REQUIRE_HARDENED": "1",
+            "TRUSTSIGHT_REQUIRE_READONLY_CONFIG": "1",
+            "TRUSTSIGHT_CONFIG_SRC": str(src),
+            "TRUSTSIGHT_CONFIG_DIR": str(dst),
+            "TRUSTSIGHT_PROC_NET_ROUTE": str(route),
+            "TRUSTSIGHT_PROC_NET_IPV6_ROUTE": str(route6),
+        },
+        capture_output=True, text=True, timeout=30)
+    assert result.returncode == 2

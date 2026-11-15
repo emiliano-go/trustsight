@@ -350,6 +350,8 @@ its audit record cannot be written; the log rotates at 64 MiB.
 `/proc/net/ipv6_route`; the watcher refuses to start if it finds a default
 route. Running it on a bridge with direct internet access therefore fails
 closed instead of silently bypassing the proxy.
+It also refuses a writable `/config-src`, so the operator config mount must
+really be read-only rather than merely intended to be.
 
 ### Rotating provider tokens through the broker
 

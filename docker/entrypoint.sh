@@ -50,6 +50,16 @@ if [ "${TRUSTSIGHT_REQUIRE_HARDENED:-}" = "1" ]; then
         echo "trustsight-entrypoint: root filesystem is writable" >&2
         exit 2
     fi
+    if [ "${TRUSTSIGHT_REQUIRE_READONLY_CONFIG:-}" = "1" ]; then
+        if [ -z "${TRUSTSIGHT_CONFIG_SRC:-}" ] || [ ! -d "${TRUSTSIGHT_CONFIG_SRC}" ]; then
+            echo "trustsight-entrypoint: read-only config source is missing" >&2
+            exit 2
+        fi
+        if [ -w "${TRUSTSIGHT_CONFIG_SRC}" ]; then
+            echo "trustsight-entrypoint: config source is writable" >&2
+            exit 2
+        fi
+    fi
     if [ -n "${TRUSTSIGHT_UPSTREAM_FETCHER_SOCKET:-}" ] \
         && env | grep -q '^TRUSTSIGHT_.*_TOKEN'; then
         echo "trustsight-entrypoint: provider token in the watcher; use the fetcher" >&2

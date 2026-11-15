@@ -106,6 +106,7 @@ services:
       # only asks it for signature headers.
       TRUSTSIGHT_FEED_SIGNER_SOCKET: "/run/trustsight/feed-signer.sock"
       TRUSTSIGHT_REQUIRE_HARDENED: "1"
+      TRUSTSIGHT_REQUIRE_READONLY_CONFIG: "1"
       # TRUSTSIGHT_LOG_LEVEL: "INFO"
       # TRUSTSIGHT_OFFLINE: "1"
       # The signed feed sink: the watcher POSTs every alert here as well as to

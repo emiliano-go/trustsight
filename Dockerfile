@@ -39,6 +39,13 @@ RUN uv sync --locked --no-install-project --python /usr/local/bin/python3
 COPY . .
 RUN uv sync --locked --python /usr/local/bin/python3
 
+# Source files created with a restrictive umask can arrive as 0600; the
+# image runs as the non-root `ts` user, so normalise readability here.
+RUN chmod -R a+rX /app
+
+COPY docker/entrypoint.sh /usr/local/bin/trustsight-entrypoint
+RUN chmod 755 /usr/local/bin/trustsight-entrypoint
+
 # The scanner writes its database and config under HOME; give the non-root
 # user a real one with the XDG directories it creates at runtime.
 RUN useradd --create-home --shell /usr/sbin/nologin ts \
@@ -51,5 +58,5 @@ USER ts
 HEALTHCHECK --interval=5m --timeout=15s --retries=3 --start-period=10m \
     CMD ["/app/.venv/bin/trustsight", "full-aur", "health", "--optional"]
 
-ENTRYPOINT ["/app/.venv/bin/trustsight"]
+ENTRYPOINT ["/usr/local/bin/trustsight-entrypoint", "/app/.venv/bin/trustsight"]
 CMD ["--help"]

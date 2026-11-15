@@ -78,6 +78,7 @@ def _run_baseline_build(
     _set_since_cursor = p._set_since_cursor
     _since_cursor = p._since_cursor
     analyze_package_text = p.analyze_package_text
+    upstream_budget = None
     source_repos_from_pkgbuild = p.source_repos_from_pkgbuild
     clear_correlation_feeds = p.clear_correlation_feeds
     clear_resume_state = p.clear_resume_state
@@ -278,16 +279,23 @@ def _run_baseline_build(
         # manifest inside the declared source archive.  Off unless
         # [upstream_scan] enabled; a refusal is logged and never fails the
         # cycle, and the default local path does not call this.
+        upstream_texts: list[tuple[str, str]] = []
         upstream_findings: list[dict] = []
         upstream_notes: list[str] = []
         verified_upstream_hashes: frozenset[str] = frozenset()
         if manifest_texts is not None:
             try:
                 from ..upstream_collect import collect_upstream_manifest_texts
+                nonlocal upstream_budget
+                if upstream_budget is None:
+                    from ..config import load_config
+                    from ..upstream_collect import UpstreamBudget
+
+                    upstream_budget = UpstreamBudget.from_config(load_config())
 
                 (upstream_texts, upstream_notes, upstream_findings,
                  verified_upstream_hashes) = collect_upstream_manifest_texts(
-                    new_pkgbuild)
+                    new_pkgbuild, budget=upstream_budget)
                 if upstream_texts:
                     manifest_texts = list(manifest_texts) + upstream_texts
                 for note in upstream_notes:
@@ -373,6 +381,8 @@ def _run_baseline_build(
                 old_install_text=(old_snapshot.get("install_text")
                                   if old_snapshot else None),
                 upstream_manifest_incomplete=manifest_incomplete,
+                upstream_manifest_texts=tuple(
+                    text for _path, text in upstream_texts),
                 manifest_deltas=manifest_deltas,
                 workflow_deltas=workflow_deltas,
                 upstream_findings=upstream_findings,

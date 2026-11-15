@@ -116,7 +116,10 @@ from ._rule_sync import (  # noqa: E402,F401
     sync_rules,
 )
 
-CONFIG_DIR = Path.home() / ".config" / "trustsight"
+CONFIG_DIR = Path(
+    os.environ.get("TRUSTSIGHT_CONFIG_DIR")
+    or (Path.home() / ".config" / "trustsight")
+)
 
 DATA_DIR = Path.home() / ".local" / "share" / "trustsight"
 

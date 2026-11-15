@@ -76,8 +76,8 @@ jobs:
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
       # The parser workers need an unprivileged user namespace inside the
-      # container, so enable it on the host and relax Docker's seccomp
-      # profile for the smoke runs.
+      # container, so enable it on the host.  The smoke runs use the shipped
+      # watcher seccomp profile and Docker's AppArmor profile, not unconfined.
       - uses: ./.github/actions/enable-userns
 
       # The image is exercised before it can be pushed: `--version` proves
@@ -86,16 +86,142 @@ jobs:
       - name: Build the image
         run: |
           docker build -t "ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}" .
-          docker run --rm --security-opt seccomp=unconfined --security-opt apparmor=unconfined "ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}" --version
-          docker run --rm --security-opt seccomp=unconfined --security-opt apparmor=unconfined "ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}" lint-rules
+          docker run --rm --security-opt seccomp="$PWD/docker/seccomp-watcher.json" --security-opt apparmor=docker-default "ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}" --version
+          docker run --rm --security-opt seccomp="$PWD/docker/seccomp-watcher.json" --security-opt apparmor=docker-default "ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}" lint-rules
+
+      # The parser/tokenizer sandbox is exercised under the same seccomp and
+      # read-only root the watcher uses, not only the rule-corpus commands.
+      - name: Exercise the parser under the shipped profile
+        run: |
+          set -eu
+          image="ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}"
+          {
+            echo 'pkgname=lint-fixture'
+            echo 'pkgver=1.0'
+            echo 'pkgrel=1'
+            echo "arch=('any')"
+            echo 'package() {'
+            echo '  install -Dm644 /dev/null "$pkgdir/usr/share/lint-fixture"'
+            echo '}'
+          } >"$RUNNER_TEMP/PKGBUILD"
+          docker run --rm --network none --read-only \
+            --tmpfs /tmp:size=64m,noexec,nosuid,nodev \
+            --tmpfs /home/ts/.cache:size=64m,noexec,nosuid,nodev \
+            --tmpfs /home/ts/.config:size=8m \
+            --user 1000:1000 --cap-drop=all \
+            --security-opt=no-new-privileges \
+            --security-opt=seccomp="$PWD/docker/seccomp-watcher.json" \
+            --security-opt=apparmor=docker-default \
+            -v "$RUNNER_TEMP:/work:ro" \
+            "$image" lint /work/PKGBUILD --json >"$RUNNER_TEMP/lint.json"
+          grep -q 'lint-fixture' "$RUNNER_TEMP/lint.json"
+          docker run --rm --network none --read-only \
+            --tmpfs /tmp:size=64m,noexec,nosuid,nodev \
+            --tmpfs /home/ts/.cache:size=64m,noexec,nosuid,nodev \
+            --user 1000:1000 --cap-drop=all \
+            --security-opt=no-new-privileges \
+            --security-opt=seccomp="$PWD/docker/seccomp-watcher.json" \
+            --security-opt=apparmor=docker-default \
+            -e TRUSTSIGHT_CONFIG_DIR=/tmp \
+            -e PYTHONPATH=/app/src \
+            --entrypoint /app/.venv/bin/python \
+            "$image" -c 'from trustsight.analysis.manifests import parse_manifest; print(parse_manifest("package.json", "{\"dependencies\":{\"left-pad\":\"1.0.0\"}}"))' \
+            >"$RUNNER_TEMP/manifest.json"
+          grep -q 'left-pad' "$RUNNER_TEMP/manifest.json"
+
+      # The proxy is threaded; the strict fetcher profile must return ENOSYS
+      # for clone3 so glibc falls back to clone. A denied host proves both
+      # startup under that profile and the allowlist response.
+      - name: Exercise the egress proxy under the fetcher profile
+        run: |
+          set -eu
+          image="ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}"
+          name="ts-proxy-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cleanup() { docker rm -f "$name" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          docker run -d --name "$name" --read-only \
+            --tmpfs /tmp:size=16m,noexec,nosuid,nodev \
+            --tmpfs /home/ts/.cache:size=16m,noexec,nosuid,nodev \
+            --cap-drop=all --security-opt=no-new-privileges \
+            --security-opt=seccomp="$PWD/docker/seccomp-fetcher.json" \
+            --user 1000:1000 "$image" egress-proxy --listen 127.0.0.1:3128
+          docker exec "$name" /app/.venv/bin/python -c \
+            'import socket; s=socket.create_connection(("127.0.0.1",3128),5); s.sendall(b"CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n\r\n"); print(s.recv(200).decode())' \
+            | grep -q '403'
+
+      - name: Exercise the token broker under the fetcher profile
+        run: |
+          set -eu
+          image="ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}"
+          name="ts-broker-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir -p "$RUNNER_TEMP/tokens"
+          printf 'tok-ci\n' >"$RUNNER_TEMP/tokens/github.token"
+          cleanup() { docker rm -f "$name" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          docker run -d --name "$name" --read-only \
+            --tmpfs /run/trustsight:size=8m \
+            --tmpfs /tmp:size=8m,noexec,nosuid,nodev \
+            --cap-drop=all --security-opt=no-new-privileges \
+            --security-opt=seccomp="$PWD/docker/seccomp-fetcher.json" \
+            --user 1000:1000 \
+            -v "$RUNNER_TEMP/tokens:/tokens:ro" \
+            --entrypoint /app/.venv/bin/trustsight "$image" \
+            token-broker --socket /run/trustsight/token.sock \
+              --token-dir /tokens
+          docker exec "$name" /app/.venv/bin/python -c \
+            'import socket; s=socket.socket(socket.AF_UNIX); s.connect("/run/trustsight/token.sock"); s.sendall(b"{\"provider\":\"github\"}\n"); print(s.recv(4096).decode())' \
+            | grep -q 'tok-ci'
+
+      - name: Start the auxiliary compose topology
+        run: |
+          set -eu
+          export TRUSTSIGHT_IMAGE="ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}"
+          export TRUSTSIGHT_PROXY_TOKEN="compose-ci"
+          mkdir -p run/trustsight run/trustsight-token run/trustsight-db
+          cleanup() {
+            docker compose -f docker-compose.watcher.yml down -v >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          docker compose -f docker-compose.watcher.yml \
+            up -d db-writer egress-proxy token-broker feed-signer
+          sleep 3
+          running="$(docker compose -f docker-compose.watcher.yml ps --status running --services)"
+          for service in db-writer egress-proxy token-broker feed-signer; do
+            echo "$running" | grep -qx "$service"
+          done
+
+      - name: Exercise the feed signer under the fetcher profile
+        run: |
+          set -eu
+          image="ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}"
+          name="ts-signer-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          key="$(openssl genpkey -algorithm ED25519 2>/dev/null \
+            | openssl pkcs8 -topk8 -nocrypt -outform DER \
+            | base64 -w0)"
+          cleanup() { docker rm -f "$name" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          docker run -d --name "$name" --read-only \
+            --tmpfs /run/trustsight:size=8m \
+            --tmpfs /audit:size=8m \
+            --tmpfs /tmp:size=8m,noexec,nosuid,nodev \
+            --cap-drop=all --security-opt=no-new-privileges \
+            --security-opt=seccomp="$PWD/docker/seccomp-fetcher.json" \
+            --user 1000:1000 \
+            -e "TRUSTSIGHT_FEED_KEY=$key" -e TRUSTSIGHT_FEED_KEY_ID=ci \
+            --entrypoint /app/.venv/bin/trustsight "$image" \
+            feed-signer --socket /run/trustsight/feed-signer.sock \
+              --audit-log /audit/log.json --audit-head /audit/head.json
+          docker exec "$name" /app/.venv/bin/python -c \
+            'import base64,json,socket; body=json.dumps({"event":"trustsight.heartbeat","scans":[]}).encode(); req=json.dumps({"body":base64.b64encode(body).decode(),"webhook_id":"ci"}).encode()+b"\n"; s=socket.socket(socket.AF_UNIX); s.connect("/run/trustsight/feed-signer.sock"); s.sendall(req); print(s.recv(4096).decode())' \
+            | grep -q '"ok": true'
+          docker exec "$name" /bin/cat /audit/head.json | grep -q chain_sha256
 
       # The read-only recipe in docs/workflows/reducing-blast-radius.md.  Two
       # passes against the same volumes: a recreated container must stay
       # writable with the state the first run wrote, and a change to the image
       # UID or required paths must fail here before the image is published.
-      # Docker's built-in seccomp profile blocks the unshare the parser
-      # workers need; the workers still apply their own seccomp allowlist and
-      # namespace floor.
+      # The shipped seccomp profile allows the parser namespace floor; the
+      # workers still apply their own seccomp allowlist and namespace floor.
       - name: Exercise the documented isolated container
         env:
           VERSION: ${{ steps.meta.outputs.version }}
@@ -122,8 +248,8 @@ jobs:
               --user 1000:1000 \
               --cap-drop=all \
               --security-opt=no-new-privileges \
-              --security-opt=seccomp=unconfined \
-              --security-opt=apparmor=unconfined \
+              --security-opt=seccomp="${PWD}/docker/seccomp-watcher.json" \
+              --security-opt=apparmor=docker-default \
               --pids-limit=512 --memory=2g --cpus=2 \
               -e TRUSTSIGHT_OFFLINE=1 \
               -e TRUSTSIGHT_NO_UPDATE_CHECK=1 \

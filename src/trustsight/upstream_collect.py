@@ -38,7 +38,7 @@ from .credentials import CredentialError
 from .findings import stamp
 from .upstream_fetch import UpstreamFetchError, fetch_bytes
 
-__all__ = ["collect_upstream_manifest_texts"]
+__all__ = ["UpstreamBudget", "collect_upstream_manifest_texts"]
 
 _MAX_ARCHIVES = 4
 _MAX_SOURCE_ENTRIES = 64
@@ -50,6 +50,12 @@ _HARD_DEADLINE_SECONDS = 300.0
 _HARD_MIN_CHECKSUM_BITS = 256
 #: The sandboxed worker accepts at most this many base64 bytes in one frame.
 _MAX_ARCHIVE_BYTES = 16 * 1024 * 1024
+
+#: Hard cycle ceilings: config can lower these, never raise them.
+_HARD_CYCLE_ARCHIVES = 10_000
+_HARD_CYCLE_BYTES = 1024 * 1024 * 1024
+_HARD_CYCLE_SECONDS = 7200.0
+_DEFAULT_CYCLE_SECONDS = 1800.0
 
 _HEX_RE = re.compile(r"^[0-9a-fA-F]+$")
 
@@ -68,6 +74,74 @@ _PROVIDER_BY_HOST = {
     "codeberg.org": "codeberg",
     "bitbucket.org": "bitbucket",
 }
+
+
+class UpstreamBudget:
+    """One watcher cycle's shared upstream allowance.
+
+    The per-call bounds still apply; this stops an AUR-wide cycle from
+    issuing an unbounded number of calls when every individual call is
+    legal.  A budget refusal is a named coverage note, never a silent skip.
+    """
+
+    def __init__(self, max_archives: int, max_bytes: int,
+                 max_seconds: float):
+        self.max_archives = max_archives
+        self.max_bytes = max_bytes
+        self.archives = 0
+        self.bytes = 0
+        self.deadline = time.monotonic() + max_seconds
+
+    @classmethod
+    def from_config(cls, config: dict | None = None) -> "UpstreamBudget":
+        section = (config or {}).get("upstream_scan")
+        section = section if isinstance(section, dict) else {}
+
+        def _int(key: str, default: int, ceiling: int) -> int:
+            try:
+                value = int(section.get(key, default))
+            except (TypeError, ValueError):
+                return default
+            return max(1, min(value, ceiling))
+
+        def _seconds() -> float:
+            try:
+                value = float(
+                    section.get("max_seconds_per_cycle",
+                                _DEFAULT_CYCLE_SECONDS))
+            except (TypeError, ValueError):
+                value = _DEFAULT_CYCLE_SECONDS
+            if value <= 0:
+                value = _DEFAULT_CYCLE_SECONDS
+            return min(value, _HARD_CYCLE_SECONDS)
+
+        return cls(
+            _int("max_archives_per_cycle", 500, _HARD_CYCLE_ARCHIVES),
+            _int("max_bytes_per_cycle", 268_435_456, _HARD_CYCLE_BYTES),
+            _seconds(),
+        )
+
+    def exhausted(self) -> str:
+        """The exhausted dimension, or ``""`` while the budget holds."""
+        if time.monotonic() >= self.deadline:
+            return "seconds"
+        if self.archives >= self.max_archives:
+            return "archives"
+        if self.bytes >= self.max_bytes:
+            return "bytes"
+        return ""
+
+    def allow_archive(self) -> bool:
+        if self.exhausted():
+            return False
+        self.archives += 1
+        return True
+
+    def allow_bytes(self, count: int) -> bool:
+        if count < 0 or self.bytes + count > self.max_bytes:
+            return False
+        self.bytes += count
+        return True
 
 #: Local CI shapes, reported only (U013/U014 are anergic).  A workflow that
 #: references a repository secret and sends it to an unknown host, or that
@@ -160,6 +234,7 @@ def collect_upstream_manifest_texts(
     config: dict | None = None,
     fetcher=None,
     extractor=None,
+    budget: UpstreamBudget | None = None,
 ) -> tuple[list[tuple[str, str]], list[str], list[dict], frozenset[str]]:
     """Return manifest texts, notes, local CI findings and verified triples.
 
@@ -175,6 +250,8 @@ def collect_upstream_manifest_texts(
     section = (config or {}).get("upstream_scan") if isinstance(config, dict) else None
     if not isinstance(section, dict) or not section.get("enabled", False):
         return [], [], [], frozenset()
+    if budget is None:
+        budget = UpstreamBudget.from_config(config)
     # The operator's offline switch is absolute: the lane never opens a
     # connection when TRUSTSIGHT_OFFLINE is set, whatever the config says.
     if os.environ.get("TRUSTSIGHT_OFFLINE", "").strip().lower() in (
@@ -191,6 +268,10 @@ def collect_upstream_manifest_texts(
         return [], ["upstream_scan_recipe_unparsed"], [], frozenset()
 
     allowed = configured_hosts(config)
+    socket_path = (
+        str(section.get("fetcher_socket", "") or "").strip()
+        or os.environ.get("TRUSTSIGHT_UPSTREAM_FETCHER_SOCKET", "").strip()
+    )
     texts: list[tuple[str, str]] = []
     notes: list[str] = []
     findings: list[dict] = []
@@ -220,6 +301,9 @@ def collect_upstream_manifest_texts(
             break
         if seen >= _MAX_ARCHIVES or time.monotonic() >= deadline_at:
             break
+        if budget.exhausted():
+            notes.append("upstream_scan_budget")
+            break
         raw = str(entry)
         url = _resolve(raw, recipe, resolve_text)
         if not url.lower().startswith("https://"):
@@ -243,25 +327,48 @@ def collect_upstream_manifest_texts(
         )
         if mode.mode != "archive":
             continue
+        if not budget.allow_archive():
+            notes.append("upstream_scan_budget")
+            break
         remaining = deadline_at - time.monotonic()
         if remaining <= 0:
             notes.append("upstream_scan_deadline")
             break
         try:
-            try:
-                token = _token_for(target.host)
-            except CredentialError:
-                notes.append("upstream_scan_token_unavailable")
-                continue
-            if fetcher is None:
+            if fetcher is not None:
+                data = fetcher(url, target)
+            elif socket_path:
+                from .upstream_fetcher_client import fetch_from_socket
+
+                data = fetch_from_socket(
+                    socket_path, url=url, expected=expected,
+                    algorithm=algorithm, min_bits=minimum,
+                    max_bytes=_MAX_ARCHIVE_BYTES,
+                    deadline_seconds=min(remaining, _HARD_DEADLINE_SECONDS),
+                )
+            else:
+                try:
+                    token = _token_for(target.host)
+                except CredentialError:
+                    notes.append("upstream_scan_token_unavailable")
+                    continue
                 data = fetch_bytes(
                     url, allowed_hosts=allowed, token=token,
                     max_bytes=_MAX_ARCHIVE_BYTES, deadline_seconds=remaining)
-            else:
-                data = fetcher(url, target)
-        except (UpstreamFetchError, UpstreamScanError):
+        except UpstreamFetchError as exc:
+            if exc.status in (403, 429, 500, 502, 503, 504):
+                # One rate limit speaks for the rest of the cycle: continuing
+                # would multiply the refusal and keep the lane hot.
+                notes.append("upstream_scan_rate_limited")
+                break
             notes.append("upstream_scan_refused")
             continue
+        except UpstreamScanError:
+            notes.append("upstream_scan_refused")
+            continue
+        if not budget.allow_bytes(len(data)):
+            notes.append("upstream_scan_budget")
+            break
         if not verify_archive_checksum(
                 data, expected, algorithm=algorithm, min_bits=minimum):
             notes.append("upstream_scan_checksum")

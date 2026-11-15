@@ -1168,6 +1168,174 @@ build lane: the manifest a caller supplies is the whole handoff.
 
 ---
 
+## trustsight upstream-fetcher
+
+Run the separate upstream archive fetcher. It owns the provider token and
+the HTTP/TLS path; the watcher talks to it over a Unix socket and never reads
+the token itself.
+
+```
+trustsight upstream-fetcher [--socket PATH]
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--socket` | Unix socket to listen on. Default `/run/trustsight/upstream.sock`; mount the same path into the watcher. |
+
+The service accepts a URL, expected checksum/algorithm and bounds, re-validates
+the forge allowlist, resolves and pins the address, fetches under the byte and
+time caps, verifies the checksum, and returns the bytes. It has no database,
+config write path, feed key or parser worker.
+
+---
+
+## trustsight egress-proxy
+
+Run the CONNECT-only egress proxy used by the upstream fetcher. It accepts
+only HTTPS on port 443 to the exact forge and CDN allowlist, resolves the
+target once, refuses non-routable addresses, and tunnels the TLS connection
+without terminating it.
+
+```
+trustsight egress-proxy [--listen HOST:PORT] [--auth-token TOKEN] [--alert-url URL]
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--listen` | Address to listen on. Default `0.0.0.0:3128`; the compose file keeps it on the internal network. |
+| `--audit-log` | Append one JSON record per allowed or refused CONNECT (`ts`, `host`, `address`, `allowed`, `reason`). The compose file points it at `/var/lib/trustsight/proxy.jsonl`. If an allowed CONNECT cannot be audited, it is refused; the log rotates at 64 MiB. |
+| `--auth-token` | Require `Proxy-Authorization: Basic trustsight:<token>`. Defaults to `TRUSTSIGHT_PROXY_TOKEN`. |
+| `--alert-url` | POST a `trustsight.proxy_denied` alert for each refused CONNECT. Defaults to `TRUSTSIGHT_PROXY_ALERT_URL`. |
+
+---
+
+## trustsight feed-signer
+
+Run the separate feed signer. It owns the Ed25519 feed key and returns
+`webhook-*` signature headers for a bounded body; the watcher never reads the
+private key.
+
+```
+trustsight feed-signer [--socket PATH]
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--socket` | Unix socket to listen on. Default `/run/trustsight/feed-signer.sock`; mount the same path into the watcher. |
+| `--audit-log` | Append one JSON record per signed body and refuse to sign if it cannot be written. The compose file points it at `/var/lib/trustsight/signer/signatures.jsonl`. |
+| `--audit-head` | Atomically publish the latest chain value to this path so an external anchor can read it. The compose file uses `/var/lib/trustsight/signer/head.json`. |
+
+The signer has no network and no database. The watcher still builds and POSTs
+the document; the signature binds the exact body it was asked to sign.
+It accepts only the known `trustsight.*` events with their expected shape,
+rate-limits the socket to 120 signatures per minute, and refuses to sign if
+its audit record cannot be written. Audit records are hash-chained, so a
+deleted or reordered record is detectable and a corrupt log fails closed.
+Each record also carries an Ed25519 signature over its canonical content, so
+an attacker without the signing key cannot rewrite the chain.
+
+---
+
+## trustsight token-broker
+
+Serve provider tokens over a local Unix socket. The fetcher asks for a
+provider and receives `{"token": "...", "expires_at": ...}`; files are
+re-read on every request so they can be rotated.
+
+```
+trustsight token-broker [--socket PATH] [--token-dir DIR] [--token-command CMD]
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--socket` | Unix socket to listen on. Default `/run/trustsight/token-broker.sock`. |
+| `--token-dir` | Directory holding `<provider>.token` and optional `<provider>.expires`. Default `/run/trustsight/tokens`. |
+| `--token-command` | Credential process run when `<provider>.token` is absent. Defaults to `TRUSTSIGHT_TOKEN_COMMAND`. |
+
+The broker has no network. An expired, missing or malformed token/expiry is
+refused; the fetcher treats that as a hard credential failure.
+`--token-command` supports Vault/STS/KMS credential helpers: it is split with
+`shlex` (never a shell), receives `{provider}`, and must print a JSON object
+with `token` and optional `expires_at`, or a plain token on the first line.
+
+---
+
+## trustsight db-writer
+
+Own the writable SQLite handle for an isolated watcher. The watcher reads the
+database through a read-only mount and sends `INSERT`/`UPDATE` statements to
+this process over a Unix socket. `DELETE`, schema changes, `PRAGMA`, and
+`ATTACH` are refused; every accepted statement is appended to a hash-chained
+audit log.
+
+```
+trustsight db-writer --db PATH [--socket PATH] [--audit-log PATH]
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--db` | Path to the SQLite database the writer owns. |
+| `--socket` | Unix socket to listen on. Default `/run/trustsight-db/db-writer.sock`. |
+| `--audit-log` | Append one hash-chained JSON record per accepted statement. |
+
+The watcher selects this mode with `TRUSTSIGHT_DB_WRITER_SOCKET`; it does not
+open the database for writing itself.
+
+---
+
+## trustsight audit-anchor
+
+Compare the signer's published `head.json` with an off-host expected chain,
+or poll it so a rollback exits non-zero.
+
+```
+trustsight audit-anchor check --head PATH [--expected CHAIN] [--expected-file PATH]
+trustsight audit-anchor watch --head PATH [--expected CHAIN] [--expected-file PATH] [--interval SECONDS] [--notify-url URL]
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--head` | Path to the signer's `head.json`. |
+| `--expected` | Expected `chain_sha256` value. |
+| `--expected-file` | File holding the expected `chain_sha256`; overrides `--expected`. |
+| `--interval` | Seconds between checks in `watch`. Default `300`. |
+| `--notify-url` | POST a mismatch alert to this URL before `watch` exits. |
+
+`check` exits `2` on a mismatch or unreadable head. `watch` does the same
+instead of continuing to poll.
+
+---
+
+## trustsight containment
+
+Report the controls active in the current process: uid, seccomp filter mode,
+AppArmor profile, root-filesystem read-only state, and whether a default route
+exists. Useful inside a container to prove the deployment matches the intent.
+
+```
+trustsight containment status [--json]
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Emit one JSON object instead of `key: value` lines. |
+
+---
+
 ## trustsight auth
 
 Manage provider tokens for the optional upstream-scan lane. A token is never

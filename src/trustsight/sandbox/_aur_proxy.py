@@ -32,6 +32,7 @@ import socket
 import ssl
 import threading
 import time
+from urllib.parse import urlsplit
 
 from .git_bounds import (
     GIT_PROXY_ADVERT_BYTES,
@@ -226,6 +227,36 @@ def _parse_upload_pack_request(body: bytes):
         if len(haves) > GIT_PROXY_MAX_HAVES:
             raise _BadRequest("too many have lines")
     return haves, done
+
+
+def _connect_via_proxy(proxy: str, host: str, port: int, timeout: float):
+    """Dial *host* through an HTTP CONNECT proxy, returning a raw socket."""
+    parts = urlsplit(proxy)
+    if parts.scheme.lower() != "http" or not parts.hostname:
+        raise _UpstreamError("watcher proxy must be http://host:port")
+    if parts.username or parts.password:
+        raise _UpstreamError("watcher proxy must not carry credentials")
+    raw = socket.create_connection(
+        (parts.hostname, parts.port or 3128), timeout=timeout)
+    try:
+        raw.settimeout(timeout)
+        raw.sendall(
+            f"CONNECT {host}:{port} HTTP/1.1\r\nHost: {host}:{port}\r\n\r\n"
+            .encode())
+        data = bytearray()
+        while b"\r\n\r\n" not in data:
+            chunk = raw.recv(4096)
+            if not chunk:
+                raise _UpstreamError("watcher proxy closed the CONNECT")
+            data.extend(chunk)
+            if len(data) > 8192:
+                raise _UpstreamError("watcher proxy response too large")
+        if b" 200 " not in bytes(data).split(b"\r\n", 1)[0] + b" ":
+            raise _UpstreamError("watcher proxy refused the CONNECT")
+        return raw
+    except Exception:
+        raw.close()
+        raise
 
 
 class AurFetchProxy:
@@ -532,8 +563,14 @@ class AurFetchProxy:
             raise _UpstreamError("explicit CA bundle is unavailable")
         context = ssl.create_default_context(cafile=_CA_BUNDLE)
         context.minimum_version = ssl.TLSVersion.TLSv1_2
-        raw = socket.create_connection(
-            (_AUR_HOST, _AUR_PORT), timeout=self._timeout)
+        proxy = (
+            os.environ.get("TRUSTSIGHT_WATCHER_PROXY", "").strip()
+            or os.environ.get("HTTPS_PROXY", "").strip()
+            or os.environ.get("https_proxy", "").strip()
+        )
+        raw = _connect_via_proxy(proxy, _AUR_HOST, _AUR_PORT, self._timeout) \
+            if proxy else socket.create_connection(
+                (_AUR_HOST, _AUR_PORT), timeout=self._timeout)
         try:
             return context.wrap_socket(raw, server_hostname=_AUR_HOST)
         except Exception:

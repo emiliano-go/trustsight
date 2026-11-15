@@ -4,15 +4,18 @@ The upstream-scan lane and any authenticated API call need a token.  A token
 is a credential, so this module defines one resolution order and one rule set
 rather than leaving each call site to invent its own:
 
-1. **systemd credentials** (a service): ``$CREDENTIALS_DIRECTORY/<provider>-token``
+1. **Token broker** (opt-in): ``TRUSTSIGHT_<PROVIDER>_TOKEN_SOCKET`` names a
+   local Unix socket that returns a short-lived token and its expiry.  The
+   broker is contacted per resolution, so rotation needs no restart.
+2. **systemd credentials** (a service): ``$CREDENTIALS_DIRECTORY/<provider>-token``
    populated by ``LoadCredentialEncrypted=``.  Root is needed once at install
    time to encrypt and place the file; the running service needs no privilege.
-2. **OS keyring** (a user CLI): Secret Service/KWallet through the optional
+3. **OS keyring** (a user CLI): Secret Service/KWallet through the optional
    ``keyring`` package.  Encrypted at rest and unlocked at login.
-3. **Secret file**: ``TRUSTSIGHT_<PROVIDER>_TOKEN_FILE``, which must be mode
+4. **Secret file**: ``TRUSTSIGHT_<PROVIDER>_TOKEN_FILE``, which must be mode
    ``0600`` like the feed key.  A group/other-readable file is named, not used
    silently.
-4. **Environment**: ``TRUSTSIGHT_<PROVIDER>_TOKEN``, for CI and containers only.
+5. **Environment**: ``TRUSTSIGHT_<PROVIDER>_TOKEN``, for CI and containers only.
    An environment variable is visible to same-UID processes, so it is last.
 
 A keyring that exists but refuses (locked, denied) is a **fail-closed** error,
@@ -27,9 +30,12 @@ a report, or a child process environment.  :class:`Secret` redacts itself in
 
 from __future__ import annotations
 
+import json
 import logging
 import os
+import socket
 import stat
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -82,6 +88,73 @@ def provider_env_names(provider: str) -> tuple[str, str]:
     """``(token_env, file_env)`` for one provider."""
     provider = normalize_provider(provider)
     return _env_name(provider, "TOKEN"), _env_name(provider, "TOKEN_FILE")
+
+
+def _expiry_env_name(provider: str) -> str:
+    return _env_name(normalize_provider(provider), "TOKEN_EXPIRES_AT")
+
+
+def _broker_env_name(provider: str) -> str:
+    return _env_name(normalize_provider(provider), "TOKEN_SOCKET")
+
+
+def _broker_token(provider: str, path: str) -> Secret:
+    """Ask a local broker for a short-lived token; any failure is fatal."""
+    request = json.dumps({"provider": provider}).encode() + b"\n"
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as conn:
+            conn.settimeout(5.0)
+            conn.connect(path)
+            conn.sendall(request)
+            conn.shutdown(socket.SHUT_WR)
+            chunks = bytearray()
+            while True:
+                chunk = conn.recv(65536)
+                if not chunk:
+                    break
+                chunks.extend(chunk)
+                if len(chunks) > 64 * 1024:
+                    raise CredentialError("token broker response is too large")
+    except (OSError, TimeoutError) as exc:
+        raise CredentialError(
+            f"{provider} token broker is unavailable: {type(exc).__name__}"
+        ) from exc
+    try:
+        response = json.loads(bytes(chunks).decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise CredentialError(f"{provider} token broker returned invalid JSON") from exc
+    if not isinstance(response, dict):
+        raise CredentialError(f"{provider} token broker returned a non-object")
+    token = response.get("token")
+    if not isinstance(token, str) or not token.strip():
+        raise CredentialError(f"{provider} token broker returned no token")
+    expires_at = response.get("expires_at")
+    if expires_at is not None:
+        try:
+            expires = float(expires_at)
+        except (TypeError, ValueError) as exc:
+            raise CredentialError("token broker expiry is not a timestamp") from exc
+        if time.time() >= expires:
+            raise CredentialError(f"{provider} token broker returned an expired token")
+    return Secret(provider, token.strip())
+
+
+def _check_expiry(secret: Secret | None, provider: str,
+                  environ) -> Secret | None:
+    """Refuse a token whose declared expiry has passed, without fallback."""
+    if secret is None:
+        return None
+    raw = (environ.get(_expiry_env_name(provider), "") or "").strip()
+    if not raw:
+        return secret
+    try:
+        expires_at = float(raw)
+    except ValueError as exc:
+        raise CredentialError(
+            f"{provider} token expiry is not a Unix timestamp") from exc
+    if time.time() >= expires_at:
+        raise CredentialError(f"{provider} token has expired; rotate it")
+    return secret
 
 
 @dataclass(frozen=True)
@@ -184,24 +257,32 @@ def token_source(
     provider = normalize_provider(provider)
     environ = os.environ if environ is None else environ
 
-    secret = _systemd_credential(provider, environ)
+    broker_path = (environ.get(_broker_env_name(provider), "") or "").strip()
+    if broker_path:
+        return _broker_token(provider, broker_path), "token broker"
+
+    secret = _check_expiry(
+        _systemd_credential(provider, environ), provider, environ)
     if secret is not None:
         return secret, "systemd credential"
 
-    secret = _keyring_token(provider, keyring_backend)
+    secret = _check_expiry(
+        _keyring_token(provider, keyring_backend), provider, environ)
     if secret is not None:
         return secret, "OS keyring"
 
     token_env, file_env = provider_env_names(provider)
     file_path = (environ.get(file_env, "") or "").strip()
     if file_path:
-        secret = _read_secret_file(Path(file_path).expanduser(), provider)
+        secret = _check_expiry(
+            _read_secret_file(Path(file_path).expanduser(), provider),
+            provider, environ)
         if secret is not None:
             return secret, "0600 token file"
 
     value = (environ.get(token_env, "") or "").strip()
     if value:
-        return Secret(provider, value), "environment"
+        return _check_expiry(Secret(provider, value), provider, environ), "environment"
     return None, ""
 
 
@@ -217,9 +298,32 @@ def resolve_token(
     is explicit rather than an error.  A keyring that refuses raises
     :class:`CredentialError` (fail closed).
     """
-    return token_source(
+    environ = os.environ if environ is None else environ
+    secret = token_source(
         provider, environ=environ, keyring_backend=keyring_backend
     )[0]
+    canary = (environ.get("TRUSTSIGHT_CANARY_TOKEN", "") or "").strip()
+    if secret is not None and canary and secret.reveal() == canary:
+        _log.critical(
+            "%s credential is the configured canary token; refusing to use it",
+            provider)
+        _send_canary_alert(provider, environ)
+        raise CredentialError(
+            f"{provider} resolved to the configured canary token; refusing")
+    return secret
+
+
+def _send_canary_alert(provider: str, environ) -> None:
+    url = (environ.get("TRUSTSIGHT_CANARY_ALERT_URL", "") or "").strip()
+    if not url:
+        return
+    from .alerts import send
+
+    send(url, {
+        "event": "trustsight.canary",
+        "provider": provider,
+        "ts": int(time.time()),
+    })
 
 
 def store_token(provider: str, token: str, *, keyring_backend=None) -> None:

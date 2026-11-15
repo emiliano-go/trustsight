@@ -27,6 +27,13 @@ services:
     # was actually examined; that visibility is why the deeper walk is on.
     command: ["full-aur", "--watch", "--interval", "1800", "--depth", "-1"]
     restart: unless-stopped
+    depends_on:
+      - db-writer
+      - upstream-fetcher
+      - feed-signer
+      - egress-proxy
+    networks:
+      - watcher-internal
     # A watcher is a long-lived service: let SIGTERM finish the package in
     # flight, save the resume state and checkpoint the WAL.
     init: true
@@ -35,8 +42,8 @@ services:
     # volumes and the two tmpfs mounts are the only writable paths.
     read_only: true
     tmpfs:
-      - /tmp:size=64m
-      - /home/ts/.cache:size=64m
+      - /tmp:size=64m,noexec,nosuid,nodev
+      - /home/ts/.cache:size=64m,noexec,nosuid,nodev
     user: "1000:1000"
     cap_drop:
       - ALL
@@ -45,8 +52,11 @@ services:
       # Docker's built-in seccomp and AppArmor profiles deny the namespace
       # and mount operations the parser workers need.  The workers still
       # apply their own seccomp allowlist and namespace/mount floor.
-      - seccomp=unconfined
-      - apparmor=unconfined
+      # Custom profile derived from Docker's default: it keeps the default
+      # denials and additionally allows only the namespace/mount calls the
+      # parser workers need, without CAP_SYS_ADMIN.
+      - seccomp=./docker/seccomp-watcher.json
+      - apparmor=${TRUSTSIGHT_APPARMOR_PROFILE:-unconfined}
     pids_limit: 512
     mem_limit: 2g
     cpus: 2.0
@@ -54,18 +64,37 @@ services:
       nofile:
         soft: 4096
         hard: 4096
+      core:
+        soft: 0
+        hard: 0
     # Re-fetch :latest on every `up`.  Docker keeps an existing :latest image
     # and will not re-pull the tag on its own, so without this a host silently
     # runs the version it first pulled, however far behind the channel moves.
     pull_policy: always
     volumes:
-      - trustsight-data:/home/ts/.local/share/trustsight
-      - ./trustsight-config:/home/ts/.config/trustsight
+      - trustsight-data:/data:ro
+      - ./run/trustsight-db:/run/trustsight-db
+      # Read-only source: the entrypoint copies it into the writable tmpfs
+      # config dir, so an RCE cannot persist by editing config/rules.
+      - ./trustsight-config:/config-src:ro
+      # The fetcher owns the provider token and the HTTP/TLS path; the
+      # watcher only has this socket.
+      - ./run/trustsight:/run/trustsight
     environment:
       # Timestamp and level on every log line, so `docker logs` shows when a
       # cycle ran, not only what it did.
       TRUSTSIGHT_LOG_TIMESTAMPS: "1"
       TMPDIR: "/tmp"
+      TRUSTSIGHT_CONFIG_SRC: "/config-src"
+      TRUSTSIGHT_CONFIG_DIR: "/tmp/trustsight-config"
+      TRUSTSIGHT_DB_PATH: "/data/trustsight.db"
+      TRUSTSIGHT_DB_WRITER_SOCKET: "/run/trustsight-db/db-writer.sock"
+      TRUSTSIGHT_UPSTREAM_FETCHER_SOCKET: "/run/trustsight/upstream.sock"
+      # AUR, release-channel, feed and ntfy traffic goes through the proxy;
+      # the watcher has no default route.
+      HTTPS_PROXY: "http://trustsight:${TRUSTSIGHT_PROXY_TOKEN:-}@egress-proxy:3128"
+      HTTP_PROXY: "http://trustsight:${TRUSTSIGHT_PROXY_TOKEN:-}@egress-proxy:3128"
+      NO_PROXY: "127.0.0.1,localhost"
       # A cycle parses and drops two ~360 MB metadata snapshots.  glibc keeps
       # the freed pages in per-thread arenas; capping arenas at 2 and trimming
       # at the top of the heap keeps RSS near the live set instead of the peak.
@@ -73,28 +102,22 @@ services:
       MALLOC_ARENA_MAX: "2"
       MALLOC_TRIM_THRESHOLD_: "131072"
       # The upstream lane is opt-in and only the watcher enables it: local
-      # `review`/`inspect` stays fetch-free.  The lane reaches only the
-      # allowlisted forges, and parses an archive only after its declared
-      # checksum verifies.  A token is strongly recommended; mount a 0600
-      # file read-only and point TRUSTSIGHT_GITHUB_TOKEN_FILE at it rather
-      # than putting the token in the environment.
+      # `review`/`inspect` stays fetch-free.  The fetcher service performs
+      # the actual read; the watcher has no provider token.
       TRUSTSIGHT_UPSTREAM_SCAN_ENABLED: "1"
       TRUSTSIGHT_UPSTREAM_SCAN_ARCHIVE_FETCH: "1"
-      # TRUSTSIGHT_GITHUB_TOKEN_FILE: "/run/secrets/github_token"
-      # Secret-file form of the feed key.  Prefer this (or a Docker secret)
-      # over putting the private key in the environment, which is visible to
-      # `docker inspect`.
-      # TRUSTSIGHT_FEED_KEY_ID: "k1"
-      # TRUSTSIGHT_FEED_KEY_FILE: "/run/secrets/trustsight_feed_key"
+      # The feed key lives in the separate feed-signer service; the watcher
+      # only asks it for signature headers.
+      TRUSTSIGHT_FEED_SIGNER_SOCKET: "/run/trustsight/feed-signer.sock"
+      TRUSTSIGHT_REQUIRE_HARDENED: "1"
+      TRUSTSIGHT_REQUIRE_SECCOMP: "1"
+      TRUSTSIGHT_REQUIRE_READONLY_CONFIG: "1"
       # TRUSTSIGHT_LOG_LEVEL: "INFO"
       # TRUSTSIGHT_OFFLINE: "1"
       # The signed feed sink: the watcher POSTs every alert here as well as to
-      # ntfy, so the feed ingests directly instead of polling.  The key is the
-      # Ed25519 private key (base64 PKCS#8); the feed holds only the public
-      # half.  With no key the feed sink is skipped.
+      # ntfy, so the feed ingests directly instead of polling.  The signer
+      # holds the Ed25519 private key; the feed holds only the public half.
       # TRUSTSIGHT_FEED_URL: "https://watcher.trustsight.org/api/ingest"
-      # TRUSTSIGHT_FEED_KEY_ID: "k1"
-      # TRUSTSIGHT_FEED_KEY: "<base64 pkcs8 ed25519>"
     healthcheck:
       test: ["CMD", "/app/.venv/bin/trustsight", "full-aur", "health", "--optional"]
       interval: 5m
@@ -107,5 +130,272 @@ services:
         max-size: "10m"
         max-file: "5"
 
+  db-writer:
+    image: ghcr.io/emiliano-go/trustsight:latest
+    container_name: trustsight-db-writer
+    command: ["db-writer", "--socket", "/run/trustsight-db/db-writer.sock",
+              "--db", "/data/trustsight.db",
+              "--audit-log", "/var/lib/trustsight/db-writer.jsonl"]
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid,nodev
+    user: "1000:1000"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=./docker/seccomp-fetcher.json
+      - apparmor=docker-default
+    network_mode: none
+    pids_limit: 64
+    mem_limit: 256m
+    cpus: 0.5
+    volumes:
+      - trustsight-data:/data
+      - ./run/trustsight-db:/run/trustsight-db
+      - trustsight-db-audit:/var/lib/trustsight
+    environment:
+      TRUSTSIGHT_LOG_TIMESTAMPS: "1"
+      TMPDIR: "/tmp"
+      TRUSTSIGHT_REQUIRE_SECCOMP: "1"
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+  upstream-fetcher:
+    image: ${TRUSTSIGHT_IMAGE:-ghcr.io/emiliano-go/trustsight:latest}
+    container_name: trustsight-upstream-fetcher
+    command: ["upstream-fetcher", "--socket", "/run/trustsight/upstream.sock"]
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid,nodev
+      - /home/ts/.cache:size=16m,noexec,nosuid,nodev
+    user: "1000:1000"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=./docker/seccomp-fetcher.json
+      - apparmor=docker-default
+    pids_limit: 64
+    mem_limit: 512m
+    cpus: 1.0
+    ulimits:
+      nofile:
+        soft: 256
+        hard: 256
+      core:
+        soft: 0
+        hard: 0
+    volumes:
+      - ./run/trustsight:/run/trustsight
+      - ./run/trustsight-token:/run/trustsight-token
+      - ./trustsight-config:/config-src:ro
+    networks:
+      - watcher-internal
+    depends_on:
+      - egress-proxy
+    environment:
+      TRUSTSIGHT_LOG_TIMESTAMPS: "1"
+      TMPDIR: "/tmp"
+      TRUSTSIGHT_CONFIG_SRC: "/config-src"
+      TRUSTSIGHT_CONFIG_DIR: "/tmp/trustsight-config"
+      TRUSTSIGHT_UPSTREAM_SCAN_ENABLED: "1"
+      TRUSTSIGHT_UPSTREAM_SCAN_ARCHIVE_FETCH: "1"
+      TRUSTSIGHT_UPSTREAM_PROXY: "http://trustsight:${TRUSTSIGHT_PROXY_TOKEN:-}@egress-proxy:3128"
+      TRUSTSIGHT_REQUIRE_SECCOMP: "1"
+      # A 0600 token file mounted read-only; the fetcher is the only process
+      # that sees it.  Uncomment and add the mount:
+      # TRUSTSIGHT_GITHUB_TOKEN_FILE: "/run/secrets/github_token"
+      # TRUSTSIGHT_GITHUB_TOKEN_EXPIRES_AT: "1790000000"
+      # TRUSTSIGHT_GITHUB_TOKEN_SOCKET: "/run/trustsight-token/token-broker.sock"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  egress-proxy:
+    image: ${TRUSTSIGHT_IMAGE:-ghcr.io/emiliano-go/trustsight:latest}
+    container_name: trustsight-egress-proxy
+    command: ["egress-proxy", "--listen", "0.0.0.0:3128",
+              "--audit-log", "/var/lib/trustsight/proxy.jsonl"]
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=8m,noexec,nosuid,nodev
+    user: "1000:1000"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=./docker/seccomp-fetcher.json
+      - apparmor=docker-default
+    pids_limit: 64
+    mem_limit: 256m
+    cpus: 1.0
+    ulimits:
+      nofile:
+        soft: 256
+        hard: 256
+      core:
+        soft: 0
+        hard: 0
+    networks:
+      - watcher-internal
+      - default
+    volumes:
+      - trustsight-egress-audit:/var/lib/trustsight
+    environment:
+      TRUSTSIGHT_LOG_TIMESTAMPS: "1"
+      TMPDIR: "/tmp"
+      TRUSTSIGHT_REQUIRE_SECCOMP: "1"
+      TRUSTSIGHT_PROXY_TOKEN: "${TRUSTSIGHT_PROXY_TOKEN:-}"
+      TRUSTSIGHT_PROXY_ALERT_URL: "${TRUSTSIGHT_PROXY_ALERT_URL:-}"
+      # Optional comma-separated exact hosts for operator webhooks/ntfy.
+      TRUSTSIGHT_EGRESS_ALLOW: "${TRUSTSIGHT_EGRESS_ALLOW:-}"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  feed-signer:
+    image: ${TRUSTSIGHT_IMAGE:-ghcr.io/emiliano-go/trustsight:latest}
+    container_name: trustsight-feed-signer
+    command: ["feed-signer", "--socket", "/run/trustsight/feed-signer.sock",
+              "--audit-log", "/var/lib/trustsight/signer/signatures.jsonl",
+              "--audit-head", "/var/lib/trustsight/signer/head.json"]
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=8m,noexec,nosuid,nodev
+    user: "1000:1000"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=./docker/seccomp-fetcher.json
+      - apparmor=docker-default
+    network_mode: none
+    pids_limit: 32
+    mem_limit: 128m
+    cpus: 0.5
+    ulimits:
+      nofile:
+        soft: 128
+        hard: 128
+      core:
+        soft: 0
+        hard: 0
+    volumes:
+      - ./run/trustsight:/run/trustsight
+      - trustsight-signer-audit:/var/lib/trustsight/signer
+      # Mount the 0600 feed key read-only here, never in the watcher:
+      # - ./secrets/feed.key:/run/secrets/feed_key:ro
+    environment:
+      TRUSTSIGHT_LOG_TIMESTAMPS: "1"
+      TMPDIR: "/tmp"
+      TRUSTSIGHT_REQUIRE_SECCOMP: "1"
+      # TRUSTSIGHT_FEED_KEY_ID: "k1"
+      # TRUSTSIGHT_FEED_KEY_FILE: "/run/secrets/feed_key"
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+  token-broker:
+    image: ${TRUSTSIGHT_IMAGE:-ghcr.io/emiliano-go/trustsight:latest}
+    container_name: trustsight-token-broker
+    command: ["token-broker", "--socket", "/run/trustsight-token/token-broker.sock",
+              "--token-dir", "/run/trustsight-token/tokens"]
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=8m,noexec,nosuid,nodev
+    user: "1000:1000"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=./docker/seccomp-fetcher.json
+      - apparmor=docker-default
+    network_mode: none
+    pids_limit: 32
+    mem_limit: 128m
+    cpus: 0.5
+    ulimits:
+      nofile:
+        soft: 128
+        hard: 128
+      core:
+        soft: 0
+        hard: 0
+    volumes:
+      - ./run/trustsight-token:/run/trustsight-token
+      # Mount rotated provider token files (and optional .expires) read-only:
+      # - ./secrets/tokens:/run/trustsight-token/tokens:ro
+    environment:
+      TRUSTSIGHT_LOG_TIMESTAMPS: "1"
+      TMPDIR: "/tmp"
+      TRUSTSIGHT_REQUIRE_SECCOMP: "1"
+      TRUSTSIGHT_TOKEN_COMMAND: "${TRUSTSIGHT_TOKEN_COMMAND:-}"
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+  anchor-monitor:
+    image: ${TRUSTSIGHT_IMAGE:-ghcr.io/emiliano-go/trustsight:latest}
+    container_name: trustsight-anchor-monitor
+    command: ["audit-anchor", "watch", "--head", "/audit/head.json",
+              "--expected-file", "/audit/expected", "--interval", "300"]
+    profiles:
+      - anchor-monitor
+    restart: "no"
+    read_only: true
+    tmpfs:
+      - /tmp:size=8m,noexec,nosuid,nodev
+    user: "1000:1000"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=./docker/seccomp-fetcher.json
+      - apparmor=docker-default
+    network_mode: none
+    pids_limit: 32
+    mem_limit: 64m
+    cpus: 0.25
+    volumes:
+      - trustsight-signer-audit:/audit:ro
+      - ./anchor/expected:/audit/expected:ro
+    environment:
+      TRUSTSIGHT_LOG_TIMESTAMPS: "1"
+      TMPDIR: "/tmp"
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+networks:
+  watcher-internal:
+    internal: true
+
 volumes:
   trustsight-data:
+  trustsight-signer-audit:
+  trustsight-egress-audit:
+  trustsight-db-audit:

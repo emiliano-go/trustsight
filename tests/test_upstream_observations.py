@@ -51,6 +51,21 @@ def test_observation_detail_is_bounded(isolated_db):
     assert len(rows[0]["detail"].encode()) <= 16 * 1024
 
 
+def test_an_oversized_detail_is_a_valid_truncation_marker(isolated_db):
+    import hashlib
+    import json
+
+    raw = "x" * (64 * 1024)
+    save_upstream_observation(
+        "pkg", "github.com/o/r", version="1",
+        checksum="c" * 64, detail=raw)
+    stored = get_upstream_observations(package="pkg")[0]["detail"]
+    marker = json.loads(stored)
+    assert marker["truncated"] is True
+    assert marker["bytes"] == len(raw.encode())
+    assert marker["sha256"] == hashlib.sha256(raw.encode()).hexdigest()
+
+
 def test_manifest_value_is_normalised():
     assert _normalize_value(
         "upstream_manifest", "GitHub.com/Owner/Repo|1.0"

@@ -87,11 +87,12 @@ which ingests it directly instead of polling ntfy:
 feed = "https://watcher.trustsight.org/api/ingest"
 ```
 
-Every feed POST is signed with an Ed25519 key
-(`TRUSTSIGHT_FEED_KEY`, base64 PKCS#8; `TRUSTSIGHT_FEED_KEY_ID` names it), and
-the feed holds only the public half, so a leaked feed secret cannot forge a
-document. ntfy and the feed are independent: one failing never stops the
-other, and with no key the feed sink is skipped.
+Every feed POST is signed with an Ed25519 key (`TRUSTSIGHT_FEED_KEY`, base64
+PKCS#8; `TRUSTSIGHT_FEED_KEY_ID` names it), and the feed holds only the public
+half. In the container the key lives in the separate `feed-signer` service and
+the watcher asks it through `TRUSTSIGHT_FEED_SIGNER_SOCKET`; the watcher never
+reads the private key. ntfy and the feed are independent: one failing never
+stops the other, and with no key or signer the feed sink is skipped.
 
 The document carries the cycle counts and the alerts. Every
 `over_threshold` entry says what happened, not only that it did: the
@@ -170,6 +171,9 @@ with no new alerts send nothing. A package matching an IOC baseline entry
 is listed in the document's `ioc_matches` whatever it scored: the IOC tier
 reports outside the heuristic score, so it would otherwise never cross the
 bar, and the match is a fact to read rather than a higher priority.
+When the upstream lane is active, the fetched manifest and workflow texts are
+IOC surfaces too, so campaign indicators such as GhostAction's injected
+workflow addresses are enforced even when the PKGBUILD diff is clean.
 Single-shot cycles (a bootstrap chunk, a plain `full-aur` run) notify like
 watch cycles.
 
@@ -192,13 +196,27 @@ dedupes on the persisted `webhook-id`.
 checkpoints the WAL. Only one watcher may own a data directory; a second
 start fails with the lock path instead of interleaving cycles.
 
-For a container, mount the feed key as a secret and point
-`TRUSTSIGHT_FEED_KEY_FILE` at it rather than putting the private key in the
-environment. The shipped compose file runs read-only with a tmpfs for `/tmp`
+For a container, mount the feed key as a secret into the `feed-signer`
+service and point `TRUSTSIGHT_FEED_KEY_FILE` at it there; the watcher only
+gets the signer socket. The shipped compose file runs read-only with a tmpfs for `/tmp`
 and the cache, drops all capabilities, sets `no-new-privileges`, and permits
-the parser workers' `unshare` and mount operations with `seccomp=unconfined`
-and `apparmor=unconfined` (the workers still apply their own seccomp
-allowlist and namespace/mount floor).
+the parser workers' `unshare` and mount operations with the shipped
+`docker/seccomp-watcher.json` profile. The watcher keeps
+`apparmor=unconfined` because those workers need `mount`; the fetcher, proxy
+and signer use Docker's `docker-default` profile. A custom AppArmor profile
+is shipped as `docker/apparmor/trustsight-watcher`; load it and opt in:
+
+```bash
+sudo apparmor_parser -r docker/apparmor/trustsight-watcher
+docker compose -f docker-compose.watcher.yml \
+  -f docker-compose.watcher.apparmor.yml up -d
+```
+
+The default stays `unconfined` until the overlay is used, so a host without
+AppArmor support still starts. With the overlay, the entrypoint checks
+`/proc/self/attr/current` and refuses to run unless the profile is active. The profile allows only the mount/userns the
+parser workers need and limits the rest of the filesystem to the read-only
+app, config and runtime paths.
 
 ## As a systemd service
 
@@ -235,12 +253,14 @@ The image is published to the GitHub Container Registry on every release:
 ```bash
 docker run -d --name trustsight-watch \
   --user 1000:1000 \
-  --security-opt seccomp=unconfined \
+  --security-opt seccomp="$PWD/docker/seccomp-watcher.json" \
   --security-opt apparmor=unconfined \
   -e TRUSTSIGHT_UPSTREAM_SCAN_ENABLED=1 \
   -e TRUSTSIGHT_UPSTREAM_SCAN_ARCHIVE_FETCH=1 \
+  -e TRUSTSIGHT_CONFIG_SRC=/config-src \
+  -e TRUSTSIGHT_CONFIG_DIR=/tmp/trustsight-config \
   -v trustsight-data:/home/ts/.local/share/trustsight \
-  -v $PWD/trustsight-config:/home/ts/.config/trustsight \
+  -v $PWD/trustsight-config:/config-src:ro \
   --restart unless-stopped \
   ghcr.io/emiliano-go/trustsight:latest \
   full-aur --watch --interval 1800 --depth -1
@@ -249,18 +269,17 @@ docker run -d --name trustsight-watch \
 The volume holds the database, the corpus state and the resume file, so a
 container restart (or a new image) continues where the last cycle ended.
 Mount a config directory carrying your `config.toml` (and `[notify] webhook`)
-to keep settings out of the image; it is mounted writable because the startup
-ruleset sync writes the synced `rules.toml` (and any missing default file)
-back into it (the directory must be writable by the container's `ts` user,
-uid 1000). A read-only or unwritable mount logs `ruleset sync skipped:
-Permission denied` and keeps the rules the volume was created with, unless you
-set `TRUSTSIGHT_NO_SYNC_RULES=1` to skip the sync deliberately. The
+to keep settings out of the image. The source is mounted read-only; the
+entrypoint copies it into `/tmp/trustsight-config`, where the startup ruleset
+sync can write. That copy lives in the container's tmpfs and disappears on
+restart, so an RCE cannot persist by editing config or rules. The data volume
+is the only path that survives, and it holds only database/corpus state. The
 container runtime must allow unprivileged user namespaces: if it does not, the
 parser workers refuse and the package is reported as not vetted rather than
-analysed with weaker confinement. With Docker, also pass `--security-opt
-seccomp=unconfined --security-opt apparmor=unconfined` (or custom profiles
-that permit `unshare` and `mount`), because the built-in profiles deny the
-namespace and mount syscalls. The process needs no
+analysed with weaker confinement. With Docker, pass the shipped custom
+`--security-opt seccomp=$PWD/docker/seccomp-watcher.json` (from the repository
+root) and `--security-opt apparmor=unconfined`, because the stock profiles
+deny the namespace and mount syscalls. The process needs no
 privileges. See
 [Reducing Blast Radius](reducing-blast-radius.md) for the boundary around the
 auditor and what it does not cover.
@@ -276,18 +295,95 @@ docker compose -f docker-compose.watcher.yml up -d
 docker compose -f docker-compose.watcher.yml logs -f trustsight-watch
 ```
 
+### Deploying a digest-pinned image
+
+`latest` is mutable. Resolve and optionally verify the image once, then use
+the pinned overlay so a moved tag cannot change what the watcher runs:
+
+```bash
+export TRUSTSIGHT_IMAGE=$(python scripts/pin_watcher_image.py \
+  --cosign-key /path/to/cosign.pub --require-signature)
+docker compose -f docker-compose.watcher.yml \
+  -f docker-compose.watcher.pinned.yml up -d
+```
+
+The overlay refuses to start without `TRUSTSIGHT_IMAGE`. The helper prints
+`repo@sha256:...`; `--cosign-key` requires the signature check to pass, and
+`--require-signature` refuses to pin at all when no key is supplied.
+The pinned overlay also sets `TRUSTSIGHT_REQUIRE_PINNED=1`, so the watcher
+entrypoint itself refuses to start from a mutable tag even if one is passed
+through the environment.
+
 ### Upstream reads and deep dependencies
 
 The shipped compose file runs `full-aur --watch --interval 1800 --depth -1`,
 so a cycle walks each root's reachable AUR dependency closure (bounded by the
-existing 8-level and 200-node per-root ceilings).  It also enables the
-upstream lane for the watcher only:
+existing 8-level and 200-node per-root ceilings).  It also adds a separate
+`upstream-fetcher` service and points the watcher at its Unix socket:
 
 ```yaml
 environment:
   TRUSTSIGHT_UPSTREAM_SCAN_ENABLED: "1"
   TRUSTSIGHT_UPSTREAM_SCAN_ARCHIVE_FETCH: "1"
+  TRUSTSIGHT_UPSTREAM_FETCHER_SOCKET: "/run/trustsight/upstream.sock"
 ```
+
+The fetcher owns the HTTP/TLS path and the provider token; the watcher has
+neither. Create the shared socket directory before starting the watcher:
+
+```bash
+mkdir -p run/trustsight run/trustsight-token
+```
+
+The watcher, fetcher and signer have no default route: they sit on
+`watcher-internal` and reach the internet only through `egress-proxy`. On the
+host, `scripts/host_egress_guard.py --bridge <br> --proxy-ip <ip> --apply`
+drops all other forwarded traffic from that bridge as a backstop. Set
+`TRUSTSIGHT_PROXY_TOKEN` to require `Basic` proxy authentication, so another
+container on that network cannot borrow the proxy.
+The proxy accepts CONNECT on 443 to the exact forge/CDN plus AUR, release and
+default feed/ntfy hosts; the watcher's `HTTPS_PROXY` routes AUR, release,
+feed and ntfy traffic through it, and the parser worker remains networkless.
+An operator webhook or custom ntfy host must be added to
+`TRUSTSIGHT_EGRESS_ALLOW` on the proxy; it is an exact-host allowlist, never
+a wildcard.
+
+Every CONNECT, allowed or refused, is appended to
+`trustsight-egress-audit` (`proxy.jsonl`), so a denied destination or an
+unexpected host is visible after the fact. An allowed CONNECT is refused if
+its audit record cannot be written; the log rotates at 64 MiB.
+
+`TRUSTSIGHT_REQUIRE_HARDENED=1` also checks `/proc/net/route` and
+`/proc/net/ipv6_route`; the watcher refuses to start if it finds a default
+route. Running it on a bridge with direct internet access therefore fails
+closed instead of silently bypassing the proxy.
+It also refuses a writable `/config-src`, so the operator config mount must
+really be read-only rather than merely intended to be.
+Every main service also sets `TRUSTSIGHT_REQUIRE_SECCOMP=1`; the entrypoint
+refuses to start unless `/proc/self/status` reports an active seccomp filter,
+so a silently ignored profile does not downgrade the deployment.
+Run `trustsight containment status --json` inside the container to audit the
+same controls after startup.
+
+### Rotating provider tokens through the broker
+
+The compose file includes a networkless `token-broker` service. Mount a
+directory of `0600` files into it:
+
+```
+secrets/tokens/github.token
+secrets/tokens/github.expires   # optional Unix timestamp
+```
+
+Then set
+`TRUSTSIGHT_GITHUB_TOKEN_SOCKET=/run/trustsight-token/token-broker.sock`
+on the fetcher. The token-broker socket lives on its own volume, not the
+watcher's; rotate a file and its expiry without restarting anything, and an
+absent, expired, or unreadable token fails closed.
+For a short-lived credential helper, set
+`TRUSTSIGHT_TOKEN_COMMAND='vault read -field=token secret/aur/{provider}'`
+on the broker; it runs without a shell when the token file is absent and must
+print the token or a JSON object with `token` and `expires_at`.
 
 The lane reads a declared source archive only when the recipe names an
 allowlisted forge host and a checksum at or above 256 bits pins it.  It never
@@ -296,14 +392,16 @@ variables are the only settings a container needs; setting them in a shell
 profile would enable the lane for every local command too.
 
 GitHub rate-limits anonymous source reads, so a token is strongly recommended
-for an AUR-wide watcher.  Mount a `0600` token file read-only and point the
-container at it:
+for an AUR-wide watcher.  Mount a `0600` token file read-only into the
+`upstream-fetcher` service (not the watcher) and point that service at it:
 
 ```yaml
-volumes:
-  - ./secrets/github-token:/run/secrets/github_token:ro
-environment:
-  TRUSTSIGHT_GITHUB_TOKEN_FILE: "/run/secrets/github_token"
+services:
+  upstream-fetcher:
+    volumes:
+      - ./secrets/github-token:/run/secrets/github_token:ro
+    environment:
+      TRUSTSIGHT_GITHUB_TOKEN_FILE: "/run/secrets/github_token"
 ```
 
 Do not put the token itself in `docker-compose.watcher.yml` or the
@@ -320,6 +418,55 @@ The same settings can live in the mounted `config.toml`:
 enabled = true
 archive_fetch = true
 ```
+
+### Stronger isolation with gVisor
+
+An optional overlay runs every watcher service under `runsc`:
+
+```bash
+docker compose -f docker-compose.watcher.yml \
+  -f docker-compose.watcher.gvisor.yml up -d
+```
+
+Install and register `runsc` as a Docker runtime first, and validate
+`unshare`/`mount` for the parser workers on the target version. The overlay
+covers the watcher, fetcher, proxy and signer; it changes the kernel boundary,
+not the service configuration. Each service also sets
+`TRUSTSIGHT_REQUIRE_GVISOR=1`; the entrypoint refuses to start unless
+`/proc/version` identifies gVisor/runsc, so a silently missing runtime does
+not downgrade the deployment.
+
+`docker-compose.watcher.kata.yml` is the equivalent microVM overlay for the
+watcher and its parser workers (`runtime: kata-runtime`). Install Kata and
+register the runtime first; the other services keep their container
+boundaries.
+
+### Anchoring the signer audit head
+
+The signer publishes `head.json` on the signer-audit volume. A monitor should
+compare it with an off-host value it already trusts:
+
+```bash
+python scripts/check_audit_anchor.py /data/signer/head.json \
+  --expected "$ANCHORED_CHAIN"
+```
+
+Exit `2` means the head moved without the anchor being updated, or the head
+is unreadable. Publish the new value only after the signer's audit log has
+been reviewed.
+
+The compose file also has an opt-in `anchor-monitor` profile that polls every
+five minutes, mounts the signed audit volume read-only, and has no network:
+
+```bash
+docker compose -f docker-compose.watcher.yml \
+  --profile anchor-monitor up -d anchor-monitor
+```
+
+It exits non-zero when the head no longer matches the mounted
+`./anchor/expected` file. Run the same check with
+`--notify-url https://…` (or the `watch` command) to deliver a
+`trustsight.anchor` alert to a pager or webhook.
 
 ### Reading the logs
 

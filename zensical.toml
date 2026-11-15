@@ -87,6 +87,7 @@ Workflows = [
   {"Tuning False Positives" = "workflows/tuning-false-positives.md"},
   {"Watching the AUR Continuously" = "workflows/watching-the-aur-continuously.md"},
   {"Reducing Blast Radius" = "workflows/reducing-blast-radius.md"},
+  {"Runtime Hardening Setup" = "workflows/runtime-hardening-setup.md"},
 ]
 
 [[project.nav]]

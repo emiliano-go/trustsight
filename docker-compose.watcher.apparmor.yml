@@ -1,0 +1,15 @@
+# Optional AppArmor overlay. Load docker/apparmor/trustsight-watcher on the
+# host first, then:
+#
+#   docker compose -f docker-compose.watcher.yml \
+#     -f docker-compose.watcher.apparmor.yml up -d
+#
+# The entrypoint refuses to start unless the profile is actually active.
+services:
+  trustsight-watch:
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=./docker/seccomp-watcher.json
+      - apparmor=trustsight-watcher
+    environment:
+      TRUSTSIGHT_REQUIRE_APPARMOR: "1"

@@ -54,13 +54,26 @@ def _call_name(node: ast.Call) -> str:
     return ".".join(reversed(parts))
 
 _NETWORK_MODULES = {
+    # A local Unix-socket token broker; it never opens an internet socket.
+    "credentials.py",
     "discovery.py",
     "fetcher.py",
     "full_aur/fetch.py",
     "full_aur/metadata.py",
     "notify.py",
+    "alerts.py",
     "release.py",
     "upstream_fetch.py",
+    "upstream_fetcher_client.py",
+    "upstream_fetcher_service.py",
+    "egress_proxy.py",
+    "feed_signer_client.py",
+    "feed_signer_service.py",
+    "token_broker_service.py",
+    # A local Unix-socket SQLite writer/client; neither opens an internet
+    # socket.
+    "db_writer_service.py",
+    "db_writer_client.py",
     # The isolated git worker clones the AUR repository (A16), but only
     # through its own loopback bridge and the parent CONNECT proxy pinned to
     # aur.archlinux.org:443.

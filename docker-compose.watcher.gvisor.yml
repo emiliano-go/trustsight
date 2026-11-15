@@ -1,0 +1,35 @@
+# Optional gVisor overlay: run every watcher service under runsc instead of
+# the host kernel. Install runsc and register it as a Docker runtime first,
+# then:
+#
+#   docker compose -f docker-compose.watcher.yml \
+#     -f docker-compose.watcher.gvisor.yml up -d
+#
+# gVisor implements the syscall surface in userspace, so a kernel-facing
+# parser or TLS bug has a much smaller host boundary. Validate unshare/mount
+# for the parser workers on the target runsc version before deploying.
+services:
+  trustsight-watch:
+    runtime: runsc
+    environment:
+      TRUSTSIGHT_REQUIRE_GVISOR: "1"
+  db-writer:
+    runtime: runsc
+    environment:
+      TRUSTSIGHT_REQUIRE_GVISOR: "1"
+  upstream-fetcher:
+    runtime: runsc
+    environment:
+      TRUSTSIGHT_REQUIRE_GVISOR: "1"
+  egress-proxy:
+    runtime: runsc
+    environment:
+      TRUSTSIGHT_REQUIRE_GVISOR: "1"
+  feed-signer:
+    runtime: runsc
+    environment:
+      TRUSTSIGHT_REQUIRE_GVISOR: "1"
+  token-broker:
+    runtime: runsc
+    environment:
+      TRUSTSIGHT_REQUIRE_GVISOR: "1"

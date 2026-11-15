@@ -86,6 +86,21 @@ from ...analysis.pipeline._tree import (
 from ..properties import extract_properties, metadata_divergence, update_properties
 
 log = logging.getLogger(__name__)
+def _ioc_matches_for(pkg_name: str, pkgbuild: str,
+                     upstream_texts: tuple[str, ...]) -> list:
+    """Match the recipe and, when upstream is active, its manifest texts."""
+    matches = ioc_baseline_matches("", pkg_name, current_text=pkgbuild)
+    seen = [(m.type, m.value, m.source, m.surface) for m in matches]
+    for text in upstream_texts:
+        for match in ioc_baseline_matches("", pkg_name, current_text=text):
+            key = (match.type, match.value, match.source, match.surface)
+            if key in seen:
+                continue
+            seen.append(key)
+            matches.append(match)
+    return matches
+
+
 def analyze_package_text(
     pkg_name: str,
     old_pkgbuild: Optional[str],
@@ -105,6 +120,7 @@ def analyze_package_text(
     install_name: Optional[str] = None,
     old_install_text: Optional[str] = None,
     upstream_manifest_incomplete: bool = False,
+    upstream_manifest_texts: tuple[str, ...] = (),
     manifest_deltas=(),
     workflow_deltas=(),
     upstream_findings=(),
@@ -407,7 +423,8 @@ def analyze_package_text(
             risk=risk,
             score_breakdown=breakdown,
             final_score=score,
-            ioc_matches=ioc_baseline_matches("", pkg_name, current_text=new_pkgbuild),
+            ioc_matches=_ioc_matches_for(
+                pkg_name, new_pkgbuild, upstream_manifest_texts),
         )
 
         # No diff on the first-seen path: there is nothing to compare

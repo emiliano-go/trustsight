@@ -64,6 +64,10 @@ REDIRECT_HOSTS = frozenset({
 class UpstreamFetchError(UpstreamScanError):
     """The bounded fetch failed or was refused."""
 
+    def __init__(self, message: str, *, status: int | None = None):
+        super().__init__(message)
+        self.status = status
+
 
 @dataclass(frozen=True)
 class _Hop:
@@ -92,6 +96,50 @@ def _open(host: str, address: str, timeout: float):
         host, 443, timeout=timeout, context=context)
     # SNI still names the hostname; only the dialed address is pinned.
     connection._create_connection = _pinned_connection(address, 443)  # type: ignore[attr-defined]
+    return connection
+
+
+def _connect_proxy(proxy: str, host: str, timeout: float, context):
+    parts = urlsplit(proxy)
+    if parts.scheme.lower() != "http" or not parts.hostname:
+        raise UpstreamFetchError("proxy must be an http://host:port URL")
+    if parts.username or parts.password:
+        raise UpstreamFetchError("proxy URL must not carry credentials")
+    port = parts.port or 3128
+    sock = socket.create_connection((parts.hostname, port), timeout)
+    try:
+        sock.settimeout(timeout)
+        sock.sendall(
+            f"CONNECT {host}:443 HTTP/1.1\r\nHost: {host}:443\r\n\r\n".encode())
+        response = bytearray()
+        while b"\r\n\r\n" not in response:
+            chunk = sock.recv(4096)
+            if not chunk:
+                raise UpstreamFetchError("proxy closed the CONNECT response")
+            response.extend(chunk)
+            if len(response) > 8192:
+                raise UpstreamFetchError("proxy response is over its cap")
+        status_line = bytes(response).split(b"\r\n", 1)[0]
+        if b" 200 " not in status_line + b" ":
+            raise UpstreamFetchError("proxy refused the CONNECT")
+        return context.wrap_socket(sock, server_hostname=host)
+    except Exception:
+        sock.close()
+        raise
+
+
+def _open_proxy(proxy: str, host: str, timeout: float):
+    context = ssl.create_default_context()
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
+    connection = http.client.HTTPSConnection(
+        host, 443, timeout=timeout, context=context)
+
+    def create(_address, timeout=socket._GLOBAL_DEFAULT_TIMEOUT,
+               source_address=None):
+        del source_address
+        return _connect_proxy(proxy, host, timeout, context)
+
+    connection._create_connection = create  # type: ignore[attr-defined]
     return connection
 
 
@@ -165,6 +213,7 @@ def fetch_bytes(
     deadline_seconds: float = _DEADLINE_SECONDS,
     timeout: float = _DEFAULT_TIMEOUT,
     max_redirects: int = _MAX_REDIRECTS,
+    proxy: str | None = None,
 ) -> bytes:
     """GET *url* and return the body, or raise :class:`UpstreamFetchError`.
 
@@ -178,7 +227,13 @@ def fetch_bytes(
     deadline_seconds = min(float(deadline_seconds), _HARD_DEADLINE_SECONDS)
     max_redirects = max(0, min(int(max_redirects), _HARD_MAX_REDIRECTS))
     deadline = time.monotonic() + deadline_seconds
-    factory = connection_factory or _open
+    if connection_factory is not None:
+        factory = connection_factory
+    elif proxy:
+        factory = lambda host, _address, timeout: _open_proxy(  # noqa: E731
+            proxy, host, timeout)
+    else:
+        factory = _open
     try:
         target, hop = _first_hop(url, allowed_hosts)
     except UpstreamFetchError:
@@ -209,22 +264,23 @@ def fetch_bytes(
             # Connect before sending so the actual socket peer can be checked
             # against the address pin_target validated (DNS-rebinding close).
             connection.connect()
-            peer_socket = getattr(connection, "sock", None)
-            if peer_socket is None:
-                raise UpstreamFetchError("connection has no socket")
-            peer = peer_socket.getpeername()[0]
-            try:
-                same = (ipaddress.ip_address(peer)
-                        == ipaddress.ip_address(addresses[0]))
-            except ValueError as exc:
-                raise UpstreamFetchError(
-                    "socket peer is not an IP address") from exc
-            if not same:
-                raise UpstreamFetchError(
-                    "socket peer changed after address validation")
-            if not is_routable_address(peer):
-                raise UpstreamFetchError(
-                    "socket peer is not a globally routable address")
+            if proxy is None:
+                peer_socket = getattr(connection, "sock", None)
+                if peer_socket is None:
+                    raise UpstreamFetchError("connection has no socket")
+                peer = peer_socket.getpeername()[0]
+                try:
+                    same = (ipaddress.ip_address(peer)
+                            == ipaddress.ip_address(addresses[0]))
+                except ValueError as exc:
+                    raise UpstreamFetchError(
+                        "socket peer is not an IP address") from exc
+                if not same:
+                    raise UpstreamFetchError(
+                        "socket peer changed after address validation")
+                if not is_routable_address(peer):
+                    raise UpstreamFetchError(
+                        "socket peer is not a globally routable address")
             connection.request("GET", hop.path, headers=headers)
             response = connection.getresponse()
             status = int(getattr(response, "status", 0))
@@ -239,7 +295,8 @@ def fetch_bytes(
                 hop = _redirect_hop(current, allowed_hosts)
                 continue
             if status != 200:
-                raise UpstreamFetchError(f"upstream returned HTTP {status}")
+                raise UpstreamFetchError(
+                    f"upstream returned HTTP {status}", status=status)
             return _read_body(
                 response, deadline, max_bytes,
                 getattr(connection, "sock", None), timeout)

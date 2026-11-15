@@ -1286,6 +1286,24 @@ instead of continuing to poll.
 
 ---
 
+## trustsight containment
+
+Report the controls active in the current process: uid, seccomp filter mode,
+AppArmor profile, root-filesystem read-only state, and whether a default route
+exists. Useful inside a container to prove the deployment matches the intent.
+
+```
+trustsight containment status [--json]
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Emit one JSON object instead of `key: value` lines. |
+
+---
+
 ## trustsight auth
 
 Manage provider tokens for the optional upstream-scan lane. A token is never

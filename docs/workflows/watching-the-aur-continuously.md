@@ -358,6 +358,8 @@ really be read-only rather than merely intended to be.
 Every main service also sets `TRUSTSIGHT_REQUIRE_SECCOMP=1`; the entrypoint
 refuses to start unless `/proc/self/status` reports an active seccomp filter,
 so a silently ignored profile does not downgrade the deployment.
+Run `trustsight containment status --json` inside the container to audit the
+same controls after startup.
 
 ### Rotating provider tokens through the broker
 

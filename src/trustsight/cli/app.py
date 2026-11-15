@@ -66,6 +66,7 @@ from .egress_proxy import register_commands as _register_egress_proxy
 from .feed_signer import register_commands as _register_feed_signer
 from .token_broker import register_commands as _register_token_broker
 from .audit_anchor import register_commands as _register_audit_anchor
+from .containment import register_commands as _register_containment
 
 _register_review(app)
 _register_inspect(app)
@@ -89,6 +90,7 @@ _register_egress_proxy(app)
 _register_feed_signer(app)
 _register_token_broker(app)
 _register_audit_anchor(app)
+_register_containment(app)
 
 
 class _StderrHandler(logging.StreamHandler):

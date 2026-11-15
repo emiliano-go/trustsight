@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -50,6 +51,10 @@ MAX_FINDINGS = 8
 #: large, but not unbounded: the gate must not let a checkout decide how much
 #: memory this process allocates before it can even inspect it.
 MAX_SRCINFO_BYTES = 2 * 1024 * 1024
+#: A package name that can be passed as a positional argument without being
+#: read as an option.  AUR names are alphanumeric plus ``@._+-`` and do not
+#: start with ``-``; the gate also reads ``.SRCINFO`` from a local checkout.
+_TARGET_RE = re.compile(r"^[A-Za-z0-9@_+][A-Za-z0-9@._+-]*$")
 DEFAULT_DEPTH = 1
 DEFAULT_TIMEOUT = 180
 MAX_ANSWER_BYTES = 64
@@ -733,6 +738,14 @@ def main(argv: list[str] | None = None, *, out: TextIO = sys.stderr) -> int:
         print(
             f"trustsight-gate: {len(targets)} targets exceeds the cap "
             f"({MAX_TARGETS})",
+            file=out,
+        )
+        return EXIT_ERROR
+    invalid = [name for name in targets if not _TARGET_RE.fullmatch(name)]
+    if invalid:
+        print(
+            "trustsight-gate: refusing an option-shaped or malformed target: "
+            + ", ".join(clean(name) for name in invalid[:4]),
             file=out,
         )
         return EXIT_ERROR

@@ -429,6 +429,20 @@ def test_a_seed_database_bomb_is_refused(tmp_path, monkeypatch):
         db.import_seed(bomb)
 
 
+def test_seed_archive_rejects_windows_path_traversal(tmp_path):
+    import tarfile
+    import trustsight.db as db
+
+    archive = tmp_path / "seed.tar.gz"
+    with tarfile.open(archive, "w:gz") as tf:
+        info = tarfile.TarInfo(r"trustsight-seed-v2\..\evil")
+        info.size = 0
+        tf.addfile(info)
+
+    with pytest.raises(ValueError, match="escapes the extraction directory"):
+        db._extract_v2_archive(archive, tmp_path / "out")
+
+
 def test_seed_archive_rejects_symlink_members(tmp_path):
     import tarfile
     import trustsight.db as db

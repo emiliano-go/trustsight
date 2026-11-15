@@ -206,6 +206,14 @@ def test_fetch_verified_url_requires_a_key(monkeypatch):
         release.fetch_verified_url("https://example.test/iocs", "manifest.json")
 
 
+def test_fetch_verified_url_rejects_a_non_http_scheme(monkeypatch):
+    monkeypatch.setattr(release, "offline", lambda: False)
+    monkeypatch.setattr(release, "_download_url", lambda *a, **k: b"x")
+    with pytest.raises(release.ReleaseFetchError, match="must be an http"):
+        release.fetch_verified_url(
+            "file:///etc", "manifest.json", pubkey=b"0" * 32)
+
+
 def test_fetch_verified_url_verifies_raw_key_bytes(monkeypatch):
     from cryptography.hazmat.primitives.asymmetric.ed25519 import (
         Ed25519PrivateKey,

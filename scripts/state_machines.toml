@@ -1,0 +1,519 @@
+# The machines behind "State and lifecycles".
+#
+# Every entry is checked against the code by
+# ``gate_state_machines_are_documented``: anchors must resolve, every
+# ``tests`` node id must exist, and every table/column named under
+# ``schema`` must appear in the schema module.  The generated inventory in
+# docs/explanation/state-and-lifecycles.md is rendered from this file, so a
+# renamed symbol or a removed column fails the build until the page and the
+# registry follow.
+#
+# ``[[exempt]]`` lists the modules the inventory scanner classified and the
+# page deliberately does not narrate: single-pass scanners, memos and
+# one-way latches with no multi-state lifecycle.  A new module that trips
+# the scanner is not exempt by default; it fails the gate until it is either
+# documented above or classified here with a reason.
+
+[[machine]]
+id = "quote-state"
+title = "Shell quote and heredoc state"
+kind = "lexical"
+status = "implicit"
+risk = "high"
+summary = "The quote-frame stack and heredoc FIFO decide what text is code, data or a heredoc body before any rule runs."
+states = "code, single, double, ANSI-C, backtick, command substitution; heredoc delimiter queue"
+anchors = [
+  "trustsight.line_lex:QuoteState",
+  "trustsight.line_lex:advance_quote_state",
+  "trustsight.line_lex:lex_lines",
+  "trustsight._heredoc:parse_opener",
+  "trustsight._heredoc:_delimiter_word",
+]
+tests = [
+  "tests/test_machine_contracts.py::test_quote_state_carries_across_lines",
+  "tests/test_machine_contracts.py::test_a_truncated_line_resets_quote_state",
+  "tests/test_machine_contracts.py::test_heredoc_openers_are_a_fifo_queue",
+]
+
+[[machine]]
+id = "diff-parser"
+title = "Unified-diff parser"
+kind = "document"
+status = "implicit"
+risk = "high"
+summary = "One walk turns raw diff lines into files, hunks and classified lines with file attribution and both line numbers."
+states = "no current file, in file, in hunk; pending old path, pending hunk boundary, pending file metadata"
+anchors = [
+  "trustsight.diffdoc:parse_diff_lines",
+  "trustsight.diffdoc:_parse_diff_lines_cached",
+]
+tests = [
+  "tests/test_machine_contracts.py::test_diffdoc_classifies_every_input_line",
+  "tests/test_diffdoc.py::test_in_hunk_survives_a_file_header_legacy_compat",
+]
+
+[[machine]]
+id = "recipe-segmentation"
+title = "Recipe function segmentation"
+kind = "document"
+status = "implicit"
+risk = "medium"
+summary = "Bash function bodies are segmented by brace depth; a redefinition keeps the last body."
+states = "outside a function, opener seen, body open at depth > 0, closed"
+anchors = [
+  "trustsight.recipedoc:_function_segments",
+  "trustsight.recipedoc:parse_recipe",
+]
+tests = [
+  "tests/test_recipedoc.py::test_one_line_body_stays_closed",
+  "tests/test_recipedoc.py::test_brace_on_a_later_line_opens_the_body",
+]
+
+[[machine]]
+id = "fetch-trust"
+title = "Fetch trust state"
+kind = "persisted"
+status = "explicit"
+risk = "high"
+summary = "A verified HEAD record outside the repository is the only proof a commit was actually fetched."
+states = "absent, unusable (unverified or malformed), verified"
+anchors = [
+  "trustsight.sandbox.fetch_state:FetchState",
+  "trustsight.sandbox.fetch_state:load",
+  "trustsight.sandbox.fetch_state:store",
+]
+tests = [
+  "tests/test_fetch_state.py::test_state_round_trips_and_is_parent_only",
+  "tests/test_fetch_state.py::test_a_symlinked_state_is_not_followed",
+  "tests/test_fetch_state.py::test_an_unverified_state_is_ignored",
+]
+
+[[machine]]
+id = "channel-pull"
+title = "Channel pull memory"
+kind = "persisted"
+status = "explicit"
+risk = "medium"
+summary = "One record per channel and feed: unpulled, or pulled at tag X. A corrupt record reads as a miss, never as a successful pull."
+states = "unpulled, pulled at tag X"
+anchors = [
+  "trustsight.channel_state:ChannelPull",
+  "trustsight.channel_state:ChannelPull.matches",
+  "trustsight.channel_state:record_pull",
+  "trustsight.channel_state:pulled_tag",
+]
+tests = [
+  "tests/test_lifecycle_states.py::test_channel_pull_matches_channel_and_tag",
+  "tests/test_channels.py::test_a_pull_is_recorded_and_read_back",
+  "tests/test_channels.py::test_a_corrupt_record_is_a_miss_not_an_error",
+]
+
+[[machine]]
+id = "alert-outbox"
+title = "Alert outbox"
+kind = "persisted"
+status = "explicit"
+risk = "high"
+summary = "Durable delivery: pending, waiting for a retry, partially delivered, delivered, or parked. Parked is terminal and is reported, never discarded."
+states = "pending, waiting, partially delivered, delivered, parked"
+anchors = [
+  "trustsight.db._lifecycles:AlertOutboxState",
+  "trustsight.db._lifecycles:AlertOutboxState.due",
+  "trustsight.db._lifecycles:AlertOutboxState.with_sink",
+  "trustsight.db._lifecycles:AlertOutboxState.failed",
+  "trustsight.db._lifecycles:AlertOutboxState.parked",
+  "trustsight.db._lifecycles:AlertOutboxState.delivered",
+  "trustsight.db._outbox:enqueue_alert_payload",
+  "trustsight.db._outbox:pending_alert_payloads",
+  "trustsight.db._outbox:mark_alert_sink",
+  "trustsight.db._outbox:mark_alert_attempt",
+  "trustsight.notify:flush_outbox",
+]
+tests = [
+  "tests/test_lifecycle_states.py::test_outbox_parked_is_terminal",
+  "tests/test_lifecycle_states.py::test_outbox_rows_follow_the_state_type",
+  "tests/test_lifecycle_states.py::test_outbox_parks_at_max_attempts",
+  "tests/test_schema.py::test_outbox_parked_state_is_terminal_in_sql",
+]
+schema = [
+  { module = "trustsight.db._schema", table = "alert_outbox", columns = ["attempts", "next_attempt_at", "ntfy_delivered", "feed_delivered", "parked_at", "last_error"], require = ["CHECK (attempts >= 0)", "CHECK (ntfy_delivered IN (0, 1))"] },
+]
+
+[[machine]]
+id = "alert-dedupe"
+title = "Alert dedupe and refractory window"
+kind = "persisted"
+status = "implicit"
+risk = "medium"
+summary = "Only the first sighting of a (package, rule) pair is a new alert; campaign pairs are debounced per observation window."
+states = "absent, seen, repeated; refractory cell absent or seen"
+anchors = [
+  "trustsight.db._profiles:record_alerts",
+]
+tests = [
+  "tests/test_watch.py::test_repeat_alerts_are_counted_not_forgotten",
+  "tests/test_watch.py::test_alerts_are_per_rule",
+]
+schema = [
+  { module = "trustsight.db._schema", table = "alert_state", columns = ["package_name", "rule_id", "first_seen", "last_sent", "count"] },
+  { module = "trustsight.db._schema", table = "alert_refractory", columns = ["rule_id", "campaign_id", "window_start_obs", "first_emitted_obs", "last_observed_obs"] },
+]
+
+[[machine]]
+id = "campaign-lifetime"
+title = "Campaign lifetime"
+kind = "persisted"
+status = "explicit"
+risk = "high"
+summary = "Absent, active until activated_at_obs + ttl_obs, then expired. Expiry is arithmetic, not a sweep; re-activation never shortens a live TTL."
+states = "absent, active, expired; expiry unannounced or announced"
+anchors = [
+  "trustsight.db._lifecycles:CampaignState",
+  "trustsight.db._lifecycles:CampaignState.is_active",
+  "trustsight.db._lifecycles:CampaignState.is_expired",
+  "trustsight.db._lifecycles:CampaignState.is_expired_unannounced",
+  "trustsight.db._lifecycles:CampaignState.reactivated",
+  "trustsight.db._campaigns:activate_campaign",
+  "trustsight.db._campaigns:active_campaigns",
+  "trustsight.db._campaigns:expired_unannounced",
+  "trustsight.db._campaigns:mark_expiry_announced",
+]
+tests = [
+  "tests/test_lifecycle_states.py::test_campaign_expiry_is_structural",
+  "tests/test_lifecycle_states.py::test_campaign_reactivation_never_shortens_a_live_window",
+  "tests/test_db.py::test_campaign_mode_activates_expires_and_caps",
+]
+schema = [
+  { module = "trustsight.db._schema", table = "campaign_alerts", columns = ["campaign_id", "activated_at_obs", "ttl_obs", "expiry_announced", "activation_count"] },
+]
+
+[[machine]]
+id = "orphan-tristate"
+title = "AUR orphan tri-state"
+kind = "persisted"
+status = "explicit"
+risk = "medium"
+summary = "Unknown (-1), maintained (0), orphaned (1). Unknown is load-bearing: never asked is not the same as was maintained or was orphaned."
+states = "unknown, maintained, orphaned"
+anchors = [
+  "trustsight.db._lifecycles:OrphanState",
+  "trustsight.db._lifecycles:OrphanState.from_db",
+  "trustsight.db._lifecycles:OrphanState.observe",
+  "trustsight.db._lifecycles:OrphanState.was_orphaned",
+  "trustsight.db._packages:get_aur_orphan_state",
+  "trustsight.db._packages:update_aur_orphan_state",
+]
+tests = [
+  "tests/test_lifecycle_states.py::test_orphan_observation_mapping",
+  "tests/test_lifecycle_states.py::test_orphan_from_db_keeps_unknown_for_bad_values",
+  "tests/test_lifecycle_states.py::test_orphan_state_round_trips_through_the_database",
+]
+schema = [
+  { module = "trustsight.db._schema", table = "packages", columns = ["aur_orphaned"] },
+]
+
+[[machine]]
+id = "property-stability"
+title = "Property stability and transitions"
+kind = "persisted"
+status = "implicit"
+risk = "medium"
+summary = "Per (package, property): absent, observed, unchanged (stable_for_n grows), or changed (a transition row is appended and stability resets)."
+states = "absent, observed, unchanged, changed; below or above the stability floor"
+anchors = [
+  "trustsight.full_aur.properties:update_properties",
+  "trustsight.full_aur.properties:stability_weight",
+  "trustsight.db._history:record_property_transition",
+]
+tests = [
+  "tests/test_longitudinal.py::test_changed_value_writes_one_transition_row",
+  "tests/test_longitudinal.py::test_stale_baseline_is_repaired_from_the_preimage_without_a_break",
+  "tests/test_longitudinal.py::test_transition_rows_are_capped_per_key",
+]
+schema = [
+  { module = "trustsight.db._schema", table = "package_properties", columns = ["package_name", "property_key", "value", "stable_for_n", "first_seen", "last_changed"] },
+  { module = "trustsight.db._schema", table = "property_transitions", columns = ["package_name", "property_key", "old_value", "new_value", "observed_at"] },
+]
+
+[[machine]]
+id = "ioc-expiry"
+title = "IOC active and expired lifecycle"
+kind = "persisted"
+status = "implicit"
+risk = "medium"
+summary = "Stored indicators are active or expired by comparing expires_at on read; there is no destructive expiry sweep, and a renewal makes an entry active again."
+states = "never expires, active, expired"
+anchors = [
+  "trustsight.ioc_baseline:_is_expired",
+  "trustsight.ioc_baseline:active_iocs",
+]
+tests = [
+  "tests/test_ioc_baseline.py::test_a_renewed_indicator_becomes_active_again",
+  "tests/test_ioc_baseline.py::test_expired_entries_stored_but_not_active",
+]
+schema = [
+  { module = "trustsight.db._schema", table = "ioc_entries", columns = ["expires_at", "source"] },
+]
+
+[[machine]]
+id = "schema-migration"
+title = "Schema migration version"
+kind = "persisted"
+status = "implicit"
+risk = "medium"
+summary = "PRAGMA user_version is a one-way latch: additive migrations run on open, the versioned rule-id migration runs once, then the stamp is raised."
+states = "shipped version or below, stamped at the current version"
+anchors = [
+  "trustsight.db._schema:_migrate",
+  "trustsight.db._schema:_SCHEMA_VERSION",
+]
+tests = [
+  "tests/test_db.py::test_a_fresh_database_is_stamped_with_the_schema_version",
+  "tests/test_db.py::test_migration_is_idempotent_and_leaves_new_ids_alone",
+]
+
+[[machine]]
+id = "corpus-cycle"
+title = "Corpus cycle mode and resume"
+kind = "orchestration"
+status = "implicit"
+risk = "high"
+summary = "Backfill, bootstrap, delta, no-op and refused are selected at entry; a persisted cursor and resume set decide what the next cycle processes."
+states = "backfill, bootstrap, delta, no-op/removals-only, refused; resume set empty or populated"
+anchors = [
+  "trustsight.full_aur._baseline_build:_run_baseline_build",
+  "trustsight.full_aur.fetch:save_resume_state",
+  "trustsight.full_aur.fetch:load_resume_state",
+  "trustsight.full_aur.fetch:clear_resume_state",
+]
+tests = [
+  "tests/test_full_aur.py::test_since_replays_one_aur_day_per_cycle",
+  "tests/test_full_aur.py::test_a_caught_up_replay_does_not_restart_on_the_next_cycle",
+  "tests/test_full_aur.py::test_since_resumes_the_cursor_across_a_restart",
+  "tests/test_watch.py::test_a_capped_cycle_processes_a_chunk_and_resumes",
+]
+
+[[machine]]
+id = "watch-liveness"
+title = "Watch loop and liveness"
+kind = "orchestration"
+status = "implicit"
+risk = "high"
+summary = "Start, success and failure are recorded independently; health is derived from staleness, consecutive failures and the outbox. One owner holds the lock."
+states = "starting, running, sleeping, failing, backfilling, stopping; healthy, unhealthy, not a watcher"
+anchors = [
+  "trustsight.full_aur._pipeline_watch:run_watch",
+  "trustsight.full_aur.watch_state:record_start",
+  "trustsight.full_aur.watch_state:record_success",
+  "trustsight.full_aur.watch_state:record_failure",
+  "trustsight.full_aur.watch_state:health",
+  "trustsight.full_aur.watch_lock:WatchAlreadyRunning",
+]
+tests = [
+  "tests/test_watch_hardening.py::test_watch_health_distinguishes_alive_from_failing",
+  "tests/test_watch_hardening.py::test_one_watcher_per_data_directory",
+  "tests/test_watch.py::test_watch_stops_cleanly_on_interrupt",
+]
+schema = [
+  { module = "trustsight.db._schema", table = "metadata", columns = ["key", "value"] },
+]
+
+[[machine]]
+id = "comparison-base"
+title = "Analysis comparison base"
+kind = "orchestration"
+status = "implicit"
+risk = "high"
+summary = "Fresh, cached, explicit old commit, recorded baseline, parent baseline, or no comparison. The choice changes the whole diff, and the parent fallback is a declared coverage gap."
+states = "fresh, cached, explicit old commit, recorded baseline, parent baseline, full recipe"
+anchors = [
+  "trustsight.analysis.pipeline._analyze:analyze_package",
+  "trustsight.analysis.pipeline._analyze_helpers:_resolve_comparison_base",
+]
+tests = [
+  "tests/test_inspect_history.py::TestComparisonBase::test_a_first_review_names_the_parent_baseline",
+  "tests/test_inspect_history.py::TestComparisonBase::test_a_recorded_analysis_reports_the_recorded_base",
+]
+
+[[machine]]
+id = "stage-tracking"
+title = "Stage-failure tracking"
+kind = "orchestration"
+status = "implicit"
+risk = "medium"
+summary = "A thread-local failed-stage list is reset per package, appended once per stage, and folded into coverage so a degraded stage forbids a clean verdict."
+states = "tracking off, tracking on, one or more stages failed"
+anchors = [
+  "trustsight.coverage:begin_stage_tracking",
+  "trustsight.coverage:note_stage_failure",
+  "trustsight.coverage:stage_failures",
+]
+tests = [
+  "tests/test_full_aur.py::test_dependency_stage_failure_does_not_leak_into_the_parent",
+  "tests/test_analysis_fail_closed.py::test_partial_install_files_marks_a_degraded_stage",
+]
+
+[[machine]]
+id = "dependency-bfs"
+title = "Dependency BFS and graph closure"
+kind = "orchestration"
+status = "implicit"
+risk = "medium"
+summary = "A bounded level-by-level frontier walk; truncation caused by a ceiling is a declared gap, while a finite depth ending by its own limit is a complete answer."
+states = "frontier non-empty, seen set, level, truncated or complete"
+anchors = [
+  "trustsight.depth:walk_dependencies",
+  "trustsight.depth:dependency_closure",
+  "trustsight.full_aur.graph:_transitive_closure",
+]
+tests = [
+  "tests/test_depth.py::test_a_dependency_cycle_terminates",
+  "tests/test_depth.py::test_the_level_ceiling_bounds_an_exhaustive_walk",
+  "tests/test_depth.py::test_a_finite_depth_cut_by_the_ceiling_is_reported_truncated",
+]
+
+[[machine]]
+id = "sandbox-worker"
+title = "Sandbox worker lifecycle"
+kind = "orchestration"
+status = "implicit"
+risk = "high"
+summary = "A worker is absent, starting, ready, busy, retired after its request cap, or stopped after a timeout or invalid reply. A dead worker is a named refusal, never a silent pass."
+states = "absent, starting, ready, busy, retired, stopped/failed"
+anchors = [
+  "trustsight.sandbox.manifest_client:_Worker",
+  "trustsight.sandbox.manifest_client:_get_worker",
+  "trustsight.sandbox.manifest_client:_close",
+]
+tests = [
+  "tests/test_manifest_worker.py::test_worker_applies_the_linux_sandbox",
+  "tests/test_manifest_worker.py::test_the_tokenizer_runs_in_the_content_worker",
+]
+
+[[machine]]
+id = "worker-degradation"
+title = "Sandbox degradation latch"
+kind = "latch"
+status = "implicit"
+risk = "high"
+summary = "A one-way per-process list of protections the worker could not apply. It is reported on every response so the parent can surface weaker isolation."
+states = "no degradation recorded, one or more protections recorded"
+anchors = [
+  "trustsight.sandbox.git_worker:_DEGRADED",
+  "trustsight.sandbox.git_worker:_apply_limits",
+  "trustsight.sandbox.git_worker:_harden_libgit2",
+]
+tests = [
+  "tests/test_git_os_sandbox.py::test_the_worker_refuses_to_start_with_a_vulnerable_libgit2",
+  "tests/test_git_os_sandbox.py::test_the_bundled_libgit2_version_floor_is_enforced",
+]
+
+[[machine]]
+id = "git-session"
+title = "Git session lifecycle"
+kind = "orchestration"
+status = "implicit"
+risk = "medium"
+summary = "A session is created, live, then closed exactly once; close is idempotent, and process exit drains every live session."
+states = "created, live, closed"
+anchors = [
+  "trustsight.sandbox.git_client:GitSession",
+  "trustsight.sandbox.git_client:GitSession.close",
+]
+tests = [
+  "tests/test_git_client.py::test_a_closed_session_refuses",
+  "tests/test_git_client.py::test_a_timed_out_request_closes_the_session",
+]
+
+# --- classified, not narrated ---------------------------------------------
+
+[[exempt]]
+reason = "single-pass scanner or bounded loop: the state is a local cursor, quote/depth or redirect counter carried across one call, with no persisted or cross-call lifecycle"
+modules = [
+  "_tokenizer_engine/_common.py",
+  "_tokenizer_engine/_variables.py",
+  "analysis/_dependency_arrays.py",
+  "analysis/_path_trust.py",
+  "analysis/artifact.py",
+  "analysis/build.py",
+  "analysis/crossfire/_common.py",
+  "analysis/crossfire/_engine.py",
+  "analysis/delivery/_common.py",
+  "analysis/edges.py",
+  "analysis/ioc.py",
+  "analysis/ioc_paths.py",
+  "analysis/manifest_syntax.py",
+  "analysis/manifests/_formats_a.py",
+  "analysis/network.py",
+  "analysis/payload_signals.py",
+  "analysis/persistence.py",
+  "analysis/runtime_surface.py",
+  "analysis/structural/_checksums.py",
+  "analysis/structural/_signing.py",
+  "changes.py",
+  "deps.py",
+  "differ/_checksums.py",
+  "differ/_sources.py",
+  "rules/_clamp.py",
+  "rules/_scope.py",
+  "shell_words.py",
+  "upstream_fetch.py",
+]
+
+[[exempt]]
+reason = "set membership and one-pass dedupe: a seen/visited set only prevents duplicate work inside one call"
+modules = [
+  "analysis/adoption.py",
+  "analysis/correlation.py",
+  "analysis/dependencies.py",
+  "analysis/ioc_match.py",
+  "analysis/structural/_hygiene.py",
+  "analysis/structural/_missing_self.py",
+  "analysis/upstream_archive.py",
+  "contacts.py",
+  "differ/_diff.py",
+  "discovery.py",
+  "full_aur/_pipeline_limits.py",
+  "full_aur/_temporal_campaigns.py",
+  "full_aur/pivot.py",
+  "gate.py",
+  "ioc_baseline.py",
+  "recipedoc.py",
+  "sandbox/git_project.py",
+  "srcinfo.py",
+  "upstream_collect.py",
+]
+
+[[exempt]]
+reason = "memo, lazy initialisation or one-way latch: stateful, but hit/miss or unset/set is the whole transition"
+modules = [
+  "analysis/base.py",
+  "anergy.py",
+  "buckets.py",
+  "cli/admin.py",
+  "cli/display.py",
+  "cli/inspect/_render.py",
+  "cli/inspect/commands.py",
+  "cli/updates.py",
+  "config/__init__.py",
+  "credentials.py",
+  "db/_connection.py",
+  "db/_dependencies.py",
+  "expansion.py",
+  "fetcher.py",
+  "full_aur/metadata.py",
+  "lint.py",
+  "override.py",
+  "release.py",
+  "render/display.py",
+  "render/inspect.py",
+  "render/progress.py",
+  "review.py",
+  "rules/_compiled.py",
+  "sandbox/_aur_proxy.py",
+  "sandbox/client.py",
+  "sandbox/expand_worker.py",
+  "sandbox/render_client.py",
+  "sandbox/render_worker.py",
+  "sandbox/store_client.py",
+]

@@ -177,3 +177,4 @@ The score, evidence breakdown, and verification metadata are rendered into a str
 | [Recipe-Targeted User Rules](structural-user-rules.md) | A second rule kind that matches typed recipe structure, its five primitives, and the HIGH cap |
 | [Cross-File Consistency](cross-file-consistency.md) | How the recipe is compared against `.SRCINFO`, the committed tree and shipped hooks |
 | [The Typed Core](the-typed-core.md) | Why the diff and the PKGBUILD are each read once: every finding is anchored to the real file, side and line, and unreadable structure is reported, never guessed |
+| [State and Lifecycles](state-and-lifecycles.md) | Where lexical, persisted and orchestration state lives, which parts are explicit types, and the transitions a change must keep |

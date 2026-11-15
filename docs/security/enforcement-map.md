@@ -50,6 +50,7 @@ python scripts/security_gates.py
 | `H-series reduction residue` | internal | `categories.RULE_CATEGORIES`, target 55-65 |
 | `retired ids resolve to live survivors` | internal | `rule_id_history.RETIRED_RULE_IDS` |
 | `docs layer mapping matches the registry` | internal | `scripts/build_layers_doc.py`, `trustsight.layers` |
+| `state machines are documented and exist` | internal | `scripts/state_machines.toml`, `scripts/build_state_doc.py`, `docs/explanation/state-and-lifecycles.md` |
 | `layer detection and coverage are independent` | internal | `trustsight.layers._layer_coverage` |
 | `every rule names its shared dependencies` | internal | `trustsight.detectors`, `SERIES_DEPENDENCIES` |
 | `layer overrides stay within the closed set` | internal | `trustsight.layers.parse_overrides`, `LAYER_VALUES` |

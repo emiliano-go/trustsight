@@ -209,7 +209,7 @@ def test_fetch_verified_url_requires_a_key(monkeypatch):
 def test_fetch_verified_url_rejects_a_non_http_scheme(monkeypatch):
     monkeypatch.setattr(release, "offline", lambda: False)
     monkeypatch.setattr(release, "_download_url", lambda *a, **k: b"x")
-    with pytest.raises(release.ReleaseFetchError, match="must be http"):
+    with pytest.raises(release.ReleaseFetchError, match="must be an http"):
         release.fetch_verified_url(
             "file:///etc", "manifest.json", pubkey=b"0" * 32)
 

@@ -46,6 +46,6 @@ def test_path_like_provider_names_are_refused(tmp_path):
 
 
 def test_the_broker_command_is_registered():
-    result = CliRunner().invoke(app, ["token-broker", "--help"])
+    result = CliRunner().invoke(app, ["token-broker", "--help"], terminal_width=200)
     assert result.exit_code == 0
     assert "--token-dir" in result.stdout

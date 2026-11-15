@@ -189,6 +189,6 @@ def test_the_watcher_uses_the_signer_and_has_no_feed_key():
 
 
 def test_the_feed_signer_command_is_registered():
-    result = CliRunner().invoke(app, ["feed-signer", "--help"])
+    result = CliRunner().invoke(app, ["feed-signer", "--help"], terminal_width=200)
     assert result.exit_code == 0
     assert "--socket" in result.stdout

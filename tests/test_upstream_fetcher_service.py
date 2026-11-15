@@ -92,6 +92,6 @@ def test_client_reads_a_socket_response(tmp_path):
 
 
 def test_the_fetcher_command_is_registered():
-    result = CliRunner().invoke(app, ["upstream-fetcher", "--help"])
+    result = CliRunner().invoke(app, ["upstream-fetcher", "--help"], terminal_width=200)
     assert result.exit_code == 0
     assert "--socket" in result.stdout

@@ -115,6 +115,19 @@ jobs:
             -v "$RUNNER_TEMP:/work:ro" \
             "$image" lint /work/PKGBUILD --json >"$RUNNER_TEMP/lint.json"
           grep -q 'lint-fixture' "$RUNNER_TEMP/lint.json"
+          docker run --rm --network none --read-only \
+            --tmpfs /tmp:size=64m,noexec,nosuid,nodev \
+            --tmpfs /home/ts/.cache:size=64m,noexec,nosuid,nodev \
+            --user 1000:1000 --cap-drop=all \
+            --security-opt=no-new-privileges \
+            --security-opt=seccomp="$PWD/docker/seccomp-watcher.json" \
+            --security-opt=apparmor=docker-default \
+            -e TRUSTSIGHT_CONFIG_DIR=/tmp \
+            -e PYTHONPATH=/app/src \
+            --entrypoint /app/.venv/bin/python \
+            "$image" -c 'from trustsight.analysis.manifests import parse_manifest; print(parse_manifest("package.json", "{\"dependencies\":{\"left-pad\":\"1.0.0\"}}"))' \
+            >"$RUNNER_TEMP/manifest.json"
+          grep -q 'left-pad' "$RUNNER_TEMP/manifest.json"
 
       # The read-only recipe in docs/workflows/reducing-blast-radius.md.  Two
       # passes against the same volumes: a recreated container must stay

@@ -183,7 +183,7 @@
 - **T008-T012 report full-AUR history and cycle context.** {#full-aur-history-campaigns} T008 reports a payload appearing after an earlier maintainer transition, T009 a high-value dormant takeover, T010 dependencies redirected to newly added or adopted targets, T011 package reappearance after removal, and T012 an integrity/provenance erosion sequence followed by a payload. All five are INFO, weight 0 and anergic pending the full-AUR benign replay; none performs new network fetches or changes a score.
 - **The watcher publishes a signed all-scan stream.** `full-aur --watch` now emits feed-only `trustsight.scans` documents beside the alert stream. Each cycle carries a compact per-package record (status, score, risk, versions, maintainer, rule ids and coverage gaps) and a workload summary (`attempted`, `succeeded`, `fetch_failed`, `not_vetted`, `vanished`, `reserved`, `with_diff`, `alerts`). The documents reuse the Ed25519 feed signature and durable outbox, never go to ntfy, and carry no diff or finding prose. `trustsight full-aur export-scans --output FILE` backfills the same shape from `analysis_history`, grouped into UTC-day synthetic cycles. The feed dashboard uses this as its all-scan denominator; existing alert documents remain the detailed-evidence channel.
 - **`trustsight-gate` adds a per-package approval step to yay and paru.** The gate runs `trustsight inspect --allow-uninstalled --depth 1` for every target in the package manager's pre-build hook, prints the report, and asks for a yes/no per package. It is a hard gate: a refusal, an analysis failure, or an unavailable terminal aborts the whole transaction, because neither manager can drop one package at that stage and an AUR package may be a pulled dependency. Includes yay `AURPreInstall` and paru `PreBuildCommand` examples, an explicit `TRUSTSIGHT_GATE_DISABLE=1` bypass, and stable exit codes.
-- **The isolated-account and container boundary is documented and exercised.** [Reducing Blast Radius](guides/reducing-blast-radius.md) describes running the CLI under a dedicated unprivileged account or a read-only container, with explicit `XDG` paths, post-update `status`/`db check` and rule-sync steps, and the Docker seccomp detail the parser workers need. CI now runs the account recipe inside the disposable Arch container, including a simulated package reinstall, and exercises the documented read-only container twice against persistent volumes.
+- **The isolated-account and container boundary is documented and exercised.** [Reducing Blast Radius](workflows/reducing-blast-radius.md) describes running the CLI under a dedicated unprivileged account or a read-only container, with explicit `XDG` paths, post-update `status`/`db check` and rule-sync steps, and the Docker seccomp detail the parser workers need. CI now runs the account recipe inside the disposable Arch container, including a simulated package reinstall, and exercises the documented read-only container twice against persistent volumes.
 
 ### Changed
 
@@ -539,8 +539,8 @@
 
 ### Added
 
-- **Campaign alert mode, and the three rules that arm it.** The G-series gains **G005 Impersonation Campaign** (one maintainer publishing many name-clones of popular packages), **G006 Neighborhood Under Campaign Alert** (weight 0) and **G007 Campaign Corroboration** (weight 0). A corroborated cluster primes a bounded **campaign state** (`db/_campaigns.py`) that expires on an *observation* clock, not wall-clock time, so expiry is structural and reproducible rather than a cleanup job. Campaign scope is **typed** (`package_names`, `hosts`, `targets`, `dependencies`), so a package name is never compared against a host. See [Campaign Alert Mode](explanation/campaign-alert-mode.md).
-- **Licensed severity escalation.** A rule may declare `escalates_when`; a fired licensor raises its severity **one notch** - never to FATAL, never chained - and the finding records which rules licensed it. A rule that expects a licensor and gets none is reported as a tool-health note, weight 0. See [Escalation Licensing](explanation/escalation-licensing.md).
+- **Campaign alert mode, and the three rules that arm it.** The G-series gains **G005 Impersonation Campaign** (one maintainer publishing many name-clones of popular packages), **G006 Neighborhood Under Campaign Alert** (weight 0) and **G007 Campaign Corroboration** (weight 0). A corroborated cluster primes a bounded **campaign state** (`db/_campaigns.py`) that expires on an *observation* clock, not wall-clock time, so expiry is structural and reproducible rather than a cleanup job. Campaign scope is **typed** (`package_names`, `hosts`, `targets`, `dependencies`), so a package name is never compared against a host. See [Campaign Alert Mode](explanation/detection-and-evidence.md).
+- **Licensed severity escalation.** A rule may declare `escalates_when`; a fired licensor raises its severity **one notch** - never to FATAL, never chained - and the finding records which rules licensed it. A rule that expects a licensor and gets none is reported as a tool-health note, weight 0. See [Escalation Licensing](explanation/scoring-and-verdicts.md).
 - **An isolated git worker.** Every libgit2 operation moves into a bounded child process (`sandbox/git_worker.py`, `sandbox/git_client.py`), launched `-I` with a minimal environment and fixed `RLIMIT_*` plus `PR_SET_NO_NEW_PRIVS`. The parent never calls libgit2, so a memory-safety defect in libgit2 (or its bundled pack/delta code) exhausts the bounded child instead of the analysis. A limit that fails to apply is reported to the parent (`degraded`) rather than swallowed. This is a **resource-bounded subprocess boundary, not an OS sandbox** (no separate UID, network namespace or seccomp).
 - **Dependency manifests committed beside a recipe.** The U-series reads committed `Cargo.toml`, `package.json`, `go.mod`, `pyproject.toml` and companions for new dependency sources and registry redirects, without fetching or extracting the referenced archives. Byte caps, safe YAML loading and constrained XML handling bound the parse.
 - **The watcher's alert document carries located findings.** Each `over_threshold` entry now names the rule, file, line, severity and rendered reason of every finding that fired, weight-bearing or not, so a notification says *where* a rule matched instead of only that it did.
@@ -584,7 +584,7 @@
 ### Added
 
 - **`ChangeDelta` carries the whole change.** The delta now records the raw `provides`/`replaces`/`conflicts` changes, a normalised view of added dependencies (version constraints, `optdepends` descriptions and unresolved entries removed), and the checksum-parity facts `H091` reads. `H030`, `H063`, `H064`, `H091` and the D-series read this one object instead of each re-extracting, so the change summary and the rules cannot disagree. No finding on the locked corpus moved.
-- **The H-series intake is frozen, and the merger audit is measured.** H is the catch-all series - any behavioural heuristic that is not a regex, structural or graph rule lands here - so the id space had grown to overlapping, partly corpus-dependent detections. The reduction plan is to merge rules that co-fire and shrink the live surface to a 55-65 band, so while that is pending **no new H id is accepted**: a new detection must be an instance of an existing H family, or filed in the series that fits its mechanism (`T` for history-backed rules). `tests/test_h_reduction.py` and two security gates enforce it. The residue gate **reports** the live count against the ceiling but fails **only when an id slips past the freeze**, never merely for being above the target band: retiring an id deletes a detection, so a high count is a prompt, not a verdict. `scripts/h_reduction_audit.py` measured every candidate pair's co-fire over the corpus, the fixtures and the history cycles; the strongest pairs are strict subsets (`H026` in `H044`) or describe different mismatches (`H053` host vs `H059` repo path), so nothing merged and the retirement map stays empty. The mechanism ships ready; the map is a data change no evidence yet supports. See [Reducing the H-Series](explanation/reducing-the-h-series.md).
+- **The H-series intake is frozen, and the merger audit is measured.** H is the catch-all series - any behavioural heuristic that is not a regex, structural or graph rule lands here - so the id space had grown to overlapping, partly corpus-dependent detections. The reduction plan is to merge rules that co-fire and shrink the live surface to a 55-65 band, so while that is pending **no new H id is accepted**: a new detection must be an instance of an existing H family, or filed in the series that fits its mechanism (`T` for history-backed rules). `tests/test_h_reduction.py` and two security gates enforce it. The residue gate **reports** the live count against the ceiling but fails **only when an id slips past the freeze**, never merely for being above the target band: retiring an id deletes a detection, so a high count is a prompt, not a verdict. `scripts/h_reduction_audit.py` measured every candidate pair's co-fire over the corpus, the fixtures and the history cycles; the strongest pairs are strict subsets (`H026` in `H044`) or describe different mismatches (`H053` host vs `H059` repo path), so nothing merged and the retirement map stays empty. The mechanism ships ready; the map is a data change no evidence yet supports. See [Reducing the H-Series](explanation/detection-and-evidence.md).
 - **A replayable history corpus.** `tests/fixtures/history_corpus.py` and the history replay are a committed set of metadata cycles that exercise the observation-history rules the stateless corpus never fires (H026/H044, H045/H073, H052/H053/H055/H059/H073/H074), run whole in the calibration job. `scripts/h_reduction_audit.py` measures the candidate merges across the corpus, the fixtures and these cycles: the pairs that co-fire most are either strict subsets or describe different mismatches, so none merged.
 - **Eleven H ids stay as documentation anchors.** H005-H014 and H028 emit nothing and exist only so their reference links resolve. They are excluded from the live count, which the gate reports as 92 of 103 catalogued rules.
 - **Temporal and edge engines.** The 16 history-backed temporal rules and the 14 traversal rules are consolidated in `full_aur/temporal_engine.py` and `analysis/edges.py`, with each rule's id, severity and finding text unchanged and a byte-identical corpus replay.
@@ -671,7 +671,7 @@
 - **A fetch inside `pkgver()` now pairs with an execution.** R051 covers pkgver's network for the classic clients but not `git fetch`/`git pull`, and pkgver was excluded from the fetch-then-execute scope entirely, so `pkgver() { git pull; bash payload; }` scored nothing. The pairing pass now reads pkgver; H016 and the write-then-execute rules are unchanged.
 - **The client vocabulary reads `git -C <dir> <verb>`, and the output-flag arms are case-sensitive.** `git -C "$srcdir/x" pull` matched no network client at all, which silenced the pairing for the most common build-helper spelling; and `re.IGNORECASE` let the lowercase `-o` arm claim curl's argument-less capital `-O`, so the URL was captured as the output filename and the real fetch paired with nothing. `(?-i:o)` / `(?-i:O)` pin the flag letters. The same option gap hid `git lfs` and `git push`: both now accept global options before their verb.
 - **Measured outcome:** the harness replay of the 1,277-history corpus moves 753 open bypasses to 1, and six tests in `tests/test_bypass_closure.py` cover the decoy shapes, the `pkgver` case, the explicit-output control and the unrelated-execution control.
-- **Release artifacts are signed with a key CI does not hold.** The deterministic source tarball ships a detached `trustsight-<version>.tar.gz.sig` made with the pinned commit-signing key; `packaging/aur/PKGBUILD` pins it in `validpgpkeys` and declares the `.sig` as a source, so makepkg and yay verify it on every user's machine. A checksum lives in the same recipe release automation owns, so a GitHub account, token or workflow compromise could rewrite artifact and checksum together; the signature needs the offline key as well. See [release signing](security/release-signing.md).
+- **Release artifacts are signed with a key CI does not hold.** The deterministic source tarball ships a detached `trustsight-<version>.tar.gz.sig` made with the pinned commit-signing key; `packaging/aur/PKGBUILD` pins it in `validpgpkeys` and declares the `.sig` as a source, so makepkg and yay verify it on every user's machine. A checksum lives in the same recipe release automation owns, so a GitHub account, token or workflow compromise could rewrite artifact and checksum together; the signature needs the offline key as well. See [release signing](security-design/release-signing.md).
 
 ### Fixed
 
@@ -739,7 +739,7 @@
 - The CLI gains `trustsight explain`, `trustsight report --format sarif` and `trustsight lint`; `docs/reference/cli.md` and `docs/reference/configuration.md` cover their flags and the document-cache environment variables.
 - Existing installs can repair the changed R051 and R057 patterns: both old spellings are recorded in `LEGACY_RULE_PATTERNS`, so `config sync-rules --update` replaces them with the shipped ones. Until then an install holding the old pattern reports `ruleset_drifted` and fails closed - the intended behaviour for a run whose detection surface is not the documented one.
 
-- A [Cross-File Consistency](explanation/cross-file-consistency.md) page: the recipe-versus-`.SRCINFO`-versus-committed-tree checks that already ship, and how H103 compares the security-relevant fields without firing on a merely stale `.SRCINFO`.
+- A [Cross-File Consistency](explanation/architecture-and-pipeline.md) page: the recipe-versus-`.SRCINFO`-versus-committed-tree checks that already ship, and how H103 compares the security-relevant fields without firing on a merely stale `.SRCINFO`.
 
 - A typed core for analysis. `trustsight.diffdoc` parses a unified diff once into a `DiffDoc` (files, hunks, classified lines with file attribution and both line numbers), and `trustsight.recipedoc` reads a PKGBUILD once into a `RecipeDoc` (resolved scalars, collected arrays, function bodies, and a first-class `unresolved` list for the forms the tokenizer refuses to guess at). `array_diff(old, new)` turns "how did this array change" into one multiset query. Every legacy diff reader (the line map, the post/pre reconstructions, the checksum and source-array machinery, the network and signing-key walkers, and the rest of the per-module `split_lines` loops) is now a projection or an iteration over the document, so the structural decisions exist exactly once; the bug class where two walkers drifted apart (a finding attributed to the wrong file, an array state machine flushing on the wrong line) has no seam left to live in. No finding, score, file or line changes: the migration was gated on a projection-parity harness (wired into the calibration CI job) and a full-corpus finding replay against a pre-migration baseline (3,919 diffs, byte-identical output, run locally), and a suite guard pins the remaining raw text loops so a new diff walker outside the typed core fails review.
 - Two IOC types, `file_path` and `pkgbuild_pattern`, in both the legacy H056 list and the signed IOC federation baseline. `file_path` matches a file a diff added or modified, or one the recipe names (`install=`, a local `source=()` entry). `pkgbuild_pattern` matches added diff lines as a regular expression; it is safety-checked statically at load (a nested quantifier or a quantified alternation is refused, because the measured check the rule linter uses hangs on exactly those) and is capped at CRITICAL, never FATAL, because a shape is a weaker claim than an exact artefact. The corpus pivot understands only `domain`, `hash` and `package`; the two new types describe a file or a line, not a stored corpus reference.
@@ -760,7 +760,7 @@
 - `trustsight inspect --explain` renders the typed core's own view: the RecipeDoc of the analysed PKGBUILD (resolved scalars, array sizes, functions, the unresolved list) and the DiffDoc summary of the analysed diff (files, hunks, cut hunks), so triage and rule authoring work from what the parser believed rather than a re-read of the raw text. In `--json` the lines ride an `explain` key.
 - `H102` (Maintainer Change With Signing Key Change, HIGH): the maintainer changed and `validpgpkeys` moved (H078) in the same diff, the xz shape. Each member scores on its own; the conjunction stacks the way X007 stacks its members, with H078's own detection standing in for the keyring delta.
 - A property timeline for the corpus. The corpus builder already hashes every tracked property per package and reports value changes to the longitudinal rules, but the row is overwritten, so the history behind a change was lost. Every observed change is now appended to `property_transitions`, and `trustsight full-aur --transitions PACKAGE` prints one key's `old -> new` timeline, oldest first, read-only and offline, with `--json` for the machine form. No scoring change: the H048-H052 family still consumes the same breaks.
-- Recipe-targeted user rules: `rules.toml` accepts a `[[structural]]` array of operator rules that ask the typed recipe instead of matching a diff line. Five primitives (`entry_added`, `entry_removed`, `host_added`, `scalar_changed`, `renamed`) match a value regex against array deltas and scalar changes, changed-line anchored so a partially visible array cannot report a hidden entry; first-seen packages degrade the change primitives to presence checks. Severity is capped at HIGH, the `[rules.R###]` controls apply, the patterns pass the same static safety gate as the R-series, and `lint-rules` checks the table. It ships with zero rules; the design and the exact semantics are in [Recipe-Targeted User Rules](explanation/structural-user-rules.md).
+- Recipe-targeted user rules: `rules.toml` accepts a `[[structural]]` array of operator rules that ask the typed recipe instead of matching a diff line. Five primitives (`entry_added`, `entry_removed`, `host_added`, `scalar_changed`, `renamed`) match a value regex against array deltas and scalar changes, changed-line anchored so a partially visible array cannot report a hidden entry; first-seen packages degrade the change primitives to presence checks. Severity is capped at HIGH, the `[rules.R###]` controls apply, the patterns pass the same static safety gate as the R-series, and `lint-rules` checks the table. It ships with zero rules; the design and the exact semantics are in [Recipe-Targeted User Rules](explanation/static-analysis-and-resolution.md).
 
 ### Fixed
 
@@ -817,7 +817,7 @@
 
 - A source URL on the registered domain of the package's `url=` is classified `declared_upstream` (+5) instead of `unknown` (+20), unless the same diff changes `url=`.
 - The published seed (`baseline-2026-09-24`) now carries the source-URL and dependency-name corpora, not maintainers alone: 185,902 source URLs, 215,504 dependency names and 36,912 hashed maintainers, so `seed fetch` warms novelty and the D-series rules on a fresh install.
-- The seeded fire-rate tables in [Measured fire rates](reference/rules/system.md#experimental-fire-rates) and [Fire Rates](explanation/fire-rates.md) are re-measured against the published 215,504-name corpus: D001 10 hits (0.27 %), D002 0, D003 18 (0.48 %), D004 2 (0.05 %), H030 5 (0.13 %), H029 2/202 (0.99 %). The D-series numbers are not covered by the cold-database CI gate, so these are point-in-time records.
+- The seeded fire-rate tables in [Measured fire rates](explanation/historical-and-behavioral-analysis.md) and [Fire Rates](explanation/historical-and-behavioral-analysis.md) are re-measured against the published 215,504-name corpus: D001 10 hits (0.27 %), D002 0, D003 18 (0.48 %), D004 2 (0.05 %), H030 5 (0.13 %), H029 2/202 (0.99 %). The D-series numbers are not covered by the cold-database CI gate, so these are point-in-time records.
 
 ### Security
 
@@ -1124,7 +1124,7 @@ and a database written by 0.16.0 is read unchanged.
   dozen child round-trips, and callers treat tokenizer output as read-only.
 
   The security model's A1, A6, the "known architectural limits" and the
-  [sandboxing the tokenizer](explanation/sandboxing-the-tokenizer.md) page
+  [sandboxing the tokenizer](explanation/static-analysis-and-resolution.md) page
   are updated from a design note to a description of what exists.
 
 These were found in a private source review by Olav Seyfarth (nursoda), with
@@ -2936,7 +2936,7 @@ and a database written by 0.15.x is read unchanged.
   rules"; past `MAX_COMPANION_BYTES` (64 KiB) that stopped holding and nothing
   recorded it, so a payload in the tail of a committed `Makefile` scored
   identically to a package with no companions at all - which is what
-  [B2](security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete)
+  [B2](security-design/security-model.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete)
   forbids.
 
   The skip was also a `break`, not a `continue`, and the budget was a single
@@ -3067,7 +3067,7 @@ and a database written by 0.15.x is read unchanged.
   binary is far likelier to be large than small. `tree_analyzed` meanwhile
   reported True because *some* file had been read, so the incomplete walk
   presented as a complete one, which is exactly what
-  [B2](security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete)
+  [B2](security-design/security-model.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete)
   forbids. Large blobs are now streamed for their magic bytes, which tightens
   the memory bound from 512 KiB to 64 bytes, and the walk reports whether it
   read everything it was asked for.
@@ -3687,7 +3687,7 @@ and a database written by 0.15.x is read unchanged.
   "dependencies are trusted" assumption stands; what changes is that the
   project can now see when it stops holding.
 
-- **[Sandboxing the tokenizer](explanation/sandboxing-the-tokenizer.md)**, a
+- **[Sandboxing the tokenizer](explanation/static-analysis-and-resolution.md)**, a
   design note on the larger of the two architectural limits. It argues the
   tokenizer is the component worth isolating and the renderer is not, states
   what isolation would *not* buy (it bounds the blast radius of a defect, not
@@ -3990,7 +3990,7 @@ and a database written by 0.15.x is read unchanged.
 
   Nothing reaches it today: every caller matches one line at a time and a
   line holds no newline, so this was latent rather than live. It is still
-  the shape [A14](security.md) exists to forbid, sitting in a prefix a
+  the shape [A14](security-design/security-model.md) exists to forbid, sitting in a prefix a
   dozen rules share, and it stayed invisible for as long as it did because
   the probe alphabet could not produce a newline - which is the argument for
   fixing an alphabet before trusting any timing taken with it. The prefix is
@@ -4381,7 +4381,7 @@ and a database written by 0.15.x is read unchanged.
 ### Changed
 
 - **The rules reference is one page per category.** `reference/rules.md`
-  became `reference/rules/`, with [an index](reference/rules/index.md)
+  became `reference/rules/`, with [an index](rules/index.md)
   carrying the type legend and a quick-reference table for all 128 rules,
   one page per `RuleCategory`, and
   [`system.md`](reference/rules/system.md) holding everything that is not an
@@ -4448,7 +4448,7 @@ and a database written by 0.15.x is read unchanged.
   published numbers now match the committed corpus: 69.1% benign zero-rate,
   benign p95 = 45 against malicious p5 = 60, strict positive separation as
   the only separation gate. The stale 3322-diff references and pre-B10
-  numbers across [security.md](security.md), the reading-a-report guide,
+  numbers across [security.md](security-design/security-model.md), the reading-a-report guide,
   fire-rates, the benchmarks page and the index pages were reconciled, and
   the CONTRIBUTING quick start now runs the security gates.
 - **The README was modernized** to match the current CLI surface and the
@@ -4463,7 +4463,7 @@ and a database written by 0.15.x is read unchanged.
   zip end-of-central-directory record produce a stamped R122 finding,
   surfaced exactly like the R118-tree scan results. The review path still
   never downloads PKGBUILD-declared URLs, so R122 only ever sees the AUR's
-  own snapshot tarballs; see [rules.md](reference/rules/integrity.md#h070).
+  own snapshot tarballs; see [rules.md](rules/integrity.md#h070).
 - **The malicious corpus is committed source.** All 164 malicious `.diff`
   bodies are now committed (a gitignore override for
   `tests/fixtures/malicious/`), so a fresh clone runs the recall and
@@ -4518,7 +4518,7 @@ and a database written by 0.15.x is read unchanged.
   published release, signing with the `BASELINE_SIGNING_KEY` Actions secret;
   the corpus baseline is exported by the maintainer and uploaded per the
   publishing guide.
-- **A security model, stated and enforced.** [`docs/security.md`](security.md)
+- **A security model, stated and enforced.** [`docs/security.md`](security-design/security-model.md)
   is now the canonical page: TrustSight as a program consuming hostile input
   (Part A), what a verdict claims and does not claim (Part B), an enforcement
   map (Part C), and a vulnerability disclosure policy written for a static
@@ -4582,7 +4582,7 @@ and a database written by 0.15.x is read unchanged.
   plaintext seed is migrated on first run and the original table renamed to
   `maintainers_deprecated_backup`. New `maintainers_hashed` /
   `package_maintainers_hashed` tables and `trustsight seed {info,stats,migrate}`
-  commands. Documented in [seed provenance](explanation/seed-provenance.md).
+  commands. Documented in [seed provenance](explanation/threat-intelligence.md).
 - **Committed-file scanning (`differ.companion_source_hunks`).** A payload that
   ships as a file inside the AUR repo (declared in `source=()` or merely named
   by the recipe, e.g. `bash "${startdir}/helper.sh"`) is now read with the same
@@ -5556,7 +5556,7 @@ and a database written by 0.15.x is read unchanged.
   | R063 | HIGH | 0.00 % | 0/3246 |
   | R064 | MEDIUM | 0.03 % | 1/3246 |
 
-  See [Fire Rates](explanation/fire-rates.md) for the full reference.
+  See [Fire Rates](explanation/historical-and-behavioral-analysis.md) for the full reference.
 
 - **Baseline regenerated** with the new defaults.  The eight rules now appear
   in per-stratum fire-rate records.  Aggregate metrics (`zero_pct`, `p95`)
@@ -5777,6 +5777,13 @@ separate reconciliation.
 - LLM verdict integration
 - Basic CLI (review, inspect, history, config)
 [Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.28.1...HEAD
+[0.28.8]: https://github.com/emiliano-go/trustsight/releases/tag/v0.28.8
+[0.28.7]: https://github.com/emiliano-go/trustsight/releases/tag/v0.28.7
+[0.28.6]: https://github.com/emiliano-go/trustsight/releases/tag/v0.28.6
+[0.28.5]: https://github.com/emiliano-go/trustsight/releases/tag/v0.28.5
+[0.28.4]: https://github.com/emiliano-go/trustsight/releases/tag/v0.28.4
+[0.28.3]: https://github.com/emiliano-go/trustsight/releases/tag/v0.28.3
+[0.28.2]: https://github.com/emiliano-go/trustsight/releases/tag/v0.28.2
 [0.28.1]: https://github.com/emiliano-go/trustsight/releases/tag/v0.28.1
 [0.28.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.28.0
 [0.27.1]: https://github.com/emiliano-go/trustsight/releases/tag/v0.27.1

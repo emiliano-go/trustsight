@@ -4,7 +4,7 @@ TrustSight is a security tool with published limits. Contributions that touch an
 
 The normative standards every change is held to are collected in [Standards](docs/standards.md). The most important one is that a detection is never tuned for a package: fix the shape, or document the false positive.
 
-If you only want to use the tool, start with the README and the tutorial. If your change affects analysis behavior or the security model, read `docs/security.md` first.
+If you only want to use the tool, start with the README and the [Start Here](docs/start-here/quickstart.md) section. If your change affects analysis behavior or the security model, read `docs/security-design/security-model.md` first.
 
 ## Quick Start
 
@@ -101,7 +101,7 @@ signature workflow:
 | `src/trustsight/config/` | Default settings and shipped rule tables |
 | `src/trustsight/db/` | Stored state and seed integrity |
 | `src/trustsight/differ/` | Diff parsing and verification evidence extraction |
-| `docs/security.md` | Security claims and invariants |
+| `docs/security-design/security-model.md` | Security claims and invariants |
 | `.github/workflows/security.yml` | CI checks for security invariants |
 | `.github/workflows/calibration.yml` | CI checks for calibration regressions |
 | `.github/workflows/harness-regression.yml` | The adversarial-harness regression gate |

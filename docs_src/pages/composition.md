@@ -2,7 +2,6 @@
 
 # Composition
 
-Where these rules come from and what a finding means: [Rule Nature](../nature/composition.md).
 
 Distinct kinds of finding co-occurred. The combination is the signal.
 
@@ -20,7 +19,7 @@ counts distinct kill-chain stages. H098 counts distinct naming/deception
 signals. None is a detection on its own: they annotate findings that other
 rules produced.
 
-See [the rule system reference](system.md) for the field table, the
+See [Rule Mechanics](mechanics.md) for the field table, the
 severity weights and the reserved identifier ranges.
 
 ---

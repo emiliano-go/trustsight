@@ -4,7 +4,7 @@
 
 TrustSight reads hostile text and reports evidence about it. Between the two, a great deal of state accumulates: a quote opened on one line and closed three hundred lines later, a diff hunk whose closer was cut off, an alert that failed to send, a campaign that expires by observation count, a corpus cursor that must survive a restart. None of that state is the product, but every one of those decisions changes what the product says.
 
-This page names where that state lives, which parts of it are explicit types, which remain implicit in ordinary code, and the invariants a change must keep. It is a map for a contributor, not a second specification: the [security model](../security.md) states the guarantees, and the [enforcement map](../security/enforcement-map.md) names the gate behind each one.
+This page names where that state lives, which parts of it are explicit types, which remain implicit in ordinary code, and the invariants a change must keep. It is a map for a contributor, not a second specification: the [security model](../security-design/security-model.md) states the guarantees, and the [enforcement map](../security-design/enforcement-map.md) names the gate behind each one.
 
 The inventory at the end is generated from `scripts/state_machines.toml`. Every symbol, test and database column it names is checked against the code, so a rename or a removed column fails the build until this page follows.
 
@@ -52,7 +52,7 @@ The parser internals remain implicit by design. Turning every carried quote fram
 
 `line_lex` carries a stack of quote frames (single, double, ANSI-C, backtick, command substitution) across lines, plus a FIFO of heredoc delimiters. Bash reads heredoc bodies in opener order, so two openers on one line are a queue, not a stack. A line past the tokenizer ceiling is scanned only to the bound and its quote state is reset; `LexedLine.truncated` records the refusal so a crafted line cannot hide the rest of a recipe behind a quote that opens past the ceiling. The fast path must agree with the full scan on the state it leaves, and the contract tests pin that agreement.
 
-The unified-diff parser is one walk from raw lines to files, hunks and classified lines. Its boundary decisions are legacy-compatible on purpose: a file header does not close an open hunk, a pure rename materialises a file from metadata alone, and a hunk shorter than its header claims becomes a `partial_hunk` gap rather than a quietly short array. Downstream stages query that one document instead of re-walking the text, which is the [typed core](the-typed-core.md) claim.
+The unified-diff parser is one walk from raw lines to files, hunks and classified lines. Its boundary decisions are legacy-compatible on purpose: a file header does not close an open hunk, a pure rename materialises a file from metadata alone, and a hunk shorter than its header claims becomes a `partial_hunk` gap rather than a quietly short array. Downstream stages query that one document instead of re-walking the text, which is the [typed core](architecture-and-pipeline.md) claim.
 
 Recipe function segmentation is the same shape at a smaller scale: brace depth opens and closes function bodies, a one-line body closes on its own line, and a redefined function keeps the last body, because that is what bash will run.
 
@@ -129,7 +129,7 @@ The scanner is a heuristic, not a proof of coverage. It looks for carried lexica
 
 ## See also
 
-- [The Typed Core](the-typed-core.md): the one-parse, many-projections design behind the document state.
-- [Sandboxing the Tokenizer](sandboxing-the-tokenizer.md): why the parser state runs in a worker.
-- [Security Model](../security.md): the guarantees these states must preserve.
-- [Enforcement Map](../security/enforcement-map.md): every guarantee's gate.
+- [The Typed Core](architecture-and-pipeline.md): the one-parse, many-projections design behind the document state.
+- [Sandboxing the Tokenizer](static-analysis-and-resolution.md): why the parser state runs in a worker.
+- [Security Model](../security-design/security-model.md): the guarantees these states must preserve.
+- [Enforcement Map](../security-design/enforcement-map.md): every guarantee's gate.

@@ -1,6 +1,6 @@
 name: Security Gates
 
-# The security model on every push.  `docs/security.md` states what
+# The security model on every push.  `docs/security-design/security-model.md` states what
 # TrustSight guarantees while reading hostile input and what a verdict
 # claims; this job is the other half of that document.  A failure here
 # means a published guarantee has stopped being true, which is a release

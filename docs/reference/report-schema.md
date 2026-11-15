@@ -2,7 +2,7 @@
 
 # Report Schema
 
-The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core analysis result. It is serialised to JSON via `fact_to_dict()` (`src/trustsight/schema.py`) for database storage and the reporting layer; `trustsight history --score-breakdown` reads the separate `triggered_rules` table instead. The **report** bodies that `review --json`, `inspect --json` and the Python API's `to_dict()` emit are a different, shared shape, built by `reporting.report_body`: same keys on all three, with the score group withheld unless asked for. See [B11](../security.md#b11-every-surface-reports-the-same-thing).
+The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core analysis result. It is serialised to JSON via `fact_to_dict()` (`src/trustsight/schema.py`) for database storage and the reporting layer; `trustsight history --score-breakdown` reads the separate `triggered_rules` table instead. The **report** bodies that `review --json`, `inspect --json` and the Python API's `to_dict()` emit are a different, shared shape, built by `reporting.report_body`: same keys on all three, with the score group withheld unless asked for. See [B11](../security-design/security-model.md#b11-every-surface-reports-the-same-thing).
 
 ---
 
@@ -163,7 +163,7 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
 | `config_fingerprint` | `string` | `sha256:` digest of the effective ruleset, scoring weights, thresholds and active overrides (B1). Two reports with the same fingerprint were produced by the same instrument; a different fingerprint means a different configuration, not a nondeterministic tool. |
 | `changes` | `list[string]` | Declared facts about what the diff did, whether or not a rule matched (B7): version moves, checksum behaviour, files added or removed, maintainer and source-host changes, and the no-change case. Context, not findings: no severity, no points, never in `triggered_rules`. `.SRCINFO` and `.gitignore` are suppressed as always-noisy. |
 | `scan_truncated` | `bool` | `true` when the diff held more lines than `rules.MAX_SCANNED_LINES` and only its first lines were matched. Distinct from `diff_truncated` because they name different caps: rule matching costs per line, so a diff of many short lines stays under `[diff] max_diff_bytes` and is still cut here. A reader who saw only `diff_truncated` would raise the byte limit and find it changed nothing. |
-| `coverage_gaps` | `list[string]` | What this run could not examine, as `"diff_truncated"`, `"scan_truncated"`, `"partial_hunk"`, `"partial_file_analysis"`, `"line_truncated"`, `"tree_not_analyzed"`, `"companion_truncated"`, `"binary_metadata"`, `"unresolved_source"`, `"unresolved_parse_time"`, `"snapshot_refused"`, `"upstream_manifest_incomplete"`, `"unpinned_build_deps"`, `"deps_not_scanned"`, `"parent_baseline"`, `"ruleset_drifted"`, `"stage_degraded"`, `"history_truncated"`, and `"noextract_suppressed"`. A dead or refusing sandboxed tokenizer - including one whose reply exceeded `protocol.MAX_RESPONSE_BYTES` and was refused before framing - is not a coverage gap: it fails the package outright, which is reported through `failed` / `error_type` instead (A6). A non-empty list forbids an UNFLAGGED verdict: `risk` is `"Inconclusive"` unless a HIGH or worse finding fired, and in that case the band is shown qualified. Enforced by `coverage.fail_closed` and `coverage.qualified_band`; see [the security model](../security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete). A gap whose root cause the previous recorded analysis already carried is named in `carried_coverage_gaps` and rendered with the marker "(unchanged since the previous review)": still a gap, still fail-closed, but not a shortfall this diff introduced. |
+| `coverage_gaps` | `list[string]` | What this run could not examine, as `"diff_truncated"`, `"scan_truncated"`, `"partial_hunk"`, `"partial_file_analysis"`, `"line_truncated"`, `"tree_not_analyzed"`, `"companion_truncated"`, `"binary_metadata"`, `"unresolved_source"`, `"unresolved_parse_time"`, `"snapshot_refused"`, `"upstream_manifest_incomplete"`, `"unpinned_build_deps"`, `"deps_not_scanned"`, `"parent_baseline"`, `"ruleset_drifted"`, `"stage_degraded"`, `"history_truncated"`, and `"noextract_suppressed"`. A dead or refusing sandboxed tokenizer - including one whose reply exceeded `protocol.MAX_RESPONSE_BYTES` and was refused before framing - is not a coverage gap: it fails the package outright, which is reported through `failed` / `error_type` instead (A6). A non-empty list forbids an UNFLAGGED verdict: `risk` is `"Inconclusive"` unless a HIGH or worse finding fired, and in that case the band is shown qualified. Enforced by `coverage.fail_closed` and `coverage.qualified_band`; see [the security model](../security-design/security-model.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete). A gap whose root cause the previous recorded analysis already carried is named in `carried_coverage_gaps` and rendered with the marker "(unchanged since the previous review)": still a gap, still fail-closed, but not a shortfall this diff introduced. |
 | `carried_coverage_gaps` | `list[string]` | The subset of `coverage_gaps` unchanged since the previous recorded analysis. |
 | `depth_truncated` | `bool` | `true` when the dependency walk stopped before the closure was exhausted; also raises `deps_not_scanned`. |
 | `depth_note` | `string` | Why the dependency walk stopped, for the report text. |
@@ -302,7 +302,7 @@ There are two JSON shapes, and they are not the same object.
   --json`, and the Python API's `Report.to_dict()`) is a presentation view of
   the same analysis, built by `reporting.report_body`. All three surfaces
   return the same keys with the same values for the same result, which
-  [B11](../security.md#b11-every-surface-reports-the-same-thing) requires and
+  [B11](../security-design/security-model.md#b11-every-surface-reports-the-same-thing) requires and
   the `the API and CLI emit the same JSON body` gate enforces.
 
   Always present (`reporting.REPORT_KEYS`): `package`, `old_version`,
@@ -379,7 +379,7 @@ There are two JSON shapes, and they are not the same object.
 add a member, it reports as `Critical` and names itself in `risk_label`
 (`Critical (FATAL: R013)`). A CRITICAL finding also floors the band at `High`
 regardless of the score, so `risk` is not a pure function of `score` - see
-[the band rules](../security.md#the-programme). `risk_label` is the same band qualified for a person: a
+[the band rules](../security-design/security-model.md#the-programme). `risk_label` is the same band qualified for a person: a
 coverage gap appends ` (incomplete analysis)` to an elevated band, and an
 `Inconclusive` names its cause: the gap(s) behind it, e.g.
 `Inconclusive (diff truncated: payload may be hidden)`, or the cold start,

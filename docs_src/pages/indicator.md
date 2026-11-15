@@ -2,7 +2,6 @@
 
 # Indicators
 
-Where these rules come from and what a finding means: [Rule Nature](../nature/indicator.md).
 
 An indicator rule asks one question: does a declared surface match an entry in
 **signed external data**? The mechanism is membership, not a heuristic - the
@@ -13,10 +12,10 @@ H056 is filed here and keeps its id; new federation matches will take `I` ids.
 
 Indicator matches are **outside the heuristic score** and never add points. A
 `confirmed` match is FATAL; the rest map to a severity by the indicator's
-confidence tier. See [IOC Federation](../ioc.md) for the transport and the
+confidence tier. See [IOC Federation](../reference/ioc.md) for the transport and the
 update cadence.
 
-See [the rule system reference](system.md) for the field table, the severity
+See [Rule Mechanics](mechanics.md) for the field table, the severity
 weights and the reserved identifier ranges.
 
 ---

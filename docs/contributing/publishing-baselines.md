@@ -7,7 +7,7 @@ three baseline kinds TrustSight consumes. It ties together the reference
 pages: the keys in [baseline keys](../reference/baseline-keys.md), the
 `full-aur` command in the [CLI reference](../reference/cli.md#trustsight-full-aur),
 the IOC format in [IOC federation](../reference/ioc.md), and the invariants
-A13 / A13b / P1 in the [security model](../security.md).
+A13 / A13b / P1 in the [security model](../security-design/security-model.md).
 
 ## The release channel
 
@@ -96,7 +96,7 @@ Every seed built by the published scripts ships with
 package, maintainer and observation counts, the build timestamp and the
 command line. Anyone reproducing the seed from the same mirror state can
 compare it directly against the published record (see
-[seed provenance](../explanation/seed-provenance.md)).
+[seed provenance](../explanation/threat-intelligence.md)).
 
 ## Prerequisites: the signing key
 

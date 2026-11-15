@@ -2,7 +2,6 @@
 
 # Naming and Dependencies
 
-Where these rules come from and what a finding means: [Rule Nature](../nature/naming-and-dependency.md).
 
 A name is claimed, or a dependency set changes, in a way that redirects
 what gets installed. H029 covers the package's own name impersonating a
@@ -29,7 +28,7 @@ labels must pass, and once cold, where D001/D002 must stay silent. The
 D-series fire rates below are point-in-time measurements against the seeded
 corpus.
 
-See [the rule system reference](system.md) for the field table, the
+See [Rule Mechanics](mechanics.md) for the field table, the
 severity weights and the reserved identifier ranges.
 
 ---

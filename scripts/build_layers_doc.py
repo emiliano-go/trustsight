@@ -16,7 +16,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from trustsight.layers import RULE_LAYER_OVERRIDES, SERIES_LAYER  # noqa: E402
 
-DOC = ROOT / "docs" / "assurance-layers" / "evidence-categories.md"
+DOC = ROOT / "docs" / "reference" / "evidence-categories.md"
 START = "<!-- generated: series-layer -->"
 END = "<!-- /generated: series-layer -->"
 

@@ -1,0 +1,184 @@
+<!-- description: Rules for a packaging step writing outside `$srcdir` and `$pkgdir`, hiding what it wrote, or learning about the host it ran on. -->
+
+# Staging and Reconnaissance
+
+## Overview
+
+
+A packaging step may write inside `$srcdir` and `$pkgdir` and nowhere else.
+These rules are the boundary (R058, H038, H076, H085), the hidden case
+(H042, H007) and the question of what the build learned about the host it
+ran on (H040).
+
+One shared write-target resolver in `analysis/persistence.py` backs the
+write rules: `install`/`cp`/`mv`/`ln` destinations including `-t DIR`, `>`
+redirects, and the verb-substitution forms `tee`, `dd of=`, `mkdir -p`,
+`touch`, `rsync` and `sed -i`. Every match is command-position anchored, so
+a quoted string such as `'cp x ~/.zshrc'` never reads as a write.
+
+See [Rule Mechanics](mechanics.md) for the field table, the
+severity weights and the reserved identifier ranges.
+
+---
+
+## Threat context
+
+The analogy is **casing the joint**: the burglar walks the block before the
+break-in, memorises the locks, notes where the valuables are and when no one
+is home. It is the oldest military idea too - reconnaissance before the
+assault, because knowing the terrain is half the operation.
+
+Before an attacker exfiltrates or pivots, they look around in exactly this
+way: environment variables, `whoami`, hostnames, cloud metadata endpoints, SSH
+keys, wallets, browser stores. In a build container this reconnaissance is a
+written-down step, so it is auditable. The rules cover the read-the-target
+behaviours that have no place in building a package: probing the metadata
+service, walking credential paths, and staging files for a later fetch.
+
+Not every `env` is recon; the rules target the recognisable credential and
+cloud-metadata shapes rather than generic introspection. The value is that a
+recon step turns an otherwise-ambiguous fetch into a deliberate
+look-then-take sequence.
+
+## Detection mechanisms
+
+The rules that make up this category are listed below, each with the series that implements it and the severity it carries. Scoring, matching and identifier allocation are shared across every category: see [Rule Mechanics](mechanics.md).
+
+## Individual rules
+
+<!-- generated: page-index -->
+| Rule | Name | Severity |
+|---|---|---|
+| [C025](#c025) | Hardening Option Disabled | LOW |
+| [C028](#c028) | Build Cache Outside The Build Trees | - |
+| [H007](#h007) | Symlink Redirect | - |
+| [H010](#h010) | Suspicious file write | - |
+| [H038](#h038) | World-Writable Staging | HIGH |
+| [H040](#h040) | Host Reconnaissance | INFO |
+| [H042](#h042) | Hidden Drop | HIGH |
+| [H076](#h076) | Build Writes Outside Staging Root | HIGH |
+| [H085](#h085) | PATH Injection With Undeclared Directory | HIGH |
+| [R058](#r058) | Write Outside Package Root | HIGH |
+<!-- /generated: page-index -->
+
+### H007: Symlink Redirect {#h007}
+
+H007 is retained as a documentation anchor for a retired rule. It emits no
+finding; a symlink written outside `$pkgdir` is one shape of [H076](#h076).
+
+### H010: Suspicious file write {#h010}
+
+H010 is retained as a documentation anchor for a reserved `runtime` id. No
+code emits it; a write to a sensitive location is claimed by the static rules
+when the diff shows it, such as [H076](#h076) and [R058](#r058).
+
+### R058: Write Outside Package Root {#r058}
+
+- **Target:** `raw_line`
+- **Severity:** HIGH (weight 25)
+- **Category:** `system`
+
+- **Pattern:** `^\+?\s*(?:sudo\s+)?(?:install|cp|mv|dd|tee)\s+[^;&|]*(?:(?<=\s)|(?<=\s["\x27]))(?:/etc|/boot|/usr/bin|/usr/lib)/`
+- **Description:** Detects writes to `/etc`, `/boot`, `/usr/bin`, or `/usr/lib` by absolute path. The same write prefixed with `$pkgdir` is normal packaging and does not match.
+
+### H038: World-Writable Staging {#h038}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `persistence`
+
+- **Condition:** `/tmp`, `/var/tmp` or `/dev/shm` is used as a working or execution directory. `mktemp -d` is excluded wholesale: a random private directory is not a fixed world-writable path.
+
+Fire rate: 0 on the v1 corpus.
+
+### H042: Hidden Drop {#h042}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `persistence`
+
+- **Condition:** A leading-dot (hidden) executable is written outside `$srcdir` and `$pkgdir`.
+
+H042 is deliberately the quietest rule in the group so that one payload does
+not fire three times: a hidden write that is later executed belongs to
+H069/H072, one in a world-writable directory to H038, one in the user's home to
+H032. H042 claims only the hidden drop none of those own.
+
+Fire rate: 0 on the v1 corpus.
+
+### H076: Build Writes Outside Staging Root {#h076}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `persistence`
+
+- **Condition:** `prepare`, `build`, `check`, `package` or a top-level line writes to a plain absolute path outside `$srcdir`/`$pkgdir`.
+
+Rather than a list of interesting directories, the rule is the shape: a
+packaging step may only write inside the staging roots. An absolute system path
+changes the machine doing the build, and pacman tracks none of it. Top level is
+the worse case, because it runs when makepkg sources the file. Install hooks
+are excluded, since H032/H038/H039/H062 own the target system. Devices
+(`> /dev/null`) and extractor artefacts are excluded by requiring a plain
+absolute path.
+
+Fire rate: 0 on the v1 corpus.
+
+### H085: PATH Injection With Undeclared Directory {#h085}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `build`
+
+- **Condition:** Inside a build/package/check/prepare function, a `PATH=` assignment adds a single-level `$srcdir/<subdir>` directory that is neither a declared `source=()` basename, a repository manifest member, nor a directory the recipe itself creates (`mkdir -p` / `install -d`).
+
+`PATH=$srcdir/tools:$PATH make` lets the recipe smuggle a binary into a
+standard command's search path. Adding the plain source root is common enough
+that it stays silent; deeper paths are more likely to be legitimate project
+layouts, so only single-level subdirectories are flagged. Detected by
+`_path_injection_findings()` in `src/trustsight/analysis/delivery/__init__.py`.
+
+### H040: Host Reconnaissance {#h040}
+
+- **Severity:** INFO (weight 0)
+- **Category:** `recon`
+
+- **Condition:** Host-profiling commands from `[patterns] recon_commands` run at a command position inside a build or install function.
+
+A lone `uname -m` is an architecture check and is reported at INFO by design.
+`env`, `dmidecode` and `systemd-detect-virt` are deliberately absent: the first
+produced a false positive on a `sed` expression, and the other two are H067's.
+
+Fire rate: 0 on the v1 corpus.
+
+### C025: Hardening Option Disabled {#c025}
+
+- **Severity:** LOW (weight 5)
+- **Category:** `build`
+
+- **Condition:** `options=()` gains a hardening-disabling entry
+  (`!strip`, `!debug`, `!lto`, `!fortify`, `!debugsplit`).
+
+Debug packages set these routinely, so the benign fire rate is the
+published number that decides this rule's weight. Measured on the locked
+benign corpus: 20 on the v1 corpus (0.53%).
+
+### C028: Build Cache Outside The Build Trees {#c028}
+
+**INFO** (weight 0) · category `staging`
+
+Fires when the diff adds a build step (`go build`, `cargo fetch`,
+`npm ci`, ...) that will cache outside `$srcdir`/`$pkgdir` (Go module cache,
+Cargo registry, npm cache) and the recipe does not override the cache
+directory. This is a failure by omission, not malice, so it is INFO and
+weight 0; it reports that the build will write outside the build trees.
+
+## Interpretation
+
+- The finding names the target being read (a metadata IP, a credential path,
+  a wallet directory). Read it as intent evidence: the package is
+  accumulating material it was not asked to touch.
+- Recon alone may be weight of evidence rather than a verdict; recon followed
+  by a network send is the pattern to escalate.
+- Some of these rules co-fire with crossfire and exfiltration families by
+  design; the pairing is the signal.
+
+## Related documentation
+
+- [Cross-File Consistency](../explanation/architecture-and-pipeline.md)

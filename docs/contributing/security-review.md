@@ -2,7 +2,7 @@
 
 # Reviewing a Security Control
 
-Every invariant in [the security model](../security.md) has a gate. This page is
+Every invariant in [the security model](../security-design/security-model.md) has a gate. This page is
 about the mistake that lets a gate pass while the invariant is broken, because
 it has now happened four times in this codebase and it will happen again.
 
@@ -15,7 +15,7 @@ The control is real. The gate is real. The gate passes. And the invariant is
 false, because the code has more than one way in and the check only knows about
 one of them.
 
-It is the same shape as the thing [B2](../security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete)
+It is the same shape as the thing [B2](../security-design/security-model.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete)
 exists to prevent, one level up: content skipped without a gap recorded, versus
 an entry point missed without the gate noticing. In both cases nothing fails,
 and the absence of a failure reads as a guarantee.
@@ -80,7 +80,7 @@ Worth knowing when you are relying on one:
 `every result declares its coverage`, `a baseline supplies state, not rules`,
 `doc cross-references resolve`, `critical paths are synchronised`,
 `sandbox responses are capped before framing`,
-`every cited invariant is defined`, and `docs/security.md matches the gates`.
+`every cited invariant is defined`, and `docs/security-design/security-model.md matches the gates`.
 
 **Behavioural, loop over every known site:** `terminal output is inert` (eleven
 renderers, including `explain`, `forget` and the CLI stderr log handler), `reserved names are refused by every writer` (three writers),
@@ -108,18 +108,18 @@ The tokenizer and regex checks are deliberately separate from the broad rule mat
 
 ## When you add an invariant
 
-1. Write the sentence in [the security model](../security.md).
+1. Write the sentence in [the security model](../security-design/security-model.md).
 2. Enumerate the entry points before writing the gate.
 3. Write the gate against the widest one, or structurally over all of them.
-4. Add the row to the [enforcement map](../security.md#part-c-the-enforcement-map).
-   The `docs/security.md matches the gates` gate fails otherwise, which is the
+4. Add the row to the [enforcement map](../security-design/security-model.md#part-c-the-enforcement-map).
+   The `docs/security-design/security-model.md matches the gates` gate fails otherwise, which is the
    point: a guarantee with no check and a check with no guarantee are both bugs.
 
 ## When you add a rule
 
 Detection rules are calibration, not security invariants, and go through
 [writing a rule](writing-a-rule.md) and the
-[calibration gates](../explanation/fire-rates.md) instead. The one security
+[calibration gates](../explanation/historical-and-behavioral-analysis.md) instead. The one security
 question a rule raises is the A5 one: if it compiles a pattern, it must match
 against text that has been through `rules.clamp_text`, which every current
 call site does. A rule that reads a file, opens a socket, or spawns a process

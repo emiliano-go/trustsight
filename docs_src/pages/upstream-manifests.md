@@ -2,7 +2,6 @@
 
 # Upstream Manifests
 
-Where these rules come from and what a finding means: [Rule Nature](../nature/upstream-manifests.md).
 
 TrustSight never fetches what a package declares (A2) and never extracts an
 upstream archive (A8): the cargo stays sealed. But the dependency manifests
@@ -34,7 +33,7 @@ cycles; an incomplete read preserves the prior state instead of inventing a
 delta.
 
 This is a reference page. For how weight and scope work, see
-[Rule System](system.md).
+[Rule Mechanics](mechanics.md).
 
 ## Reading a U finding
 

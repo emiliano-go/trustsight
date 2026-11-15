@@ -56,7 +56,7 @@ extension is not a shell one are blanked first, so a `build() {` in a
 `.desktop` file or a patch cannot place the rest of that file inside a
 function. Function detection reads both spellings - `build() {` and
 `function build {`, with or without parentheses - and hyphenated names. The
-[rule system reference](../reference/rules/system.md#how-scope-reduces-false-positives)
+[rule system reference](../rules/matching.md)
 covers the call graph, the `message` rules and the linter warnings.
 
 ## H-series rules (code)
@@ -75,8 +75,8 @@ Adding one means:
    what makes it a documented rule and what reserves the id against a
    `rules.toml` entry claiming it.
 3. Add its message template to `src/trustsight/findings.py`.
-4. Document it on the category page under `docs/reference/rules/`, as
-   `### H0NN:`, so the index builder picks it up.
+4. Document it on its category page under `docs/rules/`, as `### H0NN:`,
+   so the index builder picks it up.
 
 An H rule has no `enabled` or `weight_override` control, because it has no
 `rules.toml` entry to attach one to. If a rule *should* be operator-tunable,
@@ -99,7 +99,7 @@ unlike the rest of the ruleset's. Its commands are not rare in a PKGBUILD -
 `rm -rf` appears in most recipes - so each rule is written against a
 *distinction* rather than a command: the build sandbox is not the system, a
 mention is not an invocation, and a package's own service is not the system's.
-See [the sabotage reference](../reference/rules/sabotage.md).
+See [the sabotage reference](../rules/sabotage.md).
 
 ## C-series rules (code)
 
@@ -118,8 +118,7 @@ span three or more capabilities. Reuse an existing value where one fits.
 
 `RuleCategory`, in `src/trustsight/categories.py`, names the **kind of
 claim** the rule makes. The set is closed, every rule has exactly one, and
-it decides which page under `docs/reference/rules/` carries the rule's
-definition. Add the id to `RULE_CATEGORIES` in the same change that adds
+it decides which page under `docs/rules/` carries the rule's definition. Add the id to `RULE_CATEGORIES` in the same change that adds
 the rule:
 
 ```python
@@ -162,24 +161,18 @@ the identity and the prose:
 - **Condition:** ...
 ```
 
-Add the anchor to the page's list in `docs_src/layout.json`, and a stub to
-`docs/reference/rules/system.md`:
+Add the anchor to the page's list in `docs_src/layout.json`. Do not edit the
+category page by hand: the heading, the `Target` / `Severity` / `Category`
+bullets and the generated index are rebuilt from the registry and the section
+source. The old `docs/rules/mechanics.md` anchor stubs are generated
+too, so a rule ID added to the registry gets its compatibility anchor
+automatically.
 
-```markdown
-### H086 {#h086}
-
-See [H086: Name](../reference/rules/maintainer-and-metadata.md#h086).
-```
-
-Each category also has a page on the **Rule Nature** tab
-(`docs/reference/nature/<category>.md`) describing where the category's ideas
-come from and what a finding means. Those pages are prose, not per-rule
-definitions, so a new rule rarely changes one; update it only when the rule
-introduces a new *kind* of claim the page does not yet cover. The generated
-line at the top of each Nature page lists the rule IDs and is rebuilt with the
-pages, so you do not edit it by hand. The two tabs are kept in step by the
-navigation check in `tests/test_docs.py`, which requires every page on disk to
-appear in the nav.
+Each category has **one** canonical page. It carries both the mechanics and
+the interpretation prose from `docs_src/nature/<category>.md`. A new rule
+rarely changes the interpretation; update it only when the rule introduces a
+new *kind* of claim the page does not yet cover. The generated rule list on
+the page is rebuilt with the definitions, so you never maintain a second index.
 
 Then rebuild the pages and the index from `docs_src` and the registry:
 
@@ -189,8 +182,9 @@ uv run python scripts/build_rules_index.py
 
 `tests/test_docs.py` fails if any of those is missing, if the section lands
 on a page the category does not own, if a quoted pattern has drifted from
-the shipped one, or if the id is absent from the quick-reference table.
-`tests/test_generated_docs.py` fails if a page or the index was not rebuilt.
+the shipped one, or if the id is absent from the generated catalog.
+`tests/test_generated_docs.py` fails if a category page, the catalog or the
+compatibility anchors were not rebuilt.
 `tests/test_rule_metadata.py` fails if the documented name or severity is not
 one the code actually emits.
 

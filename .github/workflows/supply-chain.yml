@@ -2,7 +2,7 @@ name: Supply chain
 
 # The dependency boundary, made observable.
 #
-# `docs/security.md` takes "the dependencies are trusted" as an assumption
+# `docs/security-design/security-model.md` takes "the dependencies are trusted" as an assumption
 # rather than defending it: `pygit2`, `rich`, `typer`, `tldextract`,
 # `cryptography`, Python and SQLite are third-party or substrate code this
 # project consumes and does not audit.  That is a legitimate boundary, but

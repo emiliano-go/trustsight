@@ -1,6 +1,6 @@
 """The security-model gates, enforced.
 
-``docs/security.md`` states what TrustSight guarantees.  This script is the
+``docs/security-design/security-model.md`` states what TrustSight guarantees.  This script is the
 other half of that document: every invariant it lists has a check here, and
 a check that fails is a claim that has stopped being true.  The split is the
 same one ``calibration_gates.py`` makes for detection: the doc says what the

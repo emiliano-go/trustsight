@@ -4,7 +4,7 @@ The R-series matches diff lines.  A ``[[structural]]`` rule asks the typed
 core instead: did an array gain an entry, did a host appear, did a scalar
 change, did a source local name move under a kept URL.  The table is
 user-only and ships empty; the semantics, the changed-line anchor and the
-severity cap are in ``docs/explanation/structural-user-rules.md``.
+severity cap are in ``docs/explanation/static-analysis-and-resolution.md``.
 """
 
 from urllib.parse import urlparse

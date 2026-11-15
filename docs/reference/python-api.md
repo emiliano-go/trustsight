@@ -78,7 +78,7 @@ Each dependency is a **full analysis in its own right** - its own score, its
 own band, its own row in the database. None of it is folded into the parent's
 `score`, and that is deliberate rather than cautious: `depth` is not part of
 the config fingerprint, so a parent score that moved with `depth` would break
-[B1](../security.md#b1-a-score-is-a-sum-of-matched-evidence-nothing-more) for
+[B1](../security-design/security-model.md#b1-a-score-is-a-sum-of-matched-evidence-nothing-more) for
 anyone comparing two runs.
 
 ```python
@@ -114,7 +114,7 @@ TrustSight(*, auto_import_seed: bool | None = None)
 
 Construction does no I/O. The config directory and database are prepared on the first call that needs them. The API may import a bundled seed when a build supplies one, but it does not fetch the release-channel seed automatically; that network fetch is limited to eligible CLI `review` and `inspect` commands.
 
-`auto_import_seed` defaults to `None`, which follows `seed.auto_import` in `config.toml`. Pass `False` to run against a cold database deliberately. A cold database makes every novelty signal meaningless, and TrustSight reports the band as `Inconclusive` rather than pretending otherwise; maturity is database-wide, not per package. See [cold start and maturity](../explanation/cold-start-and-maturity.md).
+`auto_import_seed` defaults to `None`, which follows `seed.auto_import` in `config.toml`. Pass `False` to run against a cold database deliberately. A cold database makes every novelty signal meaningless, and TrustSight reports the band as `Inconclusive` rather than pretending otherwise; maturity is database-wide, not per package. See [cold start and maturity](../explanation/scoring-and-verdicts.md).
 
 ### API input limits
 
@@ -200,7 +200,7 @@ report = ts.analyze_diff(pathlib.Path("change.diff").read_text())
 
 ### `verify_build(package, *, diff_text="", manifest=None, declared=None, static_clean=None) -> dict`
 
-The optional **L9 build lane**, off by default (`[verify] enabled = false`). With the lane disabled or the container unavailable it returns `{"status": "l9_unavailable", ...}` - a weight-0 boundary that never reads as clean or malicious. Given a `manifest` it inspects the built artifact (A001-A008) without executing anything (the build that produced the manifest runs outside the static core) and returns `{"status": "l9_analyzed", "findings": [...]}`. Pass `static_clean` (the L1-L8 outcome) to set `l9_divergence: true` when the two disagree; both profiles render and L9 never edits the static verdict. See [Artifact](rules/artifact.md).
+The optional **L9 build lane**, off by default (`[verify] enabled = false`). With the lane disabled or the container unavailable it returns `{"status": "l9_unavailable", ...}` - a weight-0 boundary that never reads as clean or malicious. Given a `manifest` it inspects the built artifact (A001-A008) without executing anything (the build that produced the manifest runs outside the static core) and returns `{"status": "l9_analyzed", "findings": [...]}`. Pass `static_clean` (the L1-L8 outcome) to set `l9_divergence: true` when the two disagree; both profiles render and L9 never edits the static verdict. See [Artifact](../rules/artifact.md).
 
 ```python
 result = ts.verify_build(
@@ -547,4 +547,4 @@ for item in unvetted:
 raise SystemExit(1 if blocked or unvetted else 0)
 ```
 
-See [using TrustSight in CI](../guides/using-in-ci.md) for the same argument made about the CLI, and [what TrustSight cannot see](../explanation/what-trustsight-cannot-see.md) for the limits that apply to both.
+See [using TrustSight in CI](../workflows/using-in-ci.md) for the same argument made about the CLI, and [what TrustSight cannot see](../explanation/limitations-and-uncertainty.md) for the limits that apply to both.

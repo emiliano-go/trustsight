@@ -6,7 +6,7 @@ TrustSight is a security analysis and intelligence platform for the AUR ecosyste
 is an **instrument, not a judge**: it reads changes, applies published detection
 rules, and reports what it found and what it could not see. It never decides
 whether a package is safe; a person does. Every contribution is measured against
-the same thesis, which the [security model](../security.md) states and each part
+the same thesis, which the [security model](../security-design/security-model.md) states and each part
 below applies to work on the tool itself.
 
 - [Development Setup](development-setup.md): getting started, running tests,
@@ -25,6 +25,8 @@ below applies to work on the tool itself.
 - [Reviewing a Security Control](security-review.md): how to scope a gate so it
   covers the entry point an attacker reaches, and the failure mode that keeps
   recurring
+- [Documentation Policy](documentation-policy.md): who a page is for, where
+  content belongs, and the checks a documentation change must pass
 
 ## The boundary
 
@@ -40,7 +42,7 @@ will not be merged.
 
 Every agreed guarantee has a gate in CI; a change that breaks a gate is a change
 that is not done. The list is stated in full in
-[the enforcement map](../security.md#part-c-the-enforcement-map). The ones most
+[the enforcement map](../security-design/security-model.md#part-c-the-enforcement-map). The ones most
 likely to be touched by a rule or pipeline change:
 
 - **Determinism.** The same diff, effective configuration, and observation
@@ -87,3 +89,12 @@ benign corpus and real case reports are the arguments that matter.
 | Rules              | 206 scoring rules across R/H/C/D/S/X, plus P001-P009 declared practice (P004 is skipped) and W001-W014 unverifiable |
 | Rule config        | `rules.toml`                    |
 | Benign corpus lock | `tests/fixtures/corpus.lock`    |
+
+## Project records
+
+- [In the Wild](../reports/in-the-wild.md): field notes from real AUR
+  incidents.
+- [2026-10-14: AUR name-clone waves](../reports/2026-10-14-aur-name-clone-waves.md):
+  a worked campaign report.
+- [Hot-path performance baseline](../reports/hot-path-baseline.md): the
+  measured cost of a review, and what changed it.

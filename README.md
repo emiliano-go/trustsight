@@ -83,9 +83,9 @@ Requires **Python 3.11+** and **Arch Linux** (the tool discovers packages via `p
 
 ## Security model
 
-TrustSight is **evidence-producing**, not proof-of-safety. Read the [full security model](https://docs.trustsight.org/security/) for the threat model, invariants, and enforcement gates. It audits and does not install. The tool never runs the PKGBUILD, never executes extracted commands, and never modifies your system. Every finding is traceable to a specific diff line, URL, or novelty record. The output is a structured evidence report, not a gate. See [what TrustSight cannot see](https://docs.trustsight.org/explanation/what-trustsight-cannot-see/).
+TrustSight is **evidence-producing**, not proof-of-safety. Read the [full security model](https://docs.trustsight.org/security-design/security-model/) for the threat model, invariants, and enforcement gates. It audits and does not install. The tool never runs the PKGBUILD, never executes extracted commands, and never modifies your system. Every finding is traceable to a specific diff line, URL, or novelty record. The output is a structured evidence report, not a gate. See [what TrustSight cannot see](https://docs.trustsight.org/explanation/limitations-and-uncertainty/).
 
-> **Why static analysis?** TrustSight is a SAST tool by design: it never executes PKGBUILDs or fetches URLs declared by them, and runs before `makepkg`. Its only network egress is the AUR metadata snapshot and the signed baseline channel - never a source the package declares. For how to customize the detection surface, see [Why Static Analysis](https://docs.trustsight.org/explanation/why-static-analysis/).
+> **Why static analysis?** TrustSight is a SAST tool by design: it never executes PKGBUILDs or fetches URLs declared by them, and runs before `makepkg`. Its only network egress is the AUR metadata snapshot and the signed baseline channel - never a source the package declares. For how to customize the detection surface, see [Why Static Analysis](https://docs.trustsight.org/explanation/static-analysis-and-resolution/).
 
 ---
 
@@ -123,7 +123,7 @@ TrustSight is **evidence-producing**, not proof-of-safety. Read the [full securi
 | **Runtime attacks** | The tool never executes the PKGBUILD, never runs extracted commands, and never modifies your system. |
 | **Zero-day structural attacks** | Rules are pattern-based and calibrated against a known corpus. A novel attack that leaves no matching pattern will not fire. |
 
-The default review output shows findings and a verdict, not score or risk columns. Add `--score` or `--risk` when you want the numeric band in the terminal. The default review profile flags scores above 20; on the locked benign corpus that is about **1 in 15** review workload items. `quiet` and `strict` profiles change the queue without changing scores or bands. A clean score means no known risk signals fired, not that the package is safe. This is a point-in-time corpus measurement, not a universal false-positive rate. See [what TrustSight cannot see](https://docs.trustsight.org/explanation/what-trustsight-cannot-see/) for details.
+The default review output shows findings and a verdict, not score or risk columns. Add `--score` or `--risk` when you want the numeric band in the terminal. The default review profile flags scores above 20; on the locked benign corpus that is about **1 in 15** review workload items. `quiet` and `strict` profiles change the queue without changing scores or bands. A clean score means no known risk signals fired, not that the package is safe. This is a point-in-time corpus measurement, not a universal false-positive rate. See [what TrustSight cannot see](https://docs.trustsight.org/explanation/limitations-and-uncertainty/) for details.
 
 ---
 
@@ -156,9 +156,9 @@ Every rule carries an **evidence layer**, `L1`-`L8`, naming the *kind* of eviden
 | `L7` Known indicators | Is it on the list? | `I` |
 | `L8` Campaign correlation | Do other packages tell the same story? | `G` |
 
-The report keeps detection and coverage separate: `L3 fired` says the payload-signature check matched, `L1 passed` says the structural check was read in full and stayed silent (not that the update is safe), and `L8 not_applicable` says the check could not run on a single package. `M` reasons about other findings and fires *at* their layer, so it owns no layer of its own. The optional `L9` build lane (`A001`-`A008`) inspects the built package and is not one of the eight. See [How TrustSight groups security evidence](https://docs.trustsight.org/assurance-layers/).
+The report keeps detection and coverage separate: `L3 fired` says the payload-signature check matched, `L1 passed` says the structural check was read in full and stayed silent (not that the update is safe), and `L8 not_applicable` says the check could not run on a single package. `M` reasons about other findings and fires *at* their layer, so it owns no layer of its own. The optional `L9` build lane (`A001`-`A008`) inspects the built package and is not one of the eight. See [How TrustSight groups security evidence](https://docs.trustsight.org/security-design/assurance-layers/).
 
-Signals come from 277 documented rules across eleven rule families: 37 detection rules (R-series, TOML-configurable), 108 heuristic rules (H-series), 34 code-structure rules (C001-C034), 5 dependency-graph rules (D001-D005), 8 sabotage rules (S001-S008), 34 crossfire anti-evasion rules (X001-X034), 6 meta rules (M001-M006), 3 entropy rules (E001-E003), 12 temporal rules (T001-T012), 15 correlation rules (G001-G011, G012-G015), and 15 manifest rules (U001-U015). Two further families are reported but never weighted: declared practice (P001-P009) and unverifiable (W001-W014), the latter naming what an analysis could not read. The optional L9 build lane adds eight artifact rules (A001-A010), reported outside the heuristic when enabled. Calibration uses a locked, point-in-time 8,393-diff benign corpus of real AUR updates and 213 self-authored, labelled malicious fixtures; it is regression evidence, not an independent recall claim. See [Benchmarks and Methodology](https://docs.trustsight.org/explanation/benchmarks-and-methodology/) and the [blinded-evaluation intake](https://docs.trustsight.org/contributing/blinded-evaluation/) for scope.
+Signals come from 277 documented rules across eleven rule families: 37 detection rules (R-series, TOML-configurable), 108 heuristic rules (H-series), 34 code-structure rules (C001-C034), 5 dependency-graph rules (D001-D005), 8 sabotage rules (S001-S008), 34 crossfire anti-evasion rules (X001-X034), 6 meta rules (M001-M006), 3 entropy rules (E001-E003), 12 temporal rules (T001-T012), 15 correlation rules (G001-G011, G012-G015), and 15 manifest rules (U001-U015). Two further families are reported but never weighted: declared practice (P001-P009) and unverifiable (W001-W014), the latter naming what an analysis could not read. The optional L9 build lane adds eight artifact rules (A001-A010), reported outside the heuristic when enabled. Calibration uses a locked, point-in-time 8,393-diff benign corpus of real AUR updates and 213 self-authored, labelled malicious fixtures; it is regression evidence, not an independent recall claim. See [Benchmarks and Methodology](https://docs.trustsight.org/explanation/detection-and-evidence/) and the [blinded-evaluation intake](https://docs.trustsight.org/contributing/blinded-evaluation/) for scope.
 
 ---
 
@@ -172,8 +172,11 @@ MIT
 
 | Section | Description |
 |---|---|
-| [Tutorial](https://docs.trustsight.org/tutorial/installation/) | One-tutorial path from install to first review |
-| [Full documentation](https://docs.trustsight.org/) | Docs landing page |
-| [Contributing](https://docs.trustsight.org/contributing/) | How to report bugs, contribute code, improve docs |
-| [Security](https://docs.trustsight.org/security/) | Vulnerability disclosure policy |
+| [Start Here](https://docs.trustsight.org/start-here/quickstart/) | Install TrustSight, run a first review, understand the report |
+| [Workflows](https://docs.trustsight.org/workflows/) | Auditing before update, yay and paru, CI, triage, configuration |
+| [Security & Design](https://docs.trustsight.org/security-design/security-model/) | The security model, boundaries, evidence model and threat model |
+| [Rules](https://docs.trustsight.org/rules/) | Categories, series, mechanics and every rule definition |
+| [Reference](https://docs.trustsight.org/reference/) | CLI, Python API, configuration, report schema and exit codes |
+| [Contributing](https://docs.trustsight.org/contributing/) | Development, rule authoring, evaluation, releases and docs policy |
+| [Vulnerability Reporting](https://docs.trustsight.org/security-design/vulnerability-reporting/) | How to report a vulnerability |
 | [License](https://docs.trustsight.org/license/) | MIT full text |

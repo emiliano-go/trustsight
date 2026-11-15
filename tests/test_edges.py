@@ -118,7 +118,7 @@ def test_every_registered_emitter_is_dispatched():
     original = edges.EDGE_INSTANCES
     edges.EDGE_INSTANCES = tuple(
         edges.EdgeInstance("H094", "spy", "unread", None, None, (), "HIGH",
-                           "docs/reference/rules/fetch-and-execution.md",
+                           "docs/rules/fetch-and-execution.md",
                            ("tests/test_edges.py",), spy)
         for _ in range(3)
     )

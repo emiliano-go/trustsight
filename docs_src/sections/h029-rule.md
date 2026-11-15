@@ -23,4 +23,4 @@ Symmetric edit-distance is a census generator: `foo-git`, `foo-bin`, `foo-lts`, 
     graph positions: H029 scans the package's **own name** against observed
     popularity, D002 walks the **dependency closure**. The series split is
     positional, not mechanical - that is the intended reading of "series =
-    mechanism" (see [Rule Nature](nature.md)).
+    mechanism" (see [Rule Interpretation](series.md)).

@@ -13,7 +13,7 @@ body:
           host, terminal escape injection, a resource-exhaustion crash, an
           integrity breach): do **not** open a public issue. Report it
           privately, see the security link on the new-issue page or
-          [How to report](https://github.com/emiliano-go/trustsight/blob/master/docs/security.md#how-to-report).
+          [How to report](https://github.com/emiliano-go/trustsight/blob/master/docs/security-design/vulnerability-reporting.md#how-to-report).
         - **"It flagged a benign package"**: check
           [Tuning False Positives](https://docs.trustsight.org/guides/tuning-false-positives/)
           first. A hit on a genuine bad practice is a real finding, not a rule

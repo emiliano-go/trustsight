@@ -2,7 +2,6 @@
 
 # Maintainer and Metadata
 
-Where these rules come from and what a finding means: [Rule Nature](../nature/maintainer-and-metadata.md).
 
 Who owns the package changed (H026, H044, H074, C006), a property that held
 across a long run of observations changed (H037, H049, H050, H051, H054), a
@@ -16,7 +15,7 @@ consecutive observations before a change is reported. Every one of them is
 silent on a cold database by construction, because the first observation of
 a property only inserts it.
 
-See [the rule system reference](system.md) for the field table, the
+See [Rule Mechanics](mechanics.md) for the field table, the
 severity weights and the reserved identifier ranges.
 
 ---

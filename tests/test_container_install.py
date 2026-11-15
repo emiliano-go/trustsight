@@ -138,7 +138,7 @@ def test_pkgbuild_builds_and_installs(arch_container: str, tmp_path: Path) -> No
     entry = _exec(arch_container, "trustsight", "--version")
     assert version in entry, f"installed entry point reports {entry.strip()!r}"
 
-    # The setup documented in docs/guides/reducing-blast-radius.md: a
+    # The setup documented in docs/workflows/reducing-blast-radius.md: a
     # dedicated nologin account owns its state, and the first run after an
     # update adds missing rules and opens the database without root-owned
     # leftovers.

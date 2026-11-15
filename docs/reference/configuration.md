@@ -96,7 +96,7 @@ so it never confirms that a declared key signs anything or that a pinned commit
 holds what it claims. A signal an attacker can assert for free must not be able
 to lower a score. These facts are now reported as weight-0 declared-practice
 findings in the `P` namespace (`P001`-`P009`, P004 skipped); see
-[the security model](../security.md#b10-positive-evidence-is-reported-never-credited).
+[the security model](../security-design/security-model.md#b10-positive-evidence-is-reported-never-credited).
 
 Pinning classification via `classify_pinning_level()` in
 `src/trustsight/buckets.py` still runs; it decides which `P` finding is
@@ -127,7 +127,7 @@ emitted, not a score.
 |-----|------|---------|-------------|
 | `allow` | array of strings | `["waterfox.com", "torproject.org", "arduino.cc", "cachyos.org", "freedesktop.org", "archlinux.org", "winehq.org"]` | Registered domains (eTLD+1) exempted from C011. Add a legitimate non-forge distribution CDN or mirror here when C011 fires on a prebuilt `-bin` package that sources from it. |
 
-`config.toml` is written once and read verbatim, so an install that predates this table keeps the shipped default (`DEFAULT_SOURCE_DIVERGENCE_ALLOW` in `src/trustsight/config/_default_config.py`). The table is part of the [configuration fingerprint](../explanation/scoring-philosophy.md): changing it changes which packages C011 reports, so two operators with different lists are different instruments.
+`config.toml` is written once and read verbatim, so an install that predates this table keeps the shipped default (`DEFAULT_SOURCE_DIVERGENCE_ALLOW` in `src/trustsight/config/_default_config.py`). The table is part of the [configuration fingerprint](../explanation/scoring-and-verdicts.md): changing it changes which packages C011 reports, so two operators with different lists are different instruments.
 
 ### `[rules]`
 
@@ -165,7 +165,7 @@ unrelated rule.
 
 ### `[code_rules]`
 
-Rules emitted from code rather than `rules.toml`, so the `experimental` flag above cannot reach them. They are **not** experimental: all default to `true`, a value set by corpus calibration; see [Fire Rates](../explanation/fire-rates.md).
+Rules emitted from code rather than `rules.toml`, so the `experimental` flag above cannot reach them. They are **not** experimental: all default to `true`, a value set by corpus calibration; see [Fire Rates](../explanation/historical-and-behavioral-analysis.md).
 
 A config written before this section existed still gets these defaults: `load_config()` reads the file verbatim without merging defaults, so the fallbacks live in code (`_CODE_RULE_DEFAULTS` in `src/trustsight/analysis/base.py`). Setting a key here always overrides them.
 
@@ -288,7 +288,7 @@ Each dependency is analysed exactly as a package - its own score, its own
 band, its own row in the database. Nothing is folded into the parent's score,
 because `depth` is deliberately absent from the config fingerprint and a
 score that moved with `--depth` would break
-[B1](../security.md#b1-a-score-is-a-sum-of-matched-evidence-nothing-more)
+[B1](../security-design/security-model.md#b1-a-score-is-a-sum-of-matched-evidence-nothing-more)
 for anyone comparing two runs.
 
 Overridden per run by `--depth`.
@@ -622,7 +622,7 @@ Four commands stop, and they do not all stop for the same reason:
 the package's own AUR repository, because that clone is how a diff exists at
 all; `fetcher` does not consult this variable. What the variable governs is
 the bulk and release channels, not the per-package fetch that
-[A3](../security.md#the-invariants) already constrains to one host keyed by
+[A3](../security-design/security-model.md#the-invariants) already constrains to one host keyed by
 package name. To stop all outbound traffic, deny it at the network layer.
 
 Defined in `release.offline()`.

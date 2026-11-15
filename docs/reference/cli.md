@@ -200,7 +200,7 @@ examined.` (`comparison_base: "parent"`).
 The plain-text fallback carries the **same sections** in the same order, and
 nothing is dropped from it: a field on one renderer and not the other is a
 difference in information, which
-[B11](../security.md#b11-every-surface-reports-the-same-thing) forbids.
+[B11](../security-design/security-model.md#b11-every-surface-reports-the-same-thing) forbids.
 
 ### Database
 
@@ -239,11 +239,11 @@ trustsight preinstall <package>...
 
 ### Output and exit codes
 
-The body and renderers are the same as `inspect` ([B11](../security.md#b11-every-surface-reports-the-same-thing)).
+The body and renderers are the same as `inspect` ([B11](../security-design/security-model.md#b11-every-surface-reports-the-same-thing)).
 It is a **report, not a gate**: exit **0** when the scan completed (whatever it
-found) and **2** when it could not run, per [B6](../security.md#b6-what-a-result-does-not-claim).
+found) and **2** when it could not run, per [B6](../security-design/security-model.md#b6-what-a-result-does-not-claim).
 Gate a pipeline on the JSON, not the exit status. For an approval step inside
-yay/paru use [`trustsight-gate`](../guides/gating-yay-paru.md) instead.
+yay/paru use [`trustsight-gate`](../workflows/integrating-yay-and-paru.md) instead.
 
 ---
 
@@ -268,7 +268,7 @@ trustsight hook yay  [--config PATH] [--print] [--dry-run] [--force] [--remove]
 `paru` gets `PreBuildCommand` under the `bin` section; `yay` gets an
 `AURPreInstall` handler in `init.lua`. Exit 0 when configured, already
 configured or printed; 2 when refused or unreadable. See
-[Gating yay and paru](../guides/gating-yay-paru.md).
+[Gating yay and paru](../workflows/integrating-yay-and-paru.md).
 
 ---
 

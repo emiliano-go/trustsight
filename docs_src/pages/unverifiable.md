@@ -2,17 +2,16 @@
 
 # Unverifiable
 
-Where these rules come from and what a finding means: [Rule Nature](../nature/unverifiable.md).
 
 W rules report **what the analysis could not check**.
 
 Every other rule says "this recipe does something". A W finding says "this
 analysis could not verify something", attached to the line it applies to. It
-is the same statement as a [coverage gap](../report-schema.md), moved from
+is the same statement as a [coverage gap](../reference/report-schema.md), moved from
 the run to the line.
 
 This is a reference page. For how weight and scope work, see
-[Rule System](system.md).
+[Rule Mechanics](mechanics.md).
 
 ## Reading a W finding
 
@@ -29,7 +28,7 @@ the format. The checksum proves the bytes arrived unaltered; it says nothing
 about what they do.
 
 Pricing that would put a finding on a large share of the ecosystem and make
-the number mean less, which is what [B10](../../security.md) prevents: a gap
+the number mean less, which is what [B10](../security-design/security-model.md) prevents: a gap
 must not add points. Silence is the other option, and silence is what the
 boundary documentation had to describe as something TrustSight cannot see.
 

@@ -135,7 +135,7 @@ warms, novelty signals ramp linearly to full weight.
 
 When the final score is in the Medium range (21-50) **and** maturity is below 0.5 (fewer than ~25 observations) **and** no entry in the breakdown is HIGH, CRITICAL or FATAL, the verdict is downgraded from "Medium" to "Inconclusive". This signals insufficient data rather than actual risk. Logic at `src/trustsight/scoring.py`.
 
-The same downgrade is applied, at any maturity, when the analysis recorded a coverage gap: see [the security model](../security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete). Logic at `src/trustsight/coverage.py`.
+The same downgrade is applied, at any maturity, when the analysis recorded a coverage gap: see [the security model](../security-design/security-model.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete). Logic at `src/trustsight/coverage.py`.
 
 ---
 
@@ -145,7 +145,7 @@ Structural integrity protections declared in the statically visible post-diff
 PKGBUILD text.
 They are **reported, never scored**: each is emitted as a weight-0 finding in
 the `P` namespace. See
-[B10](../security.md#b10-positive-evidence-is-reported-never-credited) for why
+[B10](../security-design/security-model.md#b10-positive-evidence-is-reported-never-credited) for why
 a signal an attacker can assert for free must not lower a score.
 
 ### Sources
@@ -196,4 +196,24 @@ was not looked at".
 
 It is therefore not tier-gated, not maturity-scaled, and not scored. It is
 the per-line form of a [coverage gap](report-schema.md), available cold and
-always shown. See the [unverifiable rules reference](rules/unverifiable.md).
+always shown. See the [unverifiable rules reference](../rules/unverifiable.md).
+
+## Rules by evidence tier
+
+| Tier | Rule sources | What they measure |
+|------|-------------|-------------------|
+| A (Structural) | R001-R059, R078, R091, R099, R104, R144, R152, H001-H103, S001-S008, X001-X034, C001-C034, D001-D005 | Direct pattern matching against PKGBUILD commands and structure |
+| B (Priors/Context) | Source bucket classification | Domain reputation of new URLs (not a rule, but a scoring input) |
+| C (History/Novelty) | URL and maintainer novelty | First-seen signals from the local database |
+| D (Verification) | Checksum, PGP, GPG presence | Declared integrity metadata, reported at weight 0 |
+| Reported, not scored | W001-W014 | Analysis boundaries: bytes the package will run that this run could not read. Weight 0, always shown. |
+
+The U-series reads what a recipe declares about upstream. From the committed dependency manifests beside a recipe: U003 (a new remote source) and U004 (a redirected resolver) score at MEDIUM; U001, U002, U005 and U006 are weight-0 ledger entries. From upstream release integrity: U007 (CI exfil shape) and U008 (git-history credential sweep) score at MEDIUM from the signed federation channel, U009 (new CI surface committed) is a weight-0 ledger entry, and U010 (unauditable upstream) scores at MEDIUM.
+
+Rules only contribute to Tier A. Tiers B and C are computed independently and added to the score alongside the rule contributions.
+
+Tier D contributes nothing to the score. Declared verification is emitted as
+weight-0 `P001`-`P009` findings and reported to the reader: TrustSight never
+fetches, so it cannot confirm that a declared key signs anything, and a signal
+an attacker can assert for free must not be able to lower a score. See
+[B10](../security-design/security-model.md#b10-positive-evidence-is-reported-never-credited).

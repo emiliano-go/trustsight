@@ -10,7 +10,7 @@ rule, and several values exist that only one rule uses.
 :class:`RuleCategory` answers "what sort of thing does this rule detect?"
 There is exactly one per rule, the set is closed, and it is the axis the
 reference documentation is organised along: each member owns one page under
-``docs/reference/rules/``.  The two are not interchangeable - H027 is
+``docs/rules/``.  The two are not interchangeable - H027 is
 ``category = "meta"`` and :data:`RuleCategory.COMPOSITION`, because the
 capability it reports is "none of them" while the claim it makes is "several
 stages co-occurred".
@@ -90,7 +90,7 @@ class RuleCategory(StrEnum):
 
     @property
     def doc_page(self) -> str:
-        """Path of the reference page, relative to ``docs/reference/rules/``."""
+        """Path of the reference page, relative to ``docs/rules/``."""
         return f"{self.value}.md"
 
     @property

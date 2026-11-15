@@ -19,8 +19,11 @@ both (see llmstxt.org):
     corpus in one request, for a reader that would otherwise crawl 57 pages.
 
 Structure comes from ``zensical.toml``'s ``nav`` rather than from a second
-list in this file: a page added to the site is a page added here, and a nav
-entry with no file fails the build below rather than emitting a dead link.
+list in this file.  Pages that are deliberately not global navigation entries
+(advanced explanations and the per-category rule pages) are appended in an
+"Advanced and reference" section, so every page on disk still appears in both
+files.  A nav entry with no file fails the build rather than emitting a dead
+link.
 
 Usage::
 
@@ -90,6 +93,12 @@ def _sections(meta: dict) -> list[tuple[str, list[tuple[str, str]]]]:
             _walk(value, pages)
             sections.append((title, pages))
     return sections
+
+
+def _title(path: Path, body: str) -> str:
+    """The page's H1, falling back to its filename."""
+    match = re.search(r"^#\s+(.+)$", body, re.M)
+    return match.group(1).strip() if match else path.stem.replace("-", " ").title()
 
 
 def _strip_frontmatter(text: str) -> tuple[str, str]:
@@ -200,6 +209,24 @@ def build(docs: Path, meta: dict) -> tuple[str, str]:
 
             full += ["", "=" * 78, f"# {title}", f"Source: {url}", "=" * 78, "",
                      body.strip(), ""]
+        index.append("")
+
+    navigated = {path for _, pages in _sections(meta) for _, path in pages}
+    on_disk = {str(p.relative_to(docs)) for p in docs.rglob("*.md")}
+    extras = sorted(on_disk - navigated)
+    if extras:
+        index += ["## Advanced and reference", ""]
+        for path in extras:
+            page = docs / path
+            front, body = _strip_frontmatter(page.read_text())
+            summary = _summary(front, body)
+            url = _url(base, path)
+            index.append(
+                f"- [{_title(page, body)}]({url})"
+                + (f": {summary}" if summary else "")
+            )
+            full += ["", "=" * 78, f"# {_title(page, body)}", f"Source: {url}",
+                     "=" * 78, "", body.strip(), ""]
         index.append("")
 
     if missing:

@@ -2,7 +2,6 @@
 
 # Install and Persistence
 
-Where these rules come from and what a finding means: [Rule Nature](../nature/install-and-persist.md).
 
 Something survives the build. Install hooks run as root at install time,
 which makes them the highest-privilege code a PKGBUILD carries (R007, H017,
@@ -14,7 +13,7 @@ R017 and R053/R059 split the same operation by target: a setuid bit inside
 privilege change to the build host. R052 and H032 cover the user-profile
 form, where the persistence is a dotfile rather than a unit.
 
-See [the rule system reference](system.md) for the field table, the
+See [Rule Mechanics](mechanics.md) for the field table, the
 severity weights and the reserved identifier ranges.
 
 ---

@@ -16,7 +16,7 @@ A benign false positive is a rule hit on a genuine bad practice by the packager,
 
 A malicious false positive is a bad rule trigger: the rule fired with no bad practice or malicious behaviour behind it. A misread option, an allowlist gap, or a counting or grouping error is a malicious false positive. The fix belongs in the detection shape, and it ships with the true-positive twin.
 
-The term names a false positive of the maliciousness claim, not a malicious false positive. See [Tuning False Positives](guides/tuning-false-positives.md#two-kinds-of-false-positive). The glossary defines both terms once: [Glossary](reference/glossary.md).
+The term names a false positive of the maliciousness claim, not a malicious false positive. See [Tuning False Positives](workflows/tuning-false-positives.md#two-kinds-of-false-positive). The glossary defines both terms once: [Glossary](reference/glossary.md).
 
 ## Detection standards
 
@@ -26,7 +26,7 @@ No package name, maintainer, or individual recipe may appear in detection logic.
 
 Operator overrides are different. They are explicit, scoped, require a reason, and expire; they are an operator's local decision, not a hidden branch in the instrument. A package-specific branch in shipped code is forbidden.
 
-**Enforced by:** [Tuning False Positives](guides/tuning-false-positives.md#known-false-positives) and review of every rule change.
+**Enforced by:** [Tuning False Positives](workflows/tuning-false-positives.md#known-false-positives) and review of every rule change.
 
 ### False-positive fixes include the true-positive twin
 
@@ -38,7 +38,7 @@ A change that only stops a rule firing is not a fix. The malicious case must sti
 
 A new detection ships at weight 0 (INFO) until the benign corpus calibrates it. Being useful is not the same as being calibrated.
 
-**Enforced by:** [Scoring Philosophy](explanation/scoring-philosophy.md) and `tests/test_calibration_gates.py`.
+**Enforced by:** [Scoring Philosophy](explanation/scoring-and-verdicts.md) and `tests/test_calibration_gates.py`.
 
 ### Anergy is a standing state, not a silent omission
 
@@ -58,13 +58,13 @@ A rule firing on at least 30% of the benign corpus is describing a census, not d
 
 A rule carries a permanent uid and a permanent id. Retired ids resolve to their survivor and are never re-issued; renamed ids keep an alias so old suppressions still resolve. Rule ids are immutable even when the taxonomy later looks wrong.
 
-**Enforced by:** `registry_uids.json`, `rule_id_history.py`, `registry.py` and [Rule System](reference/rules/system.md).
+**Enforced by:** `registry_uids.json`, `rule_id_history.py`, `registry.py` and [Rule Mechanics](rules/mechanics.md).
 
 ### Rule intake names five things
 
 A proposed rule names its mechanism (series), its subject (category), its evidence layer, its shared dependencies, and the attack variation existing rules miss. If another rule already covers the same shape, the change is filed as an instance of that rule or must argue complementary coverage. Complementary is not the same as independent: two rules that share the tokenizer or history database can fail together.
 
-**Enforced by:** [Writing a Rule](contributing/writing-a-rule.md), [How to Add a Useful Detector](assurance-layers/diversity.md) and the intake review.
+**Enforced by:** [Writing a Rule](contributing/writing-a-rule.md), [How to Add a Useful Detector](security-design/assurance-layers/diversity.md) and the intake review.
 
 ### Rules must be able to fire
 
@@ -82,13 +82,13 @@ A rule belongs to exactly one evidence layer and one composition stage. A new ru
 
 Declared checksums, PGP keys, pins and trusted hosts are INFO findings at weight 0. There are no subtractive weights, because a claim an attacker can assert for free must not buy back score.
 
-**Enforced by:** [What a Result Claims](security/what-a-result-claims.md#b10-positive-evidence-is-reported-never-credited).
+**Enforced by:** [What a Result Claims](security-design/what-a-result-claims.md#b10-positive-evidence-is-reported-never-credited).
 
 ### Known false positives are documented
 
 When the same shape is a real signal elsewhere, keep the finding and document why it stays. Do not add a package to an allowlist to silence it.
 
-**Enforced by:** [Tuning False Positives](guides/tuning-false-positives.md#known-false-positives).
+**Enforced by:** [Tuning False Positives](workflows/tuning-false-positives.md#known-false-positives).
 
 ### Fixtures are executable claims
 
@@ -108,7 +108,7 @@ Path, host and URL decisions go through the shared helpers rather than being re-
 
 New code reads diffs through `DiffDoc` and recipes through `RecipeDoc`. A legitimate raw `split_lines` loop is pinned with a reason in `tests/test_typed_core_adoption.py`; an unpinned new loop fails the suite.
 
-**Enforced by:** `tests/test_typed_core_adoption.py` and [The Typed Core](explanation/the-typed-core.md).
+**Enforced by:** `tests/test_typed_core_adoption.py` and [The Typed Core](explanation/architecture-and-pipeline.md).
 
 ### Findings go through stamp and templates
 
@@ -140,7 +140,7 @@ Every report key is present on every path, the API and CLI share one analysis, a
 
 Exit 0 means the analysis completed; exit 2 means it could not. A package that flags is reported in the output, not in the exit status.
 
-**Enforced by:** [What a Result Claims](security/what-a-result-claims.md#b6-what-a-result-does-not-claim) and `tests/test_exit_codes.py`.
+**Enforced by:** [What a Result Claims](security-design/what-a-result-claims.md#b6-what-a-result-does-not-claim) and `tests/test_exit_codes.py`.
 
 ### Alert counts reconcile and weight-zero annotations are reported
 
@@ -152,7 +152,7 @@ Shown findings plus grouped findings equal the rendered count. Weight-0 annotati
 
 The terminal cap is always announced, and the JSON report is never filtered. Volume is not evidence about any single package.
 
-**Enforced by:** [Alert Budget](explanation/alert-budget.md).
+**Enforced by:** [Alert Budget](explanation/detection-and-evidence.md).
 
 ## Evidence and verdict standards
 
@@ -160,25 +160,25 @@ The terminal cap is always announced, and the JSON report is never filtered. Vol
 
 A flag is a prompt to look, not a verdict to obey. An unflagged result is a detection outcome, not a certificate of safety.
 
-**Enforced by:** [Acting on a Flag](guides/acting-on-a-flag.md) and [What a Result Claims](security/what-a-result-claims.md#b6-what-a-result-does-not-claim).
+**Enforced by:** [Acting on a Flag](workflows/acting-on-a-flag.md) and [What a Result Claims](security-design/what-a-result-claims.md#b6-what-a-result-does-not-claim).
 
 ### Fail closed
 
 Incomplete coverage forbids a clean verdict. A truncated diff, a partial file or an unread manifest is INCONCLUSIVE, never unflagged.
 
-**Enforced by:** `coverage.fail_closed` and [Security Model](security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete).
+**Enforced by:** `coverage.fail_closed` and [Security Model](security-design/security-model.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete).
 
 ### Unresolved is not seen
 
 A construct the analyzer could not resolve is reported as a boundary. It is never treated as absent, and it is never treated as benign.
 
-**Enforced by:** `W008`/`X026` and [Security Model](security.md).
+**Enforced by:** `W008`/`X026` and [Security Model](security-design/security-model.md).
 
 ### Evidence over assertion
 
 TrustSight never fetches a URL a package declares. It reports what it could read and what it could not, rather than confirming an attacker's claim for them.
 
-**Enforced by:** [Security Model](security.md#part-a-trustsight-as-a-program-under-attack) and the W-series.
+**Enforced by:** [Security Model](security-design/security-model.md#part-a-trustsight-as-a-program-under-attack) and the W-series.
 
 ### A failed query is not an empty result
 
@@ -190,37 +190,37 @@ A failed lookup degrades to an explicit failure or a declared boundary, never to
 
 An over-cap seed or baseline aborts its import. Diff and history truncation is allowed only as a declared coverage gap; it never becomes a complete-looking result.
 
-**Enforced by:** `bounded_io.py`, `docs/security/program-under-attack.md` and `coverage.py`.
+**Enforced by:** `bounded_io.py`, `docs/security-design/program-under-attack.md` and `coverage.py`.
 
 ### Suppression is always visible
 
 A suppressed finding is returned and reported, never silently discarded. Overrides expire, and indicator corroboration can make a suppressed finding visible again.
 
-**Enforced by:** [What a Result Claims](security/what-a-result-claims.md#b5-suppression-is-always-visible) and [Override Tolerance](explanation/override-tolerance.md).
+**Enforced by:** [What a Result Claims](security-design/what-a-result-claims.md#b5-suppression-is-always-visible) and [Override Tolerance](explanation/scoring-and-verdicts.md).
 
 ### FATAL cannot be switched off
 
 The FATAL rules protect the reviewer, not just the machine. No tuning justification can disable them.
 
-**Enforced by:** [What a Result Claims](security/what-a-result-claims.md#b4-fatal-cannot-be-switched-off) and `config.enforce_fatal_rules`.
+**Enforced by:** [What a Result Claims](security-design/what-a-result-claims.md#b4-fatal-cannot-be-switched-off) and `config.enforce_fatal_rules`.
 
 ### Report what changed, not only what fired
 
 Every result carries a change summary beside its findings, including the no-change case. Absence of alerts must not read as absence of change.
 
-**Enforced by:** [What a Result Claims](security/what-a-result-claims.md#b7-a-result-reports-what-changed-not-only-what-fired).
+**Enforced by:** [What a Result Claims](security-design/what-a-result-claims.md#b7-a-result-reports-what-changed-not-only-what-fired).
 
 ### Findings are checkable
 
 Content findings carry a file and line. Non-content findings declare an evidence class instead of silently omitting a location.
 
-**Enforced by:** [What a Result Claims](security/what-a-result-claims.md#b8-a-finding-is-checkable) and `findings.NON_CONTENT_RULES`.
+**Enforced by:** [What a Result Claims](security-design/what-a-result-claims.md#b8-a-finding-is-checkable) and `findings.NON_CONTENT_RULES`.
 
 ### No output grants permission to skip review
 
 No rendered output says or implies “safe”, “clean”, or “nothing to review”. The terminal always ends with a direction to review.
 
-**Enforced by:** [What a Result Claims](security/what-a-result-claims.md#b9-no-output-grants-permission-to-skip-review).
+**Enforced by:** [What a Result Claims](security-design/what-a-result-claims.md#b9-no-output-grants-permission-to-skip-review).
 
 ## Calibration standards
 
@@ -228,7 +228,7 @@ No rendered output says or implies “safe”, “clean”, or “nothing to rev
 
 Benign p95 must stay below malicious p5. A change that moves both populations is not a detection improvement.
 
-**Enforced by:** `scripts/calibration/_gates.py` and [Benchmarks and Methodology](explanation/benchmarks-and-methodology.md).
+**Enforced by:** `scripts/calibration/_gates.py` and [Benchmarks and Methodology](explanation/detection-and-evidence.md).
 
 ### CRITICAL recall stays at 100%
 
@@ -240,7 +240,7 @@ Every known malicious fixture must still fire. Losing a critical detection to re
 
 Novelty and history rules decline while the database is cold. They do not guess from an empty observation set.
 
-**Enforced by:** [Cold Start and Maturity](explanation/cold-start-and-maturity.md).
+**Enforced by:** [Cold Start and Maturity](explanation/scoring-and-verdicts.md).
 
 ### Determinism under a fixed fingerprint
 
@@ -290,7 +290,7 @@ Missing shipped rules are appended to an existing `rules.toml`. Replacing a chan
 
 An override is scoped, reason-bearing, expiring and visible in the result. It cannot suppress FATAL or hide indicator corroboration.
 
-**Enforced by:** `override.py` and [Override Tolerance](explanation/override-tolerance.md).
+**Enforced by:** `override.py` and [Override Tolerance](explanation/scoring-and-verdicts.md).
 
 ### Default config files are private
 
@@ -310,7 +310,7 @@ Analysis never executes package content. There is no sandbox that makes running 
 
 TrustSight connects only to its declared hosts, and never fetches a URL a package names. This removes the SSRF primitive entirely.
 
-**Enforced by:** `scripts/security_gates.py` and [Security Model](security.md).
+**Enforced by:** `scripts/security_gates.py` and [Security Model](security-design/security-model.md).
 
 ### All inputs are bounded and regexes are audited
 
@@ -334,7 +334,7 @@ Hostile TOML, JSON, YAML and line input returns a refusal instead of hanging or 
 
 They run in isolated workers, not in the analysis process. A tokenizer failure must not blind the whole analysis silently, and libgit2 stays behind the git worker.
 
-**Enforced by:** `sandbox/`, `scripts/security_gates.py` and [Sandboxing the Tokenizer](explanation/sandboxing-the-tokenizer.md).
+**Enforced by:** `sandbox/`, `scripts/security_gates.py` and [Sandboxing the Tokenizer](explanation/static-analysis-and-resolution.md).
 
 ### Every child process gets an explicit environment
 
@@ -382,7 +382,7 @@ A baseline may add observations, never detection rules.
 
 Gates check template text, never substituted field values. A package legitimately named `safe-rs` must not trip a permission-denial check.
 
-**Enforced by:** [What a Result Claims](security/what-a-result-claims.md#b9-no-output-grants-permission-to-skip-review) and the reporting gates.
+**Enforced by:** [What a Result Claims](security-design/what-a-result-claims.md#b9-no-output-grants-permission-to-skip-review) and the reporting gates.
 
 ## Operational resilience
 
@@ -408,7 +408,7 @@ The urgent notification tier pages at night, so ordinary alerts never carry it. 
 
 The stored JSON keeps every package. Only the notification is capped, and the cap is reported.
 
-**Enforced by:** `notify.py` and [Alert Budget](explanation/alert-budget.md).
+**Enforced by:** `notify.py` and [Alert Budget](explanation/detection-and-evidence.md).
 
 ## Release and process standards
 

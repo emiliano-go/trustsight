@@ -1,7 +1,7 @@
 """The security model, tested.
 
 ``scripts/security_gates.py`` is the enforcement surface and CI runs it
-whole.  This file runs it too, so a claim in ``docs/security.md`` cannot
+whole.  This file runs it too, so a claim in ``docs/security-design/security-model.md`` cannot
 break without a local ``pytest`` noticing, and adds the behavioural cases
 the gates assert only the shape of.
 """
@@ -87,7 +87,7 @@ def test_the_doc_and_the_gates_name_the_same_invariants(security_gates_report):
     from security_gates import gate_doc_lists_every_gate
 
     gates = [g for g in security_gates_report
-             if g.name != "docs/security.md matches the gates"]
+             if g.name != "docs/security-design/security-model.md matches the gates"]
     assert gate_doc_lists_every_gate(gates).passed
 
 

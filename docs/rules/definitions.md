@@ -1,0 +1,349 @@
+<!-- description: The complete TrustSight rule catalog by category, with severity, series and a link to the canonical definition of every R, H, C, D, S, X, T, G, E, I, M, A, U, W and P identifier. -->
+
+# Individual Rule Definitions
+
+This page is the full inventory. Each row names the rule, its series, its
+severity and the category page that owns its definition. A rule is defined on
+exactly one category page; this catalog only points at it.
+
+<!-- generated: catalog -->
+| Id | Name | Series | Severity | Category |
+|----|------|--------|----------|----------|
+| [A001](artifact.md#a001) | Setuid File In Artifact | Artifact | HIGH | [Artifact](artifact.md) |
+| [A002](artifact.md#a002) | Undeclared Unit In Artifact | Artifact | MEDIUM | [Artifact](artifact.md) |
+| [A003](artifact.md#a003) | Library Outside Depends | Artifact | MEDIUM | [Artifact](artifact.md) |
+| [A004](artifact.md#a004) | Install Hook Diverges From Declaration | Artifact | HIGH | [Artifact](artifact.md) |
+| [A005](artifact.md#a005) | Unusual Artifact Mode | Artifact | INFO | [Artifact](artifact.md) |
+| [A006](artifact.md#a006) | File Capabilities In Artifact | Artifact | HIGH | [Artifact](artifact.md) |
+| [A007](artifact.md#a007) | Privileged Surface In Artifact | Artifact | MEDIUM | [Artifact](artifact.md) |
+| [A008](artifact.md#a008) | eBPF Artifact In Package | Artifact | HIGH | [Artifact](artifact.md) |
+| [A009](artifact.md#a009) | Executable Binary In Source Archive | Artifact | HIGH | [Artifact](artifact.md) |
+| [A010](artifact.md#a010) | Setuid File In Source Archive | Artifact | HIGH | [Artifact](artifact.md) |
+| [C001](integrity.md#c001) | Checksum Changed Without Source Change With Stable Version | Integrity-change | HIGH | [Integrity and Verification](integrity.md) |
+| [C002](integrity.md#c002) | Checksum Updated With Version Bump | Integrity-change | INFO | [Integrity and Verification](integrity.md) |
+| [C003](integrity.md#c003) | Source URL Changed Without Version Bump | Integrity-change | INFO | [Integrity and Verification](integrity.md) |
+| [C004](integrity.md#c004) | Checksum Removed For Unchanged Source | Integrity-change | CRITICAL | [Integrity and Verification](integrity.md) |
+| [C005](integrity.md#c005) | Binary Artifact From Untrusted Source | Integrity-change | MEDIUM | [Integrity and Verification](integrity.md) |
+| [C006](maintainer-and-metadata.md#c006) | Maintainer Change With New Source Domain | Integrity-change | HIGH | [Maintainer and Metadata](maintainer-and-metadata.md) |
+| [C007](fetch-and-execution.md#c007) | Command Substitution In Source Array | Integrity-change | CRITICAL | [Fetch and Execution](fetch-and-execution.md) |
+| [C008](integrity.md#c008) | Unread Content Moved Under A Stable Version | Integrity-change | HIGH | [Integrity and Verification](integrity.md) |
+| [C009](integrity.md#c009) | Unread Content Moved With The Version | Integrity-change | INFO | [Integrity and Verification](integrity.md) |
+| [C010](integrity.md#c010) | Binary Metadata File | Integrity-change | HIGH | [Integrity and Verification](integrity.md) |
+| [C011](integrity.md#c011) | Prebuilt Binary From Non-Upstream Host | Integrity-change | MEDIUM | [Integrity and Verification](integrity.md) |
+| [C012](deception.md#c012) | Source Domain Resembles Declared Upstream | Integrity-change | MEDIUM | [Deception and Anti-Analysis](deception.md) |
+| [C013](integrity.md#c013) | Source Fork Diverges From Declared Upstream | Integrity-change | MEDIUM | [Integrity and Verification](integrity.md) |
+| [C014](integrity.md#c014) | Array Order Manipulation | Integrity-change | MEDIUM | [Integrity and Verification](integrity.md) |
+| [C015](fetch-and-execution.md#c015) | Fetch In package() | Integrity-change | HIGH | [Fetch and Execution](fetch-and-execution.md) |
+| [C016](fetch-and-execution.md#c016) | Interpreter Invocation In Install Hook | Integrity-change | HIGH | [Fetch and Execution](fetch-and-execution.md) |
+| [C017](install-and-persist.md#c017) | Install Hook Writes To A User-Writable Location | Integrity-change | HIGH | [Install and Persistence](install-and-persist.md) |
+| [C018](integrity.md#c018) | Executable File Committed | Integrity-change | MEDIUM | [Integrity and Verification](integrity.md) |
+| [C019](integrity.md#c019) | File Renamed | Integrity-change | INFO | [Integrity and Verification](integrity.md) |
+| [C020](integrity.md#c020) | Credentials In A Source URL | Integrity-change | HIGH | [Integrity and Verification](integrity.md) |
+| [C021](composition.md#c021) | Dependency Removal During A Build Change | Integrity-change | HIGH | [Composition](composition.md) |
+| [C022](integrity.md#c022) | Checksum Strength Downgraded | Integrity-change | HIGH | [Integrity and Verification](integrity.md) |
+| [C023](integrity.md#c023) | IP-Literal Source Host | Integrity-change | MEDIUM | [Integrity and Verification](integrity.md) |
+| [C024](composition.md#c024) | Install Script Not Declared | Integrity-change | MEDIUM | [Composition](composition.md) |
+| [C025](staging-and-recon.md#c025) | Hardening Option Disabled | Integrity-change | LOW | [Staging and Reconnaissance](staging-and-recon.md) |
+| [C026](integrity.md#c026) | Empty File Added | Integrity-change | INFO | [Integrity and Verification](integrity.md) |
+| [C027](integrity.md#c027) | Declared Install Script Is Absent | Integrity-change | INFO | [Integrity and Verification](integrity.md) |
+| [C028](staging-and-recon.md#c028) | Build Cache Outside The Build Trees | Integrity-change | - | [Staging and Reconnaissance](staging-and-recon.md) |
+| [C029](install-and-persist.md#c029) | Backup Array Gains Entries | Integrity-change | INFO | [Install and Persistence](install-and-persist.md) |
+| [C030](maintainer-and-metadata.md#c030) | Epoch Removed With Version Unchanged | Integrity-change | INFO | [Maintainer and Metadata](maintainer-and-metadata.md) |
+| [C031](install-and-persist.md#c031) | Boot Or System Image Tool Run During Build | Integrity-change | HIGH | [Install and Persistence](install-and-persist.md) |
+| [C032](install-and-persist.md#c032) | Scriptlet Executes Commands At Top Level | Integrity-change | HIGH | [Install and Persistence](install-and-persist.md) |
+| [C033](integrity.md#c033) | Context Bleed | Integrity-change | MEDIUM | [Integrity and Verification](integrity.md) |
+| [C034](maintainer-and-metadata.md#c034) | Metadata Inconsistency | Integrity-change | INFO | [Maintainer and Metadata](maintainer-and-metadata.md) |
+| [D001](naming-and-dependency.md#d001) | Novel Dependency Added | Dependency | MEDIUM | [Naming and Dependencies](naming-and-dependency.md) |
+| [D002](naming-and-dependency.md#d002) | Typosquatted Dependency | Dependency | HIGH | [Naming and Dependencies](naming-and-dependency.md) |
+| [D003](naming-and-dependency.md#d003) | New Network-Using Makedepends | Dependency | MEDIUM | [Naming and Dependencies](naming-and-dependency.md) |
+| [D004](naming-and-dependency.md#d004) | Dependency Hijack Via Provides | Dependency | HIGH | [Naming and Dependencies](naming-and-dependency.md) |
+| [D005](naming-and-dependency.md#d005) | Official-Repo Name Shadow | Dependency | MEDIUM | [Naming and Dependencies](naming-and-dependency.md) |
+| [E001](entropy.md#e001) | Added-Text Compression Ratio | Entropy | MEDIUM | [Entropy](entropy.md) |
+| [E002](entropy.md#e002) | Encoded-Alphabet Fraction | Entropy | MEDIUM | [Entropy](entropy.md) |
+| [E003](entropy.md#e003) | Identifier Entropy | Entropy | MEDIUM | [Entropy](entropy.md) |
+| [G001](correlation.md#g001) | Shared Gained Host | Correlation | HIGH | [Correlation](correlation.md) |
+| [G002](correlation.md#g002) | Shared Added Literal | Correlation | HIGH | [Correlation](correlation.md) |
+| [G003](correlation.md#g003) | Coordinated Adoption | Correlation | MEDIUM | [Correlation](correlation.md) |
+| [G004](correlation.md#g004) | Shared Upstream Dependency | Correlation | HIGH | [Correlation](correlation.md) |
+| [G005](correlation.md#g005) | Impersonation Campaign | Correlation | HIGH | [Correlation](correlation.md) |
+| [G006](correlation.md#g006) | Neighborhood Under Campaign Alert | Correlation | INFO | [Correlation](correlation.md) |
+| [G007](correlation.md#g007) | Campaign Corroboration | Correlation | INFO | [Correlation](correlation.md) |
+| [G008](correlation.md#g008) | First-Seen Account Adoption Burst | Correlation | HIGH | [Correlation](correlation.md) |
+| [G009](correlation.md#g009) | Watchlisted Subject | Correlation | INFO | [Correlation](correlation.md) |
+| [G010](correlation.md#g010) | Shared First-Seen Host | Correlation | INFO | [Correlation](correlation.md) |
+| [G011](correlation.md#g011) | Maintainer Package Creation Burst | Correlation | MEDIUM | [Correlation](correlation.md) |
+| [G012](correlation.md#g012) | Shared Payload Signal | Correlation | HIGH | [Correlation](correlation.md) |
+| [G013](correlation.md#g013) | Shared Fetch Target | Correlation | HIGH | [Correlation](correlation.md) |
+| [G014](correlation.md#g014) | Shared Adoption Window | Correlation | HIGH | [Correlation](correlation.md) |
+| [G015](correlation.md#g015) | Sleeper Adoption Campaign | Correlation | MEDIUM | [Correlation](correlation.md) |
+| [H001](integrity.md#h001) | Checksum Disabled | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
+| [H002](integrity.md#h002) | Checksum Emptied | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
+| [H003](fetch-and-execution.md#h003) | Insecure Download Protocol | Heuristic | LOW | [Fetch and Execution](fetch-and-execution.md) |
+| [H004](fetch-and-execution.md#h004) | Privilege Escalation | Heuristic | CRITICAL | [Fetch and Execution](fetch-and-execution.md) |
+| [H005](integrity.md#h005) | validpgpkeys Added | Heuristic | - | [Integrity and Verification](integrity.md) |
+| [H006](naming-and-dependency.md#h006) | New Make/Opt/Check Dependency | Heuristic | - | [Naming and Dependencies](naming-and-dependency.md) |
+| [H007](staging-and-recon.md#h007) | Symlink Redirect | Heuristic | - | [Staging and Reconnaissance](staging-and-recon.md) |
+| [H008](integrity.md#h008) | Suspicious Environment Variable | Heuristic | - | [Integrity and Verification](integrity.md) |
+| [H009](fetch-and-execution.md#h009) | Network connection attempt | Heuristic | - | [Fetch and Execution](fetch-and-execution.md) |
+| [H010](staging-and-recon.md#h010) | Suspicious file write | Heuristic | - | [Staging and Reconnaissance](staging-and-recon.md) |
+| [H011](fetch-and-execution.md#h011) | Sensitive binary execution | Heuristic | - | [Fetch and Execution](fetch-and-execution.md) |
+| [H012](deception.md#h012) | Strace detection attempt (TracerPid check) | Heuristic | - | [Deception and Anti-Analysis](deception.md) |
+| [H013](deception.md#h013) | Strace log truncated (possible flood evasion) | Heuristic | - | [Deception and Anti-Analysis](deception.md) |
+| [H014](obfuscation.md#h014) | Eval or Exec Usage | Heuristic | - | [Obfuscation](obfuscation.md) |
+| [H015](fetch-and-execution.md#h015) | Critical Build Function Modified | Heuristic | INFO | [Fetch and Execution](fetch-and-execution.md) |
+| [H016](fetch-and-execution.md#h016) | Hidden Network Fetch In Build | Heuristic | HIGH | [Fetch and Execution](fetch-and-execution.md) |
+| [H017](install-and-persist.md#h017) | Install Hook Fetches Or Executes | Heuristic | HIGH | [Install and Persistence](install-and-persist.md) |
+| [H018](integrity.md#h018) | Patch Applied From Outside The Build Tree | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
+| [H019](integrity.md#h019) | Source URL Downgraded To HTTP | Heuristic | MEDIUM | [Integrity and Verification](integrity.md) |
+| [H020](temporal.md#h020) | Very Recent Update | Heuristic | INFO | [Temporal Context](temporal.md) |
+| [H021](temporal.md#h021) | Brand New Package | Heuristic | INFO | [Temporal Context](temporal.md) |
+| [H022](temporal.md#h022) | Stale Package Revived | Heuristic | MEDIUM | [Temporal Context](temporal.md) |
+| [H023](install-and-persist.md#h023) | Install Hook Present | Heuristic | INFO | [Install and Persistence](install-and-persist.md) |
+| [H024](integrity.md#h024) | GPG Verification Removed | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
+| [H025](integrity.md#h025) | Build Environment Subversion | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
+| [H026](maintainer-and-metadata.md#h026) | New Maintainer Without Prior History | Heuristic | HIGH | [Maintainer and Metadata](maintainer-and-metadata.md) |
+| [H027](composition.md#h027) | Capability Density Anomaly | Heuristic | INFO | [Composition](composition.md) |
+| [H028](corpus-behavioral.md#h028) | Accelerated Release Cadence | Heuristic | - | [Corpus Behavioral](corpus-behavioral.md) |
+| [H029](naming-and-dependency.md#h029-rule) | Package-Name Typosquat | Heuristic | HIGH | [Naming and Dependencies](naming-and-dependency.md) |
+| [H030](count-based.md#h030-rule) | Dependency-Set Expansion | Heuristic | MEDIUM | [Count-Based](count-based.md) |
+| [H031](fetch-and-execution.md#h031) | Version-In-URL Injection | Heuristic | MEDIUM | [Fetch and Execution](fetch-and-execution.md) |
+| [H032](install-and-persist.md#h032) | Write To User Home Or RC | Heuristic | CRITICAL | [Install and Persistence](install-and-persist.md) |
+| [H033](integrity.md#h033) | Moved Git Ref | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
+| [H034](fetch-and-execution.md#h034) | Exotic Source Protocol | Heuristic | MEDIUM | [Fetch and Execution](fetch-and-execution.md) |
+| [H035](install-and-persist.md#h035) | Foreign Package Manager In Install Hook | Heuristic | HIGH | [Install and Persistence](install-and-persist.md) |
+| [H036](count-based.md#h036) | Shell Obfuscation Density | Heuristic | MEDIUM | [Count-Based](count-based.md) |
+| [H037](maintainer-and-metadata.md#h037) | Long-Stable Property Changed | Heuristic | MEDIUM | [Maintainer and Metadata](maintainer-and-metadata.md) |
+| [H038](staging-and-recon.md#h038) | World-Writable Staging | Heuristic | HIGH | [Staging and Reconnaissance](staging-and-recon.md) |
+| [H039](install-and-persist.md#h039) | Systemd ExecStart From Runtime-Writable Path | Heuristic | HIGH | [Install and Persistence](install-and-persist.md) |
+| [H040](staging-and-recon.md#h040) | Host Reconnaissance | Heuristic | INFO | [Staging and Reconnaissance](staging-and-recon.md) |
+| [H041](fetch-and-execution.md#h041) | Upload To Paste Or File-Drop Host | Heuristic | HIGH | [Fetch and Execution](fetch-and-execution.md) |
+| [H042](staging-and-recon.md#h042) | Hidden Drop | Heuristic | HIGH | [Staging and Reconnaissance](staging-and-recon.md) |
+| [H043](composition.md#h043) | Attack-Chain Composition | Heuristic | INFO | [Composition](composition.md) |
+| [H044](maintainer-and-metadata.md#h044) | Ownership Transition | Heuristic | MEDIUM | [Maintainer and Metadata](maintainer-and-metadata.md) |
+| [H045](count-based.md#h045) | Mass Adoption | Heuristic | HIGH | [Count-Based](count-based.md) |
+| [H046](corpus-behavioral.md#h046) | Orphan/Adoption Dependency | Heuristic | MEDIUM | [Corpus Behavioral](corpus-behavioral.md) |
+| [H047](integrity.md#h047) | Security-Relevant Build Flag Change | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
+| [H048](naming-and-dependency.md#h048) | Dependency Vendored Into Source | Heuristic | HIGH | [Naming and Dependencies](naming-and-dependency.md) |
+| [H049](maintainer-and-metadata.md#h049) | Source Origin Changed | Heuristic | MEDIUM | [Maintainer and Metadata](maintainer-and-metadata.md) |
+| [H050](maintainer-and-metadata.md#h050) | Version Scheme Changed | Heuristic | INFO | [Maintainer and Metadata](maintainer-and-metadata.md) |
+| [H051](maintainer-and-metadata.md#h051) | Package Description Changed | Heuristic | MEDIUM | [Maintainer and Metadata](maintainer-and-metadata.md) |
+| [H052](count-based.md#h052) | Shared Source Repository | Heuristic | HIGH | [Count-Based](count-based.md) |
+| [H053](naming-and-dependency.md#h053) | Name/Host Consensus Divergence | Heuristic | MEDIUM | [Naming and Dependencies](naming-and-dependency.md) |
+| [H054](maintainer-and-metadata.md#h054) | Build System Changed | Heuristic | MEDIUM | [Maintainer and Metadata](maintainer-and-metadata.md) |
+| [H055](count-based.md#h055) | Attribute Burst | Heuristic | MEDIUM | [Count-Based](count-based.md) |
+| [H056](indicator.md#h056) | Known Indicator of Compromise | Heuristic | FATAL | [Indicators](indicator.md) |
+| [H057](corpus-behavioral.md#h057) | Transitive Exposure | Heuristic | INFO | [Corpus Behavioral](corpus-behavioral.md) |
+| [H058](maintainer-and-metadata.md#h058) | Maintainer Baseline Deviation | Heuristic | MEDIUM | [Maintainer and Metadata](maintainer-and-metadata.md) |
+| [H059](naming-and-dependency.md#h059) | Name/Repo Divergence | Heuristic | MEDIUM | [Naming and Dependencies](naming-and-dependency.md) |
+| [H060](corpus-behavioral.md#h060) | Transitive Orphan Risk | Heuristic | INFO | [Corpus Behavioral](corpus-behavioral.md) |
+| [H061](corpus-behavioral.md#h061) | Dependency Centrality | Heuristic | INFO | [Corpus Behavioral](corpus-behavioral.md) |
+| [H062](install-and-persist.md#h062) | Pacman Hook Installed | Heuristic | MEDIUM | [Install and Persistence](install-and-persist.md) |
+| [H063](maintainer-and-metadata.md#h063) | Epoch Introduced | Heuristic | MEDIUM | [Maintainer and Metadata](maintainer-and-metadata.md) |
+| [H064](naming-and-dependency.md#h064) | Provides/Replaces Scope Expansion | Heuristic | HIGH | [Naming and Dependencies](naming-and-dependency.md) |
+| [H065](obfuscation.md#h065) | Obfuscated Literal Reconstructed | Heuristic | INFO | [Obfuscation](obfuscation.md) |
+| [H066](integrity.md#h066) | Embedded Binary In Tree | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
+| [H067](deception.md#h067) | Anti-Analysis Check | Heuristic | HIGH | [Deception and Anti-Analysis](deception.md) |
+| [H068](fetch-and-execution.md#h068) | Reconstructed Executable Payload | Heuristic | HIGH | [Fetch and Execution](fetch-and-execution.md) |
+| [H069](fetch-and-execution.md#h069) | Build-time Generation Then Execution | Heuristic | HIGH | [Fetch and Execution](fetch-and-execution.md) |
+| [H070](integrity.md#h070) | Archive Trailer Anomaly | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
+| [H071](fetch-and-execution.md#h071) | Covert Egress | Heuristic | HIGH | [Fetch and Execution](fetch-and-execution.md) |
+| [H072](fetch-and-execution.md#h072) | Write Then Execute | Heuristic | HIGH | [Fetch and Execution](fetch-and-execution.md) |
+| [H073](corpus-behavioral.md#h073) | Introduction Rate Deviation | Heuristic | MEDIUM | [Corpus Behavioral](corpus-behavioral.md) |
+| [H074](maintainer-and-metadata.md#h074) | Adopt-then-Modify | Heuristic | MEDIUM | [Maintainer and Metadata](maintainer-and-metadata.md) |
+| [H075](fetch-and-execution.md#h075) | Remote Script Via Process Substitution | Heuristic | CRITICAL | [Fetch and Execution](fetch-and-execution.md) |
+| [H076](staging-and-recon.md#h076) | Build Writes Outside Staging Root | Heuristic | HIGH | [Staging and Reconnaissance](staging-and-recon.md) |
+| [H077](fetch-and-execution.md#h077) | Parse-time Network Fetch | Heuristic | HIGH | [Fetch and Execution](fetch-and-execution.md) |
+| [H078](integrity.md#h078) | Signing Key Set Changed | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
+| [H079](integrity.md#h079) | Build Flags Weakened | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
+| [H080](obfuscation.md#h080) | Indirect Command Expansion | Heuristic | CRITICAL | [Obfuscation](obfuscation.md) |
+| [H081](fetch-and-execution.md#h081) | Committed File Executed Without Declaration | Heuristic | HIGH | [Fetch and Execution](fetch-and-execution.md) |
+| [H082](fetch-and-execution.md#h082) | Fetch Then Execute | Heuristic | CRITICAL | [Fetch and Execution](fetch-and-execution.md) |
+| [H083](fetch-and-execution.md#h083) | Downloaded Source File Executed | Heuristic | HIGH | [Fetch and Execution](fetch-and-execution.md) |
+| [H084](install-and-persist.md#h084) | Service ExecStart Targets Undeclared Binary | Heuristic | HIGH | [Install and Persistence](install-and-persist.md) |
+| [H085](staging-and-recon.md#h085) | PATH Injection With Undeclared Directory | Heuristic | HIGH | [Staging and Reconnaissance](staging-and-recon.md) |
+| [H086](maintainer-and-metadata.md#h086) | Adopted From Orphan | Heuristic | MEDIUM | [Maintainer and Metadata](maintainer-and-metadata.md) |
+| [H087](integrity.md#h087) | Recipe Changed Without Upstream | Heuristic | MEDIUM | [Integrity and Verification](integrity.md) |
+| [H088](maintainer-and-metadata.md#h088) | Adopted, Recipe Rewritten, Unpinned Fetch | Heuristic | HIGH | [Maintainer and Metadata](maintainer-and-metadata.md) |
+| [H089](install-and-persist.md#h089) | Packaged File Names A Build-Only Path | Heuristic | HIGH | [Install and Persistence](install-and-persist.md) |
+| [H090](fetch-and-execution.md#h090) | Committed Companion Carries A Fetch-Execute Payload | Heuristic | CRITICAL | [Fetch and Execution](fetch-and-execution.md) |
+| [H091](integrity.md#h091) | Checksum Array Shorter Than Source Array | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
+| [H092](integrity.md#h092) | Metadata Names A Source The Recipe Does Not | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
+| [H093](install-and-persist.md#h093) | Committed Config Points At A Build-Only Path | Heuristic | HIGH | [Install and Persistence](install-and-persist.md) |
+| [H094](fetch-and-execution.md#h094) | Unread Script Executed During Packaging | Heuristic | HIGH | [Fetch and Execution](fetch-and-execution.md) |
+| [H095](install-and-persist.md#h095) | Boot Or Image Artifact Built From The Source Tree | Heuristic | HIGH | [Install and Persistence](install-and-persist.md) |
+| [H096](integrity.md#h096) | Download Agent Override | Heuristic | MEDIUM | [Integrity and Verification](integrity.md) |
+| [H097](integrity.md#h097) | Function Shadowing | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
+| [H098](composition.md#h098) | Naming/Deception Cluster | Heuristic | HIGH | [Composition](composition.md) |
+| [H099](integrity.md#h099) | Source Host Swapped Under A Kept Local Name | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
+| [H100](install-and-persist.md#h100) | Install Hook Added Or Retargeted | Heuristic | HIGH | [Install and Persistence](install-and-persist.md) |
+| [H101](integrity.md#h101) | Source Pinning Lost | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
+| [H102](composition.md#h102) | Maintainer Change With Signing Key Change | Heuristic | HIGH | [Composition](composition.md) |
+| [H103](integrity.md#h103) | Metadata And Recipe Disagree | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
+| [H104](naming-and-dependency.md#h104) | Placeholder Package | Heuristic | INFO | [Naming and Dependencies](naming-and-dependency.md) |
+| [H105](maintainer-and-metadata.md#h105) | Adopted Source Executed | Heuristic | HIGH | [Maintainer and Metadata](maintainer-and-metadata.md) |
+| [H106](naming-and-dependency.md#h106) | Registry Or Index Override | Heuristic | MEDIUM | [Naming and Dependencies](naming-and-dependency.md) |
+| [H107](fetch-and-execution.md#h107) | Credential Store Access With Egress | Heuristic | HIGH | [Fetch and Execution](fetch-and-execution.md) |
+| [H108](install-and-persist.md#h108) | Service Or Cron Enable Command | Heuristic | HIGH | [Install and Persistence](install-and-persist.md) |
+| [M001](meta.md#m001) | Claim Contradicted By Structure | Meta | HIGH | [Meta and Confluence](meta.md) |
+| [M002](meta.md#m002) | Weak Signal Across Layers | Meta | MEDIUM | [Meta and Confluence](meta.md) |
+| [M003](meta.md#m003) | Composition Not Owned Elsewhere | Meta | MEDIUM | [Meta and Confluence](meta.md) |
+| [M004](meta.md#m004) | Expected Co-fire Absent | Meta | INFO | [Meta and Confluence](meta.md) |
+| [M005](meta.md#m005) | Licensor Absent On Licensed Shape | Meta | INFO | [Meta and Confluence](meta.md) |
+| [M006](meta.md#m006) | Campaign Re-armed Too Often | Meta | INFO | [Meta and Confluence](meta.md) |
+| [R001](fetch-and-execution.md#r001) | Remote Script Execution | Regex | CRITICAL | [Fetch and Execution](fetch-and-execution.md) |
+| [R002](fetch-and-execution.md#r002) | Wget Pipe to Shell | Regex | CRITICAL | [Fetch and Execution](fetch-and-execution.md) |
+| [R003](obfuscation.md#r003) | Base64 Decode and Execute | Regex | CRITICAL | [Obfuscation](obfuscation.md) |
+| [R007](install-and-persist.md#r007) | Install File Modification | Regex | MEDIUM | [Install and Persistence](install-and-persist.md) |
+| [R008](fetch-and-execution.md#r008) | Unexpected File Download | Regex | HIGH | [Fetch and Execution](fetch-and-execution.md) |
+| [R010](fetch-and-execution.md#r010) | Uses curl in PKGBUILD | Regex | LOW | [Fetch and Execution](fetch-and-execution.md) |
+| [R011](fetch-and-execution.md#r011) | Uses wget in PKGBUILD | Regex | LOW | [Fetch and Execution](fetch-and-execution.md) |
+| [R012](deception.md#r012) | LLM Prompt Injection | Regex | FATAL | [Deception and Anti-Analysis](deception.md) |
+| [R013](deception.md#r013) | Unicode Bidi Override | Regex | FATAL | [Deception and Anti-Analysis](deception.md) |
+| [R017](install-and-persist.md#r017) | Setuid/Setgid Permission | Regex | HIGH | [Install and Persistence](install-and-persist.md) |
+| [R039](obfuscation.md#r039) | Eval With Dynamic Content | Regex | CRITICAL | [Obfuscation](obfuscation.md) |
+| [R040](obfuscation.md#r040) | Shell -c With Dynamic Payload | Regex | CRITICAL | [Obfuscation](obfuscation.md) |
+| [R041](fetch-and-execution.md#r041) | Shell Network Redirection | Regex | CRITICAL | [Fetch and Execution](fetch-and-execution.md) |
+| [R042](fetch-and-execution.md#r042) | Download Then Execute | Regex | CRITICAL | [Fetch and Execution](fetch-and-execution.md) |
+| [R043](obfuscation.md#r043) | Base64 Blob Decode | Regex | CRITICAL | [Obfuscation](obfuscation.md) |
+| [R044](fetch-and-execution.md#r044) | Interpreter One-Liner With Network | Regex | HIGH | [Fetch and Execution](fetch-and-execution.md) |
+| [R045](obfuscation.md#r045) | Binary Encoding Pipe | Regex | MEDIUM | [Obfuscation](obfuscation.md) |
+| [R046](fetch-and-execution.md#r046) | Source URL Uses IP Address | Regex | MEDIUM | [Fetch and Execution](fetch-and-execution.md) |
+| [R047](fetch-and-execution.md#r047) | Source URL Uses Non-Standard Port | Regex | LOW | [Fetch and Execution](fetch-and-execution.md) |
+| [R048](fetch-and-execution.md#r048) | Source URL On Free Registrar TLD | Regex | LOW | [Fetch and Execution](fetch-and-execution.md) |
+| [R049](integrity.md#r049) | Compiler Plugin Or Loader Override | Regex | MEDIUM | [Integrity and Verification](integrity.md) |
+| [R050](integrity.md#r050) | Compiler Hardening Disabled | Regex | MEDIUM | [Integrity and Verification](integrity.md) |
+| [R051](fetch-and-execution.md#r051) | Network Access In pkgver | Regex | HIGH | [Fetch and Execution](fetch-and-execution.md) |
+| [R052](install-and-persist.md#r052) | Dotfile Written To User Profile | Regex | HIGH | [Install and Persistence](install-and-persist.md) |
+| [R053](install-and-persist.md#r053) | Setuid Or Setgid Bit Set In Package Root | Regex | MEDIUM | [Install and Persistence](install-and-persist.md) |
+| [R054](install-and-persist.md#r054) | Persistence Unit Outside Package Root | Regex | HIGH | [Install and Persistence](install-and-persist.md) |
+| [R055](fetch-and-execution.md#r055) | Git Clone With Variable Branch | Regex | MEDIUM | [Fetch and Execution](fetch-and-execution.md) |
+| [R056](fetch-and-execution.md#r056) | Download Then Source | Regex | CRITICAL | [Fetch and Execution](fetch-and-execution.md) |
+| [R057](fetch-and-execution.md#r057) | TLS Verification Disabled | Regex | HIGH | [Fetch and Execution](fetch-and-execution.md) |
+| [R058](staging-and-recon.md#r058) | Write Outside Package Root | Regex | HIGH | [Staging and Reconnaissance](staging-and-recon.md) |
+| [R059](install-and-persist.md#r059) | Setuid Or Setgid Bit Set Outside Package Root | Regex | HIGH | [Install and Persistence](install-and-persist.md) |
+| [R078](integrity.md#r078) | Compression Command Override | Regex | MEDIUM | [Integrity and Verification](integrity.md) |
+| [R091](integrity.md#r091) | Privilege Escalation Override | Regex | HIGH | [Integrity and Verification](integrity.md) |
+| [R099](integrity.md#r099) | Trap Statement | Regex | MEDIUM | [Integrity and Verification](integrity.md) |
+| [R104](integrity.md#r104) | Error Handling Suppressed | Regex | HIGH | [Integrity and Verification](integrity.md) |
+| [R144](install-and-persist.md#r144) | Packaged File Points At A World-Writable Path | Regex | HIGH | [Install and Persistence](install-and-persist.md) |
+| [R152](fetch-and-execution.md#r152) | Source URL On Free-Hosting Or Dynamic-DNS Host | Regex | MEDIUM | [Fetch and Execution](fetch-and-execution.md) |
+| [S001](sabotage.md#s001) | Recursive Self-Spawn | Sabotage | CRITICAL | [Sabotage](sabotage.md) |
+| [S002](sabotage.md#s002) | Recursive Deletion Outside The Build Tree | Sabotage | CRITICAL | [Sabotage](sabotage.md) |
+| [S003](sabotage.md#s003) | Raw Block Device Write | Sabotage | CRITICAL | [Sabotage](sabotage.md) |
+| [S004](sabotage.md#s004) | Secure Deletion Of User Data | Sabotage | HIGH | [Sabotage](sabotage.md) |
+| [S005](sabotage.md#s005) | Permission Change On A System Path | Sabotage | HIGH | [Sabotage](sabotage.md) |
+| [S006](sabotage.md#s006) | System Service Disruption | Sabotage | HIGH | [Sabotage](sabotage.md) |
+| [S007](sabotage.md#s007) | Cryptocurrency Miner | Sabotage | HIGH | [Sabotage](sabotage.md) |
+| [S008](sabotage.md#s008) | Shell History Or Log Destruction | Sabotage | MEDIUM | [Sabotage](sabotage.md) |
+| [T001](temporal.md#t001) | Signing-Key Novelty | Temporal | HIGH | [Temporal Context](temporal.md) |
+| [T002](temporal.md#t002) | Maintainer Domain Novelty | Temporal | MEDIUM | [Temporal Context](temporal.md) |
+| [T003](temporal.md#t003) | Signing Key Rotated | Temporal | HIGH | [Temporal Context](temporal.md) |
+| [T004](temporal.md#t004) | Vouch Surface Removed | Temporal | MEDIUM | [Temporal Context](temporal.md) |
+| [T005](temporal.md#t005) | Scheme Downgrade | Temporal | MEDIUM | [Temporal Context](temporal.md) |
+| [T006](temporal.md#t006) | Metadata-Git Divergence | Temporal | MEDIUM | [Temporal Context](temporal.md) |
+| [T007](temporal.md#t007) | Packager Not In History | Temporal | INFO | [Temporal Context](temporal.md) |
+| [T008](temporal.md#t008) | Delayed Payload Adoption | Temporal | INFO | [Temporal Context](temporal.md) |
+| [T009](temporal.md#t009) | High-Value Dormant Takeover | Temporal | INFO | [Temporal Context](temporal.md) |
+| [T010](naming-and-dependency.md#t010) | Dependency Redirection | Temporal | INFO | [Naming and Dependencies](naming-and-dependency.md) |
+| [T011](temporal.md#t011) | Package Reappearance | Temporal | INFO | [Temporal Context](temporal.md) |
+| [T012](temporal.md#t012) | Trust Erosion Sequence | Temporal | INFO | [Temporal Context](temporal.md) |
+| [U001](upstream-manifests.md#u001) | Manifest Added Or Removed | U | INFO | [Upstream Manifests](upstream-manifests.md) |
+| [U002](upstream-manifests.md#u002) | Upstream Dependency Delta | U | INFO | [Upstream Manifests](upstream-manifests.md) |
+| [U003](upstream-manifests.md#u003) | New Remote Source In Manifest | U | MEDIUM | [Upstream Manifests](upstream-manifests.md) |
+| [U004](upstream-manifests.md#u004) | Registry Redirect | U | MEDIUM | [Upstream Manifests](upstream-manifests.md) |
+| [U005](upstream-manifests.md#u005) | Dependency Surface Jump | U | INFO | [Upstream Manifests](upstream-manifests.md) |
+| [U006](upstream-manifests.md#u006) | Manifest Changed Without Its Lockfile | U | INFO | [Upstream Manifests](upstream-manifests.md) |
+| [U007](upstream-release.md#u007) | CI Exfil Shape | U | MEDIUM | [Upstream Release Integrity](upstream-release.md) |
+| [U008](upstream-release.md#u008) | Git-History Credential Sweep | U | MEDIUM | [Upstream Release Integrity](upstream-release.md) |
+| [U009](upstream-release.md#u009) | New CI Surface Committed | U | LOW | [Upstream Release Integrity](upstream-release.md) |
+| [U010](upstream-release.md#u010) | Unauditable Upstream | U | MEDIUM | [Upstream Release Integrity](upstream-release.md) |
+| [U011](upstream-manifests.md#u011) | Upstream Origin Changed | U | - | [Upstream Manifests](upstream-manifests.md) |
+| [U012](upstream-manifests.md#u012) | Lockfile Integrity Weakened | U | - | [Upstream Manifests](upstream-manifests.md) |
+| [U013](upstream-release.md#u013) | CI Exfil Shape (Local) | U | MEDIUM | [Upstream Release Integrity](upstream-release.md) |
+| [U014](upstream-release.md#u014) | Git-History Credential Sweep (Local) | U | MEDIUM | [Upstream Release Integrity](upstream-release.md) |
+| [U015](upstream-manifests.md#u015) | Federated Upstream Manifest Delta | U | INFO | [Upstream Manifests](upstream-manifests.md) |
+| [W001](unverifiable.md#w001) | Executes Code This Analysis Did Not Read | Unverifiable | - | [Unverifiable](unverifiable.md) |
+| [W002](unverifiable.md#w002) | Build Resolves Dependencies From A Registry | Unverifiable | - | [Unverifiable](unverifiable.md) |
+| [W003](unverifiable.md#w003) | Applies A Patch This Analysis Did Not Read | Unverifiable | - | [Unverifiable](unverifiable.md) |
+| [W004](unverifiable.md#w004) | Build Engine Runs A Manifest This Analysis Did Not Read | Unverifiable | - | [Unverifiable](unverifiable.md) |
+| [W005](unverifiable.md#w005) | Build Runs A Target Whose Recipe Was Not Read | Unverifiable | - | [Unverifiable](unverifiable.md) |
+| [W006](unverifiable.md#w006) | Generated File Names A Build-Only Path | Unverifiable | - | [Unverifiable](unverifiable.md) |
+| [W007](unverifiable.md#w007) | Dependency Novelty Declined For Insufficient Observations | Unverifiable | - | [Unverifiable](unverifiable.md) |
+| [W008](unverifiable.md#w008) | Unresolved Construct In A Recipe | Unverifiable | - | [Unverifiable](unverifiable.md) |
+| [W009](unverifiable.md#w009) | Upstream Manifests Not Examined | Unverifiable | - | [Unverifiable](unverifiable.md) |
+| [W010](unverifiable.md#w010) | Alert Volume Capped | Unverifiable | - | [Unverifiable](unverifiable.md) |
+| [W011](unverifiable.md#w011) | Upstream Content Not Read | Unverifiable | - | [Unverifiable](unverifiable.md) |
+| [W012](unverifiable.md#w012) | Federation Not Consulted | Unverifiable | - | [Unverifiable](unverifiable.md) |
+| [W013](unverifiable.md#w013) | Campaign Perimeter Boundary Note | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
+| [W014](unverifiable.md#w014) | Upstream Scan Not Completed | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
+| [X001](crossfire.md#x001) | Encoded Payload Decoded And Executed | Crossfire | - | [Crossfire](crossfire.md) |
+| [X002](crossfire.md#x002) | Non-Literal Executable Name | Crossfire | - | [Crossfire](crossfire.md) |
+| [X003](crossfire.md#x003) | Obfuscated Command Argument | Crossfire | - | [Crossfire](crossfire.md) |
+| [X004](crossfire.md#x004) | Build Output Suppressed | Crossfire | - | [Crossfire](crossfire.md) |
+| [X005](crossfire.md#x005) | Home Reached By An Alternative Spelling | Crossfire | - | [Crossfire](crossfire.md) |
+| [X006](crossfire.md#x006) | Source Points Somewhere Unexpected | Crossfire | - | [Crossfire](crossfire.md) |
+| [X007](crossfire.md#x007) | Multiple Evasion Techniques | Crossfire | - | [Crossfire](crossfire.md) |
+| [X008](crossfire.md#x008) | Whitespace A Shell Does Not Split On | Crossfire | - | [Crossfire](crossfire.md) |
+| [X009](crossfire.md#x009) | Fetch Through An Uncatalogued Client | Crossfire | - | [Crossfire](crossfire.md) |
+| [X010](crossfire.md#x010) | Interpreter One-Liner Reaches The Network | Crossfire | - | [Crossfire](crossfire.md) |
+| [X011](crossfire.md#x011) | Package Manager Runs Fetched Code At Build Time | Crossfire | - | [Crossfire](crossfire.md) |
+| [X012](crossfire.md#x012) | Build Toolchain Redirected Into The Source Tree | Crossfire | - | [Crossfire](crossfire.md) |
+| [X013](crossfire.md#x013) | Fetch Redirected Or Trust Root Replaced | Crossfire | - | [Crossfire](crossfire.md) |
+| [X014](crossfire.md#x014) | Environment Variable Names Code To Run | Crossfire | - | [Crossfire](crossfire.md) |
+| [X015](crossfire.md#x015) | Work Scheduled To Run After The Build | Crossfire | - | [Crossfire](crossfire.md) |
+| [X016](crossfire.md#x016) | Fetch Piped Into An Unrecognised Consumer | Crossfire | - | [Crossfire](crossfire.md) |
+| [X017](crossfire.md#x017) | Tool Flag Or Builtin Carries A Command | Crossfire | - | [Crossfire](crossfire.md) |
+| [X018](crossfire.md#x018) | Interpreter One-Liner Assembles A Name | Crossfire | - | [Crossfire](crossfire.md) |
+| [X019](crossfire.md#x019) | Host Material Sent Or Packaged | Crossfire | - | [Crossfire](crossfire.md) |
+| [X020](crossfire.md#x020) | Recipe Writes The Build Steps The Engine Runs | Crossfire | - | [Crossfire](crossfire.md) |
+| [X021](crossfire.md#x021) | Executor Runs A File Chosen At Runtime | Crossfire | - | [Crossfire](crossfire.md) |
+| [X022](crossfire.md#x022) | Generated Config Handed To The Tool That Reads It | Crossfire | - | [Crossfire](crossfire.md) |
+| [X023](crossfire.md#x023) | Command Output Executed As A Script | Crossfire | - | [Crossfire](crossfire.md) |
+| [X024](crossfire.md#x024) | Indirect Sensitive Assignment | Crossfire | - | [Crossfire](crossfire.md) |
+| [X025](crossfire.md#x025) | Multi-Line Function Shadow | Crossfire | - | [Crossfire](crossfire.md) |
+| [X026](crossfire.md#x026) | Unresolved Constructs In Executable Positions | Crossfire | - | [Crossfire](crossfire.md) |
+| [X027](crossfire.md#x027) | Refusal Cluster | Crossfire | - | [Crossfire](crossfire.md) |
+| [X028](crossfire.md#x028) | Pattern Completed Across Commits | Crossfire | - | [Crossfire](crossfire.md) |
+| [X029](crossfire.md#x029) | Encoded Material At Rest | Crossfire | - | [Crossfire](crossfire.md) |
+| [X030](crossfire.md#x030) | ANSI-C Quoted Content In Commands | Crossfire | - | [Crossfire](crossfire.md) |
+| [X031](crossfire.md#x031) | Build Reads Non-Code Text | Crossfire | - | [Crossfire](crossfire.md) |
+| [X032](crossfire.md#x032) | Command Name Assembled By Splicing | Crossfire | - | [Crossfire](crossfire.md) |
+| [X033](crossfire.md#x033) | File With No Provenance Executed | Crossfire | - | [Crossfire](crossfire.md) |
+| [X034](crossfire.md#x034) | Fetch Laundered Through An Archival Service | Crossfire | - | [Crossfire](crossfire.md) |
+<!-- /generated: catalog -->
+
+## Reading a rule entry
+
+Every definition states the same facts in the same order:
+
+- **Target**: `resolved` (post-variable-expansion command strings),
+  `raw_line` (the literal diff line), or `programmatic` (emitted from code in
+  `analysis/`, because the condition needs more than one line). See
+  [Rule Matching](matching.md).
+- **Severity**: `FATAL`, `CRITICAL`, `HIGH`, `MEDIUM`, `LOW` or `INFO`,
+  with the weight it contributes. See [Rule Scoring](scoring.md).
+- **Category**: the capability field on the rule, not the page's subject. See
+  [Rule Labels Explained](interpretation.md#capability-is-the-category-field-not-the-subject).
+- **Pattern** or **Condition**: what makes the rule fire. Quoted patterns are
+  checked against the shipped `rules.toml` on every test run, so a pattern
+  here cannot drift from the one that runs.
+- **Fire rate**, where measured: hits on the current 8,393-diff benign corpus,
+  unless a page explicitly identifies a historical measurement. These are
+  false-positive rates. The full table is in
+  [measured fire rates](../explanation/historical-and-behavioral-analysis.md#fire-rates).
+
+## Non-rule findings
+
+Two families are reported but never scored, and are documented with the
+category that owns their claim:
+
+- **Declared practice** (`P001`-`P009`, with `P004` skipped): statements about
+  what a recipe declares. See [Rule Scoring](scoring.md#fatal-behaviour) and the
+  [glossary](../reference/glossary.md).
+- **Unverifiable** (`W001`-`W014`): statements about what the analysis could
+  not read. Weight 0, always shown. See
+  [Unverifiable](unverifiable.md) and
+  [Limitations and Uncertainty](../explanation/limitations-and-uncertainty.md).
+
+The identifier space is deliberately non-contiguous; see
+[Rule Identifiers](identifiers.md) before assigning a new ID.

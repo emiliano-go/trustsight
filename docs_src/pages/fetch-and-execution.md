@@ -2,7 +2,6 @@
 
 # Fetch and Execution
 
-Where these rules come from and what a finding means: [Rule Nature](../nature/fetch-and-execution.md).
 
 Code reaches the machine and runs. Every rule here claims one of three
 things: something was fetched, something was executed, or a path connects
@@ -16,7 +15,7 @@ download split across two lines, and a declared `source=()` script all put
 fetched code in a shell without one. H077 moves the same question to parse
 time, where the fetch happens before any build step or checksum applies.
 
-See [the rule system reference](system.md) for the field table, the
+See [Rule Mechanics](mechanics.md) for the field table, the
 severity weights and the reserved identifier ranges.
 
 ---

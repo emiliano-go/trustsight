@@ -2,7 +2,6 @@
 
 # Meta and Confluence
 
-Where these rules come from and what a finding means: [Rule Nature](../nature/meta.md).
 
 M rules take **other rules' findings** as their input. Every other series
 reads the recipe; this one reads the finding set.
@@ -15,7 +14,7 @@ finding that contradicts it, or several weak signals whose combination is
 the story.
 
 This is a reference page. For how weight and scope work, see
-[Rule System](system.md).
+[Rule Mechanics](mechanics.md).
 
 ## Reading an M finding
 

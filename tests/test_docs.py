@@ -19,10 +19,10 @@ from trustsight.config import DEFAULT_CONFIG, DEFAULT_RULES
 from trustsight.scoring import DECLARED_REASONS
 
 ROOT = Path(__file__).resolve().parent.parent
-RULES_DIR = ROOT / "docs" / "reference" / "rules"
-NATURE_DIR = ROOT / "docs" / "reference" / "nature"
-SYSTEM_MD = RULES_DIR / "system.md"
+RULES_DIR = ROOT / "docs" / "rules"
+SYSTEM_MD = ROOT / "docs" / "reference" / "rules" / "system.md"
 INDEX_MD = RULES_DIR / "index.md"
+DEFINITIONS_MD = RULES_DIR / "definitions.md"
 CLI_MD = ROOT / "docs" / "reference" / "cli.md"
 CONFIG_MD = ROOT / "docs" / "reference" / "configuration.md"
 API_MD = ROOT / "docs" / "reference" / "python-api.md"
@@ -33,9 +33,14 @@ PROGRAMMATIC_RULES = ["H001", "H002", "C001", "C002", "C003",
                       "C004", "C005", "C006", "C007", "C008", "C009", "C010"]
 
 # Pages under RULES_DIR that hold no rule definitions.  `index.md` is the
-# map and `system.md` is everything that is not an individual rule, so a
-# rule section appearing on either is a routing bug rather than content.
-NON_RULE_PAGES = {"index.md", "nature.md", "system.md"}
+# overview, `definitions.md` is the generated catalog, and the mechanics
+# pages own scoring, matching, configuration and identifiers.  A rule
+# definition appearing on any of them is a routing bug rather than content.
+NON_RULE_PAGES = {
+    "index.md", "categories.md", "series.md", "mechanics.md",
+    "scoring.md", "matching.md", "configuration.md", "identifiers.md",
+    "interpretation.md", "definitions.md",
+}
 
 # A rule section, as opposed to the prose headings that share the level.
 #
@@ -46,8 +51,8 @@ NON_RULE_PAGES = {"index.md", "nature.md", "system.md"}
 # system.md, and nothing would say so.
 #
 # `P` is deliberately absent. Declared-practice findings are rendered from
-# `DECLARED_REASONS` and documented as one table in system.md rather than as
-# per-rule sections, so there is no `### P00N:` heading to find.
+# `DECLARED_REASONS` and documented as one table rather than as per-rule
+# sections, so there is no `### P00N:` heading to find.
 _RULE_SECTION_RE = re.compile(r"^### ([RCDSXWHU]\d{3}):", re.M)
 
 
@@ -115,35 +120,29 @@ def test_every_category_has_a_page():
 def test_every_page_belongs_to_a_category():
     known = {c.doc_page for c in RuleCategory} | NON_RULE_PAGES
     stray = sorted(p.name for p in RULES_DIR.glob("*.md") if p.name not in known)
-    assert stray == [], f"pages under docs/reference/rules/ with no category: {stray}"
+    assert stray == [], f"pages under docs/rules/ with no category: {stray}"
 
 
-# The Rule Nature tab splits the same categories along the other axis: where
-# the rules come from and what a finding means.  Its pages live in a parallel
-# directory so they stay outside `build_rules_index.py`'s scan; the two checks
-# below keep the pair in step and keep that scan innocent.
+# Each category has one canonical page.  The page must carry both halves:
+# the mechanics (individual rule definitions) and the interpretation prose
+# that used to live on a parallel Nature page.  These checks pin the merge so
+# a future generator change cannot silently drop the interpretation.
+@pytest.mark.parametrize("category", list(RuleCategory), ids=lambda c: c.value)
+def test_every_category_page_carries_its_interpretation(category):
+    page = RULES_DIR / category.doc_page
+    text = page.read_text()
+    assert "## Threat context" in text, f"{page.name} lost its threat context"
+    assert "## Interpretation" in text, f"{page.name} lost its interpretation"
+    assert "## Individual rules" in text, f"{page.name} lost its rule index"
 
 
-def test_every_category_has_a_nature_page():
-    missing = sorted(
-        c.value for c in RuleCategory if not (NATURE_DIR / f"{c.value}.md").exists()
-    )
-    assert missing == [], f"RuleCategory members with no Nature page: {missing}"
-
-
-# A rule definition on a Nature page would be a second copy of the mechanics
-# the System page owns, and would look like content to any future scan of the
-# directory.  `^### [A-Z]\\d{3}:` is exactly the heading `build_rules_index.py`
-# reads, so a Nature page must never carry one.
-_NATURE_RULE_HEADING_RE = re.compile(r"^### [A-Z]\d{3}:", re.M)
-
-
-@pytest.mark.parametrize(
-    "page", sorted(NATURE_DIR.glob("*.md")), ids=lambda p: p.name
-)
-def test_no_nature_page_documents_a_rule(page):
-    found = sorted(set(_NATURE_RULE_HEADING_RE.findall(page.read_text())))
-    assert found == [], f"{page.name} carries rule headings: {found}"
+def test_every_category_page_is_reachable_from_the_rules_overview():
+    overview = INDEX_MD.read_text()
+    missing = [
+        c.doc_page for c in RuleCategory
+        if f"]({c.doc_page})" not in overview
+    ]
+    assert missing == [], f"categories absent from the overview index: {missing}"
 
 
 @pytest.mark.parametrize("rule_id", sorted(RULE_CATEGORIES), ids=str)
@@ -187,12 +186,12 @@ def test_system_md_still_anchors_every_rule_id(rule_id):
     assert re.search(rf"^### {rule_id} \{{#", md, re.M), (
         f"system.md lost its anchor stub for {rule_id}"
     )
-    assert f"]({RULE_CATEGORIES[rule_id].doc_page}#" in md
+    assert f"](../../rules/{RULE_CATEGORIES[rule_id].doc_page}#" in md
 
 
 @pytest.mark.parametrize("rule_id", sorted(RULE_CATEGORIES), ids=str)
-def test_the_index_lists_every_rule(rule_id):
-    assert f"[{rule_id}](" in INDEX_MD.read_text(), (
+def test_the_catalog_lists_every_rule(rule_id):
+    assert f"[{rule_id}](" in DEFINITIONS_MD.read_text(), (
         f"{rule_id} is missing from the quick-reference table"
     )
 
@@ -575,20 +574,18 @@ def test_documented_series_ranges_end_at_the_highest_shipped_rule():
     assert not offenders, "stale rule-series ranges:\n" + "\n".join(offenders)
 
 
-def test_the_landing_page_rule_count_matches_the_catalog():
-    """`docs/index.md` advertises a total; it drifted to 145 against 171."""
-    scoring = sum(
-        1 for rule_id in RULE_CATEGORIES
-        if category_of(rule_id) not in (
-            RuleCategory.UNVERIFIABLE, RuleCategory.ARTIFACT)
-    )
-    text = (ROOT / "docs" / "index.md").read_text()
-    match = re.search(r"TrustSight ships ([\d,]+) documented detection rules", text)
-    assert match, "docs/index.md no longer states a detection-rule count"
-    claimed = int(match.group(1).replace(",", ""))
-    assert claimed == scoring, (
-        f"docs/index.md claims {claimed} detection rules; the catalog holds {scoring}"
-    )
+def test_the_rules_overview_links_the_generated_catalog():
+    """The homepage is an entry point, not an inventory.
+
+    The complete rule-family description moved to the rules section, so the
+    overview must route readers to the generated catalog instead of carrying
+    a second, hand-maintained count.
+    """
+    text = INDEX_MD.read_text()
+    assert "](definitions.md)" in text
+    assert "](categories.md)" in text
+    assert "](series.md)" in text
+    assert "](mechanics.md)" in text
 
 
 def test_every_environment_variable_is_documented():
@@ -653,10 +650,8 @@ def test_the_llms_txt_generator_covers_every_page():
 
     navigated = {path for _, pages in _sections(meta) for _, path in pages}
     on_disk = {str(p.relative_to(docs)) for p in docs.rglob("*.md")}
-    assert navigated == on_disk, (
-        f"only in nav: {sorted(navigated - on_disk)}; "
-        f"only on disk: {sorted(on_disk - navigated)}"
-    )
+    missing = sorted(navigated - on_disk)
+    assert missing == [], f"nav names pages that do not exist: {missing}"
 
     index, full = build(docs, meta)
     base = meta["site_url"].rstrip("/") + "/"
@@ -673,82 +668,61 @@ def test_the_llms_txt_generator_covers_every_page():
     assert bare == [], f"llms.txt entries with no summary: {bare}"
 
 
-def test_the_top_navigation_exposes_every_page():
-    """`navigation.tabs` renders one link per section and drops the rest.
+def test_navigation_entries_exist_and_pages_are_reachable():
+    """Six primary sections, and no page left without an inbound link.
 
-    Stock, the top navigation is six words wide and every page below the
-    first level is reachable only from the sidebar.
-    `overrides/partials/tabs-item.html` renders the children as a menu, and
-    this pins that the menu is complete: a section's index page is the tab
-    itself, and every other page under it is an entry.
-
-    It also pins the tab target. A section's index is tracked as an item
-    rather than as its URL, because the site root's index page has an empty
-    URL and testing that URL for truthiness made the root section look like
-    it had no index at all, promoting `security.md` into the Overview tab.
+    The old check required every page to be a top-navigation child, which
+    made advanced reference pages compete with the primary journey.  The new
+    structure keeps the global navigation small and reaches advanced pages
+    through section landings and contextual links, so this pins both halves:
+    every nav entry resolves, and every page on disk is reachable from one.
     """
-    site = (ROOT / "site").resolve()
-    home = site / "index.html"
-    if not home.exists():
-        pytest.skip("site/ is not built; run `zensical build` first")
-
-    html = home.read_text()
-    tabs = html[html.find('class="md-tabs"'):]
-    tabs = tabs[:tabs.find("</nav>")]
-
-    entries: set[str] = set()
-    for match in re.finditer(
-        r'<a href="([^"]*)" class="md-tabs__(?:menu-link|menu-title|link)"', tabs
-    ):
-        href = match.group(1)
-        target = (home.parent / href).resolve() if href else home.parent
-        if target.is_dir():
-            target = target / "index.html"
-        assert target.exists(), f"top-nav link to a missing page: {href!r}"
-        entries.add(str(target.relative_to(site)))
-
-    built = {str(p.relative_to(site)) for p in site.rglob("index.html")}
-    missing = sorted(built - entries)
-    assert missing == [], f"pages absent from the top navigation: {missing}"
-
-    # Reachability alone does not pin the tab's own target: when the index
-    # was resolved by URL truthiness the Overview tab pointed at
-    # `security.md` and listed the real index below it, so every page stayed
-    # reachable and only the tab was wrong. Each tab must lead to its
-    # section's index page.
     import sys
 
     sys.path.insert(0, str(ROOT / "scripts"))
     from build_llms_txt import _config, _sections
 
     meta = _config()
-    tab_targets = [
-        match.group(1)
-        for match in re.finditer(r'<a href="([^"]*)" class="md-tabs__link"', tabs)
-    ]
+    docs = ROOT / meta.get("docs_dir", "docs")
     sections = _sections(meta)
-    assert len(tab_targets) == len(sections), (
-        f"{len(tab_targets)} tabs for {len(sections)} nav sections"
-    )
-    for (title, pages), href in zip(sections, tab_targets):
-        index_page = next(
-            (path for _, path in pages
-             if path == "index.md" or path.endswith("/index.md")),
-            None,
-        )
-        if index_page is None:
-            continue
-        want = site / index_page.replace("index.md", "index.html")
-        got = (home.parent / href).resolve() if href else home.parent
-        if got.is_dir():
-            got = got / "index.html"
-        assert got == want.resolve(), (
-            f"the {title!r} tab points at {got.relative_to(site)}, "
-            f"but its section index is {want.relative_to(site)}"
-        )
+    assert len(sections) == 6, f"expected six primary sections, got {len(sections)}"
+
+    nav_paths = [path for _, pages in sections for _, path in pages]
+    assert len(nav_paths) <= 50, f"navigation grew to {len(nav_paths)} entries"
+    missing = sorted({p for p in nav_paths if not (docs / p).is_file()})
+    assert missing == [], f"nav entries with no file: {missing}"
+
+    graph: dict[str, set[str]] = {}
+    for page in docs.rglob("*.md"):
+        rel = page.relative_to(docs).as_posix()
+        links: set[str] = set()
+        for match in re.finditer(r"\[[^\]]*\]\(([^)]+)\)", page.read_text()):
+            target = match.group(1).split("#")[0]
+            if not target or target.startswith(("http", "mailto:", "#")):
+                continue
+            resolved = (page.parent / target).resolve()
+            try:
+                target_rel = resolved.relative_to(docs.resolve()).as_posix()
+            except ValueError:
+                continue
+            if (docs / target_rel).is_file():
+                links.add(target_rel)
+        graph[rel] = links
+
+    seen = set(nav_paths)
+    stack = list(nav_paths)
+    while stack:
+        for nxt in graph.get(stack.pop(), ()):
+            if nxt not in seen:
+                seen.add(nxt)
+                stack.append(nxt)
+
+    on_disk = {p.relative_to(docs).as_posix() for p in docs.rglob("*.md")}
+    unreachable = sorted(on_disk - seen)
+    assert unreachable == [], f"pages with no inbound link from navigation: {unreachable}"
 
 
-# The security model was split by part into `docs/security/`, and other
+# The security model was split by part into `docs/security-design/`, and other
 # pages, the changelog and links from outside the repo still point at the
 # old `security.md#anchor` URLs.  `security.md` keeps a stub heading per
 # moved anchor so those keep resolving; this pins the stubs, so renaming a
@@ -782,9 +756,9 @@ _MOVED_SECURITY_ANCHORS = {
 
 def test_security_md_still_anchors_every_moved_part():
     """The split kept the old URLs working by stubbing every moved anchor."""
-    text = (ROOT / "docs" / "security.md").read_text()
+    text = (ROOT / "docs" / "security-design" / "security-model.md").read_text()
     missing = sorted(a for a in _MOVED_SECURITY_ANCHORS if f"{{#{a}}}" not in text)
-    assert missing == [], f"stub anchors lost from docs/security.md: {missing}"
+    assert missing == [], f"stub anchors lost from security-model.md: {missing}"
 
 
 def test_the_readme_rule_count_matches_the_catalog():
@@ -800,4 +774,106 @@ def test_the_readme_rule_count_matches_the_catalog():
     claimed = int(match.group(1).replace(",", ""))
     assert claimed == scoring, (
         f"README.md claims {claimed} rules; the catalog holds {scoring}"
+    )
+
+
+# --- documentation structure --------------------------------------------
+#
+# The rework made the site smaller and the pages more opinionated: six primary
+# sections, one canonical page per concept, and advanced pages reachable from
+# section landings rather than every one promoted to global navigation.  The
+# checks below keep that contract cheap to verify: every page declares who it
+# is for, every internal link and anchor resolves, and the generated inventory
+# matches the tree.
+
+_FENCE_RE = re.compile(r"```.*?```", re.S)
+
+
+def _prose_without_code(text: str) -> str:
+    text = _FENCE_RE.sub("", text)
+    return re.sub(r"`[^`\n]*`", "", text)
+
+
+def _slug(heading: str) -> str:
+    """The anchor Python-Markdown derives from a heading."""
+    text = re.sub(r"<[^>]+>", "", heading.strip().lower())
+    text = re.sub(r"[^\w\s-]", "", text)
+    return re.sub(r"\s+", "-", text).strip("-")
+
+
+def _anchors(path: Path) -> set[str]:
+    found: set[str] = set()
+    for line in path.read_text().splitlines():
+        match = re.match(r"^#{1,6}\s+(.*)$", line)
+        if not match:
+            continue
+        heading = match.group(1)
+        explicit = re.search(r"\{#([^}]+)\}\s*$", heading)
+        if explicit:
+            found.add(explicit.group(1))
+            heading = re.sub(r"\s*\{#[^}]+\}\s*$", "", heading)
+        found.add(_slug(heading))
+    return found
+
+
+def test_every_documentation_page_has_a_title_and_description():
+    missing = []
+    for page in sorted((ROOT / "docs").rglob("*.md")):
+        text = page.read_text()
+        if not re.search(r"^#\s+\S", text, re.M):
+            missing.append(f"{page.relative_to(ROOT)}: no H1")
+        if "<!-- description:" not in text[:600]:
+            missing.append(f"{page.relative_to(ROOT)}: no description")
+    assert missing == [], "pages without a title or description:\n" + "\n".join(missing)
+
+
+def test_every_internal_documentation_link_resolves():
+    broken = []
+    docs = ROOT / "docs"
+    for page in sorted(docs.rglob("*.md")):
+        text = _prose_without_code(page.read_text())
+        for match in re.finditer(r"(?<!!)\[[^\]]*\]\(([^)]+)\)", text):
+            target = match.group(1).split("#")[0]
+            if not target or target.startswith(("http", "mailto:", "#", "/")):
+                continue
+            if not (page.parent / target).resolve().exists():
+                broken.append(f"{page.relative_to(ROOT)}: {match.group(1)}")
+    assert broken == [], "broken internal links:\n" + "\n".join(broken)
+
+
+def test_every_internal_documentation_anchor_resolves():
+    broken = []
+    docs = ROOT / "docs"
+    cache: dict[Path, set[str]] = {}
+    for page in sorted(docs.rglob("*.md")):
+        text = _prose_without_code(page.read_text())
+        for match in re.finditer(r"\[[^\]]*\]\(([^)#]+)#([^)]+)\)", text):
+            target = match.group(1)
+            if target.startswith(("http", "mailto:")):
+                continue
+            destination = (page.parent / target).resolve()
+            if not destination.is_file():
+                continue
+            if destination not in cache:
+                cache[destination] = _anchors(destination)
+            if match.group(2) not in cache[destination]:
+                broken.append(
+                    f"{page.relative_to(ROOT)}: {match.group(1)}#{match.group(2)}"
+                )
+    assert broken == [], "broken internal anchors:\n" + "\n".join(broken)
+
+
+def test_the_documentation_inventory_is_current():
+    """The inventory is generated; editing it by hand is what let the old
+    page list drift from the tree."""
+    import sys
+
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from docs_inventory import table, rows
+
+    committed = ROOT / "docs-inventory.md"
+    assert committed.exists(), "run python scripts/docs_inventory.py --out docs-inventory.md"
+    assert committed.read_text() == table(rows()), (
+        "docs-inventory.md is stale; "
+        "run python scripts/docs_inventory.py --out docs-inventory.md"
     )

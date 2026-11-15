@@ -9,7 +9,7 @@ cross-cut. Its findings also carry an **evidence category** (what kind of
 evidence the finding is), which is derived from the family with per-rule
 overrides. An **evidence tier** is not a classification of the rule at all:
 it describes how a scoring signal is sourced. See
-[Rule labels explained](../explanation/rule-taxonomy.md) for all of them side
+[Rule labels explained](../rules/interpretation.md) for all of them side
 by side.
 
 ## How a rule is classified
@@ -35,15 +35,15 @@ a heuristic (`H`), an evasion or refusal check (`X`), a statistic (`E`), a
 history read (`T`), a cross-package correlation (`G`), an indicator lookup
 (`I`), a predicate over other findings (`M`), or an artifact inspection (`A`).
 `P` reports declared practices and `W` reports analysis boundaries; neither is a
-detection. Full list: [Rule Series](rules/nature.md).
+detection. Full list: [Rule Series](../rules/series.md).
 
 **Subject (category).** What a rule looks for, as a closed set with one
 reference page each (fetch and execution, obfuscation, integrity, and so on). A
-rule belongs to exactly one subject. Full list: [Rules Overview](rules/index.md).
+rule belongs to exactly one subject. Full list: [Rules Overview](../rules/index.md).
 
 **Evidence category (layer).** The kind of evidence a finding represents, one
 of `L1`-`L8`
-([Part 1: Evidence Categories](../assurance-layers/evidence-categories.md)). A
+([Evidence Categories](evidence-categories.md)). A
 finding is labelled by the check that produced it, not by every other check it
 might complement.
 
@@ -52,7 +52,7 @@ built package manifest instead of the diff (`trustsight verify-build
 --manifest`), reporting artifact rules `A001`-`A008`. It is off by default,
 carries no `L1`-`L8` layer, and never changes the static score. With no
 manifest it reports `l9_unavailable`; a disagreement with the static analysis
-adds `l9_divergence`. See [Artifact](rules/artifact.md).
+adds `l9_divergence`. See [Artifact](../rules/artifact.md).
 
 **Evidence tier.** How much external data a scoring signal needs before it
 means anything: `A` (structural, always available), `B` (priors, static lists),
@@ -61,13 +61,13 @@ weighted). It describes sourcing and scoring, not a property every rule is
 filed under. Tiers are orthogonal to layers: a finding has both a tier (how it
 is sourced) and a layer (what kind of evidence it is). See
 [Evidence Tiers](evidence-tiers.md) and
-[Scoring Philosophy](../explanation/scoring-philosophy.md).
+[Scoring Philosophy](../explanation/scoring-and-verdicts.md).
 
 **Shared dependencies.** The infrastructure a rule relies on: the tokenizer,
 parser, history database, corpus, or indicator baseline. Two rules with
 different families can share one dependency, so a single input-handling failure
 can blind both. Recorded in
-[`trustsight.detectors`](../assurance-layers/enforcement.md).
+[`trustsight.detectors`](../security-design/assurance-layers/enforcement.md).
 
 ## How a run is reported
 
@@ -78,12 +78,12 @@ can blind both. Recorded in
 `not_applicable` (the analysis mode cannot exercise it, as `L8` in a
 single-package review). Detection and coverage are independent: a category can
 fire *and* be incompletely read. See
-[Part 3: Reporting](../assurance-layers/reporting.md).
+[Part 3: Reporting](../security-design/assurance-layers/reporting.md).
 
 **Boundary.** One object per shortfall that forbids a clean verdict, carrying
 `forbids_clean`. A boundary is the same shortfall as an `incomplete` coverage,
 seen from the verdict's side. See
-[the security model](../security/what-a-result-claims.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete).
+[the security model](../security-design/what-a-result-claims.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete).
 
 **Verdict.** The findings rendered into a review direction, naming the fired
 evidence categories. It describes what fired; it never grants permission to skip
@@ -91,11 +91,11 @@ review.
 
 **Score and risk band.** A deterministic weight summary of the fired findings,
 available on request (`--score`), never volunteered, and never a probability of
-safety. See [How TrustSight Works](../explanation/index.md).
+safety. See [How TrustSight Works](../security-design/how-it-works.md).
 
 ## See Also
 
-- [Assurance Layers](../assurance-layers.md) - the `L1`-`L8` model in full
-- [Rules Overview](rules/index.md) - subjects and the rule catalog
+- [Assurance Layers](../security-design/assurance-layers.md) - the `L1`-`L8` model in full
+- [Rules Overview](../rules/index.md) - subjects and the rule catalog
 - [Evidence Tiers](evidence-tiers.md) - the `A`-`D` taxonomy
-- [Security Model](../security.md) - what a result does and does not claim
+- [Security Model](../security-design/security-model.md) - what a result does and does not claim

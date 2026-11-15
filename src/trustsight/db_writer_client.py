@@ -6,6 +6,7 @@ import base64
 import json
 import socket
 import sqlite3
+import uuid
 
 __all__ = ["WriterClient", "WriterUnavailable", "decode_value"]
 
@@ -32,8 +33,10 @@ class WriterClient:
     def __init__(self, path: str, *, timeout: float = 30.0):
         self.path = path
         self.timeout = timeout
+        self.session = uuid.uuid4().hex
 
     def _request(self, request: dict) -> dict:
+        request.setdefault("session", self.session)
         try:
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as conn:
                 conn.settimeout(self.timeout)

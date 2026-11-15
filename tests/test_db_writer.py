@@ -113,3 +113,21 @@ def test_a_tampered_writer_audit_refuses_to_start(tmp_path):
     log.write_text('{"chain_sha256":"' + "0" * 64 + '","prev":"' + "0" * 64 + '"}\n')
     with pytest.raises(RuntimeError):
         _Audit(str(log))
+
+
+def test_a_new_session_rolls_back_a_stale_transaction(tmp_path):
+    path, conn = _db(tmp_path)
+    audit = _Audit(None)
+    state = {"in_tx": False}
+    assert handle({"op": "begin", "session": "old"}, conn, audit, state)["ok"]
+    assert handle({"op": "execute", "session": "old",
+                   "sql": "INSERT INTO items (name) VALUES (?)",
+                   "params": ["stale"]}, conn, audit, state)["ok"]
+    assert state["in_tx"] is True
+    result = handle({"op": "execute", "session": "new",
+                     "sql": "INSERT INTO items (name) VALUES (?)",
+                     "params": ["fresh"]}, conn, audit, state)
+    assert result["ok"]
+    rows = [row[0] for row in conn.execute("SELECT name FROM items")]
+    assert "stale" not in rows
+    assert "fresh" in rows

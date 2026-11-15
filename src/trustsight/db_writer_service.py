@@ -152,6 +152,19 @@ def handle(request: object, conn: sqlite3.Connection, audit: _Audit,
            state: dict) -> dict:
     if not isinstance(request, dict):
         return {"ok": False, "error": "invalid request"}
+    session = request.get("session")
+    if state.get("in_tx") and session != state.get("session"):
+        # Requests arrive on separate sockets, so a client that dies mid-batch
+        # cannot close its transaction itself.  A new session rolls the stale
+        # one back instead of leaving the writer permanently locked.
+        try:
+            conn.rollback()
+        except sqlite3.Error:
+            return {"ok": False, "error": "stale transaction could not be closed"}
+        state["in_tx"] = False
+        state["session"] = None
+    if isinstance(session, str):
+        state["session"] = session
     op = request.get("op")
     if op in ("begin", "commit", "rollback"):
         if op == "begin":

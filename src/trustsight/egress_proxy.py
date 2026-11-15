@@ -12,6 +12,8 @@ import argparse
 import json
 import logging
 import os
+import base64
+import hmac
 import select
 import socket
 import sys
@@ -97,6 +99,25 @@ def _env_extra_hosts() -> frozenset[str]:
     return frozenset(values)
 
 
+def _authorised(data: bytes, token: str | None) -> bool:
+    if not token:
+        return True
+    for line in data.split(b"\r\n")[1:]:
+        name, sep, value = line.partition(b":")
+        if not sep or name.strip().lower() != b"proxy-authorization":
+            continue
+        scheme, _, credential = value.strip().partition(b" ")
+        if scheme.lower() != b"basic":
+            continue
+        try:
+            decoded = base64.b64decode(credential.strip(), validate=True)
+        except Exception:
+            return False
+        _user, _, password = decoded.partition(b":")
+        return hmac.compare_digest(password, token.encode())
+    return False
+
+
 def _parse_connect(data: bytes, allowed=None) -> tuple[str, int]:
     first = data.split(b"\r\n", 1)[0].decode("latin-1")
     parts = first.split()
@@ -139,12 +160,15 @@ def _tunnel(left: socket.socket, right: socket.socket) -> None:
 
 def handle_client(conn: socket.socket, *, resolver=socket.getaddrinfo,
                   connector=socket.create_connection, allowed=None,
-                  audit_log: str | None = None) -> None:
+                  audit_log: str | None = None,
+                  auth_token: str | None = None) -> None:
     conn.settimeout(CONNECT_TIMEOUT)
     upstream = None
     data = b""
     try:
         data = _read_headers(conn)
+        if not _authorised(data, auth_token):
+            raise ProxyError("proxy authentication required")
         host, port = _parse_connect(data, allowed)
         infos = resolver(host, port, type=socket.SOCK_STREAM)
         address = None
@@ -196,7 +220,8 @@ def handle_client(conn: socket.socket, *, resolver=socket.getaddrinfo,
             pass
 
 
-def serve(listen: str = "0.0.0.0:3128", audit_log: str | None = None) -> None:
+def serve(listen: str = "0.0.0.0:3128", audit_log: str | None = None,
+          auth_token: str | None = None) -> None:
     host, _, port_text = listen.rpartition(":")
     if not host:
         host = "0.0.0.0"
@@ -216,7 +241,8 @@ def serve(listen: str = "0.0.0.0:3128", audit_log: str | None = None) -> None:
             def run(client=conn):
                 try:
                     handle_client(
-                        client, allowed=allowed, audit_log=audit_log)
+                        client, allowed=allowed, audit_log=audit_log,
+                        auth_token=auth_token)
                 finally:
                     slots.release()
 

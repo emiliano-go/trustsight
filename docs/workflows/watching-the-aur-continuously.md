@@ -336,7 +336,9 @@ mkdir -p run/trustsight run/trustsight-token
 ```
 
 The watcher, fetcher and signer have no default route: they sit on
-`watcher-internal` and reach the internet only through `egress-proxy`.
+`watcher-internal` and reach the internet only through `egress-proxy`. Set
+`TRUSTSIGHT_PROXY_TOKEN` to require `Basic` proxy authentication, so another
+container on that network cannot borrow the proxy.
 The proxy accepts CONNECT on 443 to the exact forge/CDN plus AUR, release and
 default feed/ntfy hosts; the watcher's `HTTPS_PROXY` routes AUR, release,
 feed and ntfy traffic through it, and the parser worker remains networkless.

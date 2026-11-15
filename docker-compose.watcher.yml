@@ -88,8 +88,8 @@ services:
       TRUSTSIGHT_UPSTREAM_FETCHER_SOCKET: "/run/trustsight/upstream.sock"
       # AUR, release-channel, feed and ntfy traffic goes through the proxy;
       # the watcher has no default route.
-      HTTPS_PROXY: "http://egress-proxy:3128"
-      HTTP_PROXY: "http://egress-proxy:3128"
+      HTTPS_PROXY: "http://trustsight:${TRUSTSIGHT_PROXY_TOKEN:-}@egress-proxy:3128"
+      HTTP_PROXY: "http://trustsight:${TRUSTSIGHT_PROXY_TOKEN:-}@egress-proxy:3128"
       NO_PROXY: "127.0.0.1,localhost"
       # A cycle parses and drops two ~360 MB metadata snapshots.  glibc keeps
       # the freed pages in per-thread arenas; capping arenas at 2 and trimming
@@ -169,7 +169,7 @@ services:
       TRUSTSIGHT_CONFIG_DIR: "/tmp/trustsight-config"
       TRUSTSIGHT_UPSTREAM_SCAN_ENABLED: "1"
       TRUSTSIGHT_UPSTREAM_SCAN_ARCHIVE_FETCH: "1"
-      TRUSTSIGHT_UPSTREAM_PROXY: "http://egress-proxy:3128"
+      TRUSTSIGHT_UPSTREAM_PROXY: "http://trustsight:${TRUSTSIGHT_PROXY_TOKEN:-}@egress-proxy:3128"
       TRUSTSIGHT_REQUIRE_SECCOMP: "1"
       # A 0600 token file mounted read-only; the fetcher is the only process
       # that sees it.  Uncomment and add the mount:
@@ -218,6 +218,7 @@ services:
       TRUSTSIGHT_LOG_TIMESTAMPS: "1"
       TMPDIR: "/tmp"
       TRUSTSIGHT_REQUIRE_SECCOMP: "1"
+      TRUSTSIGHT_PROXY_TOKEN: "${TRUSTSIGHT_PROXY_TOKEN:-}"
       # Optional comma-separated exact hosts for operator webhooks/ntfy.
       TRUSTSIGHT_EGRESS_ALLOW: "${TRUSTSIGHT_EGRESS_ALLOW:-}"
     logging:

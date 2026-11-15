@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 import typer
 
 from ..egress_proxy import serve
@@ -25,10 +27,13 @@ def egress_proxy_cmd(
     listen: str = typer.Option("0.0.0.0:3128", "--listen"),
     audit_log: str | None = typer.Option(
         None, "--audit-log", help="Append one JSON record per CONNECT."),
+    auth_token: str | None = typer.Option(
+        os.environ.get("TRUSTSIGHT_PROXY_TOKEN") or None,
+        "--auth-token", help="Require Basic proxy auth with this password."),
 ):
     """Serve CONNECT only to the forge/CDN allowlist."""
     try:
-        serve(listen, audit_log)
+        serve(listen, audit_log, auth_token)
     except KeyboardInterrupt:
         raise typer.Exit(code=0) from None
     except Exception as exc:  # noqa: BLE001

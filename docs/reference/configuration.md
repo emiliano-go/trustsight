@@ -585,6 +585,7 @@ changes behaviour is a config key or a command flag.
 | `TRUSTSIGHT_UPSTREAM_PROXY` | An `http://host:port` URL | Overrides `[upstream_scan] proxy` for the separate fetcher. |
 | `TRUSTSIGHT_FEED_SIGNER_SOCKET` | A Unix socket path | Sends feed bodies to the separate signer for signature headers instead of reading `TRUSTSIGHT_FEED_KEY*` in the watcher. |
 | `TRUSTSIGHT_EGRESS_ALLOW` | Comma-separated exact hostnames | Extra hosts the container egress proxy may CONNECT to, for operator webhooks/ntfy. IP literals, wildcards, ports and paths are ignored. |
+| `TRUSTSIGHT_PROXY_TOKEN` | A shared secret | Requires Basic proxy auth on every CONNECT and is embedded in the watcher/fetcher proxy URL. Empty means no proxy auth. |
 | `HTTPS_PROXY` | An `http://host:port` URL | Standard proxy used by the watcher's URL reads and its AUR git proxy. The compose file points it at `egress-proxy:3128`. |
 | `TRUSTSIGHT_WATCHER_PROXY` | An `http://host:port` URL | Watcher-specific proxy override for the AUR git proxy; takes precedence over `HTTPS_PROXY`. |
 | `TRUSTSIGHT_DEV_BUILD` | `1` | Set by the `packaging/dev` wrappers. Appends `-dev` to the `--version` output; the released package does not set it. |

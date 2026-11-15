@@ -154,3 +154,18 @@ def test_handle_client_tunnels_an_allowlisted_connect(tmp_path):
     record = json.loads(audit.read_text().strip())
     assert record["allowed"] is True
     assert record["host"] == "github.com"
+
+
+def _basic(token: str) -> bytes:
+    import base64
+    return b"Proxy-Authorization: Basic " + base64.b64encode(
+        f"trustsight:{token}".encode()) + b"\r\n"
+
+
+def test_proxy_auth_requires_a_matching_password():
+    request = (_request("github.com:443").replace(
+        b"\r\n\r\n", b"\r\n") + _basic("secret") + b"\r\n")
+    assert egress_proxy._authorised(request, "secret") is True
+    assert egress_proxy._authorised(request, "other") is False
+    assert egress_proxy._authorised(_request("github.com:443"), "secret") is False
+    assert egress_proxy._authorised(_request("github.com:443"), None) is True

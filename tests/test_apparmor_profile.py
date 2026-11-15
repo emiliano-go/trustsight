@@ -14,12 +14,10 @@ PROFILE = ROOT / "docker" / "apparmor" / "trustsight-watcher"
 
 @pytest.mark.skipif(not shutil.which("apparmor_parser"),
                     reason="apparmor_parser is not installed")
-def test_the_watcher_profile_parses():
+def test_the_watcher_profile_parses(tmp_path):
     result = subprocess.run(
-        ["apparmor_parser", "-Q", str(PROFILE)],
+        ["apparmor_parser", "-Q", "-L", str(tmp_path), str(PROFILE)],
         capture_output=True, text=True, timeout=30)
-    if result.returncode != 0 and "Permission denied" in result.stderr:
-        pytest.skip("apparmor_parser cannot write the policy cache")
     assert result.returncode == 0, result.stderr
 
 

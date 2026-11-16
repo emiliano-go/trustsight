@@ -12,7 +12,7 @@ from ...rules import _PRINTER_LINE_RE, _blank_quoted, clamp_text
 from ._common import _DECEPTIVE_SPACE_RE, _FENCE_RE, _array_body_lines, _command_starts, _command_words, _continuation_lines, _dependency_array_lines, _executes, _home_alias_hit, _loop_variable_names, _path_lookup_names, _pipeline_sink, _resolved_records, log
 from ._x01_x08 import (X001_RE, X002_SHAPES, X003_SHAPES, X004_SHAPES, X006_SHAPES,
                        X034_ARCHIVE_RE, X034_EXECUTOR_RE)
-from ._x09_x16 import X009_RE, X010_RE, X011_WORD_RE, X011_STANDDOWN_RE, X012_RE, X013_RE, X013_STANDDOWN_RE, X014_RE, X014_STANDDOWN_RE, X015_RE, X018_RE, X019_RE, _DISTRO_INSTALL_RE, _X009_CLIENT_RE, _X016_CONSUMER_RE, _X016_FETCH_RE, _X016_KNOWN_EXECUTOR_RE, _consumer_after_override, _consumer_at, _x013_is_trusted_populate, _x013_is_trusted_registry
+from ._x09_x16 import X009_RE, X010_RE, X011_WORD_RE, X011_STANDDOWN_RE, X012_RE, X013_RE, X013_STANDDOWN_RE, X014_RE, X014_STANDDOWN_RE, X015_RE, X018_RE, X019_RE, _DISTRO_INSTALL_RE, _X009_CLIENT_RE, _X016_CONSUMER_RE, _X016_FETCH_RE, _X016_KNOWN_EXECUTOR_RE, _consumer_after_override, _consumer_at, _x013_is_trusted_populate, _x013_is_trusted_registry, _x014_is_java_property
 from ._x17_x25 import X017_RE, X021_RE, X024_RE, _BUILD_MANIFEST_RE, _CONTENT_WRITE_VERB_RE, _HEREDOC_OPEN_RE, _MANIFEST_COMMAND_RE, _X017_FIND_RE, _X021_RUN_POSITIONAL_RE, _X021_SET_GLOB_RE, _X022_CONFIG_FLAG_RE, _X022_PAYLOAD_RE, _X022_WRITE_RE, _multiline_function_shadow_lines, _normalise_dest, _redirect_target, _x017_find_runs_a_script, _x024_is_benign_build_path, _x024_is_git_provenance, _x024_is_passthrough, _x024_is_test_pythonpath, _x024_is_trusted_loader_append, _x024_is_trusted_path_append, _x024_is_benign_path_suffix, _x024_is_trusted_build_value, _x024_is_flag_filter
 
 __all__ = ['crossfire_techniques']
@@ -589,15 +589,22 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
         if X010_RE.search(body):
             record("X010", line_no, "interpreter reaches the network", body.strip())
 
+        # A printer's quoted text is an instruction addressed to the reader,
+        # not work scheduled here: an install notice that says `Then run
+        # systemctl enable lighttpd` schedules nothing.  `_blank_quoted`
+        # keeps `$(...)` in double quotes, because that substitution really
+        # runs.
+        x015_body = _blank_quoted(body) if _PRINTER_LINE_RE.match(body) else body
         if (index not in printed_heredoc
                 and files.get(index) not in dead_hooks
-                and X015_RE.search(body)):
+                and X015_RE.search(x015_body)):
             record("X015", line_no, "work scheduled to run after the build",
                    body.strip())
 
         x014_body = _blank_quoted(body) if _GREP_CMD_RE.search(body) else body
         env_code = X014_RE.search(x014_body)
-        if env_code and not X014_STANDDOWN_RE.search(x014_body):
+        if (env_code and not X014_STANDDOWN_RE.search(x014_body)
+                and not _x014_is_java_property(x014_body, env_code)):
             record("X014", line_no,
                    f"{env_code.group('var')} names code the shell will run",
                    body.strip())

@@ -11,7 +11,7 @@ from ...config import (
 from ...deps import _strip_comment
 from ._common import _DATA_CONSUMER, _EXEC_WRAPPER, _SHELL
 
-__all__ = ['_x013_is_trusted_populate', '_x013_is_trusted_registry', 'X009_RE', 'X010_RE', 'X011_WORD_RE', 'X011_STANDDOWN_RE', 'X012_CONSUMER_RE', 'X012_RE', 'X013_RE', 'X013_STANDDOWN_RE', 'X014_RE', 'X014_STANDDOWN_RE', 'X015_RE', 'X018_RE', 'X019_RE', '_DISTRO_INSTALL_RE', '_X009_CLIENT_RE', '_X016_CONSUMER_RE', '_X016_FETCH_RE', '_X016_KNOWN_EXECUTOR_RE', '_consumer_after_override', '_consumer_at']
+__all__ = ['_x013_is_trusted_populate', '_x013_is_trusted_registry', '_x014_is_java_property', 'X009_RE', 'X010_RE', 'X011_WORD_RE', 'X011_STANDDOWN_RE', 'X012_CONSUMER_RE', 'X012_RE', 'X013_RE', 'X013_STANDDOWN_RE', 'X014_RE', 'X014_STANDDOWN_RE', 'X015_RE', 'X018_RE', 'X019_RE', '_DISTRO_INSTALL_RE', '_X009_CLIENT_RE', '_X016_CONSUMER_RE', '_X016_FETCH_RE', '_X016_KNOWN_EXECUTOR_RE', '_consumer_after_override', '_consumer_at']
 
 X009_RE = re.compile(
     r"\b(?:" + _OTHER_FETCH_CLIENT + r")\b[^\n|;&]*+"
@@ -338,6 +338,27 @@ X014_STANDDOWN_RE = re.compile(
     r"|nano|/dev/null)[\"']?\s*(?:;|$)",
     re.IGNORECASE,
 )
+
+#: JVM environment variables whose value may carry an agent (code) or only
+#: system properties (data).  A macOS-style `-Dfoo=bar` property names no
+#: code at all; `-javaagent:`, `-agentlib:` and `-agentpath:` load one.
+_X014_JAVA_VARS = ("JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS")
+_X014_JAVA_AGENT_RE = re.compile(
+    r"(?<![\w-])-(?:javaagent|agentlib|agentpath)\b", re.IGNORECASE)
+
+
+def _x014_is_java_property(body: str, match: re.Match) -> bool:
+    """True when a JVM env var names only properties, never code.
+
+    ``JAVA_TOOL_OPTIONS="-Djna.boot.library.path=..."`` is how the JNA
+    recipe points a *test* at the library it just built: the JVM reads a
+    property and loads nothing.  The same variable with ``-javaagent:``
+    loads a jar, ``-agentlib:``/``-agentpath:`` load a native agent, and
+    those are code the shell will run, so they keep the finding.
+    """
+    if match.groupdict().get("var") not in _X014_JAVA_VARS:
+        return False
+    return not _X014_JAVA_AGENT_RE.search(body[match.start():])
 
 X015_RE = re.compile(
     r"(?:\A\s*|[;&|(]\s*|&&\s*|\|\|\s*)"

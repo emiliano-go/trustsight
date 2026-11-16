@@ -618,6 +618,11 @@ domains = [
     # project-owned release host.  voix-bin sources its release from
     # git.gay; unknown it paid SOURCE_BUCKET for a forge bucket.
     "git.gay",
+    # Google's project source host: chromium.googlesource.com mirrors
+    # google/crubit and the rest of the Chromium tree, the same trust
+    # model as the forges above.  Unknown it charged ungoogled-chromium
+    # SOURCE_BUCKET on every routine crubit pin.
+    "googlesource.com",
 ]
 
 [official_projects]
@@ -688,6 +693,11 @@ domains = [
     "repo.yandex.ru",
     "nebula.gg",
     "downloads.sejda-cdn.com",
+    # Mozilla's add-on distribution channel: a Firefox/LibreWolf extension
+    # package's `.xpi` is published there by the extension's own author,
+    # so addons.mozilla.org is the upstream, not the divergent prebuilt
+    # host C011 reports or the unknown bucket SOURCE_BUCKET charges.
+    "addons.mozilla.org",
 ]
 
 [official_hosts]

@@ -28,10 +28,24 @@
   left to H078/T001/T003, so the same diff is not counted twice (the
   lttng-tools 2.16.0 shape: sha512 -> sha256 + `.asc` + validpgpkeys scored
   100).
+- **Four rule shapes that misfired in the 2026-11-16 watcher triage are narrowed.** X015 no longer reads a printed install hint as scheduled work, X014 no longer treats a JVM `-D` system property as code, C011 and SOURCE_BUCKET recognize the add-on store and Google project source hosts, and C033 measures surviving prose only in the files that lost comments. Each correction keeps its true-positive twin.
+
+- **Seven rule shapes that scored benign packaging work are narrowed.** The 2026-11-14 watcher triage produced no true positives from 27 alerts; each correction below keeps its true-positive twin.
+  - H081 no longer reads an argument continued with `\` as a command position (`install -Dm644 -t DEST \` + `"$srcdir/p/LICENSE"`).
+  - X011 stands down on `opam install --fake`, which registers a system package without fetching or building anything.
+  - H077 consults the current recipe when the hunk omits the enclosing function header, so a fetch inside `prepare()` is not parse-time.
+  - X005 no longer treats `2>`/`&>` or a write to `/dev/null` as a write, so a defensive `grep '/home/…/' 2>/dev/null` is not a profile write.
+  - H082 no longer attributes an execution under `/usr`, `/bin`, `/sbin`, `/lib`, `/opt` or `/etc` to an earlier fetch; a build cannot have fetched a system tool into place.
+  - C001 no longer counts compiling a `.c`/`.rs` source file as a new code capability on a version bump.
+  - C022 only reports a checksum downgrade when the best retained array is weaker than sha256; removing a redundant sha512/b2 is not a downgrade.
+- **Dependency and naming rules stop reading declared companions as impersonation.** D001/D002 stand down for names the watcher already has a `packages` row for; H064 reports an added `conflicts` entry at weight 0 (a refusal is not a name claim), and D005 skips a conflict whose name the recipe also provides/replaces.
+- **Published figures are recalibrated to the narrowed rules.** The locked-corpus measurement moved to 74.5% benign zero-rate, 6.6% above the 20-point threshold, 29.7% ruleset trigger rate and 93.4th percentile; `tests/fixtures/published-figures.json` and the docs that quote it carry the measured values. The suite figure is 9,410 tests across 278 files.
+- **The six upstream-lane rules are classified in the coverage ledger.** A009/A010 (archive ELF and setuid files) and U013/U014/U015 (local upstream workflow and manifest signals) carry deferred `add_artifact_or_manifest` plans; W014 is a boundary and classified `pseudo`. The ledger now covers all 313 catalog ids, and the rebuilt ledger also records the post-C022 fire rate (22 -> 6 on the locked corpus) that the earlier ledger predated.
+
 
 ### Calibration
 
-- **The weekly anergy review kept the remaining uncalibrated rules report-only.** A009, A010, G015, H009, H010, H011, H012, H013, T008, T009, T010, T011, T012, U013, U014 and U015 were promoted with an explicit weight of 0 and `decided_in: Unreleased`; none had a validated true-positive twin plus a quiet benign replay in the reviewed window. C001 remains conditional because the signed `upstream_hash` corroboration still covers the corpus.
+- **The weekly anergy review kept the remaining uncalibrated rules report-only.** A009, A010, G015, H009, H010, H011, H012, H013, T008, T009, T010, T011, T012, U013, U014 and U015 were promoted with an explicit weight of 0 and `decided_in: 0.29.0`; none had a validated true-positive twin plus a quiet benign replay in the reviewed window. C001 remains conditional because the signed `upstream_hash` corroboration still covers the corpus.
 
 ### Added
 
@@ -101,21 +115,6 @@
   binary (A009) or a setuid/setgid file (A010) is reported at weight 0
   (anergic). The bits and magic are read from the archive, nothing is
   extracted to disk or executed.
-
-### Fixed
-
-- **Seven rule shapes that scored benign packaging work are narrowed.** The 2026-11-14 watcher triage produced no true positives from 27 alerts; each correction below keeps its true-positive twin.
-  - H081 no longer reads an argument continued with `\` as a command position (`install -Dm644 -t DEST \` + `"$srcdir/p/LICENSE"`).
-  - X011 stands down on `opam install --fake`, which registers a system package without fetching or building anything.
-  - H077 consults the current recipe when the hunk omits the enclosing function header, so a fetch inside `prepare()` is not parse-time.
-  - X005 no longer treats `2>`/`&>` or a write to `/dev/null` as a write, so a defensive `grep '/home/…/' 2>/dev/null` is not a profile write.
-  - H082 no longer attributes an execution under `/usr`, `/bin`, `/sbin`, `/lib`, `/opt` or `/etc` to an earlier fetch; a build cannot have fetched a system tool into place.
-  - C001 no longer counts compiling a `.c`/`.rs` source file as a new code capability on a version bump.
-  - C022 only reports a checksum downgrade when the best retained array is weaker than sha256; removing a redundant sha512/b2 is not a downgrade.
-- **Dependency and naming rules stop reading declared companions as impersonation.** D001/D002 stand down for names the watcher already has a `packages` row for; H064 reports an added `conflicts` entry at weight 0 (a refusal is not a name claim), and D005 skips a conflict whose name the recipe also provides/replaces.
-- **Published figures are recalibrated to the narrowed rules.** The locked-corpus measurement moved to 74.0% benign zero-rate, 6.7% above the 20-point threshold, 30.1% ruleset trigger rate and 93.3th percentile; `tests/fixtures/published-figures.json` and the docs that quote it carry the measured values. The suite figure is 9,168 tests across 259 files.
-- **The six upstream-lane rules are classified in the coverage ledger.** A009/A010 (archive ELF and setuid files) and U013/U014/U015 (local upstream workflow and manifest signals) carry deferred `add_artifact_or_manifest` plans; W014 is a boundary and classified `pseudo`. The ledger now covers all 313 catalog ids, and the rebuilt ledger also records the post-C022 fire rate (22 -> 6 on the locked corpus) that the earlier ledger predated.
-
 
 ## [0.28.8] - 2026-11-13
 

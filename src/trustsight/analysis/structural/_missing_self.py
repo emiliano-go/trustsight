@@ -227,6 +227,27 @@ def comment_deletion_findings(diff_doc, add, config=None) -> None:
     except (AttributeError, TypeError):
         return
     before = [line for line in pre_lines if _is_comment(line)]
+    # The rule claims the prose *shrank*, and a rewrite can replace one
+    # comment with another: kimi-code-desktop-bin removed 14 of 17 comment
+    # lines and added 13, so every deletion was matched.  Measure what the
+    # reviewer can still read - the post-image half of the diff - and stand
+    # down unless at least `min_ratio` of the prose is actually gone.
+    deleted_files = {
+        getattr(line, "file", "") for line in diff_lines
+        if getattr(line, "side", "") == "remove"
+        and _is_comment(getattr(line, "content", ""))
+    }
+    # Count only the files that lost comments.  A package diff also carries
+    # .SRCINFO and companion files; comments added elsewhere must not mask a
+    # gutted PKGBUILD.
+    after = [
+        line.content for line in diff_doc.lines
+        if getattr(line, "side", "") in ("add", "context")
+        and getattr(line, "file", "") in deleted_files
+        and _is_comment(line.content)
+    ]
+    if len(after) > len(before) * (1.0 - min_ratio):
+        return
     deleted = [
         line.content for line in diff_lines
         if getattr(line, "side", "") == "remove"

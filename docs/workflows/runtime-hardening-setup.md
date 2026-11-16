@@ -213,6 +213,77 @@ docker compose -f docker-compose.watcher.yml up -d
 
 ---
 
+## Operating an existing watcher deployment
+
+These are the failures seen when the watcher was moved from
+`apparmor=unconfined` to the shipped profile on Debian 13. They are properties
+of the profile, not optional tuning.
+
+- **SQLite locks:** `/data/**` and `/tmp/**` need AppArmor's `k` permission.
+  A rule that grants only `rw` produces `operation="file_lock"` denials on
+  `trustsight.db`.
+- **DNS:** allow `network inet dgram`, `network inet6 dgram` and
+  `network netlink raw`, plus reads of `/etc/hosts`, `/etc/host.conf` and
+  `/etc/gai.conf`. Stream-only network rules make the seed fetch fail with
+  `Temporary failure in name resolution`.
+- **User namespaces:** the parser workers write `/proc/<pid>/uid_map`,
+  `gid_map` and `setgroups`; those paths need write permission.
+- **CPU discovery:** `/sys/fs/cgroup/**` and `/sys/fs/cgroup/cpu.max` need
+  read permission.
+- **Signals:** Docker's runtime needs `signal` permission for stop and
+  restart.
+- **Bytecode:** Python imports `encodings` before `-B` takes effect. The
+  image precompiles the standard library, and workers launch with both `-I`
+  and `-B`; do not grant write access to the stdlib to silence `mknod`
+  denials.
+
+Reload after changing the profile and recreate the container. Reloading the
+profile alone does not change an already-created container:
+
+```bash
+sudo /usr/sbin/apparmor_parser -r /etc/apparmor.d/trustsight-watcher
+docker compose up -d --force-recreate watcher
+```
+
+### Watchtower
+
+Do not let Watchtower update the watcher automatically. A local
+`trustsight:0.29.0` image has no registry tag to pull, and a mutable
+`ghcr.io/...:latest` tag can replace the image under a running profile and
+upstream configuration. The host AppArmor profile and compose environment
+survive a container recreation, but the image bytes do not.
+
+Set the watcher label to `false` or remove it, and update deliberately:
+
+```yaml
+labels:
+  - "com.centurylinklabs.watchtower.enable=false"
+```
+
+Then pull or rebuild, run `docker compose config`, and recreate the watcher
+in a maintenance window.
+
+### Upstream and full dependency depth
+
+The upstream lane and the full dependency walk are opt-in settings on the
+watcher service:
+
+```yaml
+environment:
+  - TRUSTSIGHT_UPSTREAM_SCAN_ENABLED=1
+  - TRUSTSIGHT_UPSTREAM_SCAN_ARCHIVE_FETCH=1
+command:
+  - |
+    exec /app/.venv/bin/trustsight full-aur --watch \
+      --interval 900 --depth -1 --notify ...
+```
+
+`--depth -1` means "walk every level, up to the existing 8-level and 200-node
+ceilings", not unbounded. The upstream lane needs a 0.29.0 or newer image;
+0.28.x ignores the environment flags.
+
+---
+
 ## Notes
 
 - These profiles do not replace the watcher's own sandbox; they add a

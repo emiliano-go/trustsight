@@ -201,10 +201,11 @@ service and point `TRUSTSIGHT_FEED_KEY_FILE` at it there; the watcher only
 gets the signer socket. The shipped compose file runs read-only with a tmpfs for `/tmp`
 and the cache, drops all capabilities, sets `no-new-privileges`, and permits
 the parser workers' `unshare` and mount operations with the shipped
-`docker/seccomp-watcher.json` profile. The watcher keeps
-`apparmor=unconfined` because those workers need `mount`; the fetcher, proxy
-and signer use Docker's `docker-default` profile. A custom AppArmor profile
-is shipped as `docker/apparmor/trustsight-watcher`; load it and opt in:
+`docker/seccomp-watcher.json` profile. The watcher can use the shipped
+AppArmor profile because the parser workers need `mount` and user namespaces;
+the fetcher, proxy and signer use Docker's `docker-default` profile. A custom
+AppArmor profile is shipped as `docker/apparmor/trustsight-watcher`; load it
+and opt in:
 
 ```bash
 sudo apparmor_parser -r docker/apparmor/trustsight-watcher
@@ -212,11 +213,17 @@ docker compose -f docker-compose.watcher.yml \
   -f docker-compose.watcher.apparmor.yml up -d
 ```
 
-The default stays `unconfined` until the overlay is used, so a host without
-AppArmor support still starts. With the overlay, the entrypoint checks
-`/proc/self/attr/current` and refuses to run unless the profile is active. The profile allows only the mount/userns the
-parser workers need and limits the rest of the filesystem to the read-only
-app, config and runtime paths.
+The base compose file stays `unconfined` until the overlay is used, so a host
+without AppArmor support still starts. With the overlay, the entrypoint checks
+`/proc/self/attr/current` and refuses to run unless the profile is active. The
+profile allows the mount and user namespaces the parser workers need, SQLite
+lock and DNS access, and limits the rest of the filesystem to the app, config,
+data and runtime paths.
+
+Do not enable Watchtower for this container. A mutable `latest` tag can
+replace the image under the host profile and upstream settings, while a local
+image tag has no registry source. Update the image and recreate the watcher
+deliberately.
 
 ## As a systemd service
 

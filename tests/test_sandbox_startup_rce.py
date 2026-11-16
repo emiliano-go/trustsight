@@ -68,6 +68,7 @@ def test_the_worker_environment_carries_no_import_path():
 def test_the_worker_launch_is_isolated():
     args = client._launch_args()
     assert "-I" in args
+    assert "-B" in args
     assert "-s" not in args
     # It still finds the package, through the explicit trusted root.
     bootstrap = args[-1]

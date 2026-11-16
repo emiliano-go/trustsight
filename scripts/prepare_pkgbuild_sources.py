@@ -123,7 +123,9 @@ def stage_sources(
         encoding="utf-8",
     )
     if signed:
-        shutil.copy(signature, out_dir / signature.name)
+        target = out_dir / signature.name
+        if signature.resolve() != target.resolve():
+            shutil.copy(signature, target)
     return signed
 
 

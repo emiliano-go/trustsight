@@ -430,3 +430,16 @@ def test_dev_check_installs_the_wheel_without_reaching_the_index():
 
 
 
+
+
+def test_staging_into_the_packaging_directory_is_idempotent(tmp_path):
+    import sys
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import prepare_pkgbuild_sources as prepare
+
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    for name in ("PKGBUILD", ".SRCINFO", "trustsight-0.29.0.tar.gz.sig"):
+        shutil.copy2(PKGBUILD_DIR / name, pkg / name)
+    assert prepare.stage_sources(pkg, pkg, "0.29.0", "0" * 64) is True
+    assert (pkg / "trustsight-0.29.0.tar.gz.sig").is_file()

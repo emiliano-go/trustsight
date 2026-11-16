@@ -2,23 +2,23 @@
   "rules": {
     "A009": {
       "changelog": "upstream-scan-lane",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.29.0",
       "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
       "signal": "artifact shape inside a fetched source archive; needs a corpus rate before it can score",
       "since": "0.28.9",
       "status": "promoted",
       "weight": 0,
-      "decided_in": "Unreleased"
+      "decided_in": "0.29.0"
     },
     "A010": {
       "changelog": "upstream-scan-lane",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.29.0",
       "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
       "signal": "artifact shape inside a fetched source archive; needs a corpus rate before it can score",
       "since": "0.28.9",
       "status": "promoted",
       "weight": 0,
-      "decided_in": "Unreleased"
+      "decided_in": "0.29.0"
     },
     "C001": {
       "changelog": "c001-upstream-hash-corroboration",
@@ -38,62 +38,62 @@
     "G015": {
       "changelog": "sleeper-adoption-campaign",
       "promotion": "run the weekly anergic calibration, then set weight and decided_in",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.29.0",
       "signal": "full-AUR benign replay fire-rate < 0.30 plus a positive sleeper-adoption campaign and a benign dormant-reactivation twin",
       "since": "Unreleased",
       "status": "promoted",
       "weight": 0,
-      "decided_in": "Unreleased"
+      "decided_in": "0.29.0"
     },
     "H009": {
       "changelog": "runtime-surface-lane",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.29.0",
       "promotion": "run the weekly anergic calibration, then set weight and decided_in",
       "signal": "weekly calibration review: assign an explicit weight (0 keeps it report-only, a positive weight promotes it) after a true-positive twin and a quiet benign replay",
       "since": "0.28.0",
       "status": "promoted",
       "weight": 0,
-      "decided_in": "Unreleased"
+      "decided_in": "0.29.0"
     },
     "H010": {
       "changelog": "runtime-surface-lane",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.29.0",
       "promotion": "run the weekly anergic calibration, then set weight and decided_in",
       "signal": "weekly calibration review: assign an explicit weight (0 keeps it report-only, a positive weight promotes it) after a true-positive twin and a quiet benign replay",
       "since": "0.28.0",
       "status": "promoted",
       "weight": 0,
-      "decided_in": "Unreleased"
+      "decided_in": "0.29.0"
     },
     "H011": {
       "changelog": "runtime-surface-lane",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.29.0",
       "promotion": "run the weekly anergic calibration, then set weight and decided_in",
       "signal": "weekly calibration review: assign an explicit weight (0 keeps it report-only, a positive weight promotes it) after a true-positive twin and a quiet benign replay",
       "since": "0.28.0",
       "status": "promoted",
       "weight": 0,
-      "decided_in": "Unreleased"
+      "decided_in": "0.29.0"
     },
     "H012": {
       "changelog": "runtime-surface-lane",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.29.0",
       "promotion": "run the weekly anergic calibration, then set weight and decided_in",
       "signal": "weekly calibration review: assign an explicit weight (0 keeps it report-only, a positive weight promotes it) after a true-positive twin and a quiet benign replay",
       "since": "0.28.0",
       "status": "promoted",
       "weight": 0,
-      "decided_in": "Unreleased"
+      "decided_in": "0.29.0"
     },
     "H013": {
       "changelog": "runtime-surface-lane",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.29.0",
       "promotion": "run the weekly anergic calibration, then set weight and decided_in",
       "signal": "weekly calibration review: assign an explicit weight (0 keeps it report-only, a positive weight promotes it) after a true-positive twin and a quiet benign replay",
       "since": "0.28.0",
       "status": "promoted",
       "weight": 0,
-      "decided_in": "Unreleased"
+      "decided_in": "0.29.0"
     },
     "T004": {
       "changelog": "missing-self-axis",
@@ -113,83 +113,83 @@
     },
     "T008": {
       "changelog": "full-aur-history-campaigns",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.29.0",
       "promotion": "remove status or mark promoted after the full-AUR benign replay checkpoint; record the measured rate in the changelog",
       "signal": "full-AUR benign replay fire-rate < 0.30 plus positive delayed-adoption and benign transition twins",
       "since": "0.27.1",
       "status": "promoted",
       "weight": 0,
-      "decided_in": "Unreleased"
+      "decided_in": "0.29.0"
     },
     "T009": {
       "changelog": "full-aur-history-campaigns",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.29.0",
       "promotion": "remove status or mark promoted after the full-AUR benign replay checkpoint; record the measured rate in the changelog",
       "signal": "full-AUR benign replay fire-rate < 0.30 plus positive dormant-takeover and active/low-exposure transition twins",
       "since": "0.27.1",
       "status": "promoted",
       "weight": 0,
-      "decided_in": "Unreleased"
+      "decided_in": "0.29.0"
     },
     "T010": {
       "changelog": "full-aur-history-campaigns",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.29.0",
       "promotion": "remove status or mark promoted after the full-AUR benign replay checkpoint; record the measured rate in the changelog",
       "signal": "full-AUR benign replay fire-rate < 0.30 plus positive dependency-redirection and established/related-target twins",
       "since": "0.27.1",
       "status": "promoted",
       "weight": 0,
-      "decided_in": "Unreleased"
+      "decided_in": "0.29.0"
     },
     "T011": {
       "changelog": "full-aur-history-campaigns",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.29.0",
       "promotion": "remove status or mark promoted after the full-AUR benign replay checkpoint; record the measured rate in the changelog",
       "signal": "full-AUR benign replay fire-rate < 0.30 plus positive reappearance and first-appearance/no-removal twins",
       "since": "0.27.1",
       "status": "promoted",
       "weight": 0,
-      "decided_in": "Unreleased"
+      "decided_in": "0.29.0"
     },
     "T012": {
       "changelog": "full-aur-history-campaigns",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.29.0",
       "promotion": "remove status or mark promoted after the full-AUR benign replay checkpoint; record the measured rate in the changelog",
       "signal": "full-AUR benign replay fire-rate < 0.30 plus positive trust-erosion and no-precursor/no-terminal twins",
       "since": "0.27.1",
       "status": "promoted",
       "weight": 0,
-      "decided_in": "Unreleased"
+      "decided_in": "0.29.0"
     },
     "U013": {
       "changelog": "upstream-scan-lane",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.29.0",
       "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
       "signal": "local CI shape over a fetched upstream workflow; needs a corpus rate before it can score",
       "since": "0.28.9",
       "status": "promoted",
       "weight": 0,
-      "decided_in": "Unreleased"
+      "decided_in": "0.29.0"
     },
     "U014": {
       "changelog": "upstream-scan-lane",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.29.0",
       "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
       "signal": "local CI shape over a fetched upstream workflow; needs a corpus rate before it can score",
       "since": "0.28.9",
       "status": "promoted",
       "weight": 0,
-      "decided_in": "Unreleased"
+      "decided_in": "0.29.0"
     },
     "U015": {
       "changelog": "upstream-scan-lane",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.29.0",
       "promotion": "run the weekly calibration, then set an explicit weight after the signed observations cover the corpus",
       "signal": "signed server-side manifest observations; needs a corpus rate before it can score",
       "since": "0.28.9",
       "status": "promoted",
       "weight": 0,
-      "decided_in": "Unreleased"
+      "decided_in": "0.29.0"
     }
   }
 }

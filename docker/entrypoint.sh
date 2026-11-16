@@ -8,10 +8,20 @@
 set -eu
 
 if [ "${TRUSTSIGHT_REQUIRE_SECCOMP:-}" = "1" ]; then
-    status="${TRUSTSIGHT_PROC_SELF_STATUS:-/proc/self/status}"
-    if [ ! -r "$status" ] || ! grep -Eq '^Seccomp:[[:space:]]*2$' "$status"; then
-        echo "trustsight-entrypoint: seccomp filter is not active" >&2
-        exit 2
+    # gVisor does not expose Docker's Seccomp status in /proc/self/status;
+    # its own syscall layer is the boundary.  Only skip when the gVisor guard
+    # is also selected, and leave the separate gVisor check below to enforce
+    # the runtime.
+    version="${TRUSTSIGHT_PROC_VERSION:-/proc/version}"
+    if [ "${TRUSTSIGHT_REQUIRE_GVISOR:-}" = "1" ] \
+        && [ -r "$version" ] && grep -qi 'gvisor\|runsc' "$version"; then
+        :
+    else
+        status="${TRUSTSIGHT_PROC_SELF_STATUS:-/proc/self/status}"
+        if [ ! -r "$status" ] || ! grep -Eq '^Seccomp:[[:space:]]*2$' "$status"; then
+            echo "trustsight-entrypoint: seccomp filter is not active" >&2
+            exit 2
+        fi
     fi
 fi
 

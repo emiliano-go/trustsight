@@ -314,3 +314,32 @@ def test_the_fetcher_profile_lets_glibc_fall_back_for_threads():
                 if "clone3" in rule["names"])
     assert rule["action"] == "SCMP_ACT_ERRNO"
     assert rule["errnoRet"] == 38
+
+
+def _gvisor_seccomp_entrypoint(status, version):
+    return subprocess.run(
+        ["sh", str(ROOT / "docker" / "entrypoint.sh"), "/bin/true"],
+        env={
+            "PATH": "/usr/bin:/bin",
+            "TRUSTSIGHT_REQUIRE_SECCOMP": "1",
+            "TRUSTSIGHT_REQUIRE_GVISOR": "1",
+            "TRUSTSIGHT_PROC_SELF_STATUS": str(status),
+            "TRUSTSIGHT_PROC_VERSION": str(version),
+        },
+        capture_output=True, text=True, timeout=30)
+
+
+def test_the_seccomp_guard_defers_to_gvisor(tmp_path):
+    status = tmp_path / "status"
+    status.write_text("Seccomp:\t0\n")
+    version = tmp_path / "version"
+    version.write_text("Linux version 4.4.0 (gVisor)\n")
+    assert _gvisor_seccomp_entrypoint(status, version).returncode == 0
+
+
+def test_the_seccomp_guard_still_fails_without_gvisor(tmp_path):
+    status = tmp_path / "status"
+    status.write_text("Seccomp:\t0\n")
+    version = tmp_path / "version"
+    version.write_text("Linux version 6.12.0-generic\n")
+    assert _gvisor_seccomp_entrypoint(status, version).returncode == 2

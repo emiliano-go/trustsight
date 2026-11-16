@@ -85,8 +85,15 @@ docker compose -f docker-compose.watcher.yml up -d
 
 ## gVisor
 
-gVisor works without KVM, but its Linux compatibility is not perfect. Test the
-parser and manifest worker before trusting it.
+gVisor works without KVM, but its Linux compatibility is not perfect. **The
+current parser worker is not compatible with gVisor:** it requires user,
+network and mount namespaces plus Landlock, and gVisor does not provide those
+inner sandbox primitives. The watcher can start, but parser/manifest work
+fails closed with `OS sandbox not applied`. Do not deploy this overlay for the
+full watcher until an alternate gVisor-compatible worker exists.
+
+If you only want gVisor for commands that do not use the parser, the overlay
+still starts. Otherwise use AppArmor on the host.
 
 ### Install `runsc`
 

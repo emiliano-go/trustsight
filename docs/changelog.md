@@ -29,6 +29,10 @@
   lttng-tools 2.16.0 shape: sha512 -> sha256 + `.asc` + validpgpkeys scored
   100).
 
+### Calibration
+
+- **The weekly anergy review kept the remaining uncalibrated rules report-only.** A009, A010, G015, H009, H010, H011, H012, H013, T008, T009, T010, T011, T012, U013, U014 and U015 were promoted with an explicit weight of 0 and `decided_in: Unreleased`; none had a validated true-positive twin plus a quiet benign replay in the reviewed window. C001 remains conditional because the signed `upstream_hash` corroboration still covers the corpus.
+
 ### Added
 
 - **The watcher runs the full dependency walk with the upstream lane on.**

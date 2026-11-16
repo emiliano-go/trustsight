@@ -24,10 +24,11 @@ Validate the result in the container:
 docker exec trustsight-watch /app/.venv/bin/trustsight containment status --json
 ```
 
-`seccomp_filter` must be `true`, `uid` must not be `0`, `root_readonly` must be
-`true`, and `default_route` must be `false`. The database writer is a separate
-networkless service; its socket is on `./run/trustsight-db` and it is not
-affected by the runtime overlay except for gVisor, which covers it too.
+`uid` must not be `0`, `root_readonly` must be `true`, and `default_route` must
+be `false`. `seccomp_filter` must be `true` under `runc` and AppArmor. Under
+gVisor it is `false` because gVisor does not expose Docker's seccomp status;
+the gVisor syscall layer is the boundary there. The database writer is a
+separate networkless service; its socket is on `./run/trustsight-db`.
 
 ---
 
@@ -41,17 +42,24 @@ sudo aa-status
 grep -E 'apparmor|security=' /proc/cmdline
 ```
 
-`enabled` must be `Y`. If it is `N`, enable AppArmor in the kernel command line
-(`apparmor=1 security=apparmor`), rebuild the bootloader configuration and
-reboot. The exact grubby/`/etc/default/grub` command depends on the
-distribution.
+`enabled` must be `Y`. If it is `N`, add
+`apparmor=1 security=apparmor` to the kernel command line, rebuild the
+bootloader configuration and reboot. The exact file depends on the
+bootloader: GRUB uses `/etc/default/grub`, systemd-boot uses
+`/etc/kernel/cmdline` or the UKI preset, and Limine uses
+`/etc/default/limine`. On Omarchy/Limine the drop-in directory is ignored
+when `/etc/default/limine` defines `KERNEL_CMDLINE[default]`; edit that file
+and run `sudo limine-update`.
 
 ### Load the profile
 
-From the repository root:
+Install the profile into the host policy directory so it survives a reboot,
+then load it:
 
 ```bash
-sudo apparmor_parser -r docker/apparmor/trustsight-watcher
+sudo install -Dm644 docker/apparmor/trustsight-watcher \
+  /etc/apparmor.d/trustsight-watcher
+sudo apparmor_parser -r /etc/apparmor.d/trustsight-watcher
 sudo aa-status | grep trustsight-watcher
 ```
 
@@ -68,16 +76,18 @@ The entrypoint refuses to start unless
 ### Validate the parser path
 
 ```bash
-docker exec trustsight-watch /app/.venv/bin/trustsight lint /app/PKGBUILD --json
+docker exec trustsight-watch sh -c \
+  'printf "pkgname=fixture\npkgver=1\npkgrel=1\narch=(any)\n" \
+     > /tmp/PKGBUILD && /app/.venv/bin/trustsight lint /tmp/PKGBUILD --json'
 ```
 
-Use a real fixture path. The parser needs `mount`/`unshare`; if the profile
-denies them, the worker must fail closed rather than fall back unconfined.
+The parser needs `mount`/`unshare`; if the profile denies them, the worker
+must fail closed rather than fall back unconfined.
 
 ### Rollback
 
 ```bash
-sudo apparmor_parser -R docker/apparmor/trustsight-watcher
+sudo apparmor_parser -R /etc/apparmor.d/trustsight-watcher
 docker compose -f docker-compose.watcher.yml up -d
 ```
 
@@ -97,37 +107,50 @@ still starts. Otherwise use AppArmor on the host.
 
 ### Install `runsc`
 
-Follow the official gVisor install for your distribution, then register it:
+gVisor publishes a tarball, not a standalone `runsc` download:
 
 ```bash
-sudo runsc install
-sudo systemctl restart docker
+cd /tmp
+arch="$(uname -m)"
+base="https://storage.googleapis.com/gvisor/releases/release/latest/${arch}"
+curl -fsSLO "${base}/gvisor.tar.zstd"
+curl -fsSLO "${base}/gvisor.tar.zstd.sha512"
+sha512sum -c gvisor.tar.zstd.sha512
+sudo tar --zstd -xf gvisor.tar.zstd -C /usr/local/bin
+```
+
+Then register it:
+
+```bash
+sudo /usr/local/bin/runsc install
+sudo systemctl reload docker
 docker info --format '{{json .Runtimes}}'
 ```
 
 `runsc` must appear in the runtime list.
 
-### Start the watcher
+### gVisor overlay status
 
-```bash
-docker compose -f docker-compose.watcher.yml \
-  -f docker-compose.watcher.gvisor.yml up -d
-```
-
-Every service in that overlay sets `TRUSTSIGHT_REQUIRE_GVISOR=1`; the
-entrypoint refuses to start unless `/proc/version` identifies gVisor/runsc.
+Do not start the full watcher with the gVisor overlay. The services start, but
+the watcher’s parser will refuse to process a recipe. Use the overlay only
+for commands that do not need the parser until an alternate
+gVisor-compatible worker exists. The entrypoint still refuses to start unless
+`/proc/version` identifies gVisor/runsc.
 
 ### Validate
 
 ```bash
 docker run --rm --network none --runtime=runsc \
-  -v "$PWD:/work:ro" \
+  --read-only --cap-drop ALL --user 1000:1000 \
+  --tmpfs /tmp:size=64m,noexec,nosuid,nodev \
+  -e TRUSTSIGHT_REQUIRE_GVISOR=1 \
   ghcr.io/emiliano-go/trustsight:latest \
-  lint /work/PKGBUILD --json
+  containment status --json
 ```
 
-Also run the manifest-worker smoke from `docker.yml`. If mount/unshare or a
-needed syscall is unimplemented, use the base `runc` profile instead.
+The parser/manifest smoke will fail with `OS sandbox not applied` until an
+alternate worker exists. Use the base `runc` profile or AppArmor for the full
+watcher.
 
 ### Rollback
 
@@ -148,19 +171,25 @@ cheap VPS without KVM.
 ls -l /dev/kvm
 ```
 
-### Install and register
+### Docker support
 
-Install the Kata Containers packages for your distribution, configure Docker
-with a `kata-runtime` entry, and restart Docker:
+Kata 3.x ships a containerd shim, not a Docker OCI runtime. Docker invokes
+the runtime with `create`, which Kata 3's `kata-runtime` does not implement;
+it fails with `Invalid command "create"`. Do not use the Kata overlay with a
+Kata 3 package.
+
+The overlay is usable only with a Kata 2.x runtime that still implements the
+Docker OCI-v1 commands. If you have one, register it and restart Docker:
 
 ```bash
 sudo systemctl restart docker
 docker info --format '{{json .Runtimes}}'
 ```
 
-`kata-runtime` must appear.
+`kata-runtime` must appear. For Kata 3, use containerd/CRI instead of Docker
+Compose.
 
-### Start the watcher
+### Start the watcher (Kata 2 OCI runtime only)
 
 ```bash
 docker compose -f docker-compose.watcher.yml \
@@ -172,8 +201,9 @@ on `runc`.
 
 ### Validate
 
-Run the same parser and manifest-worker smokes as the gVisor section, with
-`--runtime=kata-runtime`. Watch for slower start-up and memory pressure.
+Run the parser and manifest-worker smokes with `--runtime=kata-runtime`. Watch
+for slower start-up and memory pressure. The gVisor section is not a template
+for this step; its parser path is intentionally unsupported.
 
 ### Rollback
 

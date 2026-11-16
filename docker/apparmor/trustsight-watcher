@@ -24,6 +24,7 @@ profile trustsight-watcher flags=(attach_disconnected,mediate_deleted) {
   mount,
   umount,
   userns,
+  userns create,
 
   /app/** rix,
   /usr/** rix,
@@ -43,6 +44,9 @@ profile trustsight-watcher flags=(attach_disconnected,mediate_deleted) {
   /config/** rw,
   /data/** rwk,
   /proc/** r,
+  /proc/self/uid_map rw,
+  /proc/self/gid_map rw,
+  /proc/self/setgroups rw,
   /proc/*/uid_map w,
   /proc/*/gid_map w,
   /proc/*/setgroups w,

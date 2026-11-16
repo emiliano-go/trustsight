@@ -105,15 +105,20 @@ def test_a_decided_weight_overrides_severity(monkeypatch):
     assert row.weight == 40
 
 
-def test_anergic_temporal_rules_stay_weight_zero():
+def test_reviewed_temporal_rule_stays_weight_zero():
+    row = anergy.entry("T008")
+    assert row is not None
+    assert row.status == anergy.PROMOTED
+    assert row.weight == 0
+    assert row.decided_in
     finding = {
         "rule_id": "T008", "name": "Delayed Payload Adoption",
         "severity": "INFO", "category": "temporal", "match": "probe",
     }
     _, breakdown, _ = calculate_score([finding], {}, NoveltyContext())
-    row = next(entry for entry in breakdown if entry.rule_id == "T008")
-    assert row.weight == 0
-    assert row.evidence.get("anergic") is True
+    score_row = next(entry for entry in breakdown if entry.rule_id == "T008")
+    assert score_row.weight == 0
+    assert score_row.evidence.get("anergic") is None
 
 
 def test_the_shipped_ledger_marks_c001_conditional():

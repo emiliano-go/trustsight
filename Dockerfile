@@ -39,6 +39,11 @@ RUN uv sync --locked --no-install-project --python /usr/local/bin/python3
 COPY . .
 RUN uv sync --locked --python /usr/local/bin/python3
 
+# The base image ships stdlib sources without bytecode. Python imports
+# encodings before it applies -B, so under an AppArmor profile that denies
+# writes to the stdlib path every worker start logs mknod denials.
+RUN PYTHONDONTWRITEBYTECODE=0 /usr/local/bin/python3 -m compileall -q /usr/local/lib/python3.12
+
 # Source files created with a restrictive umask can arrive as 0600; the
 # image runs as the non-root `ts` user, so normalise readability here.
 RUN chmod -R a+rX /app

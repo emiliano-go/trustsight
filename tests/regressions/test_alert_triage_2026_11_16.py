@@ -164,4 +164,5 @@ def test_c033_a_rewrite_that_replaces_most_prose_one_for_one_stands_down():
 
 def test_c033_still_fires_when_the_prose_actually_shrinks():
     old, new = _commented(10, "old"), _HEAD
-    assert "C033" in _ids(_diff(old, new), current_text=new)
+    diff = _diff(old, new) + "\n" + _new_file("# filler\n" * 20, "README.md")
+    assert "C033" in _ids(diff, current_text=new)

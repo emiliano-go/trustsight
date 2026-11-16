@@ -232,7 +232,20 @@ def comment_deletion_findings(diff_doc, add, config=None) -> None:
     # lines and added 13, so every deletion was matched.  Measure what the
     # reviewer can still read - the post-image half of the diff - and stand
     # down unless at least `min_ratio` of the prose is actually gone.
-    after = [line for line in diff_doc.post_lines() if _is_comment(line)]
+    deleted_files = {
+        getattr(line, "file", "") for line in diff_lines
+        if getattr(line, "side", "") == "remove"
+        and _is_comment(getattr(line, "content", ""))
+    }
+    # Count only the files that lost comments.  A package diff also carries
+    # .SRCINFO and companion files; comments added elsewhere must not mask a
+    # gutted PKGBUILD.
+    after = [
+        line.content for line in diff_doc.lines
+        if getattr(line, "side", "") in ("add", "context")
+        and getattr(line, "file", "") in deleted_files
+        and _is_comment(line.content)
+    ]
     if len(after) > len(before) * (1.0 - min_ratio):
         return
     deleted = [

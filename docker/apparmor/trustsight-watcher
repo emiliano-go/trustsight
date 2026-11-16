@@ -16,6 +16,9 @@ profile trustsight-watcher flags=(attach_disconnected,mediate_deleted) {
   network inet dgram,
   network inet6 stream,
   network inet6 dgram,
+  network netlink raw,
+
+  signal,
 
   # Parser workers: private namespaces plus a proc/tmpfs mount.
   mount,
@@ -28,6 +31,9 @@ profile trustsight-watcher flags=(attach_disconnected,mediate_deleted) {
   /lib64/** rix,
   /etc/ssl/** r,
   /etc/resolv.conf r,
+  /etc/host.conf r,
+  /etc/hosts r,
+  /etc/gai.conf r,
   /etc/nsswitch.conf r,
   /etc/passwd r,
   /etc/group r,
@@ -38,6 +44,7 @@ profile trustsight-watcher flags=(attach_disconnected,mediate_deleted) {
   /data/** rwk,
   /proc/** r,
   /sys/devices/system/cpu/** r,
+  /sys/fs/cgroup/** r,
   /dev/urandom r,
   /dev/null rw,
 }

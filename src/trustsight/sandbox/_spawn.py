@@ -64,7 +64,10 @@ def launch_args(module: str, role: str | None = None,
         f"import {module} as _worker;"
         "raise SystemExit(_worker.main())"
     )
-    args = [sys.executable, "-I", "-c", bootstrap]
+    # -B keeps a worker from writing .pyc files into a read-only or
+    # AppArmor-protected stdlib path. -I already ignores PYTHON* variables,
+    # so the flag has to be on the command line rather than in the env.
+    args = [sys.executable, "-I", "-B", "-c", bootstrap]
     if role is not None:
         args.append(role)
     args.extend(str(item) for item in extra_argv)

@@ -80,14 +80,22 @@ jobs:
       # watcher seccomp profile and Docker's AppArmor profile, not unconfined.
       - uses: ./.github/actions/enable-userns
 
+      # docker-default denies the mount and user-namespace operations the
+      # parser workers need. Load the profile the deployment uses instead.
+      - name: Load the watcher AppArmor profile
+        run: |
+          sudo install -Dm644 docker/apparmor/trustsight-watcher \
+            /etc/apparmor.d/trustsight-watcher
+          sudo apparmor_parser -r /etc/apparmor.d/trustsight-watcher
+
       # The image is exercised before it can be pushed: `--version` proves
       # the interpreter and the entrypoint, `lint-rules` exercises the rule
       # corpus without touching the network.
       - name: Build the image
         run: |
           docker build -t "ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}" .
-          docker run --rm --security-opt seccomp="$PWD/docker/seccomp-watcher.json" --security-opt apparmor=docker-default "ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}" --version
-          docker run --rm --security-opt seccomp="$PWD/docker/seccomp-watcher.json" --security-opt apparmor=docker-default "ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}" lint-rules
+          docker run --rm --security-opt seccomp="$PWD/docker/seccomp-watcher.json" --security-opt apparmor=trustsight-watcher "ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}" --version
+          docker run --rm --security-opt seccomp="$PWD/docker/seccomp-watcher.json" --security-opt apparmor=trustsight-watcher "ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}" lint-rules
 
       # The parser/tokenizer sandbox is exercised under the same seccomp and
       # read-only root the watcher uses, not only the rule-corpus commands.
@@ -111,7 +119,7 @@ jobs:
             --user 1000:1000 --cap-drop=all \
             --security-opt=no-new-privileges \
             --security-opt=seccomp="$PWD/docker/seccomp-watcher.json" \
-            --security-opt=apparmor=docker-default \
+            --security-opt=apparmor=trustsight-watcher \
             -v "$RUNNER_TEMP:/work:ro" \
             "$image" lint /work/PKGBUILD --json >"$RUNNER_TEMP/lint.json"
           grep -q 'lint-fixture' "$RUNNER_TEMP/lint.json"
@@ -121,7 +129,7 @@ jobs:
             --user 1000:1000 --cap-drop=all \
             --security-opt=no-new-privileges \
             --security-opt=seccomp="$PWD/docker/seccomp-watcher.json" \
-            --security-opt=apparmor=docker-default \
+            --security-opt=apparmor=trustsight-watcher \
             -e TRUSTSIGHT_CONFIG_DIR=/tmp \
             -e PYTHONPATH=/app/src \
             --entrypoint /app/.venv/bin/python \
@@ -249,7 +257,7 @@ jobs:
               --cap-drop=all \
               --security-opt=no-new-privileges \
               --security-opt=seccomp="${PWD}/docker/seccomp-watcher.json" \
-              --security-opt=apparmor=docker-default \
+              --security-opt=apparmor=trustsight-watcher \
               --pids-limit=512 --memory=2g --cpus=2 \
               -e TRUSTSIGHT_OFFLINE=1 \
               -e TRUSTSIGHT_NO_UPDATE_CHECK=1 \

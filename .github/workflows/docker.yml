@@ -94,8 +94,8 @@ jobs:
       - name: Build the image
         run: |
           docker build -t "ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}" .
-          docker run --rm --security-opt seccomp="$PWD/docker/seccomp-watcher.json" --security-opt apparmor=trustsight-watcher "ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}" --version
-          docker run --rm --security-opt seccomp="$PWD/docker/seccomp-watcher.json" --security-opt apparmor=trustsight-watcher "ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}" lint-rules
+          docker run --rm -e HOME=/tmp --security-opt seccomp="$PWD/docker/seccomp-watcher.json" --security-opt apparmor=trustsight-watcher "ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}" --version
+          docker run --rm -e HOME=/tmp --security-opt seccomp="$PWD/docker/seccomp-watcher.json" --security-opt apparmor=trustsight-watcher "ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}" lint-rules
 
       # The parser/tokenizer sandbox is exercised under the same seccomp and
       # read-only root the watcher uses, not only the rule-corpus commands.
@@ -117,6 +117,7 @@ jobs:
             --tmpfs /home/ts/.cache:size=64m,noexec,nosuid,nodev \
             --tmpfs /home/ts/.config:size=8m \
             --user 1000:1000 --cap-drop=all \
+            -e HOME=/tmp \
             --security-opt=no-new-privileges \
             --security-opt=seccomp="$PWD/docker/seccomp-watcher.json" \
             --security-opt=apparmor=trustsight-watcher \
@@ -127,6 +128,7 @@ jobs:
             --tmpfs /tmp:size=64m,noexec,nosuid,nodev \
             --tmpfs /home/ts/.cache:size=64m,noexec,nosuid,nodev \
             --user 1000:1000 --cap-drop=all \
+            -e HOME=/tmp \
             --security-opt=no-new-privileges \
             --security-opt=seccomp="$PWD/docker/seccomp-watcher.json" \
             --security-opt=apparmor=trustsight-watcher \

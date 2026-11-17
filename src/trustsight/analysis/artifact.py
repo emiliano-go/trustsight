@@ -16,6 +16,8 @@ The static core never executes package code.  Nothing here runs anything.
 
 from __future__ import annotations
 
+from ..tokenizer import split_lines
+
 __all__ = ["inspect_manifest", "unsafe_runpath"]
 
 #: Paths whose executable bit is ordinary; an executable outside them is A005.
@@ -80,7 +82,7 @@ def unsafe_runpath(value) -> bool:
 def _hook_is_broad(content: str) -> bool:
     """A libalpm hook whose trigger fires on every transaction and runs a command."""
     broad = has_exec = False
-    for raw in content.splitlines():
+    for raw in split_lines(content):
         line = raw.strip()[:MAX_CONTENT_LINE_BYTES]
         if not line or line.startswith(("#", ";")):
             continue

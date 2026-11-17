@@ -48,6 +48,9 @@ PINNED_LOOPS = {
     # Shell-lines the added PKGBUILD text to blank a `*sums` array; the
     # input is a text fragment, not a diff walker.
     "analysis/entropy.py": 1,
+    # Shipped hook/udev/install payload text from the L9 manifest, not a
+    # diff walk.
+    "analysis/artifact.py": 1,
 }
 
 

@@ -121,8 +121,8 @@ jobs:
             --security-opt=no-new-privileges \
             --security-opt=seccomp="$PWD/docker/seccomp-watcher.json" \
             --security-opt=apparmor=trustsight-watcher \
-            -v "$RUNNER_TEMP:/work:ro" \
-            "$image" lint /work/PKGBUILD --json >"$RUNNER_TEMP/lint.json"
+            -v "$RUNNER_TEMP:/app/work:ro" \
+            "$image" lint /app/work/PKGBUILD --json >"$RUNNER_TEMP/lint.json"
           grep -q 'lint-fixture' "$RUNNER_TEMP/lint.json"
           docker run --rm --network none --read-only \
             --tmpfs /tmp:size=64m,noexec,nosuid,nodev \

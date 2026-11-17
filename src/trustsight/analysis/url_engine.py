@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from ..differ import extract_source_array_urls
+from ..deps import _strip_comment
 from ..rules import find_line_in_diff
 from ..tokenizer import resolve_added_lines
 from .base import _code_rule_enabled
@@ -120,7 +121,10 @@ def emit_version_in_url(ctx: URLContext, add: Callable) -> None:
         if not match:
             continue
         name, value = match.group(1), match.group(2).strip()
-        value = value.strip("\"'")
+        # `pkgver=4.16.1 # renovate: datasource=...` is shell: the comment
+        # is not part of the value.  Reading it as one made H031 report an
+        # injection on a plain version string (azure-functions-core-tools).
+        value = _strip_comment(value).strip().strip("\"'")
         if not _SAFE_VERSION_RE.match(value):
             bad_values[name] = value
 

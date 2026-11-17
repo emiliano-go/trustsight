@@ -95,6 +95,28 @@ def _strip_outer_quotes(value: str) -> str:
         return value[1:-1]
     return value
 
+
+def _strip_scalar_comment(value: str) -> str:
+    """Drop an unquoted `` # ...`` tail from an assignment's value.
+
+    ``pkgver=4.16.1 # renovate: datasource=...`` assigns the version: the
+    note is shell syntax, not data.  Keeping it in the table made H031 read
+    a plain version as an injection and interpolated the note into every
+    URL built from ``$pkgver``.  A ``#`` inside quotes is data, and a
+    ``#commit=`` fragment is glued to the preceding word, so neither is cut.
+    """
+    quote: str | None = None
+    for index, char in enumerate(value):
+        if quote:
+            if char == quote:
+                quote = None
+        elif char in "'\"":
+            quote = char
+        elif char == "#" and index and value[index - 1] in " \t":
+            return value[:index].rstrip()
+    return value
+
+
 def _split_with_lines(text: str) -> list[tuple[str, int]]:
     """``shlex.split`` tokens paired with their 1-based source line.
 
@@ -511,6 +533,9 @@ def _variable_table_with_spans(
             # Recording the whole tail made the value reference itself and
             # substitution re-expanded it until the size bound tripped.
             value = _split_top_level(value)[0].strip()
+            # Before the quotes come off: a comment can only be told from
+            # quoted data while the quoting is still visible.
+            value = _strip_scalar_comment(value)
             value = _strip_outer_quotes(value)
             # A command substitution has no static value, so it cannot be
             # folded into the table.  The name's value is unknown from this

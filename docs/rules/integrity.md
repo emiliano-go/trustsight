@@ -115,6 +115,11 @@ The rules that make up this category are listed below, each with the series that
 - **Category:** `integrity`
 
 - **Condition:** Fires when an existing SHA-256 checksum array is emptied.
+- **Stand-down:** A per-architecture recipe declares `source_<arch>` beside
+  `sha256sums_<arch>` and leaves the generic pair empty; makepkg never reads
+  the generic arrays there. The rule reads the scoped arrays first and stays
+  silent only when they cover every scoped source with a real digest (a
+  `SKIP` scoped entry still leaves H001/H002 a finding).
 - **Note:** Hard-coded in `src/trustsight/analysis/structural/_engine.py`. Cannot be disabled through `rules.toml`.
 
 ### H005: validpgpkeys Added {#h005}

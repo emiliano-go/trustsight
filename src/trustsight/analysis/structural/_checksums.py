@@ -15,7 +15,7 @@ from ...rules import find_line_in_diff
 from ...diffdoc import parse_diff_lines
 from ...tokenizer import split_lines
 
-__all__ = ['_CHECKSUM_ADDED_RE', '_CHECKSUM_ARRAY_NAMES', '_CHECKSUM_EMPTIED_RE', '_CHECKSUM_REMOVED_LINE_RE', '_CHECKSUM_SKIP_RE', '_CHECKSUM_STRENGTH', '_FETCH_IN_PACKAGE_RE', '_HARDENING_OPTIONS', '_INTERPRETER_FETCH_RE', '_SCHEME_MARKERS', '_family_values', '_first_insertion_index', '_ip_literal_hosts', '_is_checksum_array', '_is_subsequence', '_line_has_scheme', '_package_fetch_client', '_removed_declarations', '_require_content_change', '_skip_positions', '_url_host', '_userinfo_urls', 'addendum4_findings', 'array_order_changes', 'isolated_checksum_insertion', 'only_local_checksums_changed', 'recipe_checksum_parity_finding', 'substantive_change_outside_checksums']
+__all__ = ['_CHECKSUM_ADDED_RE', '_CHECKSUM_ARRAY_NAMES', '_CHECKSUM_EMPTIED_RE', '_CHECKSUM_REMOVED_LINE_RE', '_CHECKSUM_SKIP_RE', '_CHECKSUM_STRENGTH', '_FETCH_IN_PACKAGE_RE', '_HARDENING_OPTIONS', '_INTERPRETER_FETCH_RE', '_SCHEME_MARKERS', '_family_values', '_first_insertion_index', '_ip_literal_hosts', '_is_checksum_array', '_is_subsequence', '_line_has_scheme', '_package_fetch_client', '_removed_declarations', '_require_content_change', '_skip_positions', '_url_host', '_userinfo_urls', 'addendum4_findings', 'array_order_changes', 'isolated_checksum_insertion', 'only_local_checksums_changed', 'per_arch_checksums_cover_sources', 'recipe_checksum_parity_finding', 'substantive_change_outside_checksums']
 
 _CHECKSUM_SKIP_RE = re.compile(
     r"sha256sums\s*=\s*\(?\s*[\'\"]?(?:SKIP|NONE)"
@@ -189,6 +189,40 @@ _CHECKSUM_STRENGTH = ("b2sums", "sha512sums", "sha256sums", "sha1sums",
 
 _HARDENING_OPTIONS = frozenset(
     {"!strip", "!debug", "!lto", "!fortify", "!debugsplit"})
+
+
+def per_arch_checksums_cover_sources(arrays) -> bool:
+    """True when arch-scoped checksum arrays back every arch-scoped source.
+
+    ``source=()``/``sha256sums=()`` beside ``source_x86_64``/
+    ``sha256sums_x86_64`` is the documented per-architecture form, not an
+    emptied checksum list: makepkg pairs each ``source_<arch>`` with the
+    checksum array that carries the same suffix.  H002 owns "the source is
+    unbacked", so it must read the scoped arrays before calling the empty
+    generic ones emptied (openviking-bin shipped exactly this shape).
+    """
+    if getattr(arrays, "get", None) is None:
+        return False
+    arch_sources = {
+        key: (arrays.get(key) or ())
+        for key in arrays
+        if key.startswith("source_") and key != "source_"
+    }
+    if not arch_sources or arrays.get("source"):
+        return False
+    for key, sources in arch_sources.items():
+        suffix = key[len("source_"):]
+        sums = next(
+            (arrays.get(base + "_" + suffix) for base in _CHECKSUM_STRENGTH
+             if arrays.get(base + "_" + suffix)),
+            (),
+        )
+        if not sums or len(sums) != len(sources):
+            return False
+        if any(str(value).strip().upper() in ("SKIP", "NONE") for value in sums):
+            return False
+    return True
+
 
 def _family_values(arrays, base: str) -> tuple[str, ...]:
     """Every ``base``/``base_<arch>`` array's entries, concatenated."""

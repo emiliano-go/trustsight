@@ -693,6 +693,19 @@ domains = [
     "repo.yandex.ru",
     "nebula.gg",
     "downloads.sejda-cdn.com",
+    # Vendor-owned download hosts that were classified `unknown`, each
+    # charging C005/SOURCE_BUCKET on every routine release:
+    # the Orthanc project's own download server (UCLouvain), OmniGet's
+    # project site, SpigotMC's Jenkins (BungeeCord's official build), and
+    # Qoder's Beijing OSS bucket (the sibling of the qoder-ide host above).
+    "orthanc.uclouvain.be",
+    "getomniget.com",
+    "hub.spigotmc.org",
+    "qoder-app.oss-cn-beijing.aliyuncs.com",
+    # Package-hosting registry/CDN: like pypi.org and registry.npmjs.org it
+    # serves user-published artifacts, here the vendor's own Cloudsmith
+    # channel (dl.cloudsmith.io/public/saga-soft for novelwriter).
+    "dl.cloudsmith.io",
     # Mozilla's add-on distribution channel: a Firefox/LibreWolf extension
     # package's `.xpi` is published there by the extension's own author,
     # so addons.mozilla.org is the upstream, not the divergent prebuilt

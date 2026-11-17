@@ -55,7 +55,8 @@ RUN chmod 755 /usr/local/bin/trustsight-entrypoint
 # user a real one with the XDG directories it creates at runtime.
 RUN useradd --create-home --shell /usr/sbin/nologin ts \
     && mkdir -p /home/ts/.local/share/trustsight /home/ts/.config/trustsight \
-    && chown -R ts:ts /home/ts
+    && mkdir -p /data /var/lib/trustsight /var/lib/trustsight/signer \
+    && chown -R ts:ts /home/ts /data /var/lib/trustsight
 
 ENV HOME=/home/ts
 USER ts

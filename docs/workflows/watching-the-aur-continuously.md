@@ -342,6 +342,7 @@ neither. Create the shared socket directory before starting the watcher:
 
 ```bash
 mkdir -p run/trustsight run/trustsight-token
+sudo chown -R 1000:1000 run/trustsight run/trustsight-token
 ```
 
 The watcher, fetcher and signer have no default route: they sit on

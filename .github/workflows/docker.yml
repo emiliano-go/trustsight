@@ -191,6 +191,7 @@ jobs:
           export TRUSTSIGHT_IMAGE="ghcr.io/${GITHUB_REPOSITORY}:${{ steps.meta.outputs.version }}"
           export TRUSTSIGHT_PROXY_TOKEN="compose-ci"
           mkdir -p run/trustsight run/trustsight-token run/trustsight-db
+          sudo chown -R 1000:1000 run/trustsight run/trustsight-token run/trustsight-db
           cleanup() {
             docker compose -f docker-compose.watcher.yml down -v >/dev/null 2>&1 || true
           }

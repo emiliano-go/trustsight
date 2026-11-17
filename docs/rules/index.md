@@ -92,7 +92,7 @@ shipped indicator mechanism is H056, filed under [Indicators](indicator.md).
 
 Two further families are reported but never weighted: declared-practice
 findings P001-P009 (P004 is skipped) and unverifiable findings W001-W014. The
-optional L9 build lane adds artifact rules A001-A010, reported outside the
+optional L9 build lane adds artifact rules A001-A015, reported outside the
 heuristic when enabled.
 
 ## How rules contribute

@@ -215,7 +215,7 @@ for component in document["components"]:
 
 ### `verify_build(package, *, diff_text="", manifest=None, declared=None, static_clean=None) -> dict`
 
-The optional **L9 build lane**, off by default (`[verify] enabled = false`). With the lane disabled or the container unavailable it returns `{"status": "l9_unavailable", ...}` - a weight-0 boundary that never reads as clean or malicious. Given a `manifest` it inspects the built artifact (A001-A008) without executing anything (the build that produced the manifest runs outside the static core) and returns `{"status": "l9_analyzed", "findings": [...]}`. Pass `static_clean` (the L1-L8 outcome) to set `l9_divergence: true` when the two disagree; both profiles render and L9 never edits the static verdict. See [Artifact](../rules/artifact.md).
+The optional **L9 build lane**, off by default (`[verify] enabled = false`). With the lane disabled or the container unavailable it returns `{"status": "l9_unavailable", ...}` - a weight-0 boundary that never reads as clean or malicious. Given a `manifest` it inspects the built artifact (A001-A015) without executing anything (the build that produced the manifest runs outside the static core) and returns `{"status": "l9_analyzed", "findings": [...]}`. Pass `static_clean` (the L1-L8 outcome) to set `l9_divergence: true` when the two disagree; both profiles render and L9 never edits the static verdict. See [Artifact](../rules/artifact.md).
 
 ```python
 result = ts.verify_build(

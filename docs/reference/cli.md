@@ -1154,7 +1154,7 @@ trustsight verify-build <package> [--manifest PATH] [--json]
 | Argument | Required | Description |
 |----------|----------|-------------|
 | `package` | Yes | Package name. |
-| `--manifest PATH` | No | JSON array of built-file records (`path`, `mode`, `setuid`, `setgid`, `unit`, `links`, `caps`, `bpf`, `world_writable`) produced by an external build. A record may carry an optional `elf` object (`needed`, `rpath`, `runpath`, `packed`) so A003/A014/A015 can use real ELF metadata; without it those rules fall back to the record's declared `links`. Without it the lane is unavailable. |
+| `--manifest PATH` | No | JSON array of built-file records (`path`, `mode`, `setuid`, `setgid`, `unit`, `links`, `caps`, `bpf`, `world_writable`) produced by an external build. A record may carry an optional `elf` object (`needed`, `rpath`, `runpath`, `packed`) so A003/A014/A015 can use real ELF metadata; without it those rules fall back to the record's declared `links`. A `.hook`, `.rules` or `.install` record may carry bounded `content` so A011-A013 can inspect what the shipped file runs. Without it the lane is unavailable. |
 | `--json` | No | Emit the result as JSON. |
 
 It reviews the diff (L1-L8) first, then offers the L9 lane. When enabled and

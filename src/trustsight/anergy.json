@@ -20,6 +20,30 @@
       "weight": 0,
       "decided_in": "0.29.0"
     },
+    "A011": {
+      "changelog": "upstream-scan-lane",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
+      "signal": "shipped hook/udev/install content in the L9 manifest; needs a corpus rate before it can score",
+      "since": "0.28.9",
+      "status": "anergic"
+    },
+    "A012": {
+      "changelog": "upstream-scan-lane",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
+      "signal": "shipped hook/udev/install content in the L9 manifest; needs a corpus rate before it can score",
+      "since": "0.28.9",
+      "status": "anergic"
+    },
+    "A013": {
+      "changelog": "upstream-scan-lane",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
+      "signal": "shipped hook/udev/install content in the L9 manifest; needs a corpus rate before it can score",
+      "since": "0.28.9",
+      "status": "anergic"
+    },
     "A014": {
       "changelog": "upstream-scan-lane",
       "promoted_in": "Unreleased",

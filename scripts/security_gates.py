@@ -160,6 +160,7 @@ def run_gates() -> list[Gate]:
     gates.append(gate_every_report_key_is_documented())
     gates.append(gate_every_rule_names_its_cwe_and_remediation())
     gates.append(gate_elf_parsing_is_read_only_and_bounded())
+    gates.append(gate_shipped_hook_content_is_bounded_and_inert())
     gates.append(gate_transcendence_table_is_wellformed())
     gates.append(gate_every_rule_carries_exactly_one_layer())
     gates.append(gate_boundaries_forbid_clean_exactly_when_gaps())
@@ -259,6 +260,7 @@ from scripts.gates._input_bounds import (
     gate_network_reads_are_bounded,
     gate_provider_tokens_are_redacted,
     gate_elf_parsing_is_read_only_and_bounded,
+    gate_shipped_hook_content_is_bounded_and_inert,
     gate_a_declared_upstream_target_is_allowlisted_and_pinned,
     gate_an_archive_is_parsed_only_after_its_checksum_verifies,
     gate_upstream_redirects_stay_on_the_forge_cdn_allowlist,

@@ -22,6 +22,7 @@ python scripts/security_gates.py
 | `provider tokens are redacted and never logged` | A18 | `trustsight.credentials`, `tests/test_credentials.py` |
 | `every rule names its CWE and remediation` | B10 | `trustsight.rule_metadata`, `tests/test_rule_metadata.py` |
 | `ELF parsing is read-only and bounded` | A1, A4, A17 | `trustsight.analysis.elf`, `tests/test_elf.py` |
+| `shipped hook content is bounded and inert` | A1, A4, A5 | `trustsight.analysis.artifact`, `tests/test_artifact.py` |
 | `declared source URLs are never fetched` | A2 | no raw transport in `src/trustsight/analysis/`, and every fetch helper it imports is name-keyed |
 | `every JSON report carries the fingerprint` | B1 | `schema.fact_to_dict`, `reporting.report_body` |
 | `suppression is never hidden by a flag` | B5 | `suppressed_rules` outside any verbosity branch in `cli/review.py` |

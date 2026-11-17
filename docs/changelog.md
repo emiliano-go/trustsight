@@ -196,6 +196,13 @@
   (A015) are reported at weight 0 (anergic). The parser never invokes `ldd`,
   `objdump` or `readelf`, and hostile input is bounded.
 
+- **Shipped hook/udev/install content is inspected in L9 (A011-A013).** An
+  artifact manifest may carry bounded `content` for `.hook`, `.rules` and
+  `.install` files; a broad hook trigger (A011), a fetch/user-path program
+  (A012) and a udev `RUN+=`/`PROGRAM==` (A013) are reported at weight 0
+  (anergic). The text is parsed with bounded substring checks; nothing is
+  executed.
+
 ## [0.28.8] - 2026-11-13
 
 ### Fixed

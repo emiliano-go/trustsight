@@ -19,6 +19,9 @@ exactly one category page; this catalog only points at it.
 | [A008](artifact.md#a008) | eBPF Artifact In Package | Artifact | HIGH | [Artifact](artifact.md) |
 | [A009](artifact.md#a009) | Executable Binary In Source Archive | Artifact | HIGH | [Artifact](artifact.md) |
 | [A010](artifact.md#a010) | Setuid File In Source Archive | Artifact | HIGH | [Artifact](artifact.md) |
+| [A011](artifact.md#a011) | Hook Runs On Every Transaction | Artifact | MEDIUM | [Artifact](artifact.md) |
+| [A012](artifact.md#a012) | Shipped Hook Or Udev Fetches Or Runs A User Path | Artifact | HIGH | [Artifact](artifact.md) |
+| [A013](artifact.md#a013) | Udev Rule Runs A Program | Artifact | MEDIUM | [Artifact](artifact.md) |
 | [A014](artifact.md#a014) | Unsafe ELF Runpath | Artifact | HIGH | [Artifact](artifact.md) |
 | [A015](artifact.md#a015) | Packed Or Encrypted ELF Section | Artifact | MEDIUM | [Artifact](artifact.md) |
 | [C001](integrity.md#c001) | Checksum Changed Without Source Change With Stable Version | Integrity-change | HIGH | [Integrity and Verification](integrity.md) |

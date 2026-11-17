@@ -175,6 +175,18 @@ See [A014: Unsafe ELF Runpath](artifact.md#a014).
 
 See [A015: Packed Or Encrypted ELF Section](artifact.md#a015).
 
+### A011 {#a011}
+
+See [A011: Hook Runs On Every Transaction](artifact.md#a011).
+
+### A012 {#a012}
+
+See [A012: Shipped Hook Or Udev Fetches Or Runs A User Path](artifact.md#a012).
+
+### A013 {#a013}
+
+See [A013: Udev Rule Runs A Program](artifact.md#a013).
+
 ### C027 {#c027}
 
 See [C027: Declared Install Script Is Absent](../../rules/integrity.md#c027).

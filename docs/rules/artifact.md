@@ -61,6 +61,9 @@ The rules that make up this category are listed below, each with the series that
 | [A008](#a008) | eBPF Artifact In Package | HIGH |
 | [A009](#a009) | Executable Binary In Source Archive | HIGH |
 | [A010](#a010) | Setuid File In Source Archive | HIGH |
+| [A011](#a011) | Hook Runs On Every Transaction | MEDIUM |
+| [A012](#a012) | Shipped Hook Or Udev Fetches Or Runs A User Path | HIGH |
+| [A013](#a013) | Udev Rule Runs A Program | MEDIUM |
 | [A014](#a014) | Unsafe ELF Runpath | HIGH |
 | [A015](#a015) | Packed Or Encrypted ELF Section | MEDIUM |
 <!-- /generated: page-index -->
@@ -186,6 +189,44 @@ not automatically unsafe. Weight 0 (anergic) until calibrated.
 
 The section table is read with the bounded ELF parser; nothing is executed or
 unpacked. Weight 0 (anergic) until calibrated.
+
+### A011: Hook Runs On Every Transaction {#a011}
+
+- **Target:** shipped libalpm hook / udev rule / install script (L9)
+- **Severity:** MEDIUM (weight 0)
+- **Category:** `artifact`
+
+- **Condition:** A shipped libalpm `.hook` has a broad trigger
+  (`Operation = *`) and an `Exec` command, so it runs as root on every pacman
+  transaction.
+
+The hook text is read from the artifact manifest; nothing is executed.
+Weight 0 (anergic) until calibrated.
+
+### A012: Shipped Hook Or Udev Fetches Or Runs A User Path {#a012}
+
+- **Target:** shipped libalpm hook / udev rule / install script (L9)
+- **Severity:** HIGH (weight 0)
+- **Category:** `artifact`
+
+- **Condition:** A shipped `.hook`, udev `.rules` file or `.install` script
+  fetches (`curl`/`wget`/`aria2c`), runs `sh -c`, or uses a user/temp path
+  (`/tmp`, `/dev/shm`, `$HOME`, `/home`, `/root`).
+
+These files run as root outside the package manager's checksum. The text is
+read only; nothing is executed. Weight 0 (anergic) until calibrated.
+
+### A013: Udev Rule Runs A Program {#a013}
+
+- **Target:** shipped libalpm hook / udev rule / install script (L9)
+- **Severity:** MEDIUM (weight 0)
+- **Category:** `artifact`
+
+- **Condition:** A shipped udev `.rules` file runs a program
+  (`RUN+=`, `PROGRAM==`, `IMPORT{program}`).
+
+A udev rule can launch a command as root whenever a device appears. Read-only
+inspection; weight 0 (anergic) until calibrated.
 ## Interpretation
 
 - The finding describes the installed file or permission and why it is

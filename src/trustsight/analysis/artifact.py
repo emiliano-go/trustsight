@@ -26,6 +26,11 @@ _UNIT_SUFFIXES = (".service", ".timer", ".socket", ".mount", ".target", ".tmpfil
 _SETUID_JUSTIFICATIONS = ("setuid", "setgid", "A_SETUID_OK")
 
 
+#: Bounded content inspection for a shipped hook/udev rule/install script.
+MAX_CONTENT_BYTES = 64 * 1024
+MAX_CONTENT_TOTAL = 256 * 1024
+MAX_CONTENT_LINE_BYTES = 8 * 1024
+
 #: Paths that extend privilege or persistence beyond the package's files.
 _PRIVILEGED_PREFIXES = (
     "/etc/polkit-1/", "/etc/sudoers.d/", "/etc/pam.d/", "/etc/modprobe.d/",
@@ -72,6 +77,47 @@ def unsafe_runpath(value) -> bool:
     return False
 
 
+def _hook_is_broad(content: str) -> bool:
+    """A libalpm hook whose trigger fires on every transaction and runs a command."""
+    broad = has_exec = False
+    for raw in content.splitlines():
+        line = raw.strip()[:MAX_CONTENT_LINE_BYTES]
+        if not line or line.startswith(("#", ";")):
+            continue
+        key, sep, value = line.partition("=")
+        if not sep:
+            continue
+        key = key.strip().lower()
+        value = value.strip().strip("\"'")
+        if key == "operation" and value.lower() in ("*", "any", "all"):
+            broad = True
+        elif key == "exec" and value:
+            has_exec = True
+    return broad and has_exec
+
+
+def _runs_fetch_or_user_path(content: str) -> bool:
+    """A hook/udev/install body that fetches, or runs from a user/temp path."""
+    lowered = content.lower()
+    for token in ("curl", "wget", "aria2c"):
+        if token in lowered:
+            return True
+    for token in ("/tmp/", "/dev/shm", "/var/tmp/", "$home", "${home}",
+                  "~/", "/home/", "/root/"):
+        if token in lowered:
+            return True
+    for token in ("sh -c", "bash -c", "dash -c", "zsh -c", "ksh -c"):
+        if token in lowered:
+            return True
+    return False
+
+
+def _udev_runs_program(content: str) -> bool:
+    lowered = content.lower()
+    return any(token in lowered for token in (
+        "run+=", "run{", "program==", "import{program}"))
+
+
 def inspect_manifest(manifest, declared=None) -> list[dict]:
     """A001-A005 over a built-package manifest.
 
@@ -89,6 +135,7 @@ def inspect_manifest(manifest, declared=None) -> list[dict]:
     justified_setuid = any(j.lower() in mode_intent for j in _SETUID_JUSTIFICATIONS)
 
     out: list[dict] = []
+    content_total = 0
     for entry in manifest or ():
         path = str(entry.get("path", ""))
         if not path:
@@ -166,6 +213,42 @@ def inspect_manifest(manifest, declared=None) -> list[dict]:
                 "match": f"{path} is an eBPF object/loader (rootkit-capable)",
                 "file": path,
             })
+        content = entry.get("content")
+        if isinstance(content, str) and content:
+            encoded = content.encode("utf-8", "replace")
+            if len(encoded) > MAX_CONTENT_BYTES:
+                content = encoded[:MAX_CONTENT_BYTES].decode(
+                    "utf-8", "ignore")
+            if content_total + len(content) <= MAX_CONTENT_TOTAL:
+                content_total += len(content)
+                lower_path = path.lower()
+                if lower_path.endswith(".hook") and _hook_is_broad(content):
+                    out.append({
+                        "rule_id": "A011",
+                        "name": "Hook Runs On Every Transaction",
+                        "severity": "MEDIUM", "category": "artifact",
+                        "match": (f"{path} is a hook with a broad trigger and "
+                                  "an Exec command"),
+                        "file": path,
+                    })
+                if (lower_path.endswith((".hook", ".rules", ".install"))
+                        and _runs_fetch_or_user_path(content)):
+                    out.append({
+                        "rule_id": "A012",
+                        "name": "Shipped Hook Or Udev Fetches Or Runs A User Path",
+                        "severity": "HIGH", "category": "artifact",
+                        "match": (f"{path} fetches or runs a program from a "
+                                  "user/temp path"),
+                        "file": path,
+                    })
+                if lower_path.endswith(".rules") and _udev_runs_program(content):
+                    out.append({
+                        "rule_id": "A013",
+                        "name": "Udev Rule Runs A Program",
+                        "severity": "MEDIUM", "category": "artifact",
+                        "match": f"{path} runs a program from a udev rule",
+                        "file": path,
+                    })
         if entry.get("world_writable"):
             out.append({
                 "rule_id": "A005", "name": "Unusual Artifact Mode",

@@ -374,6 +374,10 @@ def gate_manifest_parsing_is_sandboxed() -> Gate:
         problems.append("the worker has no upstream archive operation")
     if "parse_upstream_archive" not in worker_source:
         problems.append("the worker does not call parse_upstream_archive")
+    if "__elf_metadata__" not in worker_source:
+        problems.append("the worker has no ELF metadata operation")
+    if "parse_elf" not in worker_source:
+        problems.append("the worker does not call parse_elf")
     from trustsight.full_aur import fetch
     fetch_source = inspect.getsource(fetch.fetch_pkgbuild_with_tree)
     if "manifest_client" not in fetch_source:
@@ -1590,3 +1594,41 @@ def gate_upstream_reads_are_bounded_and_pinned() -> Gate:
             problems.append(f"upstream_collect.py lacks {token}")
     return Gate("upstream reads are bounded and pinned", not problems,
                 problems or "peer check, decompressed cap and text cap present")
+
+
+def gate_elf_parsing_is_read_only_and_bounded() -> Gate:
+    """A1/A4/A17: the ELF reader parses bytes, never executes a helper.
+
+    ``ldd`` executes its argument on glibc, so the reader must be a pure
+    parser.  The AST check rejects a process/loader import; the runtime check
+    proves a non-ELF and a lying section table are handled without a raise.
+    """
+    import struct
+
+    from trustsight.analysis.elf import MAX_ELF_BYTES, parse_elf
+
+    source = (SRC / "analysis" / "elf.py").read_text(encoding="utf-8")
+    problems: list[str] = []
+    banned = {"subprocess", "ctypes", "mmap", "os", "pty", "shlex"}
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name.split(".")[0] in banned:
+                    problems.append(f"elf.py imports {alias.name}")
+        elif isinstance(node, ast.ImportFrom):
+            if (node.module or "").split(".")[0] in banned:
+                problems.append(f"elf.py imports from {node.module}")
+    if MAX_ELF_BYTES > 4 * 1024 * 1024:
+        problems.append("the ELF parse window is too large")
+    if parse_elf(b"not an elf at all" * 10) is not None:
+        problems.append("a non-ELF was accepted")
+    header = bytearray(b"\x7fELF" + bytes(60))
+    header[4] = 2
+    header[5] = 1
+    struct.pack_into("<Q", header, 40, 10**9)
+    try:
+        parse_elf(bytes(header))
+    except Exception as exc:  # noqa: BLE001 - a raise is the failure
+        problems.append(f"a hostile header raised {type(exc).__name__}")
+    return Gate("ELF parsing is read-only and bounded", not problems,
+                problems or "pure parser; hostile input bounded")

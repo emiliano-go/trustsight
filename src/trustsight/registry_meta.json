@@ -89,6 +89,24 @@
     "target": "declared source archive (opt-in upstream lane)",
     "uid": "TS-0301"
   },
+  "a014": {
+    "canonical": true,
+    "capability": "artifact",
+    "name": "Unsafe ELF Runpath",
+    "severity": "HIGH",
+    "severity_text": "HIGH (weight 0)",
+    "target": "ELF in the artifact/upstream lane",
+    "uid": "TS-0302"
+  },
+  "a015": {
+    "canonical": true,
+    "capability": "artifact",
+    "name": "Packed Or Encrypted ELF Section",
+    "severity": "MEDIUM",
+    "severity_text": "MEDIUM (weight 0)",
+    "target": "ELF in the artifact/upstream lane",
+    "uid": "TS-0303"
+  },
   "c001": {
     "canonical": true,
     "capability": null,

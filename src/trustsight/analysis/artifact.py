@@ -16,7 +16,7 @@ The static core never executes package code.  Nothing here runs anything.
 
 from __future__ import annotations
 
-__all__ = ["inspect_manifest"]
+__all__ = ["inspect_manifest", "unsafe_runpath"]
 
 #: Paths whose executable bit is ordinary; an executable outside them is A005.
 _USUAL_EXEC_PREFIXES = ("/usr/bin/", "/usr/sbin/", "/usr/lib/", "/bin/", "/sbin/")
@@ -51,6 +51,25 @@ def _is_unit(path: str) -> bool:
 
 def _unusual_exec(path: str) -> bool:
     return not path.startswith(_USUAL_EXEC_PREFIXES)
+
+
+def unsafe_runpath(value) -> bool:
+    """True for a DT_RPATH/DT_RUNPATH that searches an unsafe location.
+
+    ``$ORIGIN`` is relative to the binary's own (package-owned) directory, so
+    it is not automatically unsafe; an empty, relative or system-temp path is.
+    """
+    path = str(value or "").strip()
+    if not path:
+        return True
+    if "$ORIGIN" in path or "${ORIGIN}" in path:
+        return False
+    if path in (".", "..") or not path.startswith("/"):
+        return True
+    for prefix in ("/tmp", "/var/tmp", "/dev/shm", "/home", "/root"):
+        if path == prefix or path.startswith(prefix + "/"):
+            return True
+    return False
 
 
 def inspect_manifest(manifest, declared=None) -> list[dict]:
@@ -90,7 +109,9 @@ def inspect_manifest(manifest, declared=None) -> list[dict]:
                 "match": f"{path} is a unit/timer/tmpfiles the recipe does not declare",
                 "file": path,
             })
-        for lib in entry.get("links", ()) or ():
+        elf = entry.get("elf") or {}
+        links = entry.get("links") or elf.get("needed") or ()
+        for lib in links:
             base = str(lib).rsplit("/", 1)[-1]
             if not base or base.split(".so", 1)[0] in depends:
                 continue
@@ -117,6 +138,27 @@ def inspect_manifest(manifest, declared=None) -> list[dict]:
                           "the declared recipe does not explain"),
                 "file": path,
             })
+        if elf:
+            runpaths = list(elf.get("rpath") or ()) + list(
+                elf.get("runpath") or ())
+            unsafe = [rp for rp in runpaths if unsafe_runpath(rp)]
+            if unsafe:
+                out.append({
+                    "rule_id": "A014",
+                    "name": "Unsafe ELF Runpath",
+                    "severity": "HIGH", "category": "artifact",
+                    "match": (f"{path} searches for libraries in "
+                              + ", ".join(str(rp) for rp in unsafe[:3])),
+                    "file": path,
+                })
+            if elf.get("packed"):
+                out.append({
+                    "rule_id": "A015",
+                    "name": "Packed Or Encrypted ELF Section",
+                    "severity": "MEDIUM", "category": "artifact",
+                    "match": f"{path} is a packed or encrypted ELF binary",
+                    "file": path,
+                })
         if entry.get("bpf") or path.lower().endswith((".bpf.o", ".bpf.c")):
             out.append({
                 "rule_id": "A008", "name": "eBPF Artifact In Package",

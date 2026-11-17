@@ -61,6 +61,8 @@ The rules that make up this category are listed below, each with the series that
 | [A008](#a008) | eBPF Artifact In Package | HIGH |
 | [A009](#a009) | Executable Binary In Source Archive | HIGH |
 | [A010](#a010) | Setuid File In Source Archive | HIGH |
+| [A014](#a014) | Unsafe ELF Runpath | HIGH |
+| [A015](#a015) | Packed Or Encrypted ELF Section | MEDIUM |
 <!-- /generated: page-index -->
 
 ### A001: Setuid File In Artifact {#a001}
@@ -159,6 +161,31 @@ The bit is read from the archive header, not by executing anything. It is
 report-only (weight 0, anergic) until calibrated; a source tree that ships a
 setuid file is worth a look even before it is built.
 
+### A014: Unsafe ELF Runpath {#a014}
+
+- **Target:** ELF in the artifact/upstream lane
+- **Severity:** HIGH (weight 0)
+- **Category:** `artifact`
+
+- **Condition:** A fetched or built ELF binary declares an `RPATH`/`RUNPATH`
+  that is empty, relative, or points at a system-temp or user-owned
+  directory (for example `.`, `/tmp`, `/dev/shm`, `/home`, `/root`).
+
+The ELF header is read with a bounded parser; the binary is never mapped or
+executed. `$ORIGIN` is relative to the binary's own package directory and is
+not automatically unsafe. Weight 0 (anergic) until calibrated.
+
+### A015: Packed Or Encrypted ELF Section {#a015}
+
+- **Target:** ELF in the artifact/upstream lane
+- **Severity:** MEDIUM (weight 0)
+- **Category:** `artifact`
+
+- **Condition:** A fetched or built ELF binary carries a packer marker
+  (`.upx`/`UPX!`/`.packed`) or an encrypted/packed executable section.
+
+The section table is read with the bounded ELF parser; nothing is executed or
+unpacked. Weight 0 (anergic) until calibrated.
 ## Interpretation
 
 - The finding describes the installed file or permission and why it is

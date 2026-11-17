@@ -167,6 +167,14 @@ See [C025: Hardening Option Disabled](../../rules/staging-and-recon.md#c025).
 
 See [C026: Empty File Added](../../rules/integrity.md#c026).
 
+### A014 {#a014}
+
+See [A014: Unsafe ELF Runpath](artifact.md#a014).
+
+### A015 {#a015}
+
+See [A015: Packed Or Encrypted ELF Section](artifact.md#a015).
+
 ### C027 {#c027}
 
 See [C027: Declared Install Script Is Absent](../../rules/integrity.md#c027).

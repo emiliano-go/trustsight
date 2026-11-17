@@ -190,6 +190,12 @@
   (anergic). The bits and magic are read from the archive, nothing is
   extracted to disk or executed.
 
+- **ELF metadata is read with a bounded parser (A014/A015).** An artifact or
+  upstream-source ELF is parsed read-only for `DT_NEEDED`, `RPATH`/`RUNPATH`
+  and packer markers; an unsafe runpath (A014) and a packed/encrypted binary
+  (A015) are reported at weight 0 (anergic). The parser never invokes `ldd`,
+  `objdump` or `readelf`, and hostile input is bounded.
+
 ## [0.28.8] - 2026-11-13
 
 ### Fixed

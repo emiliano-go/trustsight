@@ -158,6 +158,8 @@ def run_gates() -> list[Gate]:
     gates.append(gate_layer_overrides_stay_within_the_closed_set())
     gates.append(gate_boundaries_are_the_coverage_view())
     gates.append(gate_every_report_key_is_documented())
+    gates.append(gate_every_rule_names_its_cwe_and_remediation())
+    gates.append(gate_elf_parsing_is_read_only_and_bounded())
     gates.append(gate_transcendence_table_is_wellformed())
     gates.append(gate_every_rule_carries_exactly_one_layer())
     gates.append(gate_boundaries_forbid_clean_exactly_when_gaps())
@@ -256,6 +258,7 @@ from scripts.gates._input_bounds import (
     gate_network_is_confined,
     gate_network_reads_are_bounded,
     gate_provider_tokens_are_redacted,
+    gate_elf_parsing_is_read_only_and_bounded,
     gate_a_declared_upstream_target_is_allowlisted_and_pinned,
     gate_an_archive_is_parsed_only_after_its_checksum_verifies,
     gate_upstream_redirects_stay_on_the_forge_cdn_allowlist,
@@ -376,6 +379,7 @@ from scripts.gates._reporting import (
     gate_doc_cross_references_resolve,
     gate_every_input_bound_is_a_source_constant,
     gate_every_json_report_carries_the_fingerprint,
+    gate_every_rule_names_its_cwe_and_remediation,
     gate_every_render_ends_with_a_direction,
     gate_flag_threshold_is_derived,
     gate_no_git_filters_or_hooks,

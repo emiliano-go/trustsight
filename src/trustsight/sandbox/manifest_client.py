@@ -241,6 +241,22 @@ def parse_snapshot(name: str, data: bytes, *, max_members: int = 10_000,
         return _ask(payload)
 
 
+def elf_metadata(name: str, data: bytes) -> dict | None:
+    """Parse one ELF in the read-role worker; bounded by the parse window."""
+    from trustsight.analysis.elf import MAX_ELF_BYTES
+
+    window = bytes(data[:MAX_ELF_BYTES])
+    if not window:
+        return None
+    with _lock:
+        payload = json.dumps(
+            {"path": "__elf_metadata__", "text": name,
+             "data": base64.b64encode(window).decode("ascii")},
+            ensure_ascii=False, separators=(",", ":"),
+        ).encode("utf-8")
+        return _ask(payload)
+
+
 def parse_upstream_archive(name: str, data: bytes, *,
                            max_members: int = 10_000,
                            max_file_bytes: int = 512 * 1024,

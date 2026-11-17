@@ -313,3 +313,25 @@ def test_archive_artifacts_become_report_only_a009_a010():
     ids = {f["rule_id"] for f in findings}
     assert {"A009", "A010"} <= ids
     assert all(f.get("weight_override") == 0 for f in findings)
+
+
+def test_elf_metadata_becomes_report_only_a014_a015():
+    def extractor(_slug, _data):
+        return {
+            "manifest_texts": [],
+            "artifacts": [{
+                "path": "bin/tool", "mode": 0o755, "setuid": False,
+                "setgid": False, "elf": True, "size": 10,
+                "elf_info": {"needed": ["libc.so.6"],
+                             "rpath": ["/tmp/lib"], "runpath": [],
+                             "packed": True},
+            }],
+            "complete": True, "refused": False, "malformed": False,
+        }
+
+    _texts, _notes, findings, _verified = collect_upstream_manifest_texts(
+        RECIPE, config=CONFIG, fetcher=lambda url, target: DATA,
+        extractor=extractor)
+    ids = {f["rule_id"] for f in findings}
+    assert {"A014", "A015"} <= ids
+    assert all(f.get("weight_override") == 0 for f in findings)

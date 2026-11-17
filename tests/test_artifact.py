@@ -163,3 +163,26 @@ def test_verify_build_cli_passes_a_manifest(monkeypatch, tmp_path):
     payload = _json.loads(result.stdout)
     assert payload["status"] == "l9_analyzed"
     assert any(f["rule_id"] == "A001" for f in payload["findings"])
+
+
+def test_a003_uses_the_elf_needed_list_when_present():
+    manifest = [{"path": "/usr/bin/app",
+                 "elf": {"needed": ["libevil.so.2"]}}]
+    assert "A003" in _ids(manifest, {"depends": ["glibc"]})
+
+
+def test_a014_flags_an_unsafe_runpath():
+    manifest = [{"path": "/usr/bin/app",
+                 "elf": {"rpath": ["/tmp/lib"], "runpath": []}}]
+    assert "A014" in _ids(manifest)
+
+
+def test_a014_allows_origin_relative_runpath():
+    manifest = [{"path": "/usr/bin/app",
+                 "elf": {"runpath": ["$ORIGIN/../lib"]}}]
+    assert "A014" not in _ids(manifest)
+
+
+def test_a015_flags_a_packed_binary():
+    manifest = [{"path": "/usr/bin/app", "elf": {"packed": True}}]
+    assert "A015" in _ids(manifest)

@@ -841,3 +841,24 @@ def gate_alert_counts_reconcile() -> Gate:
                     problems.append(f"counts do not reconcile at {n}/{cap}")
     return Gate("alert counts reconcile", not problems,
                 problems or "shown + grouped == rendered")
+
+
+def gate_every_rule_names_its_cwe_and_remediation() -> Gate:
+    """B10: descriptive labels are present, and they never score.
+
+    A CWE identifier and a one-line remediation are reader aids.  Every rule
+    must resolve one of each (a per-rule override or its category default);
+    the labels are not weights and cannot lower a finding.
+    """
+    from trustsight.categories import RULE_CATEGORIES
+    from trustsight.rule_metadata import cwe_of, remediation_of
+
+    problems = [
+        f"{rule_id}: missing {label}"
+        for rule_id in sorted(RULE_CATEGORIES)
+        for label, value in (("CWE", cwe_of(rule_id)),
+                             ("remediation", remediation_of(rule_id)))
+        if not value
+    ]
+    return Gate("every rule names its CWE and remediation", not problems,
+                problems or f"labelled {len(RULE_CATEGORIES)} rules")

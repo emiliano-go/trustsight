@@ -19,6 +19,8 @@ exactly one category page; this catalog only points at it.
 | [A008](artifact.md#a008) | eBPF Artifact In Package | Artifact | HIGH | [Artifact](artifact.md) |
 | [A009](artifact.md#a009) | Executable Binary In Source Archive | Artifact | HIGH | [Artifact](artifact.md) |
 | [A010](artifact.md#a010) | Setuid File In Source Archive | Artifact | HIGH | [Artifact](artifact.md) |
+| [A014](artifact.md#a014) | Unsafe ELF Runpath | Artifact | HIGH | [Artifact](artifact.md) |
+| [A015](artifact.md#a015) | Packed Or Encrypted ELF Section | Artifact | MEDIUM | [Artifact](artifact.md) |
 | [C001](integrity.md#c001) | Checksum Changed Without Source Change With Stable Version | Integrity-change | HIGH | [Integrity and Verification](integrity.md) |
 | [C002](integrity.md#c002) | Checksum Updated With Version Bump | Integrity-change | INFO | [Integrity and Verification](integrity.md) |
 | [C003](integrity.md#c003) | Source URL Changed Without Version Bump | Integrity-change | INFO | [Integrity and Verification](integrity.md) |

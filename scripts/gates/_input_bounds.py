@@ -374,10 +374,6 @@ def gate_manifest_parsing_is_sandboxed() -> Gate:
         problems.append("the worker has no upstream archive operation")
     if "parse_upstream_archive" not in worker_source:
         problems.append("the worker does not call parse_upstream_archive")
-    if "__elf_metadata__" not in worker_source:
-        problems.append("the worker has no ELF metadata operation")
-    if "parse_elf" not in worker_source:
-        problems.append("the worker does not call parse_elf")
     from trustsight.full_aur import fetch
     fetch_source = inspect.getsource(fetch.fetch_pkgbuild_with_tree)
     if "manifest_client" not in fetch_source:

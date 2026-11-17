@@ -59,19 +59,6 @@ def _handle(body: bytes) -> dict:
         if path == "__srcinfo__":
             from trustsight.srcinfo import _parse_srcinfo_local
             return {"result": _parse_srcinfo_local(text)}
-        if path == "__elf_metadata__":
-            import base64
-            import dataclasses
-            from trustsight.analysis.elf import parse_elf
-            data = request.get("data")
-            if not isinstance(data, str):
-                return {"error": "invalid ELF request"}
-            try:
-                raw = base64.b64decode(data, validate=True)
-            except Exception:
-                return {"error": "invalid ELF encoding"}
-            info = parse_elf(raw)
-            return {"result": None if info is None else dataclasses.asdict(info)}
         if path == "__upstream_archive__":
             import base64
             from trustsight.analysis.upstream_archive import parse_upstream_archive

@@ -25,6 +25,7 @@ profile trustsight-watcher flags=(attach_disconnected,mediate_deleted) {
   umount,
   userns,
   userns create,
+  capability sys_admin,
 
   /app/** rix,
   /usr/** rix,

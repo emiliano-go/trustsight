@@ -252,25 +252,31 @@ def _x024_is_flag_filter(body: str, match: re.Match) -> bool:
     """True when CFLAGS/LDFLAGS-like flags are rewritten from themselves.
 
     ``LDFLAGS="$(echo "${LDFLAGS}" | sed s/-Wl,-z,nodlopen//)"`` filters the
-    flags the build already had. Only a pure echo/printf | filter pipeline
-    that names the same variable stands down; a fetch or an executor keeps
-    the finding.
+    flags the build already had, and ``RUSTFLAGS=$(sed -E 's/…//' <<<"$RUSTFLAGS")``
+    is the same rewrite without the echo.  Only a pure filter pipeline or a
+    filter reading the variable's own value stands down; a fetch or an
+    executor keeps the finding, and so does a filter over some other file.
     """
     var = match.groupdict().get("x024var", "").upper()
     if var not in {"CFLAGS", "CXXFLAGS", "LDFLAGS", "MAKEFLAGS", "RUSTFLAGS"}:
         return False
     value = _x024_assignment_value(body, match)
-    if not re.match(r"^\$\(\s*(?:echo|printf)\b", value):
-        return False
     if not re.search(r"\$\{?" + re.escape(var) + r"\b", value, re.IGNORECASE):
-        return False
-    if not re.search(r"\|\s*(?:sed|tr|awk|gawk|grep)\b", value):
         return False
     if re.search(_NETWORK_CLIENT, value, re.IGNORECASE):
         return False
     if re.search(SCRIPT_EXECUTOR, value, re.IGNORECASE):
         return False
-    return True
+    if re.match(r"^\$\(\s*(?:echo|printf)\b", value):
+        return bool(re.search(r"\|\s*(?:sed|tr|awk|gawk|grep)\b", value))
+    if re.match(r"^\$\(\s*(?:sed|tr|awk|gawk|grep)\b", value):
+        # The filter must read the flags themselves: a here-string, or a
+        # quoted argument naming the variable.  `sed 's/a/b/' /tmp/evil`
+        # rewrites something else and keeps the finding.
+        return bool(re.search(r"<<<|<<", value)) or bool(
+            re.search(r"[\"']\$\{?" + re.escape(var) + r"\b",
+                      value, re.IGNORECASE))
+    return False
 
 
 #: Build-tool search paths that are configured by deriving them from other

@@ -511,11 +511,13 @@ def addendum4_findings(diff_text, scope_doc, pre, post, source_changes,
     if pre is None or post is None:
         return
 
-    # G3 (C021): a test/dependency array removed while a build function
+    # G3 (C021): the test-dependency array removed while a build function
     # changed - dropping the checks that would catch a payload.  Dropping
-    # `checkdepends` eliminates the test-suite execution outright, so it is
-    # the HIGH candidate the spec gates on fire rates; `optdepends` removal
-    # is far more often cleanup, so it stays MEDIUM.
+    # `checkdepends` eliminates the test-suite execution outright, which is
+    # the shape this rule claims.  `optdepends` is not that shape: it lists
+    # optional runtime suggestions, so removing one (yapfast dropped
+    # vulkan-icd-loader when it moved rendering to GL) removes no check and
+    # cannot hide a payload.
     # A transitional package removes the build function itself; there is no
     # build change left to hide a removed check behind.  C021's claim is
     # "tests/dependencies were dropped while the build changed", not "the
@@ -535,39 +537,36 @@ def addendum4_findings(diff_text, scope_doc, pre, post, source_changes,
         for entry in _family_values(post.arrays, field)
     }
     if build_remains:
-        for name in ("checkdepends", "optdepends"):
-            lost = [
-                entry for entry in array_diff(
-                    _family_values(pre.arrays, name),
-                    _family_values(post.arrays, name)).lost
-                if dependency_name(entry) not in post_dependencies
+        name = "checkdepends"
+        lost = [
+            entry for entry in array_diff(
+                _family_values(pre.arrays, name),
+                _family_values(post.arrays, name)).lost
+            if dependency_name(entry) not in post_dependencies
+        ]
+        if lost:
+            # Removing a coverage/lint plugin while the runner and the rest
+            # of the check dependencies remain does not eliminate the
+            # test-suite execution C021 claims to protect.  Only a removed
+            # runner (or an emptied array) is the HIGH shape.
+            runners = [
+                entry for entry in lost
+                if re.search(r"(?:^|[-_])(?:pytest|py\.test|nose2?|tox|"
+                             r"unittest|bats|prove)$", dependency_name(entry))
             ]
-            if not lost:
-                continue
-            if name == "checkdepends":
-                # Removing a coverage/lint plugin while the runner and the
-                # rest of the check dependencies remain does not eliminate
-                # the test-suite execution C021 claims to protect.  Only a
-                # removed runner (or an emptied array) is the HIGH shape.
-                runners = [
-                    entry for entry in lost
-                    if re.search(r"(?:^|[-_])(?:pytest|py\.test|nose2?|tox|"
-                                 r"unittest|bats|prove)$", dependency_name(entry))
-                ]
-                if not runners and _family_values(post.arrays, name):
-                    continue
+            if runners or not _family_values(post.arrays, name):
                 lost = runners or lost
-            touched = any(
-                pre.functions.get(fn) != post.functions.get(fn)
-                for fn in ("build", "prepare", "check")
-            )
-            if touched:
-                severity = "HIGH" if name == "checkdepends" else "MEDIUM"
-                add("C021", "Dependency Removal During A Build Change", severity,
-                    "composition",
-                    f"{name} lost {', '.join(sorted(set(lost))[:3])} while a "
-                    "build function changed",
-                    line=None, field=name, lost=", ".join(sorted(set(lost))[:5]))
+                touched = any(
+                    pre.functions.get(fn) != post.functions.get(fn)
+                    for fn in ("build", "prepare", "check")
+                )
+                if touched:
+                    add("C021", "Dependency Removal During A Build Change",
+                        "HIGH", "composition",
+                        f"{name} lost {', '.join(sorted(set(lost))[:3])} while "
+                        "a build function changed",
+                        line=None, field=name,
+                        lost=", ".join(sorted(set(lost))[:5]))
 
     # G4 (C022): verification downgraded to a weaker algorithm.  The
     # strongest array must be *declared removed in this diff* (a partial

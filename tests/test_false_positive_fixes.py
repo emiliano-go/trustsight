@@ -981,9 +981,19 @@ def test_c021_still_fires_when_a_dependency_is_really_removed():
     new = "pkgname=demo\npkgver=1\nbuild() { make all; }\n"
     diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,4 +1,3 @@\n"
             " pkgname=demo\n pkgver=1\n"
-            "-build() { make; }\n-optdepends=('foo: x')\n"
+            "-build() { make; }\n-checkdepends=('python-pytest-mock')\n"
             "+build() { make all; }\n")
     assert "C021" in _ids(diff, current_text=new)
+
+
+def test_c021_quiet_on_dropping_an_optional_runtime_suggestion():
+    """optdepends lists suggestions, not checks; removing one hides nothing."""
+    new = "pkgname=demo\npkgver=1\nbuild() { make all; }\n"
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,4 +1,3 @@\n"
+            " pkgname=demo\n pkgver=1\n"
+            "-build() { make; }\n-optdepends=('foo: x')\n"
+            "+build() { make all; }\n")
+    assert "C021" not in _ids(diff, current_text=new)
 
 
 def test_c021_quiet_on_removing_a_coverage_plugin_only():

@@ -80,7 +80,7 @@ def test_g3_dependency_removal_during_a_build_change_fires():
     assert findings["C021"].severity == "HIGH"
 
 
-def test_g3_optdepends_removal_is_medium():
+def test_g3_optdepends_removal_stands_down():
     text = (
         "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,6 +1,5 @@\n"
         " pkgname=demo\n pkgver=1.0\n"
@@ -91,8 +91,7 @@ def test_g3_optdepends_removal_is_medium():
         "+  make\n"
         " }\n"
     )
-    findings = _findings(text)
-    assert findings["C021"].severity == "MEDIUM"
+    assert "C021" not in _ids(text)
 
 
 def test_g3_removal_without_a_build_change_stands_down():

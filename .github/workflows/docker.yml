@@ -180,6 +180,7 @@ jobs:
             --entrypoint /app/.venv/bin/trustsight "$image" \
             token-broker --socket /run/trustsight/token.sock \
               --token-dir /tokens
+          sleep 2
           docker exec "$name" /app/.venv/bin/python -c \
             'import socket; s=socket.socket(socket.AF_UNIX); s.connect("/run/trustsight/token.sock"); s.sendall(b"{\"provider\":\"github\"}\n"); print(s.recv(4096).decode())' \
             | grep -q 'tok-ci'
@@ -223,6 +224,7 @@ jobs:
             --entrypoint /app/.venv/bin/trustsight "$image" \
             feed-signer --socket /run/trustsight/feed-signer.sock \
               --audit-log /audit/log.json --audit-head /audit/head.json
+          sleep 2
           docker exec "$name" /app/.venv/bin/python -c \
             'import base64,json,socket; body=json.dumps({"event":"trustsight.heartbeat","scans":[]}).encode(); req=json.dumps({"body":base64.b64encode(body).decode(),"webhook_id":"ci"}).encode()+b"\n"; s=socket.socket(socket.AF_UNIX); s.connect("/run/trustsight/feed-signer.sock"); s.sendall(req); print(s.recv(4096).decode())' \
             | grep -q '"ok": true'

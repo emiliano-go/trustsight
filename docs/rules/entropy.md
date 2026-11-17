@@ -74,6 +74,10 @@ A highly compressible addition is repetitive, the shape of a packed or padded pa
 - **Condition:** At least `[thresholds] e002.min_fraction` of the added tokens are base64/base32/hex runs of at least `e002.min_length` (default 64) characters.
 
 The alphabet sets are X029's, applied as a statistic rather than a staging predicate.
+The contents of a `sha256sums`/`sha512sums`/`md5sums`/`b2sums` array are removed before
+the statistic runs: a recipe that declares a dozen digests adds a block of 64-hex
+tokens, and a digest list is metadata for the build rather than encoded payload.
+E001 measures the same filtered text for the same reason.
 
 ### E003: Identifier Entropy {#e003}
 

@@ -423,7 +423,13 @@ def shared_upstream_dependency(records, min_packages: int = 2) -> list[dict]:
                 by_dep[(name, host)][str(record.get("package", ""))] = record
     out = []
     for (name, host), members in sorted(by_dep.items()):
-        if len(members) >= min_packages and not _one_project(members.values()):
+        # `sonora` and `sonora-bin` are two commits of one project: the
+        # dependency set is identical because the source tree is.  A name
+        # family that `is_related_package` joins is not several packages
+        # meeting at a new dependency.
+        if (len(members) >= min_packages
+                and not _one_project(members.values())
+                and not _one_related_cluster(members)):
             where = f" from {host}" if host else ""
             out.append({
                 "rule_id": "G004",

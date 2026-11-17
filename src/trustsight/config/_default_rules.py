@@ -607,6 +607,10 @@ domains = [
     "github.com",
     "gitlab.com",
     "codeberg.org",
+    # Framasoft's public GitLab instance.  A user-content forge like the
+    # three above: the project's own repo path is what the recipe names
+    # (peppercarrot-fonts), not a project-owned release host.
+    "framagit.org",
     "bitbucket.org",
     "sourceforge.net",
     "freedesktop.org",
@@ -745,6 +749,8 @@ domains = [
     "clever-tools.clever-cloud.com",  # Clever Cloud's release CDN
     "kepler-static-artifacts.kepler.labcollab.net",  # Kepler's artifact CDN
     "download-center.epson.com",      # Epson's own driver download center
+    "edgedl.me.gvt1.com",             # Google's Android Studio download CDN
+    "ftp.postgresql.org",             # pgAdmin's own apt repository (PostgreSQL)
     # Overte's own release bucket on DigitalOcean Spaces.  The parent
     # domain is a multi-tenant object store, so only this bucket is the
     # project's distribution surface (overte-appimage).

@@ -233,6 +233,18 @@ def is_related_package(name: str, pkgbase: str) -> bool:
         return False
     if stem.startswith(other) or other.startswith(stem):
         return True
+    # `python-mytimer` providing `mytimer` is the module/CLI split of one
+    # upstream, not a hijack: strip the ecosystem prefix from the pkgbase
+    # and compare again before falling through to the shared-token test.
+    for prefix in _ecosystem_prefixes():
+        marker = prefix + "-"
+        if stem.startswith(marker):
+            stripped = _package_stem(stem[len(marker):])
+            if stripped and (stripped == other
+                             or stripped.startswith(other)
+                             or other.startswith(stripped)):
+                return True
+            break
     head = stem.split("-")[0]
     return (
         head == other.split("-")[0]

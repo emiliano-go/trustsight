@@ -379,6 +379,11 @@ declaration is the attack's committed form, while a declaration moving to
 an existing script is weaker (the script may predate the diff) and reads
 as MEDIUM.
 
+A hook whose body only prints text or refreshes the desktop, MIME or icon
+cache (`update-desktop-database`, `gtk-update-icon-cache`, `fc-cache`, …)
+is INFO at weight 0: it runs as root but changes no file an attacker can
+use. Any other command in the body keeps the HIGH/MEDIUM shape.
+
 ### C032: Scriptlet Executes Commands At Top Level {#c032}
 
 - **Severity:** HIGH (weight 25)

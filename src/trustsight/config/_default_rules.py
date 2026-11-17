@@ -745,6 +745,10 @@ domains = [
     "clever-tools.clever-cloud.com",  # Clever Cloud's release CDN
     "kepler-static-artifacts.kepler.labcollab.net",  # Kepler's artifact CDN
     "download-center.epson.com",      # Epson's own driver download center
+    # Overte's own release bucket on DigitalOcean Spaces.  The parent
+    # domain is a multi-tenant object store, so only this bucket is the
+    # project's distribution surface (overte-appimage).
+    "overte-public.fra1.digitaloceanspaces.com",
 ]
 
 [raw_hosting]

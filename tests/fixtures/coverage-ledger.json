@@ -1323,64 +1323,40 @@
       ],
       "benign_state": "fire",
       "benign_strata": [
-        "bin_repack",
-        "data_fonts",
-        "dependency_heavy",
-        "dkms_kernel",
         "lang_deep",
         "lang_ecosystem",
-        "maintainer_churn",
         "multi_client_fetch",
-        "persist_surface",
-        "signed_sources",
         "source_patched",
-        "vcs_git",
-        "vcs_other"
+        "vcs_git"
       ],
       "disposition": null,
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 51,
+      "fires": 10,
       "id": "C021",
       "pseudo": false,
       "reason": "",
       "series": "C",
       "sources": {
         "cold": {
-          "fires": 51,
+          "fires": 10,
           "strata": [
-            "bin_repack",
-            "data_fonts",
-            "dependency_heavy",
-            "dkms_kernel",
             "lang_deep",
             "lang_ecosystem",
-            "maintainer_churn",
             "multi_client_fetch",
-            "persist_surface",
-            "signed_sources",
             "source_patched",
-            "vcs_git",
-            "vcs_other"
+            "vcs_git"
           ]
         }
       },
       "state": "measured",
       "strata": [
-        "bin_repack",
-        "data_fonts",
-        "dependency_heavy",
-        "dkms_kernel",
         "lang_deep",
         "lang_ecosystem",
-        "maintainer_churn",
         "multi_client_fetch",
-        "persist_surface",
-        "signed_sources",
         "source_patched",
-        "vcs_git",
-        "vcs_other"
+        "vcs_git"
       ],
       "uid": "TS-0029"
     },

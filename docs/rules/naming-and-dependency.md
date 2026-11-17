@@ -169,6 +169,7 @@ Relatedness is what makes this usable, since declaring a variant of yourself is 
 | One name is a prefix of the other | `htop-vim` provides `htop` | no |
 | Shared leading token (siblings) | `linux-cachyos` provides `linux-headers` | no |
 | Shared token is a generic ecosystem prefix | `python-evil` provides `python-requests` | **yes** |
+| Ecosystem prefix splits off an exact name | `python-mytimer` provides `mytimer` | no |
 | No relationship | `some-pkg` provides `openssl` | **yes** |
 
 The ecosystem carve-out matters: thousands of unrelated packages share `python-`, so treating that as evidence of a common project would suppress exactly the hijack the rule exists to catch.
@@ -194,6 +195,10 @@ The list also covers transfer clients (`axel`, `lftp`, `ftp`, `tftp`,
 `[patterns] network_tools`, so an operator can tune it; an existing
 `patterns.toml` is repaired in place only while it still carries the exact
 shipped list.
+
+`checkdepends` is not part of this rule: it runs the recipe's own test
+suite, where an HTTP client library is a test fixture rather than a new
+build-time fetch capability.
 
 ### H064: Provides/Replaces Scope Expansion {#h064}
 

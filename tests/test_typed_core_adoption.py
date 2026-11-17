@@ -45,6 +45,9 @@ PINNED_LOOPS = {
     "analysis/manifests/_formats_c.py": 4,
     # Reads a committed companion file's payload text, not a diff.
     "sandbox/git_project.py": 1,
+    # Shell-lines the added PKGBUILD text to blank a `*sums` array; the
+    # input is a text fragment, not a diff walker.
+    "analysis/entropy.py": 1,
 }
 
 

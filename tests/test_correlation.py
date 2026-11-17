@@ -117,16 +117,22 @@ def test_g003_escalates_for_a_first_seen_account_adopting_dormant_packages(
         monkeypatch):
     import time
 
-    now = time.time()
+    # A fixed clock: the escalation window is 30 days, so a hard-coded
+    # "first seen" date turns this test red on the calendar rather than on
+    # a regression.
+    now = 1794900000.0
+    monkeypatch.setattr("trustsight.analysis.correlation.time.time",
+                        lambda: now)
     dormant = int(now - 180 * 86400 - 86400)
     records = [
         {"package": f"pkg{i}", "maintainer": "fennekuiper", "adoption": True,
          "adoption_predicates": ["H086"], "last_modified": dormant}
         for i in range(3)
     ]
+    first_seen = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now - 10 * 86400))
     monkeypatch.setattr(
         "trustsight.sandbox.store_client.maintainer_first_seen",
-        lambda m: "2026-10-18 12:00:00" if m == "fennekuiper" else None,
+        lambda m: first_seen if m == "fennekuiper" else None,
     )
     found = coordinated_adoption(records, min_members=3)
     assert found[0]["severity"] == "HIGH"

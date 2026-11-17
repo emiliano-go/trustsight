@@ -112,10 +112,21 @@ def source_name_host_swaps(
 _HOOK_SAFE_LINE_RE = re.compile(
     r"^(?:_?[A-Za-z]\w*\s*\(\)\s*\{.*|"
     r"cat|echo|printf|msg|note|warning|error|info|local|unset|tput|true|false|:|"
+    # Desktop/icon/mime cache refreshers: a root hook that only rebuilds
+    # a cache changes nothing an attacker can use (trilium-cn-bin).
+    r"command|update-desktop-database|update-mime-database|"
+    r"gtk-update-icon-cache|xdg-desktop-menu|xdg-icon-resource|fc-cache|"
     r"if|then|else|elif|fi|\[\[?|\]\]?)",
     re.IGNORECASE,
 )
 _CAT_LINE_RE = re.compile(r"^\s*cat\b")
+#: Commands a hook may run that only rebuild a cache or probe for a tool.
+#: They are inert: no file outside the cache directory changes.
+_HOOK_CACHE_REFRESH_RE = re.compile(
+    r"^(?:command|update-desktop-database|update-mime-database|"
+    r"gtk-update-icon-cache|xdg-desktop-menu|xdg-icon-resource|fc-cache)\b",
+    re.IGNORECASE,
+)
 _HOOK_DANGER_RE = re.compile(
     r"\b(?:curl|wget|nc|ncat|socat|bash|sh|zsh|dash|ksh|python3?|perl|ruby|node|"
     r"php|lua|chmod|chown|chattr|rm|mv|cp|install|ln|mkdir|touch|tee|dd|"
@@ -124,13 +135,14 @@ _HOOK_DANGER_RE = re.compile(
 
 
 def install_hook_notice_only(diff_text: str, hook_name: str = "") -> bool:
-    """True when the added install hook only prints text.
+    """True when the added install hook only prints text or refreshes a cache.
 
     A notice-only hook (libfprint's transitional package, aqua's PATH hint)
     runs as root but changes nothing: it is a real `install=` transition,
-    not a reason to raise H100 to HIGH.  Heredoc bodies and printer-quoted
-    text are blanked before the line scan, so a message that mentions a
-    dangerous command is still a message.
+    not a reason to raise H100 to HIGH.  A hook that only rebuilds the
+    desktop/mime/icon caches (trilium-cn-bin) is the same inert shape.  Heredoc
+    bodies and printer-quoted text are blanked before the line scan, so a
+    message that mentions a dangerous command is still a message.
     """
     doc = parse_diff_lines(split_lines(diff_text))
     for file in doc.files:
@@ -156,7 +168,7 @@ def install_hook_notice_only(diff_text: str, hook_name: str = "") -> bool:
         }
         printed = _printed_heredoc_body_indices(body_lines)
         quoted = _printer_quote_body_indices(body_lines)
-        saw_printer = False
+        saw_inert = False
         continued_print = False
         for index, raw in enumerate(body_lines):
             if index in printed or index in quoted:
@@ -165,7 +177,7 @@ def install_hook_notice_only(diff_text: str, hook_name: str = "") -> bool:
             if not line:
                 continue
             if _PRINTER_LINE_RE.match(raw) or _CAT_LINE_RE.match(raw):
-                saw_printer = True
+                saw_inert = True
                 continued_print = raw.rstrip().endswith("\\")
                 line = _blank_quoted(line)
             elif continued_print:
@@ -184,10 +196,12 @@ def install_hook_notice_only(diff_text: str, hook_name: str = "") -> bool:
             if call and call.group(1) in defined:
                 continue
             if _HOOK_SAFE_LINE_RE.match(line):
+                if _HOOK_CACHE_REFRESH_RE.match(line):
+                    saw_inert = True
                 continue
             # A command not on the safe list is behaviour, not a notice.
             return False
-        return saw_printer
+        return saw_inert
     return False
 
 

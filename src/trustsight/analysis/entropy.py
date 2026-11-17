@@ -18,6 +18,8 @@ import gzip
 import math
 import re
 
+from ..tokenizer import split_lines
+
 __all__ = [
     "added_literals",
     "added_text",
@@ -99,6 +101,38 @@ def encoded_fraction(text: str, min_length: int = 64) -> float:
     return encoded / len(tokens)
 
 
+_CHECKSUM_ARRAY_RE = re.compile(
+    r"\b(?:sha(?:1|224|256|384|512)|md5|b2)sums(?:_[a-z0-9_]+)?\s*=\s*\(",
+    re.IGNORECASE,
+)
+
+
+def strip_checksum_arrays(text: str) -> str:
+    """Drop checksum digests before the text statistics run.
+
+    A recipe that declares a dozen ``sha256sums`` entries adds a block of
+    64-hex tokens and nothing else; E002 read that as an encoded payload and
+    E001 as compressed text (noto-fonts-variable-*, arbinel-bin).  A digest
+    list is metadata: the bytes it names are what the build consumes, and the
+    digest itself cannot execute.  Only the contents of a ``*sums`` array are
+    blanked - the array name, the surrounding code and every other added line
+    still count.
+    """
+    out: list[str] = []
+    parens = 0
+    for line in split_lines(text):
+        if parens == 0 and _CHECKSUM_ARRAY_RE.search(line):
+            parens = line.count("(") - line.count(")")
+            if parens > 0:
+                out.append(_CHECKSUM_ARRAY_RE.sub("", line))
+                continue
+        if parens > 0:
+            parens += line.count("(") - line.count(")")
+            continue
+        out.append(line)
+    return "\n".join(out)
+
+
 def identifier_entropy(text: str) -> float:
     """Shannon entropy (bits/char) of the newly assigned identifier names."""
     names = _IDENT_RE.findall(text)
@@ -144,6 +178,7 @@ def entropy_findings(diff_text: str, config, add) -> None:
     """
     thresholds = _thresholds(config)
     text = added_text(diff_text)
+    text = strip_checksum_arrays(text)
     if not text:
         return
 

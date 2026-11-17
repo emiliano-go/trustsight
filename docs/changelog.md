@@ -2,6 +2,39 @@
 
 # Changelog
 
+## [0.29.2] - 2026-11-17
+
+### Fixed
+
+- **H002 accepts the per-architecture checksum form.** A recipe with
+  `sha256sums=()` beside `source_x86_64` and `sha256sums_x86_64` is the
+  documented makepkg layout, not an emptied checksum list. The rule reads the
+  scoped arrays first and stays silent only when every scoped source has a
+  real digest.
+- **H031 stops reading the Renovate note as part of the version.** A trailing
+  shell comment on `pkgver` is stripped while quoting is still visible, so a
+  quoted `#` and a `#commit=` fragment are preserved.
+- **SOURCE_BUCKET and C005 recognize vendor release hosts.** The Orthanc
+  project server, OmniGet, SpigotMC Jenkins, Qoder OSS and Cloudsmith are
+  vendor distribution channels, not unknown hosting.
+- **The release image has writable state directories.** The image now creates
+  `/data` and `/var/lib/trustsight` as the `ts` user, so the db-writer and
+  feed-signer named volumes inherit the right ownership. The smoke also
+  chowns the bind-mounted socket directories.
+- **The watcher compose can be overridden by the image under test.** The
+  watcher and db-writer no longer hardcode `latest`, and the image smoke
+  waits for each socket service before probing it.
+
+### Changed
+
+- **The harness pin follows the 0.29.1 core declaration.** The replay job
+  measures a harness that declares the version this checkout ships.
+
+### Stats
+
+- 9 commits since v0.29.1
+- Package version 0.29.2 (Beta)
+
 ## [0.29.1] - 2026-11-16
 
 ### Fixed
@@ -5828,7 +5861,8 @@ separate reconciliation.
 - SQLite novelty tracking
 - LLM verdict integration
 - Basic CLI (review, inspect, history, config)
-[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.29.1...HEAD
+[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.29.2...HEAD
+[0.29.2]: https://github.com/emiliano-go/trustsight/releases/tag/v0.29.2
 [0.29.1]: https://github.com/emiliano-go/trustsight/releases/tag/v0.29.1
 [0.29.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.29.0
 [0.28.8]: https://github.com/emiliano-go/trustsight/releases/tag/v0.28.8

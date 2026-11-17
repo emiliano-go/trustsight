@@ -1336,6 +1336,41 @@ trustsight containment status [--json]
 
 ---
 
+## trustsight sbom
+
+Export a deterministic CycloneDX 1.5 SBOM for one package. The document is a
+projection of the analysis: it lists the package, every declared `source=()`
+entry, and every declared or analysed dependency, and attaches each finding to
+the component its evidence names.
+
+```
+trustsight sbom <package> [--format cyclonedx] [--out FILE]
+```
+
+| Argument / flag | Required | Description |
+|-----------------|----------|-------------|
+| `package` | Yes | Package name. |
+| `--format` | No | SBOM format; only `cyclonedx` is supported. |
+| `--out FILE` | No | Write the document to `FILE` instead of stdout. |
+
+A source component carries its checksum as a CycloneDX hash and its URL as an
+external reference. It is marked opaque with a `trustsight:opaque` property
+when it is a VCS entry (`git+`, `svn+`, `hg+`, `bzr+`), when its checksum is
+`SKIP`, or when it has no checksum. A dependency component is marked opaque
+when its analysis failed or when a coverage gap left the dependency graph
+incomplete; every component also carries `trustsight:analyzed` and, when it
+was analysed, its score, risk and finding count. The root component carries
+`trustsight:coverage-gap` properties, so an incomplete read never looks clean.
+
+Findings are `trustsight:finding` properties with the value `RULE:SEVERITY`.
+The export is bounded (`MAX_SBOM_COMPONENTS`, `MAX_SBOM_FINDINGS`,
+`MAX_RECIPE_BYTES`); excess components are dropped deterministically and the
+root records `trustsight:truncated` and the omitted count. Nothing is fetched
+or executed to build it, and there is no timestamp or random serial, so
+repeated runs over the same analysis are byte-identical.
+
+---
+
 ## trustsight auth
 
 Manage provider tokens for the optional upstream-scan lane. A token is never

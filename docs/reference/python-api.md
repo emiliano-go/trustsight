@@ -198,6 +198,21 @@ Analyse a unified diff directly, with no git and no network. The analyzer's real
 report = ts.analyze_diff(pathlib.Path("change.diff").read_text())
 ```
 
+### `sbom(package, *, depth=None) -> dict`
+
+Export a CycloneDX 1.5 SBOM for one package. The document lists the package,
+its declared `source=()` entries, and its declared or analysed dependencies,
+and attaches each finding to the component its evidence names. A source is
+opaque when it is a VCS entry, carries `SKIP`, or has no checksum; the root is
+opaque when a coverage gap leaves the graph incomplete, and the document
+carries no timestamp or random serial so repeated runs are byte-identical.
+
+```python
+document = ts.sbom("some-package")
+for component in document["components"]:
+    print(component["name"], component.get("version", ""))
+```
+
 ### `verify_build(package, *, diff_text="", manifest=None, declared=None, static_clean=None) -> dict`
 
 The optional **L9 build lane**, off by default (`[verify] enabled = false`). With the lane disabled or the container unavailable it returns `{"status": "l9_unavailable", ...}` - a weight-0 boundary that never reads as clean or malicious. Given a `manifest` it inspects the built artifact (A001-A008) without executing anything (the build that produced the manifest runs outside the static core) and returns `{"status": "l9_analyzed", "findings": [...]}`. Pass `static_clean` (the L1-L8 outcome) to set `l9_divergence: true` when the two disagree; both profiles render and L9 never edits the static verdict. See [Artifact](../rules/artifact.md).

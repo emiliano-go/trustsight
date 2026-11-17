@@ -68,6 +68,7 @@ from .token_broker import register_commands as _register_token_broker
 from .audit_anchor import register_commands as _register_audit_anchor
 from .containment import register_commands as _register_containment
 from .db_writer import register_commands as _register_db_writer
+from .sbom import register_commands as _register_sbom
 
 _register_review(app)
 _register_inspect(app)
@@ -93,6 +94,7 @@ _register_token_broker(app)
 _register_audit_anchor(app)
 _register_containment(app)
 _register_db_writer(app)
+_register_sbom(app)
 
 
 class _StderrHandler(logging.StreamHandler):

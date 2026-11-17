@@ -220,10 +220,12 @@ profile allows the mount and user namespaces the parser workers need, SQLite
 lock and DNS access, and limits the rest of the filesystem to the app, config,
 data and runtime paths.
 
-Do not enable Watchtower for this container. A mutable `latest` tag can
-replace the image under the host profile and upstream settings, while a local
-image tag has no registry source. Update the image and recreate the watcher
-deliberately.
+Watchtower can stay enabled as a **monitor-only** watcher: it checks for a
+new image and sends notifications but does not replace the running one. A
+mutable `latest` tag can replace the image under the host profile and
+upstream settings, while a local image tag has no registry source. Use the
+`com.centurylinklabs.watchtower.monitor-only=true` label and update the image
+and recreate the watcher deliberately.
 
 ## As a systemd service
 

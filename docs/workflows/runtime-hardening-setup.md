@@ -249,21 +249,24 @@ docker compose up -d --force-recreate watcher
 
 ### Watchtower
 
-Do not let Watchtower update the watcher automatically. A local
-`trustsight:0.29.0` image has no registry tag to pull, and a mutable
-`ghcr.io/...:latest` tag can replace the image under a running profile and
-upstream configuration. The host AppArmor profile and compose environment
-survive a container recreation, but the image bytes do not.
+Watchtower can remain enabled in monitor-only mode without risking the
+watcher. A local `trustsight:0.29.0` image has no registry tag to pull, and
+a mutable `ghcr.io/...:latest` tag can replace the image under a running
+profile and upstream configuration. The host AppArmor profile and compose
+environment survive a container recreation, but the image bytes do not.
 
-Set the watcher label to `false` or remove it, and update deliberately:
+To keep Watchtower notifications without automatic image replacement:
 
 ```yaml
 labels:
-  - "com.centurylinklabs.watchtower.enable=false"
+  - "com.centurylinklabs.watchtower.enable=true"
+  - "com.centurylinklabs.watchtower.monitor-only=true"
 ```
 
-Then pull or rebuild, run `docker compose config`, and recreate the watcher
-in a maintenance window.
+If automatic replacement is required, use a registry image rather than a
+local tag, set a healthcheck, and update the host profile and compose file
+deliberately after each release. Watchtower does not roll back an image that
+starts but fails the parser sandbox, so keep the previous image available.
 
 ### Upstream and full dependency depth
 

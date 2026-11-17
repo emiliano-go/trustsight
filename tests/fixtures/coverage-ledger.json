@@ -3975,31 +3975,28 @@
       ],
       "benign_state": "fire",
       "benign_strata": [
-        "data_fonts",
-        "multi_client_fetch"
+        "data_fonts"
       ],
       "disposition": null,
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 31,
+      "fires": 1,
       "id": "H031",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 31,
+          "fires": 1,
           "strata": [
-            "data_fonts",
-            "multi_client_fetch"
+            "data_fonts"
           ]
         }
       },
       "state": "measured",
       "strata": [
-        "data_fonts",
-        "multi_client_fetch"
+        "data_fonts"
       ],
       "uid": "TS-0087"
     },

@@ -45,7 +45,7 @@ from ...recipedoc import recipe_states
 from ...rules import find_line_in_diff
 from ...diffdoc import parse_diff_lines
 from ...tokenizer import split_lines
-from ._checksums import _is_checksum_array, _package_fetch_client, addendum4_findings, array_order_changes, isolated_checksum_insertion
+from ._checksums import _is_checksum_array, _package_fetch_client, addendum4_findings, array_order_changes, isolated_checksum_insertion, per_arch_checksums_cover_sources
 from ._common import _BINARY_ARTIFACT_RE, _TRUSTED_BUCKETS
 from ._hooks import install_script_findings
 from ._hygiene import _build_hygiene_findings, _splicing_findings, capability_in_diff, diff_structure_findings
@@ -333,8 +333,18 @@ def _structural_findings_from_request(request: ScanRequest) -> list[dict]:
             line=find_line_in_diff(diff_text, r"SKIP|NONE"),
             skip_suffix=suffix)
     elif cs_behavior == "checksum_array_emptied":
-        add("H002", "Checksum Emptied", "HIGH", "integrity", cs_behavior,
-            line=find_line_in_diff(diff_text, r"sha256sums\s*=\s*\(\s*\)"))
+        # The generic arrays can be empty because the recipe is built per
+        # architecture: makepkg pairs `source_<arch>` with `sha256sums_<arch>`
+        # and never reads the generic pair.  Read the scoped arrays first;
+        # only a recipe with no arch backing is an emptied checksum list.
+        per_arch = False
+        if current_text:
+            from ...recipedoc import parse_recipe
+            per_arch = per_arch_checksums_cover_sources(
+                parse_recipe(current_text).arrays)
+        if not per_arch:
+            add("H002", "Checksum Emptied", "HIGH", "integrity", cs_behavior,
+                line=find_line_in_diff(diff_text, r"sha256sums\s*=\s*\(\s*\)"))
 
     # H091 - makepkg pairs `source=()` with each `*sums=()` by position,
     # and no rule looked at the two lengths together. The shared ChangeDelta

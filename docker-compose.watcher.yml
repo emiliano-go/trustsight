@@ -19,7 +19,7 @@
 #
 services:
   trustsight-watch:
-    image: ghcr.io/emiliano-go/trustsight:latest
+    image: ${TRUSTSIGHT_IMAGE:-ghcr.io/emiliano-go/trustsight:latest}
     container_name: trustsight-watch
     # -1 walks the whole reachable AUR dependency closure, bounded by
     # depth.MAX_DEPTH_LEVELS (8) and MAX_DEPTH_NODES (200) per root.  The
@@ -131,7 +131,7 @@ services:
         max-file: "5"
 
   db-writer:
-    image: ghcr.io/emiliano-go/trustsight:latest
+    image: ${TRUSTSIGHT_IMAGE:-ghcr.io/emiliano-go/trustsight:latest}
     container_name: trustsight-db-writer
     command: ["db-writer", "--socket", "/run/trustsight-db/db-writer.sock",
               "--db", "/data/trustsight.db",

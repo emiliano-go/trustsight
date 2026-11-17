@@ -320,10 +320,6 @@ stays quiet, and an interpolated version made only of version characters is
 ordinary packaging. What the rule describes is a value carrying delimiters
 (`;`, whitespace, `/`) being substituted into something the build fetches.
 
-A `#` comment after the assignment is shell syntax, not part of the value:
-`pkgver=4.16.1 # renovate: datasource=...` assigns `4.16.1`, and the tokenizer
-drops the note before the value reaches this rule or any URL interpolation.
-
 Fire rate: 1 on the v1 corpus (0.03 %).
 
 ### H034: Exotic Source Protocol {#h034}

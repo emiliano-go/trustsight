@@ -220,12 +220,12 @@ profile allows the mount and user namespaces the parser workers need, SQLite
 lock and DNS access, and limits the rest of the filesystem to the app, config,
 data and runtime paths.
 
-Watchtower can stay enabled as a **monitor-only** watcher: it checks for a
-new image and sends notifications but does not replace the running one. A
-mutable `latest` tag can replace the image under the host profile and
-upstream settings, while a local image tag has no registry source. Use the
-`com.centurylinklabs.watchtower.monitor-only=true` label and update the image
-and recreate the watcher deliberately.
+Watchtower can run against `ghcr.io/emiliano-go/trustsight:latest`: the image
+workflow moves that tag only for stable releases. Watchtower replaces the
+image, not the compose environment, so the AppArmor profile and upstream
+settings stay in place. Keep the previous image available
+(`WATCHTOWER_CLEANUP=false`) and reload the host profile before deploying a
+release that changes the parser sandbox.
 
 ## As a systemd service
 

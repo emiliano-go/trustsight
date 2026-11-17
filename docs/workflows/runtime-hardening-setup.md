@@ -249,24 +249,24 @@ docker compose up -d --force-recreate watcher
 
 ### Watchtower
 
-Watchtower can remain enabled in monitor-only mode without risking the
-watcher. A local `trustsight:0.29.0` image has no registry tag to pull, and
-a mutable `ghcr.io/...:latest` tag can replace the image under a running
-profile and upstream configuration. The host AppArmor profile and compose
-environment survive a container recreation, but the image bytes do not.
+Watchtower is supported with the release image. The image workflow moves
+`ghcr.io/emiliano-go/trustsight:latest` only for stable releases, so
+Watchtower tracking `latest` pulls releases, not arbitrary builds.
 
-To keep Watchtower notifications without automatic image replacement:
+Use the registry image, not a locally built tag:
 
 ```yaml
+image: ghcr.io/emiliano-go/trustsight:latest
 labels:
   - "com.centurylinklabs.watchtower.enable=true"
-  - "com.centurylinklabs.watchtower.monitor-only=true"
 ```
 
-If automatic replacement is required, use a registry image rather than a
-local tag, set a healthcheck, and update the host profile and compose file
-deliberately after each release. Watchtower does not roll back an image that
-starts but fails the parser sandbox, so keep the previous image available.
+The host AppArmor profile and compose environment survive a container
+recreation. The image bytes change, so after a release that changes the
+parser sandbox, reload the profile before Watchtower recreates the watcher.
+Watchtower does not roll back an image that starts but fails the parser
+sandbox; set `WATCHTOWER_CLEANUP=false` to keep the previous image
+available, and keep the container healthcheck enabled.
 
 ### Upstream and full dependency depth
 

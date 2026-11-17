@@ -263,7 +263,7 @@ jobs:
           run_ts() {
             docker run --rm --read-only \
               --tmpfs /tmp:rw,size=64m,mode=1777 \
-              --tmpfs /home/ts/.cache:size=64m \
+              --tmpfs /home/ts/.cache:size=64m,mode=1777 \
               --user 1000:1000 \
               --cap-drop=all \
               --security-opt=no-new-privileges \

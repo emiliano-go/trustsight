@@ -17,9 +17,11 @@ from dataclasses import dataclass
 
 __all__ = ["MAX_ELF_BYTES", "ElfInfo", "parse_elf"]
 
-#: The parse window.  A real ELF header and dynamic table live near the
-#: start; a larger window buys nothing and is attacker-chosen cost.
-MAX_ELF_BYTES = 1024 * 1024
+#: The parse window.  Section headers (and therefore ``.dynamic``) can sit
+#: at the end of a large linked binary, so a small prefix silently loses
+#: ``DT_NEEDED``.  The archive lane charges this window against its own
+#: 64 MiB ELF budget rather than trusting the member size.
+MAX_ELF_BYTES = 64 * 1024 * 1024
 MAX_SECTIONS = 256
 MAX_DYNAMIC = 4096
 MAX_STRINGS = 4096

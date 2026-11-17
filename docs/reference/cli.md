@@ -1159,7 +1159,7 @@ trustsight verify-build <package> [--manifest PATH] [--json]
 
 It reviews the diff (L1-L8) first, then offers the L9 lane. When enabled and
 given a manifest, it inspects the artifact with the A-series rules
-(`A001`-`A008`); those findings are L9 evidence and are never blended into
+(`A001` through `A008`); those findings are L9 evidence and are never blended into
 the static score. When the artifact and the static analysis disagree, the
 result carries `l9_divergence` and both profiles stand.
 

@@ -98,9 +98,15 @@ def _hook_is_broad(content: str) -> bool:
     return broad and has_exec
 
 
+def _strip_comments(content: str) -> str:
+    return "\n".join(
+        line for line in split_lines(content)
+        if not line.strip().startswith(("#", ";")))
+
+
 def _runs_fetch_or_user_path(content: str) -> bool:
     """A hook/udev/install body that fetches, or runs from a user/temp path."""
-    lowered = content.lower()
+    lowered = _strip_comments(content).lower()
     for token in ("curl", "wget", "aria2c"):
         if token in lowered:
             return True
@@ -108,14 +114,11 @@ def _runs_fetch_or_user_path(content: str) -> bool:
                   "~/", "/home/", "/root/"):
         if token in lowered:
             return True
-    for token in ("sh -c", "bash -c", "dash -c", "zsh -c", "ksh -c"):
-        if token in lowered:
-            return True
     return False
 
 
 def _udev_runs_program(content: str) -> bool:
-    lowered = content.lower()
+    lowered = _strip_comments(content).lower()
     return any(token in lowered for token in (
         "run+=", "run{", "program==", "import{program}"))
 

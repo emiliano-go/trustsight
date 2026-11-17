@@ -1614,7 +1614,7 @@ def gate_elf_parsing_is_read_only_and_bounded() -> Gate:
         elif isinstance(node, ast.ImportFrom):
             if (node.module or "").split(".")[0] in banned:
                 problems.append(f"elf.py imports from {node.module}")
-    if MAX_ELF_BYTES > 4 * 1024 * 1024:
+    if MAX_ELF_BYTES > 64 * 1024 * 1024:
         problems.append("the ELF parse window is too large")
     if parse_elf(b"not an elf at all" * 10) is not None:
         problems.append("a non-ELF was accepted")

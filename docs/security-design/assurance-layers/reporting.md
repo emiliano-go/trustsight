@@ -118,7 +118,7 @@ is reported beside them, not inside them:
 - `l9_divergence` - the artifact findings and the static analysis disagree.
   Both profiles are rendered in full; neither overrides the other.
 
-L9 findings (`A001`-`A008`) carry no `L1`-`L8` layer and never change the
+L9 findings (`A001` through `A008`) carry no `L1`-`L8` layer and never change the
 static score; they are evidence from outside the static analysis.
 
 ## The boundary, beside the layers

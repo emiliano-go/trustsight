@@ -49,8 +49,8 @@ PINNED_LOOPS = {
     # input is a text fragment, not a diff walker.
     "analysis/entropy.py": 1,
     # Shipped hook/udev/install payload text from the L9 manifest, not a
-    # diff walk.
-    "analysis/artifact.py": 1,
+    # diff walk: one is the content scan, one strips comment lines.
+    "analysis/artifact.py": 2,
 }
 
 

@@ -51,6 +51,7 @@ _ARTIFACT_PREFIX = 4
 _MAX_INSPECTED = 2048
 MAX_ARCHIVE_ARTIFACTS = 256
 MAX_ELF_ARTIFACTS = 16
+MAX_ELF_TOTAL_BYTES = 64 * 1024 * 1024
 _ZIP_EOCD = b"PK\x05\x06"
 _GZIP_MAGIC = b"\x1f\x8b"
 _BZ2_MAGIC = b"BZh"
@@ -165,7 +166,7 @@ def _record_artifact(result: dict, name: str, mode: int, prefix: bytes,
 def _tar(data: bytes, result: dict, *, max_members: int,
          max_file_bytes: int, max_total_bytes: int, max_files: int) -> None:
     texts = result["manifest_texts"]
-    seen = kept = inspected = elf_parsed = 0
+    seen = kept = inspected = elf_parsed = elf_bytes = 0
     stream = _LimitedReader(_decompressed(data), max_total_bytes)
     try:
         tar_context = tarfile.open(fileobj=stream, mode="r|")
@@ -215,11 +216,17 @@ def _tar(data: bytes, result: dict, *, max_members: int,
                 handle = tar.extractfile(member)
                 if handle is not None:
                     prefix = handle.read(_ARTIFACT_PREFIX)
-                    if prefix[:4] == _ELF_MAGIC and elf_parsed < MAX_ELF_ARTIFACTS:
-                        rest = handle.read(MAX_ELF_BYTES - len(prefix))
-                        info = parse_elf(prefix + rest)
-                        elf_info = info.to_dict() if info is not None else None
-                        elf_parsed += 1
+                    if prefix[:4] == _ELF_MAGIC:
+                        want = min(member.size, MAX_ELF_BYTES)
+                        if (elf_parsed >= MAX_ELF_ARTIFACTS
+                                or elf_bytes + want > MAX_ELF_TOTAL_BYTES):
+                            result["refused"] = True
+                        else:
+                            rest = handle.read(MAX_ELF_BYTES - len(prefix))
+                            info = parse_elf(prefix + rest)
+                            elf_info = info.to_dict() if info is not None else None
+                            elf_parsed += 1
+                            elf_bytes += len(prefix) + len(rest)
                 inspected += 1
             _record_artifact(result, name, mode, prefix, member.size, elf_info)
     stream.close()
@@ -254,7 +261,7 @@ def _zip(data: bytes, result: dict, *, max_members: int,
             result["complete"] = False
             result["refused"] = True
             return
-        kept = total = inspected = elf_parsed = 0
+        kept = total = inspected = elf_parsed = elf_bytes = 0
         for info in entries:
             if info.is_dir():
                 continue
@@ -303,12 +310,18 @@ def _zip(data: bytes, result: dict, *, max_members: int,
             elif inspected < _MAX_INSPECTED and info.file_size > 0:
                 with archive.open(info) as handle:
                     prefix = handle.read(_ARTIFACT_PREFIX)
-                    if prefix[:4] == _ELF_MAGIC and elf_parsed < MAX_ELF_ARTIFACTS:
-                        rest = handle.read(MAX_ELF_BYTES - len(prefix))
-                        parsed_info = parse_elf(prefix + rest)
-                        elf_info = (parsed_info.to_dict()
-                                    if parsed_info is not None else None)
-                        elf_parsed += 1
+                    if prefix[:4] == _ELF_MAGIC:
+                        want = min(info.file_size, MAX_ELF_BYTES)
+                        if (elf_parsed >= MAX_ELF_ARTIFACTS
+                                or elf_bytes + want > MAX_ELF_TOTAL_BYTES):
+                            result["refused"] = True
+                        else:
+                            rest = handle.read(MAX_ELF_BYTES - len(prefix))
+                            parsed_info = parse_elf(prefix + rest)
+                            elf_info = (parsed_info.to_dict()
+                                        if parsed_info is not None else None)
+                            elf_parsed += 1
+                            elf_bytes += len(prefix) + len(rest)
                 inspected += 1
             _record_artifact(result, name, mode, prefix, info.file_size, elf_info)
 

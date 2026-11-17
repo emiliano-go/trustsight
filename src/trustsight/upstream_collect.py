@@ -388,6 +388,9 @@ def collect_upstream_manifest_texts(
             continue
         if parsed.get("refused") or parsed.get("malformed"):
             notes.append("upstream_scan_partial")
+        if any((a.get("elf_info") or {}).get("truncated")
+               for a in parsed.get("artifacts") or ()):
+            notes.append("upstream_scan_partial")
         findings.extend(_artifact_findings(parsed.get("artifacts") or ()))
         for path, text in parsed.get("manifest_texts") or ():
             if is_ci_workflow_path(path):

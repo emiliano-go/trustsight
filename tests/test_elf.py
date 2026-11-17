@@ -10,7 +10,8 @@ SHSTR = b"\x00.shstrtab\x00.dynstr\x00.dynamic\x00.upx\x00"
 DYNSTR = b"\x00libc.so.6\x00/tmp/lib\x00$ORIGIN/../lib\x00"
 
 
-def _elf64(*, packed_name=False, rpath=True, runpath=True) -> bytes:
+def _elf64(*, packed_name=False, rpath=True, runpath=True,
+           endian="<", encoding=1) -> bytes:
     shstr_off = 64
     dynstr_off = shstr_off + len(SHSTR)
     dynamic_off = dynstr_off + len(DYNSTR)
@@ -20,7 +21,8 @@ def _elf64(*, packed_name=False, rpath=True, runpath=True) -> bytes:
     if runpath:
         entries.append((29, DYNSTR.index(b"$ORIGIN")))
     entries.append((0, 0))
-    dynamic = b"".join(struct.pack("<QQ", tag, val) for tag, val in entries)
+    dynamic = b"".join(
+        struct.pack(f"{endian}QQ", tag, val) for tag, val in entries)
     shoff = dynamic_off + len(dynamic)
     names = [0, 1, 11, 19]  # offsets in SHSTR
     if packed_name:
@@ -32,16 +34,16 @@ def _elf64(*, packed_name=False, rpath=True, runpath=True) -> bytes:
         (names[2], 3, dynstr_off, len(DYNSTR), 0, 0),
         (names[3], 6, dynamic_off, len(dynamic), 2, 16),
     ):
-        shdrs += struct.pack("<IIQQQQIIQQ", name_off, typ, 0, 0, off, size,
-                             link, 0, 0, entsize)
+        shdrs += struct.pack(f"{endian}IIQQQQIIQQ", name_off, typ, 0, 0, off,
+                             size, link, 0, 0, entsize)
     header = bytearray(64)
     header[0:4] = b"\x7fELF"
     header[4] = 2  # 64-bit
-    header[5] = 1  # little
+    header[5] = encoding
     header[6] = 1
-    struct.pack_into("<HHI", header, 16, 2, 0x3E, 1)
-    struct.pack_into("<Q", header, 40, shoff)
-    struct.pack_into("<HHHHHH", header, 52, 64, 56, 0, 64, 4, 1)
+    struct.pack_into(f"{endian}HHI", header, 16, 2, 0x3E, 1)
+    struct.pack_into(f"{endian}Q", header, 40, shoff)
+    struct.pack_into(f"{endian}HHHHHH", header, 52, 64, 56, 0, 64, 4, 1)
     return bytes(header) + SHSTR + DYNSTR + dynamic + bytes(shdrs)
 
 
@@ -105,3 +107,10 @@ def test_a_lying_section_table_is_bounded_not_a_crash():
     data = bytearray(_elf64())
     struct.pack_into("<Q", data, 40, 10**9)  # e_shoff outside the file
     assert parse_elf(bytes(data)) is not None
+
+
+def test_elf64_big_endian_reads_needed():
+    info = parse_elf(_elf64(endian=">", encoding=2))
+    assert info is not None
+    assert info.bits == 64 and info.endian == "big"
+    assert info.needed == ("libc.so.6",)

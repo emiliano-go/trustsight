@@ -146,6 +146,7 @@ python scripts/security_gates.py
 | `every history diff is scored independently` | B1 | no aggregate score reachable from the `--last` path |
 | `manifest parses are bounded and refusing` | A4b/A5 | hostile TOML/JSON/line fixtures and the PyYAML merge-key bomb return a refusal or linear parse, never a hang |
 | `manifest parsing is sandboxed` | A17 | the parent facades (`analysis/manifests`, `srcinfo`, `tokenizer`, `full_aur/fetch`) call `sandbox/manifest_client`; `sandbox/manifest_worker` applies the read-role Linux sandbox and is the only production caller of the manifest, archive and tokenizer-engine parsers |
+| `artifact manifest parsing is sandboxed` | A19 | `TrustSight.verify_build` and `trustsight verify-build` send raw manifest text through `sandbox/manifest_client`; `sandbox/manifest_worker` parses it and calls `analysis.artifact.inspect_manifest_bounded`; the parent never parses the manifest or calls the inspector directly. The client normalises the list form under an aggregate text budget, rejects raw controls and over-frame requests, and re-validates the worker projection; `tests/test_artifact.py` and `tests/test_manifest_worker.py` cover the hostile cases |
 | `manifest table is configuration` | A6 | the manifest filename table is written to `patterns.toml` |
 | `U003 joins the host view` | B11 | a manifest-introduced git host appears in `hosts_gained` |
 | `manifest ledger stays weight 0` | B10 | U001/U002/U005/U006 are INFO and U009 is a feed-only LOW; all weigh 0, and only U003/U004 score |

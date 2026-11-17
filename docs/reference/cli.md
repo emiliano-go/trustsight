@@ -872,7 +872,7 @@ live in `trustsight-feed` (`npm run import:scans`, `npm run rollup:scans`).
 trustsight full-aur verify [--package NAME ...] [--limit N] [--json]
 ```
 
-The batch L9 lane for corpus operators: it runs the optional artifact inspection over the corpus (or the named packages) and lands the results in the corpus DB as artifact properties, feeding future reproducibility comparison. The static core never runs package code - the build that produces a manifest runs outside TrustSight. With `[verify] enabled = false` (the default) or no sandbox container, every package reports `l9_unavailable`, a weight-0 boundary rather than a verdict.
+The batch L9 lane for corpus operators: it runs the optional artifact inspection over the corpus (or the named packages) and lands the results in the corpus DB as artifact properties, feeding future reproducibility comparison. The static core never runs package code - the build that produces a manifest runs outside TrustSight. With `[verify] enabled = false` (the default) or no read-role sandbox, every package reports `l9_unavailable`, a weight-0 boundary rather than a verdict.
 
 ### What one cycle does
 
@@ -1143,9 +1143,10 @@ ladder (`FATAL`/`CRITICAL` → `error`, `HIGH`/`MEDIUM` → `warning`, else
 
 Inspect an external build's artifact manifest. TrustSight does not build the
 package: the build runs outside the static core and its manifest is the
-handoff. Off by default; with `[verify] enabled = false` or no manifest it
-reports `l9_unavailable` - a weight-0 boundary, never a clean or malicious
-verdict. Nothing is executed here.
+handoff. Off by default; with `[verify] enabled = false`, no manifest, or no
+available read-role sandbox it reports `l9_unavailable` - a weight-0 boundary,
+never a clean or malicious verdict. The manifest is parsed and inspected in
+that sandbox, not in the parent process. Nothing is executed here.
 
 ```
 trustsight verify-build <package> [--manifest PATH] [--json]
@@ -1154,17 +1155,22 @@ trustsight verify-build <package> [--manifest PATH] [--json]
 | Argument | Required | Description |
 |----------|----------|-------------|
 | `package` | Yes | Package name. |
-| `--manifest PATH` | No | JSON array of built-file records (`path`, `mode`, `setuid`, `setgid`, `unit`, `links`, `caps`, `bpf`, `world_writable`) produced by an external build. A record may carry an optional `elf` object (`needed`, `rpath`, `runpath`, `packed`) so A003/A014/A015 can use real ELF metadata; without it those rules fall back to the record's declared `links`. A `.hook`, `.rules` or `.install` record may carry bounded `content` so A011-A013 can inspect what the shipped file runs. Without it the lane is unavailable. |
+| `--manifest PATH` | No | JSON array of built-file records (`path`, `mode`, `setuid`, `setgid`, `unit`, `links`, `caps`, `bpf`, `world_writable`) produced by an external build. A record may carry an optional `elf` object (`needed`, `rpath`, `runpath`, `packed`) so A003/A014/A015 can use real ELF metadata; without it those rules fall back to the record's declared `links`. A `.hook`, `.rules` or `.install` record may carry bounded `content` so A011-A013 can inspect what the shipped file runs. Without it the lane is unavailable. The manifest file is read under an 8 MiB cap; entries, links, path bytes, content bytes and findings are capped independently. |
 | `--json` | No | Emit the result as JSON. |
 
 It reviews the diff (L1-L8) first, then offers the L9 lane. When enabled and
-given a manifest, it inspects the artifact with the A-series rules
-(`A001` through `A008`); those findings are L9 evidence and are never blended into
-the static score. When the artifact and the static analysis disagree, the
-result carries `l9_divergence` and both profiles stand.
+given a manifest, the read-role sandbox parses it and inspects the artifact
+with the A-series rules (`A001` through `A015`); those findings are L9
+evidence and are never blended into the static score. When a complete artifact
+inspection and the static analysis disagree, the result carries
+`l9_divergence` and both profiles stand. When an input cap is reached, the
+result is `l9_partial`, carries `limits`, and the terminal states that the
+artifact was not fully inspected.
 
 The static core never executes package code, and there is no automatic
-build lane: the manifest a caller supplies is the whole handoff.
+build lane: the manifest a caller supplies is the whole handoff. The L9 lane
+requires the same read-role sandbox as committed-manifest parsing; hosts where
+that sandbox cannot start report `l9_unavailable`.
 
 ---
 

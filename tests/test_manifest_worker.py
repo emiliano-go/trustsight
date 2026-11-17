@@ -86,3 +86,144 @@ def test_snapshot_parsing_goes_through_the_content_worker(monkeypatch):
     text, *_rest = fetch.fetch_pkgbuild_with_tree("demo")
     assert text == "pkgname=demo\n"
     assert calls == [("demo", b"tar")]
+
+
+def test_artifact_manifest_goes_through_the_worker(monkeypatch):
+    import json
+
+    from trustsight.sandbox import manifest_client
+
+    captured = {}
+
+    def fake(payload):
+        captured.update(json.loads(payload))
+        return {
+            "findings": [{
+                "rule_id": "A001", "name": "Setuid File In Artifact",
+                "severity": "HIGH", "category": "artifact",
+                "match": "/usr/bin/x has setuid",
+                "file": "/usr/bin/x",
+            }],
+            "limits": {"truncated": False, "reasons": []},
+        }
+
+    monkeypatch.setattr(manifest_client, "_ask", fake)
+    result = manifest_client.inspect_artifact_manifest(
+        manifest_text='[{"path": "/usr/bin/x", "setuid": true}]')
+    assert captured["path"] == "__artifact_manifest__"
+    assert captured["text"].startswith("[")
+    assert result["findings"][0]["rule_id"] == "A001"
+
+
+def test_artifact_manifest_list_is_normalised_before_the_worker(monkeypatch):
+    import json
+
+    from trustsight.sandbox import manifest_client
+
+    captured = {}
+
+    def fake(payload):
+        captured.update(json.loads(payload))
+        return {"findings": [], "limits": {"truncated": False, "reasons": []}}
+
+    monkeypatch.setattr(manifest_client, "_ask", fake)
+    manifest_client.inspect_artifact_manifest(
+        manifest=[{"path": "/usr/bin/x", "unknown": "x" * 100}],
+        declared={"depends": ["glibc"], "unknown": "ignored"},
+    )
+    records = json.loads(captured["text"])
+    assert records == [{"path": "/usr/bin/x"}]
+    assert captured["declared"] == {"depends": ["glibc"]}
+
+
+def test_artifact_manifest_rejects_both_forms():
+    from trustsight.sandbox import manifest_client
+
+    with pytest.raises(manifest_client.ManifestUnavailable):
+        manifest_client.inspect_artifact_manifest(
+            manifest=[], manifest_text="[]")
+
+
+def test_artifact_manifest_rejects_a_malformed_worker_result(monkeypatch):
+    from trustsight.sandbox import manifest_client
+
+    monkeypatch.setattr(
+        manifest_client, "_ask",
+        lambda payload: {"findings": [{"rule_id": "X"}],
+                         "limits": {"reasons": []}})
+    with pytest.raises(manifest_client.ManifestUnavailable):
+        manifest_client.inspect_artifact_manifest(manifest_text="[]")
+
+
+def test_the_worker_parses_artifact_manifests():
+    import json
+
+    body = json.dumps({
+        "path": "__artifact_manifest__",
+        "text": json.dumps([{"path": "/usr/bin/x", "setuid": True}]),
+    }).encode()
+    response = manifest_worker._handle(body)
+    assert response["result"]["findings"][0]["rule_id"] == "A001"
+
+
+def test_the_worker_rejects_a_non_array_artifact_manifest():
+    import json
+
+    body = json.dumps({
+        "path": "__artifact_manifest__",
+        "text": json.dumps({"path": "/usr/bin/x"}),
+    }).encode()
+    response = manifest_worker._handle(body)
+    assert "error" in response
+
+
+def test_the_worker_rejects_a_pathless_artifact_record():
+    import json
+
+    body = json.dumps({
+        "path": "__artifact_manifest__",
+        "text": json.dumps([{}]),
+    }).encode()
+    response = manifest_worker._handle(body)
+    assert "error" in response
+
+
+def test_artifact_manifest_rejects_raw_control_text():
+    from trustsight.sandbox import manifest_client
+
+    with pytest.raises(manifest_client.ManifestUnavailable, match="control"):
+        manifest_client.inspect_artifact_manifest(
+            manifest_text='["\x01"]')
+
+
+def test_artifact_manifest_request_over_the_frame_cap_is_refused(monkeypatch):
+    from trustsight.sandbox import manifest_client, protocol
+
+    monkeypatch.setattr(protocol, "MAX_FRAME_BYTES", 8)
+    with pytest.raises(manifest_client.ManifestUnavailable, match="framed"):
+        manifest_client._ask(b"x" * 9)
+
+
+def test_artifact_manifest_result_requires_limits(monkeypatch):
+    from trustsight.sandbox import manifest_client
+
+    monkeypatch.setattr(
+        manifest_client, "_ask",
+        lambda payload: {"findings": [], "limits": {"reasons": []}})
+    with pytest.raises(manifest_client.ManifestUnavailable, match="limits"):
+        manifest_client.inspect_artifact_manifest(manifest_text="[]")
+
+
+def test_artifact_manifest_reasons_are_bounded(monkeypatch):
+    from trustsight.analysis import artifact
+    from trustsight.sandbox import manifest_client
+
+    monkeypatch.setattr(
+        manifest_client, "_ask",
+        lambda payload: {
+            "findings": [],
+            "limits": {"truncated": False,
+                       "reasons": ["x" * (artifact.MAX_LIMIT_REASON_BYTES + 1)]},
+        })
+    with pytest.raises(manifest_client.ManifestUnavailable, match="limits"):
+        manifest_client.inspect_artifact_manifest(manifest_text="[]")

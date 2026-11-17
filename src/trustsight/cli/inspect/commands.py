@@ -318,16 +318,18 @@ def register_commands(app: typer.Typer):
         manifest: Optional[str] = typer.Option(
             None, "--manifest",
             help="JSON artifact manifest produced by an external build; "
-                 "without it the lane reports l9_unavailable"),
+                 "without it the lane reports l9_unavailable. The manifest "
+                 "is parsed in the read-role sandbox, not in this process."),
         json_output: bool = typer.Option(False, "--json", help="Output JSON"),
     ):
         """Inspect an external build's artifact manifest (the L9 lane).
 
         TrustSight does not build the package: the build runs outside the
         static core and its manifest is the handoff.  Off by default; with
-        ``verify.enabled = false`` or no manifest this reports
-        ``l9_unavailable`` - a weight-0 boundary, never a clean or malicious
-        verdict.  Nothing is executed here.
+        ``verify.enabled = false``, no manifest, or no available read-role
+        sandbox this reports ``l9_unavailable`` - a weight-0 boundary, never
+        a clean or malicious verdict.  A capped inspection reports
+        ``l9_partial``.  Nothing is executed here.
         """
         from ...api import TrustSight
         from ...config import ensure_default_configs
@@ -347,48 +349,47 @@ def register_commands(app: typer.Typer):
             static_clean = None
         loaded = _read_manifest(manifest) if manifest else None
         result = TrustSight().verify_build(
-            package, manifest=loaded, static_clean=static_clean)
+            package, manifest_text=loaded, static_clean=static_clean)
         if json_output:
             typer.echo(json.dumps(result, indent=2))
             return
         if result["status"] == "l9_unavailable":
-            typer.echo(f"L9 build lane unavailable for {package}: "
-                       f"{result['reason']}")
+            reason = clean(result.get("reason", ""), limit=1024)
+            typer.echo(f"L9 build lane unavailable for {package}: {reason}")
             return
         for finding in result["findings"]:
-            typer.echo(f"{finding['rule_id']}: {finding['match']}")
+            rule_id = clean(finding.get("rule_id", ""), limit=64)
+            match = clean(finding.get("match", ""), limit=1024)
+            typer.echo(f"{rule_id}: {match}")
+        if result["status"] == "l9_partial":
+            limits = result.get("limits") or {}
+            reasons = ", ".join(
+                clean(reason, limit=128)
+                for reason in (limits.get("reasons") or ())
+            ) or "input cap"
+            typer.echo("L9 inspection truncated: the artifact was not fully "
+                       f"inspected ({reasons}); this is not a clean result.")
         if result.get("l9_divergence"):
             typer.echo("L9 divergence: the artifact and the static analysis "
                        "disagree; both profiles stand.")
 
-#: A manifest is operator-supplied JSON, not package input, but it is still
-#: read under a cap: the inspection half must not be turned into an unbounded
-#: allocation by a mistaken path.
-_MAX_MANIFEST_BYTES = 8 * 1024 * 1024
 
-
-def _read_manifest(path: str) -> list:
-    """Read an artifact manifest: a JSON array of file records."""
+def _read_manifest(path: str) -> str:
+    """Read an artifact manifest as raw text for the sandboxed inspector."""
     from pathlib import Path
 
+    from ...analysis.artifact import MAX_MANIFEST_BYTES
     from ...bounded_io import ReadTooLarge, read_file_capped
 
     try:
         data = read_file_capped(
-            Path(path), _MAX_MANIFEST_BYTES, "artifact manifest")
+            Path(path), MAX_MANIFEST_BYTES, "artifact manifest")
     except ReadTooLarge as exc:
         raise typer.BadParameter(str(exc)) from exc
     try:
-        parsed = json.loads(data)
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise typer.BadParameter(f"manifest is not valid JSON: {exc}") from exc
-    if not isinstance(parsed, list):
-        raise typer.BadParameter("a manifest is a JSON array of file records")
-    records = [entry for entry in parsed if isinstance(entry, dict)]
-    if len(records) != len(parsed):
-        raise typer.BadParameter(
-            "every manifest record must be a JSON object")
-    return records
+        return data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise typer.BadParameter("manifest is not valid UTF-8") from exc
 
 
 def _inspect_history(

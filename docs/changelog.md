@@ -2,6 +2,47 @@
 
 # Changelog
 
+## [0.29.1] - 2026-11-16
+
+### Fixed
+
+- **The watcher runs under the shipped AppArmor profile on Debian 13.**
+  The profile now permits SQLite locks, UDP DNS, netlink, `/etc/hosts`,
+  cgroup reads, signals, user-namespace maps, `pivot_root` and the `/app`
+  directory read. The previous profile denied the parser worker at
+  user-namespace setup or `pivot_root`, which surfaced as a cycle failure.
+- **Parser workers stop writing bytecode into the stdlib.** Workers launch
+  with `-I` and `-B`, and the image precompiles the standard library. This
+  keeps `PYTHON*` variables out of the worker while avoiding `mknod` denials
+  under AppArmor.
+- **The image smoke test uses the watcher profile.** Docker's default
+  profile denied the parser mount, which prevented the v0.29.0 image from
+  reaching the push step. The workflow loads the shipped profile and runs
+  the smoke under it.
+
+### Changed
+
+- **Watchtower tracks stable release images.** The `latest` tag still moves
+  only for stable releases. The docs now describe the supported setup:
+  use the registry image, keep the previous image with
+  `WATCHTOWER_CLEANUP=false`, and reload the host profile before a release
+  that changes the parser sandbox.
+
+### Documentation
+
+- **The host deployment guide records the AppArmor findings.** It covers
+  the SQLite `k` permission, DNS and netlink rules, cgroup reads, signal
+  permission, user-namespace maps, `pivot_root`, bytecode precompilation,
+  the systemd userns policy, upstream activation, full-depth walks and
+  Watchtower operation.
+
+### Stats
+
+- 13 commits since v0.29.0
+- 12 files changed, +194 / -29
+- 9,405 tests across 278 files
+- Package version 0.29.1 (Beta)
+
 ## [0.29.0] - 2026-11-16
 
 ### Security
@@ -5787,7 +5828,8 @@ separate reconciliation.
 - SQLite novelty tracking
 - LLM verdict integration
 - Basic CLI (review, inspect, history, config)
-[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.29.0...HEAD
+[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.29.1...HEAD
+[0.29.1]: https://github.com/emiliano-go/trustsight/releases/tag/v0.29.1
 [0.29.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.29.0
 [0.28.8]: https://github.com/emiliano-go/trustsight/releases/tag/v0.28.8
 [0.28.7]: https://github.com/emiliano-go/trustsight/releases/tag/v0.28.7

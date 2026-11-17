@@ -227,7 +227,9 @@ of the profile, not optional tuning.
   `/etc/gai.conf`. Stream-only network rules make the seed fetch fail with
   `Temporary failure in name resolution`.
 - **User namespaces:** the parser workers write `/proc/<pid>/uid_map`,
-  `gid_map` and `setgroups`; those paths need write permission.
+  `gid_map` and `setgroups`; those paths need write permission. The sandbox
+  also pivots into its private root, so the profile needs `pivot_root` and
+  read access to the `/app` directory itself.
 - **CPU discovery:** `/sys/fs/cgroup/**` and `/sys/fs/cgroup/cpu.max` need
   read permission.
 - **Signals:** Docker's runtime needs `signal` permission for stop and

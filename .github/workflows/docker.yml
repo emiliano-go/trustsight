@@ -200,7 +200,11 @@ jobs:
           sleep 3
           running="$(docker compose -f docker-compose.watcher.yml ps --status running --services)"
           for service in db-writer egress-proxy token-broker feed-signer; do
-            echo "$running" | grep -qx "$service"
+            if ! echo "$running" | grep -qx "$service"; then
+              docker compose -f docker-compose.watcher.yml ps -a
+              docker compose -f docker-compose.watcher.yml logs --tail=40
+              exit 1
+            fi
           done
 
       - name: Exercise the feed signer under the fetcher profile

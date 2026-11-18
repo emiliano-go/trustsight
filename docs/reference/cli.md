@@ -1410,10 +1410,13 @@ was analysed, its score, risk and finding count. The root component carries
 
 Findings are `trustsight:finding` properties with the value `RULE:SEVERITY`.
 The export is bounded (`MAX_SBOM_COMPONENTS`, `MAX_SBOM_FINDINGS`,
-`MAX_RECIPE_BYTES`); excess components are dropped deterministically and the
-root records `trustsight:truncated` and the omitted count. Nothing is fetched
-or executed to build it, and there is no timestamp or random serial, so
-repeated runs over the same analysis are byte-identical.
+`MAX_RECIPE_BYTES`, `MAX_SBOM_BYTES`); excess components are dropped
+deterministically and the root records `trustsight:truncated` and the omitted
+count, while a document past the byte cap is refused. The command uses the
+normal AUR fetch path to read the package it analyses, but it never fetches a
+URL the package declares and never executes package code. There is no
+timestamp or random serial, so repeated runs over the same analysis are
+byte-identical.
 
 ---
 

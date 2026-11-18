@@ -102,7 +102,8 @@ def encoded_fraction(text: str, min_length: int = 64) -> float:
 
 
 _CHECKSUM_ARRAY_RE = re.compile(
-    r"\b(?:sha(?:1|224|256|384|512)|md5|b2)sums(?:_[a-z0-9_]+)?\s*=\s*\(",
+    r"^\s*(?:sha(?:1|224|256|384|512)|md5|b2)sums(?:_[a-z0-9_]+)?"
+    r"\s*=\s*\(",
     re.IGNORECASE,
 )
 

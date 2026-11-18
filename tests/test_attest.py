@@ -124,3 +124,17 @@ def test_attestation_refuses_a_tampered_source_inventory(tmp_path):
     out.write_text(json.dumps(payload))
     with pytest.raises(AttestError, match="source inventory"):
         check_tree(root, out)
+
+
+def test_attest_cli_sanitizes_the_unpinned_listing(tmp_path, capsys):
+    from trustsight.attest_cli import main as attest_main
+
+    root = tmp_path / "pkg"
+    root.mkdir()
+    (root / "PKGBUILD").write_text(
+        'pkgname=x\nsource=("git+https://example.invalid/\x1b[31mevil")\n'
+    )
+    assert attest_main([str(root), "--list-unpinned"]) == 0
+    out = capsys.readouterr().out
+    assert "\x1b" not in out
+    assert "evil" in out

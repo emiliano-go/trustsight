@@ -491,7 +491,7 @@ def _run_baseline_build(
         # previous recipe was actually observed.
         notify_diff = (
             _notify_diff(old_pkgbuild, new_pkgbuild)
-            if previous_snapshot else {}
+            if previous_snapshot and old_pkgbuild else {}
         )
         detail[name] = {
             "score": fact.final_score,

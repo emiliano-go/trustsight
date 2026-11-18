@@ -203,3 +203,33 @@ def test_cli_refuses_an_unsupported_format():
     result = CliRunner().invoke(app, ["sbom", "demo", "--format", "spdx"])
     assert result.exit_code == 2
     assert "only cyclonedx" in result.output
+
+
+def test_sbom_checksum_alignment_preserves_empty_elements():
+    recipe = (
+        "pkgname=demo\n"
+        "source=('one.tar.gz' 'two.tar.gz' 'three.tar.gz')\n"
+        f"sha256sums=('' '{GOOD_HASH}' '{'b' * 64}')\n"
+    )
+    bom = build_sbom(_fact(score_breakdown=[], dependencies=[]),
+                     recipe_text=recipe)
+    by_name = {c["name"]: c for c in bom["components"]}
+    assert _values(by_name["one.tar.gz"], "trustsight:opaque") == ["true"]
+    assert by_name["two.tar.gz"]["hashes"][0]["content"] == GOOD_HASH
+    assert by_name["three.tar.gz"]["hashes"][0]["content"] == "b" * 64
+
+
+def test_sbom_dependency_refs_are_unique_after_sanitising():
+    fact = _fact(score_breakdown=[], dependencies=[
+        DependencyReport(name="a+b", depth=1), DependencyReport(name="a-b", depth=1),
+    ])
+    bom = build_sbom(fact, recipe_text="pkgname=demo\n")
+    refs = [c["bom-ref"] for c in bom["components"]]
+    assert len(refs) == len(set(refs))
+
+
+def test_render_sbom_refuses_a_document_over_the_export_cap():
+    import pytest
+    from trustsight import sbom
+    with pytest.raises(ValueError, match="export cap"):
+        sbom.render_sbom({"x": "y" * (MAX_SBOM_BYTES + 1)})

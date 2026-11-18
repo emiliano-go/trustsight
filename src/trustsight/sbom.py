@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 from typing import Any, Iterable
 
 from .deps import normalize_dependency
@@ -112,12 +113,13 @@ def _suffixes(arrays: dict[str, tuple[str, ...]], family: str) -> list[str]:
 
 
 def _checksum_for(
-    arrays: dict[str, tuple[str, ...]], suffix: str
+    arrays: dict[str, tuple[str, ...]], suffix: str, recipe_text: str = ""
 ) -> tuple[tuple[str, ...], str]:
     for name, algorithm in _CHECKSUM_ALGS:
         key = name + suffix
         if key in arrays:
-            return arrays[key], algorithm
+            raw = _raw_array(recipe_text, key)
+            return (raw or arrays[key]), algorithm
     return (), ""
 
 
@@ -141,12 +143,29 @@ def _pin(url: str) -> tuple[str, str]:
     return "", ""
 
 
-def _source_rows(arrays: dict[str, tuple[str, ...]]) -> list[dict]:
+def _raw_array(text: str, key: str) -> tuple[str, ...]:
+    """An array declaration with empty elements preserved."""
+    match = re.search(rf"(?ms)^\s*{re.escape(key)}\s*=\s*\((.*?)\)", text)
+    if not match:
+        return ()
+    try:
+        return tuple(shlex.split(match.group(1), comments=False, posix=True))
+    except ValueError:
+        return ()
+
+
+def _source_rows(arrays: dict[str, tuple[str, ...]],
+                 recipe_text: str = "") -> list[dict]:
     rows: list[dict] = []
     seen: set[tuple[str, str]] = set()
     for suffix in _suffixes(arrays, "source"):
-        entries = arrays.get("source" + suffix) or ()
-        sums, algorithm = _checksum_for(arrays, suffix)
+        key = "source" + suffix
+        entries = _raw_array(recipe_text, key) or arrays.get(key) or ()
+        sums, algorithm = _checksum_for(arrays, suffix, recipe_text)
+        if len(sums) != len(entries):
+            # parse_recipe drops empty elements, so a length mismatch means
+            # the checksum index cannot be attributed safely.
+            sums = ()
         for index, raw in enumerate(entries):
             entry = _text(raw, 1024)
             if not entry:
@@ -216,16 +235,18 @@ def _dependency_rows(fact, arrays: dict[str, tuple[str, ...]]) -> dict[str, dict
     return rows
 
 
-def _strings(value: Any) -> Iterable[str]:
+def _strings(value: Any, _depth: int = 0) -> Iterable[str]:
+    if _depth > 8:
+        return
     if isinstance(value, str):
         yield value
     elif isinstance(value, dict):
         for key, item in value.items():
             yield str(key)
-            yield from _strings(item)
+            yield from _strings(item, _depth + 1)
     elif isinstance(value, (list, tuple, set)):
         for item in value:
-            yield from _strings(item)
+            yield from _strings(item, _depth + 1)
 
 
 def _finding_key(finding: dict) -> tuple[str, str]:
@@ -254,10 +275,11 @@ def _attach_findings(
             break
         key = _finding_key(finding)
         evidence = finding.get("evidence") or {}
-        haystack = [
-            _text(value, 1024)
-            for value in _strings(evidence)
-        ]
+        haystack = []
+        for value in _strings(evidence):
+            haystack.append(_text(value, 1024))
+            if len(haystack) >= 256:
+                break
         haystack.append(_text(finding.get("file"), 512))
         assigned = False
         for source, tokens in zip(sources, source_tokens):
@@ -360,7 +382,7 @@ def build_sbom(fact, *, recipe_text: str = "") -> dict:
         MAX_NAME_BYTES)
     arrays, recipe_status = _recipe_arrays(recipe_text)
 
-    sources = _source_rows(arrays)
+    sources = _source_rows(arrays, recipe_text)
     omitted_sources = max(0, len(sources) - MAX_SBOM_COMPONENTS)
     sources = sources[:MAX_SBOM_COMPONENTS]
     dependency_map = _dependency_rows(fact, arrays)
@@ -427,7 +449,7 @@ def build_sbom(fact, *, recipe_text: str = "") -> dict:
         ))
 
     dependency_refs: list[str] = []
-    for name in sorted(dependencies):
+    for index, name in enumerate(sorted(dependencies)):
         row = dependencies[name]
         analyzed = row.get("analyzed")
         constraints = sorted(row["constraints"])
@@ -475,7 +497,7 @@ def build_sbom(fact, *, recipe_text: str = "") -> dict:
                 properties.append(_prop("trustsight:parent", parent))
         properties.extend(_finding_props(row.get("findings") or ()))
         properties.extend(_opaque_props(reasons))
-        ref = f"urn:trustsight:dependency:{_ref(name)}"
+        ref = f"urn:trustsight:dependency:{index}:{_ref(name)}"
         dependency_refs.append(ref)
         components.append((
             "library",
@@ -536,7 +558,7 @@ def build_sbom(fact, *, recipe_text: str = "") -> dict:
             **({"version": tool_version} if tool_version else {}),
         }],
     }
-    return {
+    document = {
         "bomFormat": "CycloneDX",
         "specVersion": "1.5",
         "version": 1,
@@ -548,12 +570,18 @@ def build_sbom(fact, *, recipe_text: str = "") -> dict:
                 component.get("version", ""), component["bom-ref"])),
         "dependencies": dependencies_payload,
     }
+    render_sbom(document)
+    return document
 
 
 def render_sbom(bom: dict) -> str:
     """Serialize a document deterministically, one trailing newline."""
-    return json.dumps(
+    text = json.dumps(
         bom, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+    if len(text.encode("utf-8")) > MAX_SBOM_BYTES:
+        raise ValueError(
+            f"SBOM exceeds the {MAX_SBOM_BYTES}-byte export cap")
+    return text
 
 
 def _current_recipe(fact) -> str:

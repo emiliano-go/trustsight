@@ -86,8 +86,10 @@ def register_commands(app: typer.Typer) -> None:
             typer.echo(json.dumps(payload, indent=2))
             return
         print(f"package: {clean(package)}")
-        print(f"previous: {old_score}/100 ({old_band}) at {before.get('timestamp', '')}")
-        print(f"current:  {new_score}/100 ({new_band})")
+        previous_at = clean(str(before.get("timestamp", "")), limit=128)
+        print(f"previous: {old_score}/100 ({clean(str(old_band), limit=64)}) "
+              f"at {previous_at}")
+        print(f"current:  {new_score}/100 ({clean(str(new_band), limit=64)})")
         print(f"delta:    {payload['delta']:+d}")
         print("new:      " + (", ".join(payload["new"]) or "(none)"))
         print("resolved: " + (", ".join(payload["resolved"]) or "(none)"))

@@ -2,7 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
+## [0.30.0] - 2026-11-18
 
 ### Added
 
@@ -5968,7 +5968,8 @@ separate reconciliation.
 - SQLite novelty tracking
 - LLM verdict integration
 - Basic CLI (review, inspect, history, config)
-[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.29.2...HEAD
+[0.30.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.30.0
+[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.30.0...HEAD
 [0.29.2]: https://github.com/emiliano-go/trustsight/releases/tag/v0.29.2
 [0.29.1]: https://github.com/emiliano-go/trustsight/releases/tag/v0.29.1
 [0.29.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.29.0

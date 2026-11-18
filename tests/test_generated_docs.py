@@ -95,3 +95,23 @@ def test_every_category_page_merges_mechanics_and_interpretation():
             if heading not in text:
                 missing.append(f"{category.doc_page}: {heading}")
     assert missing == [], missing
+
+
+def test_glossary_artifact_range_matches_the_catalog():
+    """The glossary's A-series range is prose, so pin it to the registry."""
+    import re
+
+    from trustsight.contract import rule_ids
+
+    artifact = sorted(
+        rule for rule in rule_ids()
+        if re.fullmatch(r"A\d{3}", rule)
+    )
+    assert artifact
+    text = (ROOT / "docs" / "reference" / "glossary.md").read_text(
+        encoding="utf-8")
+    match = re.search(
+        r"reporting artifact rules `(A\d{3})` through `(A\d{3})`", text)
+    assert match, "the glossary no longer states the artifact rule range"
+    assert match.groups() == (artifact[0], artifact[-1]), (
+        "the glossary artifact range drifted; update the A-series range")

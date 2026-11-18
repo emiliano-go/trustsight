@@ -225,6 +225,11 @@ def scan_recipe(scan: ScanInput, config: dict) -> ScanResult:
             package_name=scan.package,
         )
     )
+    if recipe_text:
+        from ..namespaces import owned_namespace_findings
+
+        triggered_rules.extend(owned_namespace_findings(
+            clamp_text(recipe_text), config, package_name=scan.package))
     if scan.tree_manifest:
         from ..delivery import scan_tree_manifest
 

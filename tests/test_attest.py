@@ -65,8 +65,10 @@ def test_a_failed_write_does_not_replace_the_previous_file(tmp_path, monkeypatch
 
 
 def test_unreadable_tree_fails_closed(tmp_path):
-    root = tmp_path / "pkg"; root.mkdir()
-    blocked = root / "blocked"; blocked.mkdir()
+    root = tmp_path / "pkg"
+    root.mkdir()
+    blocked = root / "blocked"
+    blocked.mkdir()
     (blocked / "file").write_text("x")
     blocked.chmod(0)
     try:
@@ -79,7 +81,8 @@ def test_unreadable_tree_fails_closed(tmp_path):
 def test_unpinned_sources_lists_vcs_skip_and_unchecksummed(tmp_path):
     from trustsight.attest import unpinned_sources
 
-    root = tmp_path / "pkg"; root.mkdir()
+    root = tmp_path / "pkg"
+    root.mkdir()
     (root / "PKGBUILD").write_text(
         'pkgname=demo\n'
         'source=("git+https://example.invalid/a.git" "skip.tar.gz" '

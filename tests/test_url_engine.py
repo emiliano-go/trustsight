@@ -102,7 +102,10 @@ def test_a_registry_endpoint_is_not_a_source_artifact():
         "}"
     )
     changes = extract_urls_from_diff(_diff(body))
-    assert "https://registry.yarnpkg.com" in changes.declared_urls
-    sources = set(changes.added_urls) - set(changes.declared_urls)
-    assert not any("registry.yarnpkg.com" in url for url in sources)
+    declared = set(changes.declared_urls)
+    # Exact set membership, not a URL substring probe: the URL is declared
+    # and every added URL is declared, so no undeclared source is left to
+    # be bucketed.
+    assert declared == {"https://registry.yarnpkg.com"}
+    assert set(changes.added_urls) <= declared
     assert "SOURCE_BUCKET" not in _ids(body)

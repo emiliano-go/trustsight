@@ -39,18 +39,19 @@
     "docs/reports/benchmarks-and-methodology.md": [
       "- **Benign** p95 = 30",
       "- Gap = +10 points",
-      "| Benign zero-rate | 75.2% |",
-      "| Ruleset trigger rate | 29.1% |",
+      "| Benign zero-rate | 75.5% |",
+      "| Ruleset trigger rate | 28.9% |",
       "| Benign flag rate | 6.4% |",
       "| Benign p95 | 30 |",
-      "The 75.2% zero-rate means 75.2% of benign diffs score 0, while **6.4% exceed the 20-point threshold**",
+      "The 75.5% zero-rate means 75.5% of benign diffs score 0, while **6.4% exceed the 20-point threshold**",
       "213 self-authored fixtures",
-      "| Benign zero-rate | 75.2 % |",
+      "| Benign zero-rate | 75.5 % |",
+      "| Benign p95 | 30 |",
       "| CRITICAL p5 | 40 |"
     ],
     "docs/reports/fire-rates.md": [
       "| benign 95th percentile | 30 |",
-      "| benign diffs scoring 0 | 75.2% |",
+      "| benign diffs scoring 0 | 75.5% |",
       "| benign diffs above the 20-point threshold | 6.4% |",
       "| percentile at which 20 sits | 93.6th |",
       "| malicious 5th percentile | 40 |",
@@ -60,7 +61,7 @@
     "docs/security-design/how-it-works.md": [
       "The benign p95 (95th percentile of benign package scores) is 30",
       "The 10-point gap between these two measured percentiles",
-      "**75.2% zero-rate** on the 8,393-diff locked corpus",
+      "**75.5% zero-rate** on the 8,393-diff locked corpus",
       "**benign p95 = 30**"
     ],
     "docs/security-design/security-model.md": [
@@ -68,7 +69,7 @@
     ],
     "docs/security-design/what-a-result-claims.md": [
       "| benign 95th percentile | 30 |",
-      "| benign diffs scoring 0 | 75.2% |",
+      "| benign diffs scoring 0 | 75.5% |",
       "| benign diffs above 20 | 6.4% |",
       "| percentile that 20 now sits at | 93.6th |",
       "| malicious 5th percentile | 40 |",
@@ -77,18 +78,18 @@
       "**The 6.4% benign flag rate is a security property"
     ],
     "docs/start-here/understanding-your-first-report.md": [
-      "**75.2 % of diffs score 0**",
+      "**75.5 % of diffs score 0**",
       "benign packages score **30**",
       "5th percentile of **40** and a minimum of **20**",
       "sits at the 93.6th, so about **6.4%**"
     ],
     "docs/workflows/tuning-false-positives.md": [
-      "zero-rate of **75.2%**",
+      "zero-rate of **75.5%**",
       "| Benign p95 | 30 |"
     ],
     "docs/workflows/using-in-ci.md": [
       "| Benign | p95 (95th percentile) | **30** |",
-      "| Zero-rate (benign scored 0) | percentage | **75.2%** |",
+      "| Zero-rate (benign scored 0) | percentage | **75.5%** |",
       "the published figures separate the two tails by 10 points: benign p95 = 30, CRITICAL p5 = 40, measured on the locked 8,393-diff corpus"
     ]
   },

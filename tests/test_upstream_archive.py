@@ -88,6 +88,18 @@ def test_duplicate_members_are_ambiguous_not_silently_overridden():
     assert zip_out["complete"] is False
 
 
+def test_sparse_member_is_ambiguous():
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        info = tarfile.TarInfo("pkg/Cargo.toml")
+        info.size = 1
+        info.pax_headers = {"GNU.sparse.map": "0,1"}
+        tar.addfile(info, io.BytesIO(b"x"))
+    out = parse_upstream_archive(buf.getvalue())
+    assert out["ambiguous"]
+    assert out["complete"] is False
+
+
 def test_bounds_refuse_an_oversized_archive():
     data = _tar([("pkg/Cargo.toml", b"x" * 100, "file")])
     out = parse_upstream_archive(data, max_total_bytes=10)

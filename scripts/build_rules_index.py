@@ -104,6 +104,10 @@ def _bullets(meta: dict) -> str:
         lines.append(f"- **Severity:** {meta['severity_text']}")
     if meta.get("capability"):
         lines.append(f"- **Category:** `{meta['capability']}`")
+    if meta.get("cwe"):
+        lines.append(f"- **CWE:** `{meta['cwe']}`")
+    if meta.get("remediation"):
+        lines.append(f"- **Remediation:** {meta['remediation']}")
     return "\n".join(lines)
 
 

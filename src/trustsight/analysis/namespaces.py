@@ -56,8 +56,11 @@ def owned_namespace_findings(
     findings: list[dict] = []
     seen: set[tuple[str, str]] = set()
     for url in _urls(recipe_text):
-        parsed = urlparse(url)
-        host = (parsed.hostname or "").lower()
+        try:
+            parsed = urlparse(url)
+            host = (parsed.hostname or "").lower()
+        except ValueError:
+            continue
         raw_path = unquote(parsed.path)
         path = ("/" + posixpath.normpath(raw_path).lower().lstrip("/")
                 if raw_path.strip("/") else "")

@@ -21,8 +21,8 @@ This page is generated from the shipped registry by
 `scripts/build_threat_coverage.py`. It is a map of what the rules claim, not a
 claim of complete coverage.
 
-| Rule | Name | Category | Layer | Severity | Weight | CWE | Boundary |
-|---|---|---|---|---|---|---|---|
+| Rule | Name | Vector | Stage | Category | Layer | Severity | Weight | CWE | Boundary |
+|---|---|---|---|---|---|---|---|---|---|
 """
 
 
@@ -31,6 +31,7 @@ def _rows() -> list[str]:
     from trustsight.categories import category_of
     from trustsight.config import load_config
     from trustsight.layers import layer_of
+    from trustsight.analysis.composition import _STAGE_OF
     from trustsight.registry import REGISTRY
     from trustsight.rule_metadata import cwe_of
 
@@ -53,6 +54,7 @@ def _rows() -> list[str]:
             boundary = "boundary" if rule_id.startswith("W") else ""
         rows.append(
             f"| {rule_id} | {row.get('name', '')} | "
+            f"{rule.capability or ''} | {_STAGE_OF.get(rule_id, '')} | "
             f"{category.value if category else ''} | "
             f"{layer.value if layer else ''} | {severity} | {weight} | "
             f"{cwe_of(rule_id)} | {boundary} |"

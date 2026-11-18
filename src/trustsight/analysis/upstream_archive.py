@@ -26,6 +26,7 @@ import io
 import lzma
 import tarfile
 import zipfile
+from bisect import bisect_left
 
 from .manifests._common import (
     MAX_UPSTREAM_MANIFEST_FILES,
@@ -169,6 +170,8 @@ def _tar(data: bytes, result: dict, *, max_members: int,
     texts = result["manifest_texts"]
     seen = kept = inspected = elf_parsed = elf_bytes = 0
     names: set[str] = set()
+    starts: list[int] = []
+    ends: list[int] = []
     stream = _LimitedReader(_decompressed(data), max_total_bytes)
     try:
         tar_context = tarfile.open(fileobj=stream, mode="r|")
@@ -184,6 +187,25 @@ def _tar(data: bytes, result: dict, *, max_members: int,
                 return
             if not member.isfile() or member.issym() or member.islnk():
                 continue
+            if any(key.startswith("GNU.sparse.")
+                   for key in (member.pax_headers or {})):
+                result["ambiguous"].append(
+                    f"sparse member {member.name}")
+                result["complete"] = False
+            start = int(getattr(member, "offset_data", 0) or 0)
+            end = start + max(0, int(member.size or 0))
+            if start > 0 and end > start:
+                index = bisect_left(starts, start)
+                overlaps = (
+                    (index > 0 and ends[index - 1] > start)
+                    or (index < len(starts) and end > starts[index])
+                )
+                if overlaps:
+                    result["ambiguous"].append(
+                        f"overlapping member {member.name}")
+                    result["complete"] = False
+                starts.insert(index, start)
+                ends.insert(index, end)
             name = _safe_name(member.name)
             if name is None:
                 result["refused"] = True

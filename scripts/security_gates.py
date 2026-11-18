@@ -159,6 +159,7 @@ def run_gates() -> list[Gate]:
     gates.append(gate_boundaries_are_the_coverage_view())
     gates.append(gate_every_report_key_is_documented())
     gates.append(gate_every_rule_names_its_cwe_and_remediation())
+    gates.append(gate_threat_coverage_matches_registry())
     gates.append(gate_elf_parsing_is_read_only_and_bounded())
     gates.append(gate_shipped_hook_content_is_bounded_and_inert())
     gates.append(gate_transcendence_table_is_wellformed())
@@ -366,6 +367,7 @@ from scripts.gates._immune import (
     gate_overrides_never_hide_indicator_corroboration,
 )
 from scripts.gates._process import (
+    gate_threat_coverage_matches_registry,
     gate_anergic_entries_are_changelogged,
     gate_anergic_promotions_are_changelogged,
     gate_anergic_rules_never_score,

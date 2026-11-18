@@ -74,3 +74,25 @@ def test_unreadable_tree_fails_closed(tmp_path):
             digest_tree(root)
     finally:
         blocked.chmod(0o700)
+
+
+def test_unpinned_sources_lists_vcs_skip_and_unchecksummed(tmp_path):
+    from trustsight.attest import unpinned_sources
+
+    root = tmp_path / "pkg"; root.mkdir()
+    (root / "PKGBUILD").write_text(
+        'pkgname=demo\n'
+        'source=("git+https://example.invalid/a.git" "skip.tar.gz" '
+        '"plain.tar.gz" "pinned.tar.gz")\n'
+        'sha256sums=("SKIP" "SKIP" "" "abc")\n'
+    )
+    assert unpinned_sources(root) == [
+        {"name": "git+https://example.invalid/a.git",
+         "url": "git+https://example.invalid/a.git", "reason": "vcs"},
+        {"name": "skip.tar.gz", "url": "skip.tar.gz", "reason": "skip"},
+        {"name": "plain.tar.gz", "url": "plain.tar.gz", "reason": "unpinned"},
+    ]
+    out = tmp_path / "a.json"
+    from trustsight.attest import write_attestation
+    write_attestation(root, out)
+    assert len(json.loads(out.read_text())["unpinned_sources"]) == 3

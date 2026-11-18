@@ -16,6 +16,7 @@ import tomllib
 from scripts.gates._core import ROOT, Gate
 
 __all__ = [
+    "gate_threat_coverage_matches_registry",
     "gate_anergic_entries_are_changelogged",
     "gate_anergic_promotions_are_changelogged",
     "gate_anergic_rules_never_score",
@@ -151,3 +152,23 @@ def gate_anergic_promotions_are_changelogged() -> Gate:
             problems.append(
                 f"{row.rule_id}: decided weight {row.weight} without decided_in")
     return Gate(name, not problems, {"promoted": len(promoted)}, "; ".join(problems))
+
+
+def gate_threat_coverage_matches_registry() -> Gate:
+    """The generated threat-coverage page must match the shipped registry."""
+    import importlib.util
+
+    script = ROOT / "scripts" / "build_threat_coverage.py"
+    spec = importlib.util.spec_from_file_location("build_threat_coverage", script)
+    module = importlib.util.module_from_spec(spec)
+    try:
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        actual = module.OUT.read_text(encoding="utf-8")
+        expected = module.render()
+    except Exception as exc:  # noqa: BLE001 - a broken generator is a failed gate
+        return Gate("threat coverage matches the registry", False, 0,
+                    f"generator failed: {exc}")
+    return Gate("threat coverage matches the registry", actual == expected,
+                {"bytes": len(actual)},
+                "" if actual == expected else "run scripts/build_threat_coverage.py")

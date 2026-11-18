@@ -1192,12 +1192,16 @@ build.
 ```
 trustsight-attest <root> --out FILE
 trustsight-attest <root> --check FILE
+trustsight-attest <root> --list-unpinned
 ```
 
 The document contains the algorithm, a `sha256:` digest, the file count and
 the byte count. It contains no timestamp or random value, so the same tree
 produces the same document. Symlinks and VCS/cache directories are skipped.
 `--check` exits non-zero when any path, mode bit or file byte changed.
+`--list-unpinned` lists declared sources that are VCS entries, carry `SKIP`,
+or have no checksum; the same list is stored as `unpinned_sources` in the
+attestation document.
 
 `trustsight-gate --attest FILE --dir DIR` writes the same document during a
 normal gate review.

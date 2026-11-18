@@ -362,7 +362,8 @@ already states that upstream content is not read at all.
 - **Category:** `unverifiable`
 
 - **Condition:** A fetched source archive contains duplicate normalised member
-  names, so more than one byte sequence claims the same archive path.
+  names, overlapping member data ranges, or a GNU sparse header that hides the
+  real byte layout.
 
 The archive is read in the read-role sandbox. Nothing is extracted to disk or
 executed, and the boundary is always reported at weight 0.

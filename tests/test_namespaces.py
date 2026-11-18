@@ -46,3 +46,8 @@ def test_c035_path_prefix_is_case_insensitive():
 def test_c035_normalises_the_owned_prefix():
     recipe = 'pkgname=demo\nsource=("https://github.com/other2/repo.tar.gz")\n'
     assert owned_namespace_findings(recipe, _config("github.com/me/../other"))
+
+
+def test_c035_ignores_a_malformed_source_url():
+    recipe = 'pkgname=demo\nsource=("https://[")\n'
+    assert owned_namespace_findings(recipe, _config("github.com/me")) == []

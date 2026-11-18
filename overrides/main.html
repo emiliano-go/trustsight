@@ -5,6 +5,9 @@
 <link rel="icon" type="image/svg+xml" href="{{ base_url }}/assets/images/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="{{ base_url }}/assets/images/favicon-32x32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="{{ base_url }}/assets/images/favicon-16x16.png">
+<link rel="ai-catalog" href="{{ base_url }}/.well-known/ai-catalog.json" type="application/json">
+<link rel="api-catalog" href="{{ base_url }}/.well-known/api-catalog" type="application/linkset+json">
+<link rel="describedby" href="{{ base_url }}/auth.md" type="text/markdown">
 {% endblock %}
 
 {% block site_meta %}
@@ -105,6 +108,75 @@
   }
   nav.innerHTML = h;
   nav.removeAttribute('hidden');
+})();
+</script>
+<script>
+(function() {
+  var ctx = (document.modelContext || navigator.modelContext);
+  if (!ctx || typeof ctx.registerTool !== 'function') return;
+  var controller = new AbortController();
+
+  function register(tool) {
+    try {
+      var pending = ctx.registerTool(tool, { signal: controller.signal });
+      if (pending && typeof pending.catch === 'function') pending.catch(function() {});
+    } catch (e) {}
+  }
+
+  register({
+    name: 'open-docs-page',
+    description: 'Open a TrustSight documentation page by its site-relative path.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description: 'Site-relative path, for example /start-here/quickstart/'
+        }
+      },
+      required: ['path'],
+      additionalProperties: false
+    },
+    execute: function(args) {
+      var path = String((args && args.path) || '').trim();
+      if (path.charAt(0) !== '/' || path.slice(0, 2) === '//') {
+        throw new Error('path must be site-relative');
+      }
+      window.location.assign(path);
+      return { navigated: path };
+    }
+  });
+
+  register({
+    name: 'search-docs',
+    description: 'Search the TrustSight documentation from the page search box.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'What to search for.' }
+      },
+      required: ['query'],
+      additionalProperties: false
+    },
+    execute: async function(args) {
+      var query = String((args && args.query) || '').trim();
+      if (!query) throw new Error('query is required');
+      var response = await fetch('/search.json', { headers: { accept: 'application/json' } });
+      if (!response.ok) throw new Error('the docs search index is unavailable');
+      var data = await response.json();
+      var needle = query.toLowerCase();
+      var items = data.items || [];
+      var hit = items.find(function(item) {
+        return String(item.title || '').toLowerCase().indexOf(needle) !== -1;
+      }) || items.find(function(item) {
+        return String(item.text || '').toLowerCase().indexOf(needle) !== -1;
+      });
+      if (!hit) throw new Error('no documentation page matched that query');
+      var path = hit.location ? ('/' + String(hit.location).replace(/^\/+/, '')) : '/';
+      window.location.assign(path);
+      return { query: query, path: path, title: hit.title };
+    }
+  });
 })();
 </script>
 {% endblock %}

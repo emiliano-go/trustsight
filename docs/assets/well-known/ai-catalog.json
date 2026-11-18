@@ -1,0 +1,50 @@
+{
+  "specVersion": "1.0",
+  "host": {
+    "displayName": "TrustSight documentation",
+    "identifier": "did:web:docs.trustsight.org"
+  },
+  "entries": [
+    {
+      "identifier": "urn:air:docs.trustsight.org:site:documentation",
+      "displayName": "TrustSight documentation",
+      "type": "text/html",
+      "url": "https://docs.trustsight.org/",
+      "representativeQueries": [
+        "how do I install TrustSight",
+        "what does an UNFLAGGED verdict mean",
+        "which page defines rule H003"
+      ]
+    },
+    {
+      "identifier": "urn:air:docs.trustsight.org:api:watcher",
+      "displayName": "TrustSight Watcher API",
+      "type": "application/vnd.oai.openapi+json;version=3.1",
+      "url": "https://watcher.trustsight.org/api/openapi.json",
+      "representativeQueries": [
+        "which AUR packages raised a TrustSight alert today",
+        "show alerts for a package or rule id"
+      ]
+    },
+    {
+      "identifier": "urn:air:docs.trustsight.org:mcp:watcher",
+      "displayName": "TrustSight Watcher MCP server",
+      "type": "application/mcp-server-card+json",
+      "url": "https://docs.trustsight.org/.well-known/mcp/server-card.json",
+      "representativeQueries": [
+        "search TrustSight alerts for a package",
+        "get the latest AUR watcher alerts"
+      ]
+    },
+    {
+      "identifier": "urn:air:docs.trustsight.org:skill:navigate-docs",
+      "displayName": "Navigate TrustSight documentation",
+      "type": "text/markdown",
+      "url": "https://docs.trustsight.org/.well-known/agent-skills/trustsight-docs/SKILL.md",
+      "representativeQueries": [
+        "find the TrustSight page about fire rates",
+        "explain what a TrustSight report does not claim"
+      ]
+    }
+  ]
+}

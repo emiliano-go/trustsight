@@ -1,0 +1,7 @@
+{
+  "resource": "https://docs.trustsight.org/",
+  "authorization_servers": [],
+  "bearer_methods_supported": ["header"],
+  "scopes_supported": [],
+  "resource_documentation": "https://docs.trustsight.org/auth.md"
+}

@@ -180,3 +180,12 @@ MIT
 | [Contributing](https://docs.trustsight.org/contributing/) | Development, rule authoring, evaluation, releases and docs policy |
 | [Vulnerability Reporting](https://docs.trustsight.org/security-design/vulnerability-reporting/) | How to report a vulnerability |
 | [License](https://docs.trustsight.org/license/) | MIT full text |
+
+## Agent discovery
+
+The docs origin publishes an API catalog, an AI/ARD catalog, an agent-skills
+index, a read-only MCP server card and `/auth.md`. MkDocs does not copy
+dot-directories, so the source files live under `docs/assets/well-known/` and
+`docs/assets/agent/`, and `docs/_redirects` serves them at the well-known
+paths. `docs/_headers` adds the `Link`, `Vary: Accept`, CORS and content-type
+headers.

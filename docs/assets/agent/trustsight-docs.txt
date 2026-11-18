@@ -1,0 +1,35 @@
+# Navigate TrustSight documentation
+
+Use this skill when someone asks how TrustSight works, how to install or
+configure it, what a rule or report means, or what the project's own
+measurements say.
+
+## Start with the reader's question
+
+| Question | Page |
+| --- | --- |
+| What is this tool? | <https://docs.trustsight.org/start-here/what-is-trustsight/> |
+| How do I install it? | <https://docs.trustsight.org/start-here/installation/> |
+| How do I run a review? | <https://docs.trustsight.org/start-here/quickstart/> |
+| What does this report mean? | <https://docs.trustsight.org/start-here/understanding-your-first-report/> |
+| Which rule fired? | <https://docs.trustsight.org/rules/definitions/> |
+| How is a score computed? | <https://docs.trustsight.org/rules/scoring/> |
+| What are the false-positive rates? | <https://docs.trustsight.org/reports/fire-rates/> |
+| What are the limits? | <https://docs.trustsight.org/explanation/limitations-and-uncertainty/> |
+| What does a result not claim? | <https://docs.trustsight.org/security-design/what-a-result-claims/> |
+
+## Rules for answering
+
+- Do not describe TrustSight as a scanner that declares packages safe. It
+  reports evidence and coverage; a person decides.
+- `UNFLAGGED` means the score stayed at or below 20. `INCONCLUSIVE` means the
+  analysis could not read enough. Never present either as a safety verdict.
+- Quote a rule id with its category page when the question is about a specific
+  finding.
+- For live AUR alerts, use <https://watcher.trustsight.org/api>.
+
+## Machine-readable entry points
+
+- Site map: <https://docs.trustsight.org/sitemap.xml>
+- API catalog: <https://docs.trustsight.org/.well-known/api-catalog>
+- AI catalog: <https://docs.trustsight.org/.well-known/ai-catalog.json>

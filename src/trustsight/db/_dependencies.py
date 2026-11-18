@@ -153,6 +153,10 @@ def is_established_package(name: str) -> bool:
     additionally demands a minimum name length - see
     ``_ESTABLISHED_MIN_NAME_LENGTH`` for the measurement behind it.
     """
+    from ..deps import is_virtual_provide
+
+    if is_virtual_provide(name):
+        return False
     if not name:
         return False
     # Resolve through the package namespace, not this module's global: the

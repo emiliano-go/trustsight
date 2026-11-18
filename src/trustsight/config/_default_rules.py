@@ -611,6 +611,10 @@ domains = [
     # three above: the project's own repo path is what the recipe names
     # (peppercarrot-fonts), not a project-owned release host.
     "framagit.org",
+    # GitHub's PR-patch endpoint: the same repository content the forge
+    # serves, addressed by pull request (orca-slicer pins PR 17523 with a
+    # sha256).  A user-content forge, not a project-owned release host.
+    "patch-diff.githubusercontent.com",
     "bitbucket.org",
     "sourceforge.net",
     "freedesktop.org",
@@ -751,6 +755,7 @@ domains = [
     "download-center.epson.com",      # Epson's own driver download center
     "edgedl.me.gvt1.com",             # Google's Android Studio download CDN
     "ftp.postgresql.org",             # pgAdmin's own apt repository (PostgreSQL)
+    "release.files.ghostty.org",      # Ghostty's own release host (libghostty-vt)
     # Overte's own release bucket on DigitalOcean Spaces.  The parent
     # domain is a multi-tenant object store, so only this bucket is the
     # project's distribution surface (overte-appimage).

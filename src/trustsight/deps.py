@@ -212,6 +212,37 @@ def _ecosystem_prefixes() -> frozenset:
     return frozenset(prefixes) if prefixes else frozenset(DEFAULT_ECOSYSTEM_PREFIXES)
 
 
+#: Arch virtual/capability names that are not packages of their own.  A Mesa
+#: replacement must provide `opengl-driver`/`vulkan-driver`/`libva-driver`;
+#: the observation-count fallback in :func:`is_established_package` sees
+#: thousands of packages depending on those tokens and certifies them as
+#: established, so D004/H064 read the ordinary replacement pattern as a
+#: hijack of an unrelated package (mesa-kraid-git).  Real packages that
+#: happen to be widely provided (`libglvnd`, `polkit`, `bash`) are not here.
+VIRTUAL_PROVIDES = frozenset({
+    "opengl-driver",
+    "vulkan-driver",
+    "libva-driver",
+    "libgl",
+    "libegl",
+    "libgles",
+    "jack",
+    "ttf-font",
+    "java-runtime",
+    "java-runtime-headless",
+    "java-environment",
+    "sh",
+    "cron",
+    "initramfs",
+    "xdg-desktop-portal-impl",
+})
+
+
+def is_virtual_provide(name: str) -> bool:
+    """True when *name* is a capability token, not an impersonable package."""
+    return name.strip().lower() in VIRTUAL_PROVIDES
+
+
 def is_related_package(name: str, pkgbase: str) -> bool:
     """True when *name* belongs to the same project as *pkgbase*.
 

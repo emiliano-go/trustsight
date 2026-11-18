@@ -389,7 +389,11 @@ def _classify_prepared(
     extracted = _extract(domain.split(":", 1)[0])
     registered = f"{extracted.domain}.{extracted.suffix}"
 
-    if registered in trusted_forges:
+    # An exact host is meaningful for a forge too: GitHub serves PR patches
+    # from patch-diff.githubusercontent.com, whose registered domain would
+    # otherwise also cover avatar/object hosts.  raw_hosting is tested above,
+    # so raw.githubusercontent.com keeps its own bucket.
+    if domain in trusted_forges or registered in trusted_forges:
         return "trusted_forge", registered
     # ``domain.endswith("." + d)`` for a configured d is exactly "one of the
     # proper parents of domain is d", so skip the domain itself here.

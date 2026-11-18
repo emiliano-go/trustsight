@@ -114,7 +114,7 @@ _HOOK_SAFE_LINE_RE = re.compile(
     r"cat|echo|printf|msg|note|warning|error|info|local|unset|tput|true|false|:|"
     # Desktop/icon/mime cache refreshers: a root hook that only rebuilds
     # a cache changes nothing an attacker can use (trilium-cn-bin).
-    r"command|update-desktop-database|update-mime-database|"
+    r"command\s+-[vV]\b|update-desktop-database|update-mime-database|"
     r"gtk-update-icon-cache|xdg-desktop-menu|xdg-icon-resource|fc-cache|"
     r"if|then|else|elif|fi|\[\[?|\]\]?)",
     re.IGNORECASE,
@@ -123,8 +123,11 @@ _CAT_LINE_RE = re.compile(r"^\s*cat\b")
 #: Commands a hook may run that only rebuild a cache or probe for a tool.
 #: They are inert: no file outside the cache directory changes.
 _HOOK_CACHE_REFRESH_RE = re.compile(
-    r"^(?:command|update-desktop-database|update-mime-database|"
-    r"gtk-update-icon-cache|xdg-desktop-menu|xdg-icon-resource|fc-cache)\b",
+    r"^(?:command\s+(?:-[vV]\b|(?:update-desktop-database|"
+    r"update-mime-database|gtk-update-icon-cache|xdg-desktop-menu|"
+    r"xdg-icon-resource|fc-cache)\b)|update-desktop-database|"
+    r"update-mime-database|gtk-update-icon-cache|xdg-desktop-menu|"
+    r"xdg-icon-resource|fc-cache)\b",
     re.IGNORECASE,
 )
 _HOOK_DANGER_RE = re.compile(

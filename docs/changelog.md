@@ -48,6 +48,17 @@
 
 ### Fixed
 
+- **SBOM checksum attribution and size bounds are hardened.** Empty checksum
+  entries no longer shift every later source onto the wrong hash; dependency
+  component refs remain unique after sanitisation; evidence traversal is
+  depth and count bounded; and a document over the export cap is refused
+  instead of serialised.
+- **The H100 cache-refresh exemption no longer exempts every `command`.**
+  `command -v` probes and the named cache refreshers remain inert; a
+  `command` wrapper around a fetch or executor is still behaviour.
+- **Entropy checksum stripping only recognises a top-level `*sums` array.**
+  A printer or comment that merely spells the array name can no longer hide
+  the following added lines from E001/E002.
 - **A014 rejects `$ORIGIN` escapes to the filesystem root.** `$ORIGIN/..`,
   `$ORIGIN/../..`, a direct `/` and duplicate-slash temp paths are now unsafe;
   `$ORIGIN` below its package directory remains safe.

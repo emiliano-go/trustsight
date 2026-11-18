@@ -55,7 +55,11 @@ def register_commands(app: typer.Typer) -> None:
             )
             raise typer.Exit(code=2)
 
-        text = render_sbom(bom)
+        try:
+            text = render_sbom(bom)
+        except ValueError as exc:
+            typer.echo(f"SBOM export refused: {clean(str(exc))}", err=True)
+            raise typer.Exit(code=2) from exc
         if out is None:
             typer.echo(text, nl=False)
             return

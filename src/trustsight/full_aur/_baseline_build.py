@@ -482,6 +482,17 @@ def _run_baseline_build(
         new_pkgbuild = fetched[0] or ""
         previous_snapshot = get_previous_pkgbuild_snapshot(name) or {}
         old_pkgbuild = previous_snapshot.get("pkgbuild_text") or ""
+        # A recipe that did not change has no retained previous revision:
+        # ``save_pkgbuild_snapshot`` only shifts the current row into the
+        # previous columns on a real text change.  Passing "" as the old
+        # side then rendered "no previous recipe" as a full-addition diff,
+        # which is how an ownership-only adoption (H044) appeared as a
+        # wholly green PKGBUILD.  A notification may only show a diff when a
+        # previous recipe was actually observed.
+        notify_diff = (
+            _notify_diff(old_pkgbuild, new_pkgbuild)
+            if previous_snapshot else {}
+        )
         detail[name] = {
             "score": fact.final_score,
             "risk": getattr(fact, "risk", ""),
@@ -516,7 +527,7 @@ def _run_baseline_build(
             # The sweep joins on this; compute it while the recipe is in hand
             # instead of re-reading the snapshot and re-parsing it per package.
             "source_repos": sorted(source_repos_from_pkgbuild(new_pkgbuild)),
-            **_notify_diff(old_pkgbuild or "", new_pkgbuild),
+            **notify_diff,
         }
         return "ok"
 

@@ -61,6 +61,17 @@
 - **Attestation fails closed.** Unreadable directories, read/stat races,
   oversize documents and interrupted serialisation are named refusals; a
   failed write leaves the previous attestation intact.
+- **Manifest requests use an explicit operation field.** A package file whose
+  name matches a worker sentinel such as `__srcinfo__` can no longer be
+  mistaken for a different parser operation.
+- **Artifact worker results are checked field by field.** Unknown finding
+  fields and raw control characters are refused, and the bounded inspector
+  treats a non-list manifest as an invalid, truncated input rather than
+  iterating it.
+- **Attestation bounds the walk itself.** Directory and entry counts are
+  capped before traversal, a symlinked `PKGBUILD` is not followed, and
+  `--check` re-derives the VCS/`SKIP`/unchecksummed inventory so tampering
+  with that metadata alone is refused.
 
 ## [0.29.2] - 2026-11-17
 

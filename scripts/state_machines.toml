@@ -435,6 +435,12 @@ modules = [
 ]
 
 [[exempt]]
+reason = "single-pass source namespace check: it compares declared URLs against a config list and carries no cross-call state"
+modules = [
+  "analysis/namespaces.py",
+]
+
+[[exempt]]
 reason = "single-pass scanner or bounded loop: the state is a local cursor, quote/depth or redirect counter carried across one call, with no persisted or cross-call lifecycle"
 modules = [
   "_tokenizer_engine/_common.py",

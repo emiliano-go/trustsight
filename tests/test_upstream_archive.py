@@ -73,6 +73,21 @@ def test_zip_selects_manifests():
     assert "pkg/LICENSE" not in paths
 
 
+def test_duplicate_members_are_ambiguous_not_silently_overridden():
+    tar_out = parse_upstream_archive(_tar([
+        ("pkg/Cargo.toml", b"[package]\nname='one'\n", "file"),
+        ("pkg/Cargo.toml", b"[package]\nname='two'\n", "file"),
+    ]))
+    assert tar_out["ambiguous"]
+    assert tar_out["complete"] is False
+    zip_out = parse_upstream_archive(_zip([
+        ("pkg/Cargo.toml", b"[package]\nname='one'\n"),
+        ("pkg/Cargo.toml", b"[package]\nname='two'\n"),
+    ]))
+    assert zip_out["ambiguous"]
+    assert zip_out["complete"] is False
+
+
 def test_bounds_refuse_an_oversized_archive():
     data = _tar([("pkg/Cargo.toml", b"x" * 100, "file")])
     out = parse_upstream_archive(data, max_total_bytes=10)

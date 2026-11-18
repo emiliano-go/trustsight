@@ -69,6 +69,7 @@ from .audit_anchor import register_commands as _register_audit_anchor
 from .containment import register_commands as _register_containment
 from .db_writer import register_commands as _register_db_writer
 from .sbom import register_commands as _register_sbom
+from .diff import register_commands as _register_diff
 
 _register_review(app)
 _register_inspect(app)
@@ -95,6 +96,7 @@ _register_audit_anchor(app)
 _register_containment(app)
 _register_db_writer(app)
 _register_sbom(app)
+_register_diff(app)
 
 
 class _StderrHandler(logging.StreamHandler):

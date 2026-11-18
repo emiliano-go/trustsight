@@ -440,6 +440,15 @@
     "target": "committed .SRCINFO",
     "uid": "TS-0286"
   },
+  "c035": {
+    "canonical": true,
+    "capability": "integrity",
+    "name": "Owned Namespace Occupied",
+    "severity": "HIGH",
+    "severity_text": "HIGH",
+    "target": "programmatic (declared sources)",
+    "uid": "TS-0308"
+  },
   "d001": {
     "canonical": true,
     "capability": "dependency",
@@ -2455,6 +2464,15 @@
     "severity_text": "INFO (weight 0)",
     "target": "opt-in upstream scan lane",
     "uid": "TS-0298"
+  },
+  "w015": {
+    "canonical": true,
+    "capability": "unverifiable",
+    "name": "Archive Structure Ambiguous",
+    "severity": "INFO",
+    "severity_text": "INFO",
+    "target": "programmatic (fetched source archive)",
+    "uid": "TS-0307"
   },
   "x001": {
     "canonical": true,

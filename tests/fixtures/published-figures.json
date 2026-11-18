@@ -55,7 +55,7 @@
       "the published figures separate the two tails by 10 points: benign p95 = 30, CRITICAL p5 = 40, measured on the locked 8,393-diff corpus"
     ],
     "docs/rules/index.md": [
-      "277 of them contribute to the heuristic score"
+      "278 of them contribute to the heuristic score"
     ],
     "docs/reference/configuration.md": [
       "about 6.4% of locked benign-corpus diffs enter the review queue"

@@ -21,7 +21,7 @@ Pattern-matched from the PKGBUILD diff. Direct, observable facts about what the 
 
 - R-series regex rules and H-series heuristics, plus C/D/S/X rules where the signal requires structural, dependency, sabotage, or anti-evasion context.
 - H001/H002 checksum integrity rules (hard-coded, not TOML).
-- C001-C034 structural anomaly rules (checksum/source integrity heuristics).
+- C001-C035 structural anomaly rules (checksum/source integrity heuristics).
 - D001-D005 dependency-graph rules.
 
 ### Availability
@@ -189,7 +189,7 @@ Checksum evidence is suppressed when `checksum_behavior` is `"changed_from_sha25
 ## Outside the tiers: the W series
 
 The four tiers classify **evidence about the recipe**. The W series
-(`W001`-`W014`) makes a different kind of statement: not that the recipe did
+(`W001`-`W015`) makes a different kind of statement: not that the recipe did
 something, but that this analysis could not read something the recipe will
 run. A tier answers "how strong is this signal"; a W finding answers "what
 was not looked at".
@@ -202,11 +202,11 @@ always shown. See the [unverifiable rules reference](../rules/unverifiable.md).
 
 | Tier | Rule sources | What they measure |
 |------|-------------|-------------------|
-| A (Structural) | R001-R059, R078, R091, R099, R104, R144, R152, H001-H103, S001-S008, X001-X034, C001-C034, D001-D005 | Direct pattern matching against PKGBUILD commands and structure |
+| A (Structural) | R001-R059, R078, R091, R099, R104, R144, R152, H001-H103, S001-S008, X001-X034, C001-C035, D001-D005 | Direct pattern matching against PKGBUILD commands and structure |
 | B (Priors/Context) | Source bucket classification | Domain reputation of new URLs (not a rule, but a scoring input) |
 | C (History/Novelty) | URL and maintainer novelty | First-seen signals from the local database |
 | D (Verification) | Checksum, PGP, GPG presence | Declared integrity metadata, reported at weight 0 |
-| Reported, not scored | W001-W014 | Analysis boundaries: bytes the package will run that this run could not read. Weight 0, always shown. |
+| Reported, not scored | W001-W015 | Analysis boundaries: bytes the package will run that this run could not read. Weight 0, always shown. |
 
 The U-series reads what a recipe declares about upstream. From the committed dependency manifests beside a recipe: U003 (a new remote source) and U004 (a redirected resolver) score at MEDIUM; U001, U002, U005 and U006 are weight-0 ledger entries. From upstream release integrity: U007 (CI exfil shape) and U008 (git-history credential sweep) score at MEDIUM from the signed federation channel, U009 (new CI surface committed) is a weight-0 ledger entry, and U010 (unauditable upstream) scores at MEDIUM.
 

@@ -120,6 +120,7 @@ def _empty() -> dict:
     return {
         "manifest_texts": [],
         "artifacts": [],
+        "ambiguous": [],
         "complete": True,
         "refused": False,
         "malformed": False,
@@ -167,6 +168,7 @@ def _tar(data: bytes, result: dict, *, max_members: int,
          max_file_bytes: int, max_total_bytes: int, max_files: int) -> None:
     texts = result["manifest_texts"]
     seen = kept = inspected = elf_parsed = elf_bytes = 0
+    names: set[str] = set()
     stream = _LimitedReader(_decompressed(data), max_total_bytes)
     try:
         tar_context = tarfile.open(fileobj=stream, mode="r|")
@@ -186,6 +188,11 @@ def _tar(data: bytes, result: dict, *, max_members: int,
             if name is None:
                 result["refused"] = True
                 continue
+            if name in names:
+                result["ambiguous"].append(f"duplicate member {name}")
+                result["complete"] = False
+                continue
+            names.add(name)
             mode = member.mode or 0
             prefix = b""
             if _selected(name):
@@ -262,6 +269,7 @@ def _zip(data: bytes, result: dict, *, max_members: int,
             result["refused"] = True
             return
         kept = total = inspected = elf_parsed = elf_bytes = 0
+        names: set[str] = set()
         for info in entries:
             if info.is_dir():
                 continue
@@ -276,6 +284,11 @@ def _zip(data: bytes, result: dict, *, max_members: int,
             if name is None:
                 result["refused"] = True
                 continue
+            if name in names:
+                result["ambiguous"].append(f"duplicate member {name}")
+                result["complete"] = False
+                continue
+            names.add(name)
             mode = (info.external_attr >> 16) & 0o7777
             prefix = b""
             if _selected(name):

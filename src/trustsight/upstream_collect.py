@@ -388,6 +388,8 @@ def collect_upstream_manifest_texts(
             continue
         if parsed.get("refused") or parsed.get("malformed"):
             notes.append("upstream_scan_partial")
+        if parsed.get("ambiguous"):
+            notes.append("upstream_scan_ambiguous")
         if any((a.get("elf_info") or {}).get("truncated")
                for a in parsed.get("artifacts") or ()):
             notes.append("upstream_scan_partial")

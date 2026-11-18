@@ -18,6 +18,13 @@
   `TrustSight.sbom` export the package, its declared sources and its
   dependency components, with findings attached to the component their
   evidence names.
+- **C035 reports an occupied operator-owned namespace.** The `[namespaces]`
+  section names hosts and path prefixes the operator owns; a declared source
+  on that host under another owner is C035, anergic at weight 0. The
+  section is part of `config_fingerprint`.
+- **W015 reports ambiguous source archives.** Duplicate archive members are
+  reported as a weight-0 archive-structure boundary instead of silently
+  selecting one copy.
 
 ## [0.29.2] - 2026-11-17
 

@@ -294,6 +294,23 @@ def test_scan_notes_reach_the_fact_as_a_weight_zero_boundary():
     assert entry.weight == 0
 
 
+def test_ambiguous_archive_notes_are_w015_not_w014():
+    from trustsight.config import ensure_default_configs
+    from trustsight.db import init_db
+    from trustsight.full_aur.analyze import TemporalContext, analyze_package_text
+
+    ensure_default_configs()
+    init_db()
+    fact = analyze_package_text(
+        "demo", "pkgname=demo\npkgver=1\n", "pkgname=demo\npkgver=1\n",
+        "tester", TemporalContext(),
+        upstream_scan_notes=["upstream_scan_ambiguous"],
+    )
+    ids = {entry.rule_id for entry in fact.score_breakdown}
+    assert "W015" in ids
+    assert "W014" not in ids
+
+
 def test_archive_artifacts_become_report_only_a009_a010():
     def extractor(_slug, _data):
         return {

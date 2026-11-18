@@ -36,7 +36,7 @@ context and its rule definitions.
 | [Deception and Anti-Analysis](deception.md) | `deception` | 6 | The recipe targets whoever reviews it rather than the shell that runs it, or checks whether it is being watched. |
 | [Install and Persistence](install-and-persist.md) | `install-and-persist` | 23 | Something survives the build: a root-time hook, a unit, a privileged bit, a file in the user's profile. |
 | [Staging and Reconnaissance](staging-and-recon.md) | `staging-and-recon` | 10 | The build steps outside its staging roots, hides a drop, or profiles the host it is running on. |
-| [Integrity and Verification](integrity.md) | `integrity` | 47 | A verification the recipe used to carry is weakened, removed, or cannot cover what it claims to. |
+| [Integrity and Verification](integrity.md) | `integrity` | 48 | A verification the recipe used to carry is weakened, removed, or cannot cover what it claims to. |
 | [Naming and Dependencies](naming-and-dependency.md) | `naming-and-dependency` | 14 | A name is claimed or a dependency set changes in a way that redirects what gets installed. |
 | [Maintainer and Metadata](maintainer-and-metadata.md) | `maintainer-and-metadata` | 16 | Who owns the package, or a long-stable declared property, changed. |
 | [Temporal Context](temporal.md) | `temporal` | 14 | How recently the package or this revision appeared, independent of any diff content. |
@@ -45,7 +45,7 @@ context and its rule definitions.
 | [Corpus Behavioral](corpus-behavioral.md) | `corpus-behavioral` | 6 | The package's position in, or deviation from, the corpus baseline - silent without prior observations. |
 | [Crossfire](crossfire.md) | `crossfire` | 34 | The evasion technique itself, not the payload it hides: a rule here fires on how a thing was written rather than on what it does. |
 | [Sabotage](sabotage.md) | `sabotage` | 8 | A payload aimed at the operator's machine rather than at getting something out of it: resource exhaustion, deletion, permission sabotage, service disruption, resource theft. |
-| [Unverifiable](unverifiable.md) | `unverifiable` | 14 | Not a claim about the recipe but about the analysis: something the package will run that this run could not read. Weight 0 always, and always shown. |
+| [Unverifiable](unverifiable.md) | `unverifiable` | 15 | Not a claim about the recipe but about the analysis: something the package will run that this run could not read. Weight 0 always, and always shown. |
 | [Meta and Confluence](meta.md) | `meta` | 6 | A claim about other findings: a declared practice contradicted by structure, or a composition only visible from the whole profile. |
 | [Entropy](entropy.md) | `entropy` | 3 | The added content is statistically abnormal - a distribution outlier, not a known pattern. Suspicion, never a verdict. |
 | [Correlation](correlation.md) | `correlation` | 15 | The pattern is across packages, not inside one: a host, literal or adopter shared by several packages in a window. |
@@ -68,13 +68,13 @@ generated from it.
 <!-- generated: series-counts -->
 | Series | Mechanism | Rules |
 |--------|-----------|-------|
-| `C` | Integrity-change | 34 |
+| `C` | Integrity-change | 35 |
 | `R` | Regex | 37 |
 | `H` | Heuristic | 108 |
 | `D` | Dependency | 5 |
 | `S` | Sabotage | 8 |
 | `X` | Crossfire | 34 |
-| `W` | Unverifiable | 14 |
+| `W` | Unverifiable | 15 |
 | `P` | Declared-practice | 0 |
 | `M` | Meta | 6 |
 | `E` | Entropy | 3 |
@@ -83,7 +83,7 @@ generated from it.
 | `A` | Artifact | 15 |
 | `I` | Indicator | 0 |
 | `U` | Upstream | 15 |
-The catalog lists 306 rule IDs across 15 series; 277 of them contribute to the heuristic score.
+The catalog lists 308 rule IDs across 15 series; 278 of them contribute to the heuristic score.
 <!-- /generated: series-counts -->
 
 `P` and `I` carry no catalog IDs in this build: declared-practice findings
@@ -91,7 +91,7 @@ are rendered from `DECLARED_REASONS` (P001-P009, P004 skipped), and the
 shipped indicator mechanism is H056, filed under [Indicators](indicator.md).
 
 Two further families are reported but never weighted: declared-practice
-findings P001-P009 (P004 is skipped) and unverifiable findings W001-W014. The
+findings P001-P009 (P004 is skipped) and unverifiable findings W001-W015. The
 optional L9 build lane adds artifact rules A001-A015, reported outside the
 heuristic when enabled.
 

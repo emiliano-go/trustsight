@@ -507,17 +507,31 @@ def analyze_package_text(
         pre_filter_findings.append(archive_trailer_finding)
     pre_filter_findings.extend(upstream_findings or ())
     scan_notes = sorted({str(note) for note in upstream_scan_notes or () if note})
-    if scan_notes:
+    ambiguous = [note for note in scan_notes if note == "upstream_scan_ambiguous"]
+    non_ambiguous = [note for note in scan_notes if note != "upstream_scan_ambiguous"]
+    if non_ambiguous:
         pre_filter_findings.append(stamp({
             "rule_id": "W014",
             "name": "Upstream Scan Not Completed",
             "severity": "INFO",
             "category": "unverifiable",
             "match": ("the opt-in upstream scan did not complete: "
-                      + ", ".join(scan_notes)),
+                      + ", ".join(non_ambiguous)),
             "file": "PKGBUILD",
             "line": None,
-            "params": {"notes": scan_notes},
+            "params": {"notes": non_ambiguous},
+            "weight_override": 0,
+        }))
+    if ambiguous:
+        pre_filter_findings.append(stamp({
+            "rule_id": "W015",
+            "name": "Archive Structure Ambiguous",
+            "severity": "INFO",
+            "category": "unverifiable",
+            "match": "the fetched source archive has ambiguous members",
+            "file": "PKGBUILD",
+            "line": None,
+            "params": {"notes": ambiguous},
             "weight_override": 0,
         }))
     post_filter_findings = list(_temporal_findings(temporal, pkg_name, False))

@@ -230,6 +230,14 @@
       "status": "promoted",
       "weight": 0,
       "decided_in": "0.29.0"
+    },
+    "C035": {
+      "changelog": "owned-namespace-occupancy",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
+      "signal": "operator-owned namespace source mismatch; needs a corpus rate before it can score",
+      "since": "Unreleased",
+      "status": "anergic"
     }
   }
 }

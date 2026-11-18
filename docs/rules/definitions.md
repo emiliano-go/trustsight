@@ -58,6 +58,7 @@ exactly one category page; this catalog only points at it.
 | [C032](install-and-persist.md#c032) | Scriptlet Executes Commands At Top Level | Integrity-change | HIGH | [Install and Persistence](install-and-persist.md) |
 | [C033](integrity.md#c033) | Context Bleed | Integrity-change | MEDIUM | [Integrity and Verification](integrity.md) |
 | [C034](maintainer-and-metadata.md#c034) | Metadata Inconsistency | Integrity-change | INFO | [Maintainer and Metadata](maintainer-and-metadata.md) |
+| [C035](integrity.md#c035) | Owned Namespace Occupied | Integrity-change | HIGH | [Integrity and Verification](integrity.md) |
 | [D001](naming-and-dependency.md#d001) | Novel Dependency Added | Dependency | MEDIUM | [Naming and Dependencies](naming-and-dependency.md) |
 | [D002](naming-and-dependency.md#d002) | Typosquatted Dependency | Dependency | HIGH | [Naming and Dependencies](naming-and-dependency.md) |
 | [D003](naming-and-dependency.md#d003) | New Network-Using Makedepends | Dependency | MEDIUM | [Naming and Dependencies](naming-and-dependency.md) |
@@ -281,6 +282,7 @@ exactly one category page; this catalog only points at it.
 | [W012](unverifiable.md#w012) | Federation Not Consulted | Unverifiable | - | [Unverifiable](unverifiable.md) |
 | [W013](unverifiable.md#w013) | Campaign Perimeter Boundary Note | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
 | [W014](unverifiable.md#w014) | Upstream Scan Not Completed | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
+| [W015](unverifiable.md#w015) | Archive Structure Ambiguous | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
 | [X001](crossfire.md#x001) | Encoded Payload Decoded And Executed | Crossfire | - | [Crossfire](crossfire.md) |
 | [X002](crossfire.md#x002) | Non-Literal Executable Name | Crossfire | - | [Crossfire](crossfire.md) |
 | [X003](crossfire.md#x003) | Obfuscated Command Argument | Crossfire | - | [Crossfire](crossfire.md) |
@@ -349,7 +351,7 @@ category that owns their claim:
 - **Declared practice** (`P001`-`P009`, with `P004` skipped): statements about
   what a recipe declares. See [Rule Scoring](scoring.md#fatal-behaviour) and the
   [glossary](../reference/glossary.md).
-- **Unverifiable** (`W001`-`W014`): statements about what the analysis could
+- **Unverifiable** (`W001`-`W015`): statements about what the analysis could
   not read. Weight 0, always shown. See
   [Unverifiable](unverifiable.md) and
   [Limitations and Uncertainty](../explanation/limitations-and-uncertainty.md).

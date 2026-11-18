@@ -219,6 +219,10 @@ See [C033: Context Bleed](../../rules/integrity.md#c033).
 
 See [C034: Metadata Inconsistency](../../rules/maintainer-and-metadata.md#c034).
 
+### C035 {#c035}
+
+See [C035: Owned Namespace Occupied](../../rules/integrity.md#c035).
+
 ### D001 {#d001}
 
 See [D001: Novel Dependency Added](../../rules/naming-and-dependency.md#d001).
@@ -1110,6 +1114,10 @@ See [W013: Campaign Perimeter Boundary Note](../../rules/unverifiable.md#w013).
 ### W014 {#w014}
 
 See [W014: Upstream Scan Not Completed](../../rules/unverifiable.md#w014).
+
+### W015 {#w015}
+
+See [W015: Archive Structure Ambiguous](../../rules/unverifiable.md#w015).
 
 ### X001 {#x001}
 

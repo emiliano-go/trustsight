@@ -50,7 +50,7 @@ PINNED_LOOPS = {
     "analysis/entropy.py": 1,
     # Shipped hook/udev/install payload text from the L9 manifest, not a
     # diff walk: one is the content scan, one strips comment lines.
-    "analysis/artifact.py": 2,
+    "analysis/artifact.py": 3,
 }
 
 

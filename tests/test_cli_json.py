@@ -85,6 +85,7 @@ CASES = [
     ("seed migrate", ["seed", "migrate"]),
     ("admin anergic", ["admin", "anergic"]),
     ("verdict", ["verdict", "demo", "--verdict", "cleared"]),
+    ("diff", ["diff", "pkg", "--since-last"]),
 ]
 
 

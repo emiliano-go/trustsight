@@ -104,6 +104,7 @@ _W_RULE_KIND: dict[str, str] = {
     # The opt-in scan ran but a read was refused/partial/offline: the
     # standing upstream boundary, made specific to this run.
     "W014": BoundaryKind.UPSTREAM_UNREAD,
+    "W015": BoundaryKind.UPSTREAM_UNREAD,
 }
 
 

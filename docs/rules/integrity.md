@@ -68,6 +68,7 @@ The rules that make up this category are listed below, each with the series that
 | [C026](#c026) | Empty File Added | INFO |
 | [C027](#c027) | Declared Install Script Is Absent | INFO |
 | [C033](#c033) | Context Bleed | MEDIUM |
+| [C035](#c035) | Owned Namespace Occupied | HIGH |
 | [H001](#h001) | Checksum Disabled | HIGH |
 | [H002](#h002) | Checksum Emptied | HIGH |
 | [H005](#h005) | validpgpkeys Added | - |
@@ -880,6 +881,19 @@ Honest edits rarely gut prose wholesale. A campaign that removes comments
 shrinks what a reviewer reads without touching the payload. The ratio and
 the absolute floor are config-pinned and corpus-adjudicated; a one-line
 comment deletion is never a finding. The locked benign corpus adjudicates it; the measured rate is recorded in the changelog.
+
+### C035: Owned Namespace Occupied {#c035}
+
+- **Target:** programmatic (declared sources)
+- **Severity:** HIGH
+- **Category:** `integrity`
+
+- **Condition:** A declared source URL is on a host in `[namespaces] owned`
+  but its path is outside the operator-owned path prefix for that host.
+
+The operator owns the host and path prefix, not the whole forge. A package
+that declares the same host under another owner is reported at weight 0
+(anergic) until calibrated.
 
 ## Interpretation
 

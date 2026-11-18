@@ -169,6 +169,7 @@ Reference = [
   {"Python API" = "reference/python-api.md"},
   {"Configuration Reference" = "reference/configuration.md"},
   {"Report Schema" = "reference/report-schema.md"},
+  {"Threat Coverage" = "reference/threat-coverage.md"},
   {Evidence = [
     {"Evidence Tiers" = "reference/evidence-tiers.md"},
     {"Evidence Categories" = "reference/evidence-categories.md"},

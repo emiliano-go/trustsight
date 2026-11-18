@@ -359,6 +359,17 @@ Controls which packages are scanned when no `--repo`/`--foreign`/`--all-repos` f
 
 If none of these settings are explicitly configured, the tool scans foreign packages only (backward-compatible default).
 
+### `[namespaces]`
+
+Operator-owned source namespaces used by C035. Each entry is a
+`host/path-prefix` pair; a declared source on that host outside the prefix is
+reported as `Owned Namespace Occupied` at weight 0. The section is part of
+`config_fingerprint`.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `owned` | list[str] | `[]` | Owned `host/path-prefix` entries, for example `["github.com/example"]`. A source under the same host but another owner is C035. |
+
 ### `[verify]`
 
 | Key | Type | Default | Description |

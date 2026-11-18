@@ -1168,6 +1168,42 @@ build lane: the manifest a caller supplies is the whole handoff.
 
 ---
 
+## trustsight diff
+
+Compare a package's current analysis with its last stored analysis.
+
+```
+trustsight diff <package> [--since-last] [--depth N] [--json]
+```
+
+The command reports the previous and current score, the risk bands, the
+score delta, and the findings that appeared or resolved. It requires a stored
+analysis (`trustsight inspect --record`); without one it exits with a JSON
+error under `--json`.
+
+---
+
+## trustsight-attest
+
+Record or check a deterministic source-tree attestation. TrustSight never
+runs `makepkg`; this tool only hashes the tree the operator is about to
+build.
+
+```
+trustsight-attest <root> --out FILE
+trustsight-attest <root> --check FILE
+```
+
+The document contains the algorithm, a `sha256:` digest, the file count and
+the byte count. It contains no timestamp or random value, so the same tree
+produces the same document. Symlinks and VCS/cache directories are skipped.
+`--check` exits non-zero when any path, mode bit or file byte changed.
+
+`trustsight-gate --attest FILE --dir DIR` writes the same document during a
+normal gate review.
+
+---
+
 ## trustsight upstream-fetcher
 
 Run the separate upstream archive fetcher. It owns the provider token and

@@ -100,8 +100,8 @@ SHARED_RULES = [
     {"id": "R007", "name": "Install File Modification", "pattern": r"^\+.*\.install", "severity": "MEDIUM", "category": "installer", "match_target": "raw_line"},
     {"id": "R008", "name": "Unexpected File Download", "pattern": r"\b(python|ruby|perl)\s+-c\s+https?://", "severity": "HIGH", "category": "network_execution", "match_target": "resolved"},
     # H004 is now a code rule (src/trustsight/analysis/build.py).
-    {"id": "R010", "name": "Uses curl in PKGBUILD", "pattern": r"\bcurl\s", "severity": "LOW", "category": "network_usage", "match_target": "raw_line", "scope": ["function_body"]},
-    {"id": "R011", "name": "Uses wget in PKGBUILD", "pattern": r"\bwget\s", "severity": "LOW", "category": "network_usage", "match_target": "raw_line", "scope": ["function_body"]},
+    {"id": "R010", "name": "Uses curl in PKGBUILD", "pattern": r"\bcurl\s", "severity": "LOW", "category": "network_usage", "match_target": "raw_line", "scope": ["function_body"], "added_only": True},
+    {"id": "R011", "name": "Uses wget in PKGBUILD", "pattern": r"\bwget\s", "severity": "LOW", "category": "network_usage", "match_target": "raw_line", "scope": ["function_body"], "added_only": True},
     # `include_comments` matches the shipped definition: R012's payload is
     # aimed at whoever *reads* the file, and in practice that is always a
     # comment. Without it here the fixture asserted a behaviour the shipped

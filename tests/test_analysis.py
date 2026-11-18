@@ -440,3 +440,40 @@ def test_c013_cross_forge_does_not_fire():
         "tool-git",
         current_text='url="https://github.com/acme/tool"\n',
     )
+
+
+def test_r010_ignores_a_removed_curl_line():
+    """Deleting a fetch must not raise the score.
+
+    R010 predates the ``added_only`` convention every later raw-line rule
+    follows, so it matched the removal side too: a maintainer cleaning up a
+    build-time fetch (the electron wrapper's ipinfo country probe) scored
+    LOW for *removing* it.
+    """
+    diff = """--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,4 +1,4 @@
+ pkgname=x
+ build() {
+-  curl -s https://ipinfo.io/country
++  echo building
+ }
+"""
+    resolved, _unresolved = tokenize_and_resolve(diff)
+    triggered = apply_rules(resolved, get_raw_diff_lines(diff), SHARED_RULES)
+    assert "R010" not in [entry["rule_id"] for entry in triggered]
+
+
+def test_r010_still_fires_on_an_added_curl_line():
+    diff = """--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,4 +1,4 @@
+ pkgname=x
+ build() {
++  curl -s https://ipinfo.io/country
+   echo building
+ }
+"""
+    resolved, _unresolved = tokenize_and_resolve(diff)
+    triggered = apply_rules(resolved, get_raw_diff_lines(diff), SHARED_RULES)
+    assert "R010" in [entry["rule_id"] for entry in triggered]

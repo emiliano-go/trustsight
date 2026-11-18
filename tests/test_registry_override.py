@@ -65,3 +65,39 @@ def test_h106_quiet_on_a_read_only_registry_query():
 +}
 """
     assert h106(diff) == []
+
+
+def test_h106_quiet_on_the_ecosystems_own_default_registry():
+    """Re-stating npm's default is not a redirect to another index.
+
+    The electron-wrapper template pins
+    ``npm_config_registry="${NPM_CONFIG_REGISTRY:-.../registry.npmjs.org}"``
+    so the build is reproducible regardless of the builder's environment;
+    H106 read the assignment as an override and scored it HIGH beside the
+    ``npm install`` that used it.
+    """
+    diff = """--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,2 +1,6 @@
+ pkgname=x
++build() {
++  export npm_config_registry="${NPM_CONFIG_REGISTRY:-${npm_config_registry:-https://registry.npmjs.org}}"
++  npm install
++}
+"""
+    assert h106(diff) == []
+
+
+def test_h106_keeps_firing_when_one_host_is_not_the_default():
+    diff = """--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,2 +1,6 @@
+ pkgname=x
++build() {
++  export npm_config_registry=https://registry.npmjs.org
++  npm install --registry https://mirror.example/npm
++}
+"""
+    findings = h106(diff)
+    assert len(findings) == 1
+    assert "mirror.example" in findings[0]["match"]

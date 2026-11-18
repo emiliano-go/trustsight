@@ -698,6 +698,12 @@ def _correlation_records(
             "upstream_dep_additions": list(
                 info.get("upstream_dep_additions", ())),
             "maintainer": meta.get("Maintainer") or info.get("maintainer", ""),
+            # G003: the account this one replaced, when the transition was
+            # from a recorded maintainer.  A batch whose members all come
+            # from one predecessor is that account renamed, not a stranger
+            # adopting unrelated packages.
+            "previous_maintainer": (
+                ((old_meta or {}).get(name) or {}).get("Maintainer") or ""),
             "adoption": bool(predicates),
             "adoption_predicates": predicates,
             # The package's own source repositories, so G003 can require the

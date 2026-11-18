@@ -233,6 +233,29 @@ def _is_documentation_source(
 #: from (a project homepage, a bug tracker, a vendor CDN named in the URL).
 _URL_DECL_RE = re.compile(r"^\s*(?:url|[A-Za-z0-9_]*_url)\s*=")
 
+
+#: A package-manager registry variable.  The URL it carries is the endpoint
+#: a build asks *which* code to run, not an artifact it downloads directly:
+#: ``source=()`` never names it, and the artifact is fetched from the
+#: registry's own storage afterwards.  Reading it as a source charged a
+#: build tool's default registry as an unknown download host, and novelty
+#: as a first-seen one, on the electron-wrapper template's
+#: ``YARN_NPM_REGISTRY_SERVER="${...:-https://registry.yarnpkg.com}"``.
+_REGISTRY_ENDPOINT_RE = re.compile(
+    r"\b(?:npm_config_registry|NPM_CONFIG_REGISTRY|COREPACK_NPM_REGISTRY"
+    r"|YARN_NPM_REGISTRY_SERVER|YARN_REGISTRY|PIP_INDEX_URL"
+    r"|PIP_EXTRA_INDEX_URL|UV_INDEX|GOPROXY|GONOSUMDB|GOPRIVATE"
+    r"|CARGO_REGISTRIES_[A-Z0-9_]+|GEM_SOURCES)\s*=",
+    re.IGNORECASE,
+)
+
+#: Registries whose URL is always a resolution endpoint, even when it is not
+#: on an assignment line: the wrapper template also rewrites ``yarn.lock``
+#: with ``sed "s|https://registry.yarnpkg.com/|${_reg}/|g"``.  A tarball
+#: fetched from these hosts is canonical ecosystem content, so nothing is
+#: lost by keeping them out of the provenance prior.
+_REGISTRY_HOSTS = frozenset({"registry.npmjs.org", "registry.yarnpkg.com"})
+
 def _is_install_hook_path(path: str) -> bool:
     """True for the ``.install`` hook file: runtime commands, not origins."""
     return path.endswith(".install")
@@ -256,6 +279,15 @@ def extract_urls_from_diff(diff_text: str) -> SourceChanges:
     old_table = variable_table(lines, frozenset({"-", " "}))
     new_table = variable_table(lines, frozenset({"+", " "}))
     from ..buckets import url_host_is_non_routable, url_line_is_inert
+
+    # A registry host is a resolution endpoint unless the recipe actually
+    # lists it in ``source=()``: fetching a tarball from the registry is a
+    # real source, and the bucket must still judge that host.  Read both
+    # sides so a source that is also being removed keeps its bucket.
+    registry_source_urls = (
+        extract_source_array_urls(diff_text, "after")
+        | extract_source_array_urls(diff_text, "before")
+    )
 
     # A heredoc body is data, not a command: a URL printed in a message or
     # written into a config file is not a source.  Executed bodies
@@ -293,6 +325,7 @@ def extract_urls_from_diff(diff_text: str) -> SourceChanges:
         is_declaration = bool(
             _URL_DECL_RE.match(body)
             and not _SOURCE_ARRAY_START_RE.match(body))
+        is_registry = bool(_REGISTRY_ENDPOINT_RE.search(body))
         resolved = resolve_text(body, new_table if prefix == "+" else old_table)
         if "http" not in resolved:
             continue
@@ -319,7 +352,10 @@ def extract_urls_from_diff(diff_text: str) -> SourceChanges:
             # a `source=()` entry, and charging it SOURCE_BUCKET/NOVELTY read
             # as a provenance change on an ordinary release.  It stays in
             # `target` so the install-hook rules still see it.
-            if is_declaration or _is_install_hook_path(line.file):
+            if (is_declaration or is_registry
+                    or _is_install_hook_path(line.file)
+                    or (_source_host(cleaned) in _REGISTRY_HOSTS
+                        and cleaned not in registry_source_urls)):
                 declared_urls.add(cleaned)
                 if is_declaration:
                     upstream_host = _source_host(cleaned) or upstream_host

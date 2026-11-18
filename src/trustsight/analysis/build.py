@@ -241,6 +241,53 @@ _REGISTRY_INSTALL_RE = re.compile(
 )
 
 
+#: The registry a package manager would use with no configuration at all.
+#: Naming one of these is not an override: the tool already defaults to it,
+#: so no index chose a different answer.  The rule exists for a *different*
+#: registry; a value with no host, or with one host outside this set, still
+#: fires because absence of an override cannot be guessed at.
+_CANONICAL_REGISTRIES = frozenset({
+    "registry.npmjs.org",
+    "registry.yarnpkg.com",
+    "pypi.org",
+    "files.pythonhosted.org",
+    "proxy.golang.org",
+    "sum.golang.org",
+    "crates.io",
+    "index.crates.io",
+    "static.crates.io",
+    "rubygems.org",
+    "packagist.org",
+})
+
+_REGISTRY_URL_RE = re.compile(
+    r"https?://[^\s\"'`;|&<>()}$\\]+", re.IGNORECASE)
+
+
+def _canonical_registry_only(body: str) -> bool:
+    """True when every URL on the line names a tool's own default registry.
+
+    ``npm_config_registry="${NPM_CONFIG_REGISTRY:-.../registry.npmjs.org}"``
+    assigns the value npm already uses; there is no redirection to report.
+    Any non-canonical or unparseable host keeps the finding - the point is
+    to prove the absence of an override, not to assume one.
+    """
+    from urllib.parse import urlsplit
+
+    from ..buckets import canonical_host
+
+    hosts = []
+    for raw in _REGISTRY_URL_RE.findall(body):
+        try:
+            host = canonical_host(urlsplit(raw).netloc)
+        except ValueError:
+            return False
+        if not host:
+            return False
+        hosts.append(host)
+    return bool(hosts) and all(host in _CANONICAL_REGISTRIES for host in hosts)
+
+
 
 def _service_enable_findings(ctx, add) -> None:
     """H108: build/install code enables a service or cron job."""
@@ -289,6 +336,12 @@ def _registry_override_findings(ctx, add) -> None:
             continue
         body = _strip_comment(line[1:])
         if not _REGISTRY_OVERRIDE_RE.search(body):
+            continue
+        if _canonical_registry_only(body):
+            # Re-stating the default registry is not a redirect.  The
+            # electron-wrapper template sets
+            # ``npm_config_registry="${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org}"``
+            # so the build is reproducible, and H106 read it as an override.
             continue
         resolves = any(
             _REGISTRY_INSTALL_RE.search(_strip_comment(other[1:]))

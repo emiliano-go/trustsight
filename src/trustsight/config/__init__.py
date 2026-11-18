@@ -377,6 +377,21 @@ def load_rules() -> list[dict]:
     """
     data = load_toml("rules.toml")
     rules, restored = enforce_fatal_rules(data.get("rules", []))
+    # ``rules.toml`` is written once and only ever gains rules, so a
+    # semantic field added to the shipped block later never reaches an
+    # existing install.  ``added_only`` is such a field (R010/R011 read only
+    # the added side of a diff): fill it from the shipped definition when the
+    # on-disk block carries no value, while an explicit on-disk value wins.
+    # These fields are not in _SEMANTIC_FIELDS, so this does not turn an
+    # older user file into reported drift.
+    shipped_by_id = {rule.get("id"): rule for rule in shipped_rules()}
+    for rule in rules:
+        shipped = shipped_by_id.get(rule.get("id"))
+        if not shipped:
+            continue
+        for field in ("added_only", "include_comments"):
+            if field in shipped and field not in rule:
+                rule[field] = shipped[field]
     controls = load_config().get("rules", {})
     for rule in rules:
         control = controls.get(rule.get("id"), {})

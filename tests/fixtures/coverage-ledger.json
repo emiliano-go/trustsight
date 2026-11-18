@@ -7778,10 +7778,8 @@
       ],
       "benign_state": "fire",
       "benign_strata": [
-        "bin_repack",
         "data_fonts",
         "lang_ecosystem",
-        "large_electron",
         "maintainer_churn",
         "multi_client_fetch",
         "source_patched",
@@ -7791,19 +7789,17 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 89,
+      "fires": 23,
       "id": "R010",
       "pseudo": false,
       "reason": "",
       "series": "R",
       "sources": {
         "cold": {
-          "fires": 85,
+          "fires": 19,
           "strata": [
-            "bin_repack",
             "data_fonts",
             "lang_ecosystem",
-            "large_electron",
             "maintainer_churn",
             "multi_client_fetch",
             "source_patched",
@@ -7817,10 +7813,8 @@
       },
       "state": "measured",
       "strata": [
-        "bin_repack",
         "data_fonts",
         "lang_ecosystem",
-        "large_electron",
         "maintainer_churn",
         "multi_client_fetch",
         "source_patched",
@@ -7843,14 +7837,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 13,
+      "fires": 4,
       "id": "R011",
       "pseudo": false,
       "reason": "",
       "series": "R",
       "sources": {
         "cold": {
-          "fires": 13,
+          "fires": 4,
           "strata": [
             "data_fonts",
             "dkms_kernel",

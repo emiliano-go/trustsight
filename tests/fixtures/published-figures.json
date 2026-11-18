@@ -2,12 +2,12 @@
   "calibration": {
     "benign_above_threshold_pct": 6.4,
     "benign_p95": 30,
-    "benign_zero_rate_pct": 75.2,
+    "benign_zero_rate_pct": 75.5,
     "corpus_diffs": 8393,
     "labelled_fixtures": 213,
     "malicious_minimum": 20,
     "malicious_p5": 40,
-    "ruleset_trigger_rate_pct": 29.1,
+    "ruleset_trigger_rate_pct": 28.9,
     "separation_margin": 10,
     "threshold_percentile": 93.6
   },
@@ -99,7 +99,7 @@
     "source_urls": 185902
   },
   "tests": {
-    "count": 9586,
+    "count": 9594,
     "files": 288
   }
 }

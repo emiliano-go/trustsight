@@ -58,6 +58,10 @@ def _network_tools(config: dict) -> frozenset:
 
 def is_established_package(name: str) -> bool:
     """Official-repo membership first, observation count as the fallback."""
+    from ..deps import is_virtual_provide
+
+    if is_virtual_provide(name):
+        return False
     official = _db.official_package_names()
     if official:
         return name in official

@@ -13,7 +13,7 @@ from trustsight.analysis.upstream_archive import parse_upstream_archive
 def test_random_bytes_are_a_bounded_result_not_a_crash(data):
     result = parse_upstream_archive(data)
     assert set(result) == {
-        "manifest_texts", "artifacts", "complete", "refused", "malformed",
+        "manifest_texts", "artifacts", "ambiguous", "complete", "refused", "malformed",
     }
     assert isinstance(result["manifest_texts"], list)
     assert len(result["manifest_texts"]) <= 64

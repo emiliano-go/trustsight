@@ -61,6 +61,11 @@ The rules that make up this category are listed below, each with the series that
 | [A008](#a008) | eBPF Artifact In Package | HIGH |
 | [A009](#a009) | Executable Binary In Source Archive | HIGH |
 | [A010](#a010) | Setuid File In Source Archive | HIGH |
+| [A011](#a011) | Hook Runs On Every Transaction | MEDIUM |
+| [A012](#a012) | Shipped Hook Or Udev Fetches Or Runs A User Path | HIGH |
+| [A013](#a013) | Udev Rule Runs A Program | MEDIUM |
+| [A014](#a014) | Unsafe ELF Runpath | HIGH |
+| [A015](#a015) | Packed Or Encrypted ELF Section | MEDIUM |
 <!-- /generated: page-index -->
 
 ### A001: Setuid File In Artifact {#a001}
@@ -158,6 +163,74 @@ executed.
 The bit is read from the archive header, not by executing anything. It is
 report-only (weight 0, anergic) until calibrated; a source tree that ships a
 setuid file is worth a look even before it is built.
+
+### A014: Unsafe ELF Runpath {#a014}
+
+- **Target:** ELF in the artifact/upstream lane
+- **Severity:** HIGH (weight 0)
+- **Category:** `artifact`
+
+- **Condition:** A fetched or built ELF binary declares an `RPATH`/`RUNPATH`
+  that is empty, relative, or points at a system-temp or user-owned
+  directory (for example `.`, `/tmp`, `/dev/shm`, `/home`, `/root`).
+
+The ELF header is read with a bounded parser; the binary is never mapped or
+executed. `$ORIGIN` is relative to the binary's own package directory and is
+not automatically unsafe. Weight 0 (anergic) until calibrated.
+
+### A015: Packed Or Encrypted ELF Section {#a015}
+
+- **Target:** ELF in the artifact/upstream lane
+- **Severity:** MEDIUM (weight 0)
+- **Category:** `artifact`
+
+- **Condition:** A fetched or built ELF binary carries a known packer or
+  encrypted-section marker: `UPX!`, or a section named `.upx`, `UPX0`,
+  `UPX1`, `.packed`, `.aspack`, `.mpress`, `.nsp`, `.petite`, `.themida`,
+  `.vmp0`, `.vmp1`, `.encrypted` or `.crypt`.
+
+The section table is read with the bounded ELF parser; nothing is executed or
+unpacked. Weight 0 (anergic) until calibrated.
+
+### A011: Hook Runs On Every Transaction {#a011}
+
+- **Target:** shipped libalpm hook / udev rule / install script (L9)
+- **Severity:** MEDIUM (weight 0)
+- **Category:** `artifact`
+
+- **Condition:** A shipped libalpm `.hook` has a broad trigger
+  (`Operation = *`) and an `Exec` command, so it runs as root on every pacman
+  transaction.
+
+The hook text is read from the artifact manifest; nothing is executed.
+Weight 0 (anergic) until calibrated.
+
+### A012: Shipped Hook Or Udev Fetches Or Runs A User Path {#a012}
+
+- **Target:** shipped libalpm hook / udev rule / install script (L9)
+- **Severity:** HIGH (weight 0)
+- **Category:** `artifact`
+
+- **Condition:** A shipped `.hook`, udev `.rules` file or `.install` script
+  fetches (`curl`/`wget`/`aria2c`) or uses a user/temp path (`/tmp`,
+  `/dev/shm`, `$HOME`, `/home`, `/root`). A plain `sh -c` that only runs a
+  system helper is not itself a finding; wrapping a fetch or user path in
+  `sh -c` remains in scope because the fetch/path check sees it.
+
+These files run as root outside the package manager's checksum. The text is
+read only; nothing is executed. Weight 0 (anergic) until calibrated.
+
+### A013: Udev Rule Runs A Program {#a013}
+
+- **Target:** shipped libalpm hook / udev rule / install script (L9)
+- **Severity:** MEDIUM (weight 0)
+- **Category:** `artifact`
+
+- **Condition:** A shipped udev `.rules` file runs a program
+  (`RUN+=`, `PROGRAM==`, `IMPORT{program}`).
+
+A udev rule can launch a command as root whenever a device appears. Read-only
+inspection; weight 0 (anergic) until calibrated.
 
 ## Interpretation
 

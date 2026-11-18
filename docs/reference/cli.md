@@ -1154,17 +1154,57 @@ trustsight verify-build <package> [--manifest PATH] [--json]
 | Argument | Required | Description |
 |----------|----------|-------------|
 | `package` | Yes | Package name. |
-| `--manifest PATH` | No | JSON array of built-file records (`path`, `mode`, `setuid`, `setgid`, `unit`, `links`, `caps`, `bpf`, `world_writable`) produced by an external build. Without it the lane is unavailable. |
+| `--manifest PATH` | No | JSON array of built-file records (`path`, `mode`, `setuid`, `setgid`, `unit`, `links`, `caps`, `bpf`, `world_writable`) produced by an external build. A record may carry an optional `elf` object (`needed`, `rpath`, `runpath`, `packed`) so A003/A014/A015 can use real ELF metadata; without it those rules fall back to the record's declared `links`. A `.hook`, `.rules` or `.install` record may carry bounded `content` so A011-A013 can inspect what the shipped file runs. Without it the lane is unavailable. |
 | `--json` | No | Emit the result as JSON. |
 
 It reviews the diff (L1-L8) first, then offers the L9 lane. When enabled and
 given a manifest, it inspects the artifact with the A-series rules
-(`A001`-`A008`); those findings are L9 evidence and are never blended into
+(`A001` through `A008`); those findings are L9 evidence and are never blended into
 the static score. When the artifact and the static analysis disagree, the
 result carries `l9_divergence` and both profiles stand.
 
 The static core never executes package code, and there is no automatic
 build lane: the manifest a caller supplies is the whole handoff.
+
+---
+
+## trustsight diff
+
+Compare a package's current analysis with its last stored analysis.
+
+```
+trustsight diff <package> [--since-last] [--depth N] [--json]
+```
+
+The command reports the previous and current score, the risk bands, the
+score delta, and the findings that appeared or resolved. It requires a stored
+analysis (`trustsight inspect --record`); without one it exits with a JSON
+error under `--json`.
+
+---
+
+## trustsight-attest
+
+Record or check a deterministic source-tree attestation. TrustSight never
+runs `makepkg`; this tool only hashes the tree the operator is about to
+build.
+
+```
+trustsight-attest <root> --out FILE
+trustsight-attest <root> --check FILE
+trustsight-attest <root> --list-unpinned
+```
+
+The document contains the algorithm, a `sha256:` digest, the file count and
+the byte count. It contains no timestamp or random value, so the same tree
+produces the same document. Symlinks and VCS/cache directories are skipped.
+`--check` exits non-zero when any path, mode bit or file byte changed.
+`--list-unpinned` lists declared sources that are VCS entries, carry `SKIP`,
+or have no checksum; the same list is stored as `unpinned_sources` in the
+attestation document.
+
+`trustsight-gate --attest FILE --dir DIR` writes the same document during a
+normal gate review.
 
 ---
 
@@ -1333,6 +1373,41 @@ trustsight containment status [--json]
 | Flag | Description |
 |------|-------------|
 | `--json` | Emit one JSON object instead of `key: value` lines. |
+
+---
+
+## trustsight sbom
+
+Export a deterministic CycloneDX 1.5 SBOM for one package. The document is a
+projection of the analysis: it lists the package, every declared `source=()`
+entry, and every declared or analysed dependency, and attaches each finding to
+the component its evidence names.
+
+```
+trustsight sbom <package> [--format cyclonedx] [--out FILE]
+```
+
+| Argument / flag | Required | Description |
+|-----------------|----------|-------------|
+| `package` | Yes | Package name. |
+| `--format` | No | SBOM format; only `cyclonedx` is supported. |
+| `--out FILE` | No | Write the document to `FILE` instead of stdout. |
+
+A source component carries its checksum as a CycloneDX hash and its URL as an
+external reference. It is marked opaque with a `trustsight:opaque` property
+when it is a VCS entry (`git+`, `svn+`, `hg+`, `bzr+`), when its checksum is
+`SKIP`, or when it has no checksum. A dependency component is marked opaque
+when its analysis failed or when a coverage gap left the dependency graph
+incomplete; every component also carries `trustsight:analyzed` and, when it
+was analysed, its score, risk and finding count. The root component carries
+`trustsight:coverage-gap` properties, so an incomplete read never looks clean.
+
+Findings are `trustsight:finding` properties with the value `RULE:SEVERITY`.
+The export is bounded (`MAX_SBOM_COMPONENTS`, `MAX_SBOM_FINDINGS`,
+`MAX_RECIPE_BYTES`); excess components are dropped deterministically and the
+root records `trustsight:truncated` and the omitted count. Nothing is fetched
+or executed to build it, and there is no timestamp or random serial, so
+repeated runs over the same analysis are byte-identical.
 
 ---
 

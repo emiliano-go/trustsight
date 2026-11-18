@@ -1286,3 +1286,18 @@ def test_sync_rules_update_json_reports_post_sync_drift(tmp_path, monkeypatch):
         app, ["config", "sync-rules", "--update", "--json"])
     assert again.exit_code == 0, again.output
     assert json.loads(again.output)["drift"] == []
+
+
+def test_owned_namespaces_change_the_fingerprint(monkeypatch):
+    import trustsight.config as config_module
+
+    monkeypatch.setattr(config_module, "load_thresholds", lambda: {})
+    monkeypatch.setattr(config_module, "load_rules", lambda: [])
+    monkeypatch.setattr(config_module, "load_config", lambda: {
+        "namespaces": {"owned": ["github.com/me"]},
+    })
+    first = config_module.config_fingerprint()
+    monkeypatch.setattr(config_module, "load_config", lambda: {
+        "namespaces": {"owned": ["github.com/me", "gitlab.com/team"]},
+    })
+    assert config_module.config_fingerprint() != first

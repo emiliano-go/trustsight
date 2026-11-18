@@ -8,6 +8,18 @@ from ._models import CycleReport, FailedPackage, HistoryEntry, PivotMatch, Pivot
 from ._reports import _cycle_report, _hook, _report_from_fact, _report_from_result
 from ._validation import MAX_API_HISTORY, MAX_API_NAME_BYTES, MAX_API_PACKAGES, MAX_API_REPOS, PackageNotFound, TrustSightError, _validate_limit, _validate_name, _validate_names, _validate_nonnegative, _validate_text
 
+def _aur_info(name: str) -> dict:
+    from ..discovery import get_aur_package_info
+
+    return get_aur_package_info([name])
+
+
+def _package_row(name: str):
+    from ..db import get_package
+
+    return get_package(name)
+
+
 __all__ = ['TrustSight']
 
 class TrustSight:
@@ -224,6 +236,41 @@ class TrustSight:
         return _report_from_fact(
             analyze_package(package, depth=depth, record=record)
         )
+
+    def sbom(self, package: str, *, depth: Optional[int] = None) -> dict:
+        """Export a CycloneDX 1.5 SBOM for one package.
+
+        The document lists the package, its declared sources and its
+        dependency components.  Each finding is attached to the component
+        its evidence names; a source is opaque when it is a VCS entry,
+        carries ``SKIP``, or has no checksum, and the root is opaque when a
+        coverage gap leaves the graph incomplete.  The result contains no
+        timestamp or random serial, so two runs over the same analysis are
+        byte-identical.
+
+        :param package: package name to analyse and export.
+        :param depth: AUR dependency levels to analyse.  ``None`` uses the
+            configured depth, the same default as :meth:`inspect`.
+        :returns: the CycloneDX document as a plain dict.
+        :raises PackageNotFound: the name is in neither the AUR nor the
+            local database.
+
+        Example:
+            .. code-block:: python
+
+                from trustsight import TrustSight
+
+                document = TrustSight().sbom("some-package")
+                for component in document["components"]:
+                    print(component["name"], component.get("version", ""))
+        """
+        from ..sbom import sbom_for_package
+
+        _validate_name(package)
+        self._ensure_ready()
+        if package not in _aur_info(package) and _package_row(package) is None:
+            raise PackageNotFound(package)
+        return sbom_for_package(package, depth=depth)
 
     def analyze_text(
         self,

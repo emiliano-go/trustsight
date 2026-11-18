@@ -60,7 +60,9 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
       "template": "string",
       "evidence": {},
       "file": "string",
-      "line": int
+      "line": int,
+      "cwe": "string",
+      "remediation": "string"
     }
   ],
   "first_seen": bool,
@@ -253,13 +255,15 @@ Each entry:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `rule_id` | `string` | Rule or category identifier from the published catalog: the R/H/C/D/S/X families, the M-series meta rules (`M001`-`M006`; M002/M003 weight 0), the E-series entropy rules (`E001`-`E003`, thresholds ship empty), the T-series temporal rules (`T001`-`T007`), the G-series correlation rules (`G001`-`G011` and `G012`-`G015`), the I-series indicator rules (H056, and future `I` ids), the U-series upstream rules (`U001`-`U015`: committed manifests and upstream release), and the A-series artifact rules (`A001`-`A008`, L9 only), plus `P001`-`P009` (declared practice, always weight 0; P004 is skipped), `W001`-`W014` (unverifiable, always weight 0), or `SOURCE_BUCKET`, `NOVELTY`, `COVERAGE`. |
+| `rule_id` | `string` | Rule or category identifier from the published catalog: the R/H/C/D/S/X families, the M-series meta rules (`M001`-`M006`; M002/M003 weight 0), the E-series entropy rules (`E001`-`E003`, thresholds ship empty), the T-series temporal rules (`T001`-`T007`), the G-series correlation rules (`G001`-`G011` and `G012`-`G015`), the I-series indicator rules (H056, and future `I` ids), the U-series upstream rules (`U001`-`U015`: committed manifests and upstream release), and the A-series artifact rules (`A001`-`A015`: L9 built-package, shipped hooks/udev, and the opt-in upstream-source lane), plus `P001`-`P009` (declared practice, always weight 0; P004 is skipped), `W001`-`W015` (unverifiable, always weight 0), or `SOURCE_BUCKET`, `NOVELTY`, `COVERAGE`. |
 | `severity` | `string` | `FATAL`, `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, or `INFO`. |
 | `weight` | `int` | Contribution to the score. Never negative: nothing lowers a score. `0` for annotations, coverage gaps, every `P` and `W` finding, and unchanged companion content. |
 | `reason` | `string` | Human-readable explanation of why this entry fired. The full string is carried in both JSON and CLI display. |
 | `params` | `dict` | Parameters retained by the score entry for rendering or storage. |
 | `template` | `string` | The render string for this finding, with `{placeholders}` filled from `evidence`. Output is rendered from the template, so a finding says the same thing everywhere it appears. |
 | `evidence` | `dict` | The declared facts that triggered the rule, plus the raw matched text as `match`. This is what the finding is *about*, as opposed to prose describing it. |
+| `cwe` | `string` | A descriptive CWE identifier for the finding's claim category, or a per-rule override. Never scored. |
+| `remediation` | `string` | A one-line action for the reader. Descriptive only; it never changes the score. |
 | `file` | `string` | The file the finding is in: `PKGBUILD`, `.SRCINFO`, `<name>.install`, or another path. |
 | `line` | `int` or `null` | The 1-based line the finding anchors to. Explicitly `null`, never omitted, for findings that legitimately have no line: maintainer, graph, temporal and corpus rules, and a standing indicator match that is not in the current hunk. |
 | `techniques` | `list[string]` | Per-finding evasion-technique tags (`X002:spliced-variable` and peers), when the finding came from the X-series shape vocabulary. Additive instrumentation for the harness shape archive; never rendered, scored or suppressed. Empty for every other family. |

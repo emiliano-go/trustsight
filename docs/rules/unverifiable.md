@@ -87,6 +87,7 @@ The rules that make up this category are listed below, each with the series that
 | [W012](#w012) | Federation Not Consulted | - |
 | [W013](#w013) | Campaign Perimeter Boundary Note | INFO |
 | [W014](#w014) | Upstream Scan Not Completed | INFO |
+| [W015](#w015) | Archive Structure Ambiguous | INFO |
 <!-- /generated: page-index -->
 
 ### W001: Executes Code This Analysis Did Not Read {#w001}
@@ -353,6 +354,19 @@ quieter, so the score and the clean/not-clean boundary are untouched.
 This is a weight-0 boundary, not a scored finding and not a clean verdict. It
 names what the lane could not read this cycle; with the lane disabled, W011
 already states that upstream content is not read at all.
+
+### W015: Archive Structure Ambiguous {#w015}
+
+- **Target:** programmatic (fetched source archive)
+- **Severity:** INFO
+- **Category:** `unverifiable`
+
+- **Condition:** A fetched source archive contains duplicate normalised member
+  names, overlapping member data ranges, or a GNU sparse header that hides the
+  real byte layout.
+
+The archive is read in the read-role sandbox. Nothing is extracted to disk or
+executed, and the boundary is always reported at weight 0.
 
 ## Interpretation
 

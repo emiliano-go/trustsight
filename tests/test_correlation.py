@@ -115,8 +115,6 @@ def test_coordinated_adoption_fires_when_one_member_is_unrelated():
 
 def test_g003_escalates_for_a_first_seen_account_adopting_dormant_packages(
         monkeypatch):
-    import time
-
     # A fixed clock: the escalation window is 30 days, so a hard-coded
     # "first seen" date turns this test red on the calendar rather than on
     # a regression.
@@ -129,7 +127,10 @@ def test_g003_escalates_for_a_first_seen_account_adopting_dormant_packages(
          "adoption_predicates": ["H086"], "last_modified": dormant}
         for i in range(3)
     ]
-    first_seen = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now - 10 * 86400))
+    from datetime import datetime, timezone
+
+    first_seen = datetime.fromtimestamp(
+        now - 5 * 86400, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     monkeypatch.setattr(
         "trustsight.sandbox.store_client.maintainer_first_seen",
         lambda m: first_seen if m == "fennekuiper" else None,

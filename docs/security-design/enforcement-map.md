@@ -20,6 +20,11 @@ python scripts/security_gates.py
 | `upstream reads are bounded and pinned` | A2, A3, A8 | `trustsight.upstream_fetch` (peer check), `trustsight.analysis.upstream_archive` (decompressed cap), `trustsight.upstream_collect` (text cap) |
 | `an archive is parsed only after its checksum verifies` | A2, A8 | `trustsight.upstream_scan.verify_archive_checksum`, `tests/test_upstream_scan.py` |
 | `provider tokens are redacted and never logged` | A18 | `trustsight.credentials`, `tests/test_credentials.py` |
+| `every rule names its CWE and remediation` | B10 | `trustsight.rule_metadata`, `tests/test_rule_metadata.py` |
+| `artifact ranges end at the catalog` | B10 | `docs/rules/artifact.md`, `docs/reference/rules/system.md` |
+| `threat coverage matches the registry` | B10 | `scripts/build_threat_coverage.py`, `docs/reference/threat-coverage.md` |
+| `ELF parsing is read-only and bounded` | A1, A4, A17 | `trustsight.analysis.elf`, `tests/test_elf.py` |
+| `shipped hook content is bounded and inert` | A1, A4, A5 | `trustsight.analysis.artifact`, `tests/test_artifact.py` |
 | `declared source URLs are never fetched` | A2 | no raw transport in `src/trustsight/analysis/`, and every fetch helper it imports is name-keyed |
 | `every JSON report carries the fingerprint` | B1 | `schema.fact_to_dict`, `reporting.report_body` |
 | `suppression is never hidden by a flag` | B5 | `suppressed_rules` outside any verbosity branch in `cli/review.py` |

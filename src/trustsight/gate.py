@@ -694,6 +694,10 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--base", default="", help="package base (hook label)")
     parser.add_argument("--dir", default="", help="checked-out PKGBUILD directory")
     parser.add_argument(
+        "--attest", default="",
+        help="write a deterministic tree attestation after the gate review",
+    )
+    parser.add_argument(
         "--depth", type=int, default=DEFAULT_DEPTH,
         help="AUR dependency levels to inspect (default: 1)",
     )
@@ -749,6 +753,9 @@ def main(argv: list[str] | None = None, *, out: TextIO = sys.stderr) -> int:
             file=out,
         )
         return EXIT_ERROR
+    if args.attest and not args.dir:
+        print("trustsight-gate: --attest requires --dir", file=out)
+        return EXIT_ERROR
 
     def inspect(package: str) -> dict:
         return run_inspect(
@@ -757,7 +764,7 @@ def main(argv: list[str] | None = None, *, out: TextIO = sys.stderr) -> int:
         )
 
     try:
-        return run_gate(
+        result = run_gate(
             targets,
             inspect=inspect,
             answer=_read_answer,
@@ -770,6 +777,15 @@ def main(argv: list[str] | None = None, *, out: TextIO = sys.stderr) -> int:
     except KeyboardInterrupt:
         print("trustsight-gate: cancelled by user", file=out)
         return EXIT_REFUSED
+    if result == EXIT_APPROVED and args.attest:
+        from .attest import AttestError, write_attestation
+
+        try:
+            write_attestation(args.dir, args.attest)
+        except (AttestError, OSError) as exc:
+            print(f"trustsight-gate: attestation failed: {exc}", file=out)
+            return EXIT_ERROR
+    return result
 
 
 def entrypoint() -> None:

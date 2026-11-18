@@ -1590,3 +1590,80 @@ def gate_upstream_reads_are_bounded_and_pinned() -> Gate:
             problems.append(f"upstream_collect.py lacks {token}")
     return Gate("upstream reads are bounded and pinned", not problems,
                 problems or "peer check, decompressed cap and text cap present")
+
+
+def gate_elf_parsing_is_read_only_and_bounded() -> Gate:
+    """A1/A4/A17: the ELF reader parses bytes, never executes a helper.
+
+    ``ldd`` executes its argument on glibc, so the reader must be a pure
+    parser.  The AST check rejects a process/loader import; the runtime check
+    proves a non-ELF and a lying section table are handled without a raise.
+    """
+    import struct
+
+    from trustsight.analysis.elf import MAX_ELF_BYTES, parse_elf
+
+    source = (SRC / "analysis" / "elf.py").read_text(encoding="utf-8")
+    problems: list[str] = []
+    banned = {"subprocess", "ctypes", "mmap", "os", "pty", "shlex"}
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name.split(".")[0] in banned:
+                    problems.append(f"elf.py imports {alias.name}")
+        elif isinstance(node, ast.ImportFrom):
+            if (node.module or "").split(".")[0] in banned:
+                problems.append(f"elf.py imports from {node.module}")
+    if MAX_ELF_BYTES > 64 * 1024 * 1024:
+        problems.append("the ELF parse window is too large")
+    if parse_elf(b"not an elf at all" * 10) is not None:
+        problems.append("a non-ELF was accepted")
+    header = bytearray(b"\x7fELF" + bytes(60))
+    header[4] = 2
+    header[5] = 1
+    struct.pack_into("<Q", header, 40, 10**9)
+    try:
+        parse_elf(bytes(header))
+    except Exception as exc:  # noqa: BLE001 - a raise is the failure
+        problems.append(f"a hostile header raised {type(exc).__name__}")
+    return Gate("ELF parsing is read-only and bounded", not problems,
+                problems or "pure parser; hostile input bounded")
+
+
+def gate_shipped_hook_content_is_bounded_and_inert() -> Gate:
+    """A1/A4/A5: shipped hook/udev/install text is bounded and never executed.
+
+    The L9 manifest is operator-supplied, but the content comes from the
+    package.  The inspector uses byte caps and substring checks, imports no
+    process/transport module, and never evaluates the text.
+    """
+    from trustsight.analysis import artifact
+
+    source = (SRC / "analysis" / "artifact.py").read_text(encoding="utf-8")
+    problems: list[str] = []
+    banned = {"subprocess", "ctypes", "os", "eval", "exec", "compile"}
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            names = ([a.name for a in node.names]
+                     if isinstance(node, ast.Import)
+                     else [node.module or ""])
+            for name in names:
+                if name.split(".")[0] in banned:
+                    problems.append(f"artifact.py imports {name}")
+        elif isinstance(node, ast.Call):
+            func = node.func
+            if isinstance(func, ast.Name) and func.id in banned:
+                problems.append(f"artifact.py calls {func.id}()")
+    if artifact.MAX_CONTENT_BYTES > 1024 * 1024:
+        problems.append("per-file content cap is too large")
+    if artifact.MAX_CONTENT_TOTAL > 4 * 1024 * 1024:
+        problems.append("total content cap is too large")
+    try:
+        artifact.inspect_manifest([{
+            "path": "/etc/x.hook",
+            "content": "x" * (artifact.MAX_CONTENT_BYTES + 1024),
+        }])
+    except Exception as exc:  # noqa: BLE001 - a raise is the failure
+        problems.append(f"oversized content raised {type(exc).__name__}")
+    return Gate("shipped hook content is bounded and inert", not problems,
+                problems or "bounded, substring-only, no execution")

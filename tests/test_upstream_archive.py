@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import struct
+
 import io
 import tarfile
 import zipfile
@@ -69,6 +71,33 @@ def test_zip_selects_manifests():
     assert "pkg/go.mod" in paths
     assert "pkg/Cargo.toml" in paths
     assert "pkg/LICENSE" not in paths
+
+
+def test_duplicate_members_are_ambiguous_not_silently_overridden():
+    tar_out = parse_upstream_archive(_tar([
+        ("pkg/Cargo.toml", b"[package]\nname='one'\n", "file"),
+        ("pkg/Cargo.toml", b"[package]\nname='two'\n", "file"),
+    ]))
+    assert tar_out["ambiguous"]
+    assert tar_out["complete"] is False
+    zip_out = parse_upstream_archive(_zip([
+        ("pkg/Cargo.toml", b"[package]\nname='one'\n"),
+        ("pkg/Cargo.toml", b"[package]\nname='two'\n"),
+    ]))
+    assert zip_out["ambiguous"]
+    assert zip_out["complete"] is False
+
+
+def test_sparse_member_is_ambiguous():
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        info = tarfile.TarInfo("pkg/Cargo.toml")
+        info.size = 1
+        info.pax_headers = {"GNU.sparse.map": "0,1"}
+        tar.addfile(info, io.BytesIO(b"x"))
+    out = parse_upstream_archive(buf.getvalue())
+    assert out["ambiguous"]
+    assert out["complete"] is False
 
 
 def test_bounds_refuse_an_oversized_archive():
@@ -143,3 +172,25 @@ def test_artifacts_report_elf_binaries_and_setuid_bits():
     assert artifacts["pkg/bin/tool"]["elf"] is True
     assert artifacts["pkg/bin/suid"]["setuid"] is True
     assert "pkg/Cargo.toml" not in artifacts
+
+
+def _tiny_elf64() -> bytes:
+    header = bytearray(64)
+    header[:4] = b"\x7fELF"
+    header[4] = 2
+    header[5] = 1
+    header[6] = 1
+    struct.pack_into("<HHI", header, 16, 2, 0x3E, 1)
+    struct.pack_into("<HHHHHH", header, 52, 64, 56, 0, 64, 0, 0)
+    return bytes(header)
+
+
+def test_multiple_small_elves_are_all_parsed():
+    elf = _tiny_elf64()
+    data = _tar_modes([("pkg/a", elf, 0o755), ("pkg/b", elf, 0o755)])
+    out = parse_upstream_archive(data)
+    infos = [a for a in out["artifacts"] if a["path"].startswith("pkg/")]
+    assert len(infos) == 2
+    assert all(a["elf_info"] is not None for a in infos)
+    assert all(not a["elf_info"]["truncated"] for a in infos)
+    assert out["refused"] is False

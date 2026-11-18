@@ -524,7 +524,7 @@ def _series_bounds() -> dict[str, tuple[int, int]]:
 #: and R is excluded.  P has one gap (`P004` is skipped and documented as
 #: skipped) but is only ever written as the whole family, so its upper bound
 #: is still checkable.
-_WHOLE_FAMILY_SERIES = ("C", "D", "P", "S", "U", "W", "X")
+_WHOLE_FAMILY_SERIES = ("A", "C", "D", "P", "S", "U", "W", "X")
 
 
 def test_documented_series_ranges_end_at_the_highest_shipped_rule():

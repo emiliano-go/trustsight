@@ -22,7 +22,7 @@ the [quickstart](../start-here/quickstart.md).
 
 - [CLI reference](../reference/cli.md)
 - [Rules reference (complete R/H/C/D/S/X catalog)](../rules/index.md)
-- [Code rules reference (C001-C034)](../rules/series.md)
+- [Code rules reference (C001-C035)](../rules/series.md)
 - [Config reference](../reference/configuration.md)
 - [Evidence tiers](../reference/evidence-tiers.md)
 - [Exit codes](../reference/exit-codes.md)

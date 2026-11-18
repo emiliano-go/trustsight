@@ -3,6 +3,7 @@ import re
 from .anergy import ANERGIC, entry as anergy_entry
 from .config import DEFAULT_NOVELTY_WEIGHTS, load_config
 from .coverage import GAP_REASONS, fail_closed, inconclusive_label, qualified_band
+from .rule_metadata import cwe_of, remediation_of
 from .schema import NoveltyContext, ScoreEntry
 
 _MATURITY_THRESHOLD = 50
@@ -415,6 +416,8 @@ def calculate_score(
                     file=file,
                     line=line,
                     techniques=tuple(rule.get("techniques") or ()),
+                    cwe=cwe_of(rule["rule_id"]),
+                    remediation=remediation_of(rule["rule_id"]),
                 )
             )
             continue
@@ -452,6 +455,8 @@ def calculate_score(
                 file=file,
                 line=line,
                 techniques=tuple(rule.get("techniques") or ()),
+                cwe=cwe_of(rule["rule_id"]),
+                remediation=remediation_of(rule["rule_id"]),
             )
         )
 

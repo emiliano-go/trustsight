@@ -89,6 +89,51 @@
     "target": "declared source archive (opt-in upstream lane)",
     "uid": "TS-0301"
   },
+  "a011": {
+    "canonical": true,
+    "capability": "artifact",
+    "name": "Hook Runs On Every Transaction",
+    "severity": "MEDIUM",
+    "severity_text": "MEDIUM (weight 0)",
+    "target": "shipped libalpm hook / udev rule / install script (L9)",
+    "uid": "TS-0304"
+  },
+  "a012": {
+    "canonical": true,
+    "capability": "artifact",
+    "name": "Shipped Hook Or Udev Fetches Or Runs A User Path",
+    "severity": "HIGH",
+    "severity_text": "HIGH (weight 0)",
+    "target": "shipped libalpm hook / udev rule / install script (L9)",
+    "uid": "TS-0305"
+  },
+  "a013": {
+    "canonical": true,
+    "capability": "artifact",
+    "name": "Udev Rule Runs A Program",
+    "severity": "MEDIUM",
+    "severity_text": "MEDIUM (weight 0)",
+    "target": "shipped libalpm hook / udev rule / install script (L9)",
+    "uid": "TS-0306"
+  },
+  "a014": {
+    "canonical": true,
+    "capability": "artifact",
+    "name": "Unsafe ELF Runpath",
+    "severity": "HIGH",
+    "severity_text": "HIGH (weight 0)",
+    "target": "ELF in the artifact/upstream lane",
+    "uid": "TS-0302"
+  },
+  "a015": {
+    "canonical": true,
+    "capability": "artifact",
+    "name": "Packed Or Encrypted ELF Section",
+    "severity": "MEDIUM",
+    "severity_text": "MEDIUM (weight 0)",
+    "target": "ELF in the artifact/upstream lane",
+    "uid": "TS-0303"
+  },
   "c001": {
     "canonical": true,
     "capability": null,
@@ -394,6 +439,15 @@
     "severity_text": "INFO (weight 0)",
     "target": "committed .SRCINFO",
     "uid": "TS-0286"
+  },
+  "c035": {
+    "canonical": true,
+    "capability": "integrity",
+    "name": "Owned Namespace Occupied",
+    "severity": "HIGH",
+    "severity_text": "HIGH",
+    "target": "programmatic (declared sources)",
+    "uid": "TS-0308"
   },
   "d001": {
     "canonical": true,
@@ -2410,6 +2464,15 @@
     "severity_text": "INFO (weight 0)",
     "target": "opt-in upstream scan lane",
     "uid": "TS-0298"
+  },
+  "w015": {
+    "canonical": true,
+    "capability": "unverifiable",
+    "name": "Archive Structure Ambiguous",
+    "severity": "INFO",
+    "severity_text": "INFO",
+    "target": "programmatic (fetched source archive)",
+    "uid": "TS-0307"
   },
   "x001": {
     "canonical": true,

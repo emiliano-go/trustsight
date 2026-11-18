@@ -118,6 +118,7 @@ _STAGE_OF = {
     "H083": "write_then_exec", "H090": "foreign_fetch",
     "R144": "persistence", "H089": "persistence", "R054": "persistence",
     "H091": "integrity_removed",
+    "C035": "takeover",
     "X001": "obfuscation", "X002": "obfuscation", "X003": "obfuscation",
     "X005": "obfuscation", "X008": "obfuscation", "X018": "obfuscation",
     "X004": "anti_analysis",

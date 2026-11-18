@@ -16,7 +16,12 @@ The static core never executes package code.  Nothing here runs anything.
 
 from __future__ import annotations
 
-__all__ = ["inspect_manifest"]
+import posixpath
+import re
+
+from ..tokenizer import split_lines
+
+__all__ = ["inspect_manifest", "unsafe_runpath"]
 
 #: Paths whose executable bit is ordinary; an executable outside them is A005.
 _USUAL_EXEC_PREFIXES = ("/usr/bin/", "/usr/sbin/", "/usr/lib/", "/bin/", "/sbin/")
@@ -25,6 +30,11 @@ _UNIT_SUFFIXES = (".service", ".timer", ".socket", ".mount", ".target", ".tmpfil
 #: Files the recipe may justify a setuid bit for via a documented mode intent.
 _SETUID_JUSTIFICATIONS = ("setuid", "setgid", "A_SETUID_OK")
 
+
+#: Bounded content inspection for a shipped hook/udev rule/install script.
+MAX_CONTENT_BYTES = 64 * 1024
+MAX_CONTENT_TOTAL = 256 * 1024
+MAX_CONTENT_LINE_BYTES = 8 * 1024
 
 #: Paths that extend privilege or persistence beyond the package's files.
 _PRIVILEGED_PREFIXES = (
@@ -53,6 +63,101 @@ def _unusual_exec(path: str) -> bool:
     return not path.startswith(_USUAL_EXEC_PREFIXES)
 
 
+def unsafe_runpath(value) -> bool:
+    """True for a DT_RPATH/DT_RUNPATH that searches an unsafe location.
+
+    ``$ORIGIN`` is relative to the binary's own (package-owned) directory, so
+    it is not automatically unsafe; an empty, relative or system-temp path is.
+    """
+    path = str(value or "").strip()
+    if not path:
+        return True
+    if "$ORIGIN" in path or "${ORIGIN}" in path:
+        # Resolve the expansion against a sentinel package directory, then
+        # normalise the lexical path.  A token such as ``$ORIGIN/../../tmp``
+        # must not inherit blanket trust merely because it mentions ORIGIN.
+        resolved = path.replace("${ORIGIN}", "$ORIGIN").replace(
+            "$ORIGIN", "/__trustsight_origin__")
+        if not resolved.startswith("/"):
+            return True
+        resolved = posixpath.normpath(resolved)
+        if (resolved == "/__trustsight_origin__"
+                or resolved.startswith("/__trustsight_origin__/")):
+            return False
+        if resolved == "/":
+            return True
+        path = resolved
+    if path in (".", "..") or not path.startswith("/"):
+        return True
+    if path.startswith("/"):
+        path = "/" + path.lstrip("/")
+        path = posixpath.normpath(path)
+    if path == "/":
+        return True
+    for prefix in ("/tmp", "/var/tmp", "/dev/shm", "/home", "/root"):
+        if path == prefix or path.startswith(prefix + "/"):
+            return True
+    return False
+
+
+def _hook_is_broad(content: str) -> bool:
+    """A libalpm hook whose trigger fires on every transaction and runs a command."""
+    broad = has_exec = False
+    for raw in split_lines(content):
+        line = raw.strip()[:MAX_CONTENT_LINE_BYTES]
+        if not line or line.startswith(("#", ";")):
+            continue
+        key, sep, value = line.partition("=")
+        if not sep:
+            continue
+        key = key.strip().lower()
+        value = value.strip().strip("\"'")
+        if key == "operation" and value.lower() in ("*", "any", "all"):
+            broad = True
+        elif key == "exec" and value:
+            has_exec = True
+    return broad and has_exec
+
+
+def _strip_comments(content: str) -> str:
+    return "\n".join(
+        line for line in split_lines(content)
+        if not line.strip().startswith(("#", ";")))
+
+
+def _runs_fetch_or_user_path(content: str) -> bool:
+    """A hook/udev/install body that fetches, or runs from a user/temp path."""
+    for raw in split_lines(content):
+        line = raw.strip()
+        if not line or line.startswith(("#", ";")):
+            continue
+        if line.lower().startswith("exec"):
+            _, _, command = line.partition("=")
+            line = command.strip()
+        # A printer that only mentions a client or a path is output, not a
+        # command.  Command substitution and a pipe still execute and remain
+        # in scope.
+        if (re.match(r"^(?:\S*/)?(?:echo|printf)\b", line, re.IGNORECASE)
+                and not re.search(
+                    r"\$\(|`|\|\s*(?:\S*/)?(?:ba|z|da|k)?sh\b", line)):
+            continue
+        lowered = line.lower()
+        for token in ("curl", "wget", "aria2c"):
+            if token in lowered:
+                return True
+        for token in ("/tmp/", "/dev/shm", "/var/tmp/", "$home", "${home}",
+                      "~/", "/home/", "/root/"):
+            if token in lowered:
+                return True
+    return False
+
+
+def _udev_runs_program(content: str) -> bool:
+    lowered = _strip_comments(content).lower()
+    return any(token in lowered for token in (
+        "run+=", "run{", "program==", "import{program}"))
+
+
 def inspect_manifest(manifest, declared=None) -> list[dict]:
     """A001-A005 over a built-package manifest.
 
@@ -70,6 +175,7 @@ def inspect_manifest(manifest, declared=None) -> list[dict]:
     justified_setuid = any(j.lower() in mode_intent for j in _SETUID_JUSTIFICATIONS)
 
     out: list[dict] = []
+    content_total = 0
     for entry in manifest or ():
         path = str(entry.get("path", ""))
         if not path:
@@ -90,7 +196,9 @@ def inspect_manifest(manifest, declared=None) -> list[dict]:
                 "match": f"{path} is a unit/timer/tmpfiles the recipe does not declare",
                 "file": path,
             })
-        for lib in entry.get("links", ()) or ():
+        elf = entry.get("elf") or {}
+        links = entry.get("links") or elf.get("needed") or ()
+        for lib in links:
             base = str(lib).rsplit("/", 1)[-1]
             if not base or base.split(".so", 1)[0] in depends:
                 continue
@@ -117,6 +225,27 @@ def inspect_manifest(manifest, declared=None) -> list[dict]:
                           "the declared recipe does not explain"),
                 "file": path,
             })
+        if elf:
+            runpaths = list(elf.get("rpath") or ()) + list(
+                elf.get("runpath") or ())
+            unsafe = [rp for rp in runpaths if unsafe_runpath(rp)]
+            if unsafe:
+                out.append({
+                    "rule_id": "A014",
+                    "name": "Unsafe ELF Runpath",
+                    "severity": "HIGH", "category": "artifact",
+                    "match": (f"{path} searches for libraries in "
+                              + ", ".join(str(rp) for rp in unsafe[:3])),
+                    "file": path,
+                })
+            if elf.get("packed"):
+                out.append({
+                    "rule_id": "A015",
+                    "name": "Packed Or Encrypted ELF Section",
+                    "severity": "MEDIUM", "category": "artifact",
+                    "match": f"{path} is a packed or encrypted ELF binary",
+                    "file": path,
+                })
         if entry.get("bpf") or path.lower().endswith((".bpf.o", ".bpf.c")):
             out.append({
                 "rule_id": "A008", "name": "eBPF Artifact In Package",
@@ -124,6 +253,42 @@ def inspect_manifest(manifest, declared=None) -> list[dict]:
                 "match": f"{path} is an eBPF object/loader (rootkit-capable)",
                 "file": path,
             })
+        content = entry.get("content")
+        if isinstance(content, str) and content:
+            encoded = content.encode("utf-8", "replace")
+            if len(encoded) > MAX_CONTENT_BYTES:
+                content = encoded[:MAX_CONTENT_BYTES].decode(
+                    "utf-8", "ignore")
+            if content_total + len(content) <= MAX_CONTENT_TOTAL:
+                content_total += len(content)
+                lower_path = path.lower()
+                if lower_path.endswith(".hook") and _hook_is_broad(content):
+                    out.append({
+                        "rule_id": "A011",
+                        "name": "Hook Runs On Every Transaction",
+                        "severity": "MEDIUM", "category": "artifact",
+                        "match": (f"{path} is a hook with a broad trigger and "
+                                  "an Exec command"),
+                        "file": path,
+                    })
+                if (lower_path.endswith((".hook", ".rules", ".install"))
+                        and _runs_fetch_or_user_path(content)):
+                    out.append({
+                        "rule_id": "A012",
+                        "name": "Shipped Hook Or Udev Fetches Or Runs A User Path",
+                        "severity": "HIGH", "category": "artifact",
+                        "match": (f"{path} fetches or runs a program from a "
+                                  "user/temp path"),
+                        "file": path,
+                    })
+                if lower_path.endswith(".rules") and _udev_runs_program(content):
+                    out.append({
+                        "rule_id": "A013",
+                        "name": "Udev Rule Runs A Program",
+                        "severity": "MEDIUM", "category": "artifact",
+                        "match": f"{path} runs a program from a udev rule",
+                        "file": path,
+                    })
         if entry.get("world_writable"):
             out.append({
                 "rule_id": "A005", "name": "Unusual Artifact Mode",

@@ -63,6 +63,26 @@ See [A009: Executable Binary In Source Archive](../../rules/artifact.md#a009).
 
 See [A010: Setuid File In Source Archive](../../rules/artifact.md#a010).
 
+### A011 {#a011}
+
+See [A011: Hook Runs On Every Transaction](../../rules/artifact.md#a011).
+
+### A012 {#a012}
+
+See [A012: Shipped Hook Or Udev Fetches Or Runs A User Path](../../rules/artifact.md#a012).
+
+### A013 {#a013}
+
+See [A013: Udev Rule Runs A Program](../../rules/artifact.md#a013).
+
+### A014 {#a014}
+
+See [A014: Unsafe ELF Runpath](../../rules/artifact.md#a014).
+
+### A015 {#a015}
+
+See [A015: Packed Or Encrypted ELF Section](../../rules/artifact.md#a015).
+
 ### C001 {#c001}
 
 See [C001: Checksum Changed Without Source Change With Stable Version](../../rules/integrity.md#c001).
@@ -198,6 +218,10 @@ See [C033: Context Bleed](../../rules/integrity.md#c033).
 ### C034 {#c034}
 
 See [C034: Metadata Inconsistency](../../rules/maintainer-and-metadata.md#c034).
+
+### C035 {#c035}
+
+See [C035: Owned Namespace Occupied](../../rules/integrity.md#c035).
 
 ### D001 {#d001}
 
@@ -1090,6 +1114,10 @@ See [W013: Campaign Perimeter Boundary Note](../../rules/unverifiable.md#w013).
 ### W014 {#w014}
 
 See [W014: Upstream Scan Not Completed](../../rules/unverifiable.md#w014).
+
+### W015 {#w015}
+
+See [W015: Archive Structure Ambiguous](../../rules/unverifiable.md#w015).
 
 ### X001 {#x001}
 

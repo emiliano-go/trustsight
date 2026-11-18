@@ -294,6 +294,10 @@ def config_fingerprint() -> str:
         "patterns": cfg_mod.load_patterns(),
         "hosts": cfg_mod.load_hosts(),
         "naming": cfg_mod.load_naming(),
+        # C035 is operator-specific: the same source is owned for one
+        # namespace and occupied for another, so the list is part of the
+        # instrument.
+        "namespaces": config.get("namespaces", {}),
         "iocs": cfg_mod.load_iocs(),
     }
     try:

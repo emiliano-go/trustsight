@@ -67,6 +67,8 @@ def finding_rows(fact) -> list[dict]:
                 "weight": entry.weight,
                 "present_before": present_before,
                 "techniques": list(getattr(entry, "techniques", ()) or ()),
+                "cwe": entry.cwe,
+                "remediation": entry.remediation,
             })
     return rows
 
@@ -337,7 +339,7 @@ VERBOSE_KEYS = ("score_breakdown",)
 # Fields of a finding that are evidence rather than arithmetic.  ``weight``
 # is deliberately absent: it belongs to VERBOSE_KEYS with the breakdown.
 _FINDING_FIELDS = ("rule_id", "rule_uid", "severity", "file", "line", "description",
-                   "template", "evidence", "techniques")
+                   "template", "evidence", "techniques", "cwe", "remediation")
 
 
 def _ioc_row(match) -> dict:

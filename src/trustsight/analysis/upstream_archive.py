@@ -26,11 +26,13 @@ import io
 import lzma
 import tarfile
 import zipfile
+from bisect import bisect_left
 
 from .manifests._common import (
     MAX_UPSTREAM_MANIFEST_FILES,
     manifest_format,
 )
+from .elf import MAX_ELF_BYTES, parse_elf
 from .upstream_release import is_ci_workflow_path
 
 __all__ = ["parse_upstream_archive"]
@@ -49,6 +51,8 @@ _ELF_MAGIC = b"\x7fELF"
 _ARTIFACT_PREFIX = 4
 _MAX_INSPECTED = 2048
 MAX_ARCHIVE_ARTIFACTS = 256
+MAX_ELF_ARTIFACTS = 16
+MAX_ELF_TOTAL_BYTES = 64 * 1024 * 1024
 _ZIP_EOCD = b"PK\x05\x06"
 _GZIP_MAGIC = b"\x1f\x8b"
 _BZ2_MAGIC = b"BZh"
@@ -117,6 +121,7 @@ def _empty() -> dict:
     return {
         "manifest_texts": [],
         "artifacts": [],
+        "ambiguous": [],
         "complete": True,
         "refused": False,
         "malformed": False,
@@ -138,7 +143,7 @@ def _decompressed(data: bytes):
 
 
 def _record_artifact(result: dict, name: str, mode: int, prefix: bytes,
-                     size: int) -> None:
+                     size: int, elf_info: dict | None = None) -> None:
     """Keep only artifact-shaped entries: ELF binaries and setuid/setgid bits."""
     setuid = bool(mode & 0o4000)
     setgid = bool(mode & 0o2000)
@@ -155,6 +160,7 @@ def _record_artifact(result: dict, name: str, mode: int, prefix: bytes,
         "setuid": setuid,
         "setgid": setgid,
         "elf": elf,
+        "elf_info": elf_info,
         "size": size,
     })
 
@@ -162,7 +168,10 @@ def _record_artifact(result: dict, name: str, mode: int, prefix: bytes,
 def _tar(data: bytes, result: dict, *, max_members: int,
          max_file_bytes: int, max_total_bytes: int, max_files: int) -> None:
     texts = result["manifest_texts"]
-    seen = kept = inspected = 0
+    seen = kept = inspected = elf_parsed = elf_bytes = 0
+    names: set[str] = set()
+    starts: list[int] = []
+    ends: list[int] = []
     stream = _LimitedReader(_decompressed(data), max_total_bytes)
     try:
         tar_context = tarfile.open(fileobj=stream, mode="r|")
@@ -178,10 +187,34 @@ def _tar(data: bytes, result: dict, *, max_members: int,
                 return
             if not member.isfile() or member.issym() or member.islnk():
                 continue
+            if any(key.startswith("GNU.sparse.")
+                   for key in (member.pax_headers or {})):
+                result["ambiguous"].append(
+                    f"sparse member {member.name}")
+                result["complete"] = False
+            start = int(getattr(member, "offset_data", 0) or 0)
+            end = start + max(0, int(member.size or 0))
+            if start > 0 and end > start:
+                index = bisect_left(starts, start)
+                overlaps = (
+                    (index > 0 and ends[index - 1] > start)
+                    or (index < len(starts) and end > starts[index])
+                )
+                if overlaps:
+                    result["ambiguous"].append(
+                        f"overlapping member {member.name}")
+                    result["complete"] = False
+                starts.insert(index, start)
+                ends.insert(index, end)
             name = _safe_name(member.name)
             if name is None:
                 result["refused"] = True
                 continue
+            if name in names:
+                result["ambiguous"].append(f"duplicate member {name}")
+                result["complete"] = False
+                continue
+            names.add(name)
             mode = member.mode or 0
             prefix = b""
             if _selected(name):
@@ -202,12 +235,29 @@ def _tar(data: bytes, result: dict, *, max_members: int,
                 prefix = raw[:4]
                 texts.append((name, raw.decode("utf-8", errors="replace")))
                 kept += 1
+            elf_info = None
+            if _selected(name):
+                if prefix[:4] == _ELF_MAGIC and elf_parsed < MAX_ELF_ARTIFACTS:
+                    info = parse_elf(raw)
+                    elf_info = info.to_dict() if info is not None else None
+                    elf_parsed += 1
             elif inspected < _MAX_INSPECTED:
                 handle = tar.extractfile(member)
                 if handle is not None:
                     prefix = handle.read(_ARTIFACT_PREFIX)
+                    if prefix[:4] == _ELF_MAGIC:
+                        want = min(member.size, MAX_ELF_BYTES)
+                        if (elf_parsed >= MAX_ELF_ARTIFACTS
+                                or elf_bytes + want > MAX_ELF_TOTAL_BYTES):
+                            result["refused"] = True
+                        else:
+                            rest = handle.read(MAX_ELF_BYTES - len(prefix))
+                            info = parse_elf(prefix + rest)
+                            elf_info = info.to_dict() if info is not None else None
+                            elf_parsed += 1
+                            elf_bytes += len(prefix) + len(rest)
                 inspected += 1
-            _record_artifact(result, name, mode, prefix, member.size)
+            _record_artifact(result, name, mode, prefix, member.size, elf_info)
     stream.close()
 
 
@@ -240,7 +290,8 @@ def _zip(data: bytes, result: dict, *, max_members: int,
             result["complete"] = False
             result["refused"] = True
             return
-        kept = total = inspected = 0
+        kept = total = inspected = elf_parsed = elf_bytes = 0
+        names: set[str] = set()
         for info in entries:
             if info.is_dir():
                 continue
@@ -255,6 +306,11 @@ def _zip(data: bytes, result: dict, *, max_members: int,
             if name is None:
                 result["refused"] = True
                 continue
+            if name in names:
+                result["ambiguous"].append(f"duplicate member {name}")
+                result["complete"] = False
+                continue
+            names.add(name)
             mode = (info.external_attr >> 16) & 0o7777
             prefix = b""
             if _selected(name):
@@ -279,11 +335,30 @@ def _zip(data: bytes, result: dict, *, max_members: int,
                 prefix = raw[:4]
                 texts.append((name, raw.decode("utf-8", errors="replace")))
                 kept += 1
+            elf_info = None
+            if _selected(name):
+                if prefix[:4] == _ELF_MAGIC and elf_parsed < MAX_ELF_ARTIFACTS:
+                    parsed_info = parse_elf(raw)
+                    elf_info = (parsed_info.to_dict()
+                                if parsed_info is not None else None)
+                    elf_parsed += 1
             elif inspected < _MAX_INSPECTED and info.file_size > 0:
                 with archive.open(info) as handle:
                     prefix = handle.read(_ARTIFACT_PREFIX)
+                    if prefix[:4] == _ELF_MAGIC:
+                        want = min(info.file_size, MAX_ELF_BYTES)
+                        if (elf_parsed >= MAX_ELF_ARTIFACTS
+                                or elf_bytes + want > MAX_ELF_TOTAL_BYTES):
+                            result["refused"] = True
+                        else:
+                            rest = handle.read(MAX_ELF_BYTES - len(prefix))
+                            parsed_info = parse_elf(prefix + rest)
+                            elf_info = (parsed_info.to_dict()
+                                        if parsed_info is not None else None)
+                            elf_parsed += 1
+                            elf_bytes += len(prefix) + len(rest)
                 inspected += 1
-            _record_artifact(result, name, mode, prefix, info.file_size)
+            _record_artifact(result, name, mode, prefix, info.file_size, elf_info)
 
 
 def parse_upstream_archive(

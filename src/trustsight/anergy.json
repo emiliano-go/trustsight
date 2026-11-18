@@ -20,6 +20,46 @@
       "weight": 0,
       "decided_in": "0.29.0"
     },
+    "A011": {
+      "changelog": "upstream-scan-lane",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
+      "signal": "shipped hook/udev/install content in the L9 manifest; needs a corpus rate before it can score",
+      "since": "0.28.9",
+      "status": "anergic"
+    },
+    "A012": {
+      "changelog": "upstream-scan-lane",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
+      "signal": "shipped hook/udev/install content in the L9 manifest; needs a corpus rate before it can score",
+      "since": "0.28.9",
+      "status": "anergic"
+    },
+    "A013": {
+      "changelog": "upstream-scan-lane",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
+      "signal": "shipped hook/udev/install content in the L9 manifest; needs a corpus rate before it can score",
+      "since": "0.28.9",
+      "status": "anergic"
+    },
+    "A014": {
+      "changelog": "upstream-scan-lane",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
+      "signal": "ELF metadata from an artifact/source archive; needs a corpus rate before it can score",
+      "since": "0.28.9",
+      "status": "anergic"
+    },
+    "A015": {
+      "changelog": "upstream-scan-lane",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
+      "signal": "ELF metadata from an artifact/source archive; needs a corpus rate before it can score",
+      "since": "0.28.9",
+      "status": "anergic"
+    },
     "C001": {
       "changelog": "c001-upstream-hash-corroboration",
       "promotion": "keep conditional while the signed baseline covers the corpus; promote the corroboration path into ordinary HIGH reporting or retire the baseline once it stops paying for itself",
@@ -190,6 +230,14 @@
       "status": "promoted",
       "weight": 0,
       "decided_in": "0.29.0"
+    },
+    "C035": {
+      "changelog": "owned-namespace-occupancy",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
+      "signal": "operator-owned namespace source mismatch; needs a corpus rate before it can score",
+      "since": "Unreleased",
+      "status": "anergic"
     }
   }
 }

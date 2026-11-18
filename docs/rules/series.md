@@ -80,7 +80,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 ## C-series: **Check** Structural Invariants {#c-series}
 
-**Count:** 34 rules (C001-C034)
+**Count:** 34 rules (C001-C035)
 
 **Mechanism:** Deterministic structural checks across the PKGBUILD. C-series rules enforce invariants that cannot be expressed as a single regex match: two conditions must hold simultaneously, or a relationship between fields must be consistent. Unlike H-series (which reasons about behavioral suspicion), C-series checks are purely mechanical: if condition A and condition B co-occur, the invariant is violated.
 
@@ -195,7 +195,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 ## W-series: **Warning** Analysis Boundaries {#w-series}
 
-**Count:** 13 rules (W001-W014)
+**Count:** 14 rules (W001-W015)
 
 **Mechanism:** Reports what the analysis *could not read*. W-series findings mark visibility boundaries in the analysis: a package will run code the examination did not cover, and silence about that would be dishonest. They **warn** the reviewer where the analysis stopped.
 
@@ -326,7 +326,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 ## A-series: **Artifact** Built-Package Inspection {#a-series}
 
-**Count:** 10 rules (A001-A010)
+**Count:** 15 rules (A001-A015)
 
 **Mechanism:** Inspects the built `pkg.tar.zst` manifest - file list, modes, types and the `.INSTALL` payload - not the diff. A is the optional **L9 build lane**: mechanically distinct from every text-analysis series, off by default, run only inside the project's rootless, networkless container, and never blended into the static score. Nothing in the built package's code is executed; the container runs `makepkg`, nothing else.
 

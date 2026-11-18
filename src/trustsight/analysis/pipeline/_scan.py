@@ -154,6 +154,11 @@ def scan_diff(
             package_name=package_name,
         )
     )
+    if current_text:
+        from ..namespaces import owned_namespace_findings
+
+        triggered_rules.extend(owned_namespace_findings(
+            clamp_text(current_text), config, package_name=package_name))
     # Same blind spot as the git path, read from the marker git wrote: a
     # binary metadata delta has no body, so no rule sees a line of it.
     binary_meta = binary_metadata_in_text(diff_text)

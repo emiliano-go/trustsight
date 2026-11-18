@@ -69,6 +69,19 @@ Two of the things it never does are worth stating on their own, because each rem
 
 The one exception is the optional upstream-scan lane, and it is off by default. When an operator enables it, a declared upstream is reduced to an exact allowlisted forge (or an operator-added exact host) and pinned before any connection; the transport (`upstream_fetch.py`) follows a redirect only to a fixed forge-CDN constant and never forwards the token across it, and checks the connected socket peer against the pinned address; and an archive is extracted in the read-role manifest worker under a decompressed-byte cap and parsed only after its declared checksum verifies at the configured strength. Provider tokens live in `trustsight.credentials`, are resolved from a systemd credential, the OS keyring, a `0600` file or the environment, redact themselves in every rendering, and are never written to config, the database or a child environment (A18). The default analysis path remains fetch-free.
 
+The local-only additions do not widen that boundary. `trustsight diff` reads
+stored analysis history and runs the same static analysis as `inspect`;
+`trustsight-attest` hashes a local source tree, parses its PKGBUILD only to
+list VCS, `SKIP` and unchecksummed sources, and never runs `makepkg`, a
+linker, or any package code; the generated threat-coverage page reads the
+shipped registry. None of these fetches a package URL, connects to a host,
+reads a credential, or extracts an archive. The attestation write is atomic,
+and the gate records a digest only after the operator approves the review, so
+a refused tree leaves no attestation. The tree walk is bounded (200,000
+files, 2 GiB, 1 MiB attestation document), refuses an unreadable directory,
+and re-stats each file after hashing so a tree that changes mid-walk is a
+named refusal rather than a digest of mixed bytes.
+
 ### Assumptions
 
 The model above and the parts that follow are claims *about this program*: that its invariants hold when it runs. They are not claims about the machine it runs on. Like any model, this one rests on a set of assumptions, and stating them is what makes the boundary complete: a reader knows exactly where the analysis stops being the tool's responsibility.

@@ -95,6 +95,10 @@ class ScoreEntry:
     #: and peers).  Additive instrumentation for the harness's shape archive;
     #: never rendered, scored or suppressed.
     techniques: tuple = ()
+    #: Descriptive labels, never scored: a CWE identifier and a one-line
+    #: remediation for the reader.
+    cwe: str = ""
+    remediation: str = ""
 
 
 @dataclass
@@ -388,6 +392,8 @@ def fact_to_dict(fact: PackageFact) -> dict:
                 "line": e.line,
                 "licensed_by": list(e.licensed_by),
                 "techniques": list(getattr(e, "techniques", ()) or ()),
+                "cwe": e.cwe,
+                "remediation": e.remediation,
             }
             for e in fact.score_breakdown
         ],
@@ -574,6 +580,8 @@ def fact_from_dict(data: dict) -> PackageFact | None:
                     line=e.get("line"),
                     licensed_by=tuple(e.get("licensed_by") or ()),
                     techniques=tuple(e.get("techniques") or ()),
+                    cwe=str(e.get("cwe", "")),
+                    remediation=str(e.get("remediation", "")),
                 )
                 for e in data["score_breakdown"]
             ],

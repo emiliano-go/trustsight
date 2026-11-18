@@ -30,6 +30,7 @@ from .upstream_scan import (
     configured_hosts,
     verify_archive_checksum,
 )
+from .analysis.artifact import unsafe_runpath
 from .analysis.upstream_release import (
     declared_upstream_repo,
     is_ci_workflow_path,
@@ -387,6 +388,11 @@ def collect_upstream_manifest_texts(
             continue
         if parsed.get("refused") or parsed.get("malformed"):
             notes.append("upstream_scan_partial")
+        if parsed.get("ambiguous"):
+            notes.append("upstream_scan_ambiguous")
+        if any((a.get("elf_info") or {}).get("truncated")
+               for a in parsed.get("artifacts") or ()):
+            notes.append("upstream_scan_partial")
         findings.extend(_artifact_findings(parsed.get("artifacts") or ()))
         for path, text in parsed.get("manifest_texts") or ():
             if is_ci_workflow_path(path):
@@ -465,6 +471,34 @@ def _artifact_findings(artifacts) -> list[dict]:
                 "file": path,
                 "line": None,
                 "params": {"size": str(artifact.get("size", ""))},
+                "weight_override": 0,
+            }))
+        elf = artifact.get("elf_info") or {}
+        runpaths = list(elf.get("rpath") or ()) + list(
+            elf.get("runpath") or ())
+        unsafe = [rp for rp in runpaths if unsafe_runpath(rp)]
+        if unsafe:
+            out.append(stamp({
+                "rule_id": "A014",
+                "name": "Unsafe ELF Runpath",
+                "severity": "HIGH",
+                "category": "artifact",
+                "match": f"{path} searches for libraries in "
+                         + ", ".join(str(rp) for rp in unsafe[:3]),
+                "file": path,
+                "line": None,
+                "params": {"runpath": ", ".join(str(rp) for rp in unsafe[:3])},
+                "weight_override": 0,
+            }))
+        if elf.get("packed"):
+            out.append(stamp({
+                "rule_id": "A015",
+                "name": "Packed Or Encrypted ELF Section",
+                "severity": "MEDIUM",
+                "category": "artifact",
+                "match": f"{path} is a packed or encrypted ELF binary",
+                "file": path,
+                "line": None,
                 "weight_override": 0,
             }))
         if artifact.get("setuid") or artifact.get("setgid"):

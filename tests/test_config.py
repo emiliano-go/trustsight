@@ -1301,3 +1301,32 @@ def test_owned_namespaces_change_the_fingerprint(monkeypatch):
         "namespaces": {"owned": ["github.com/me", "gitlab.com/team"]},
     })
     assert config_module.config_fingerprint() != first
+
+
+def test_load_rules_fills_added_only_from_the_shipped_definition(
+        tmp_path, monkeypatch):
+    """An older rules.toml predates the ``added_only`` field.
+
+    ``rules.toml`` is written once and only ever gains rules, so a semantic
+    field added to the shipped block later never reaches an existing
+    install.  ``load_rules`` fills it from the shipped definition, while an
+    explicit on-disk value still wins.
+    """
+    cfg_dir = _cfg_dirs(tmp_path, monkeypatch)
+    ensure_default_configs()
+    path = cfg_dir / "rules.toml"
+
+    parts = path.read_text().split("[[rules]]")
+    rebuilt = [parts[0]]
+    for chunk in parts[1:]:
+        block = "[[rules]]" + chunk
+        if 'id = "R010"' in block or 'id = "R011"' in block:
+            block = "".join(
+                line for line in block.splitlines(keepends=True)
+                if not line.startswith("added_only"))
+        rebuilt.append(block)
+    path.write_text("".join(rebuilt))
+
+    by_id = {rule["id"]: rule for rule in load_rules()}
+    assert by_id["R010"]["added_only"] is True
+    assert by_id["R011"]["added_only"] is True

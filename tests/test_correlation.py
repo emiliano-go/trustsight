@@ -88,6 +88,37 @@ def test_coordinated_adoption_keeps_firing_without_repo_data():
     assert [f["rule_id"] for f in coordinated_adoption(records, 3)] == ["G003"]
 
 
+def test_coordinated_adoption_stands_down_for_one_renamed_account():
+    """One handle renamed across its own packages is one ownership event.
+
+    Deltacat -> 0xD3LT4C4T replaced the maintainer field on every package the
+    account owned in one cycle.  G003 read the batch as a stranger adopting
+    three unrelated projects; the shared predecessor is the difference
+    between a rename and a takeover, because a takeover of several packages
+    keeps their distinct previous maintainers.
+    """
+    records = [
+        {"package": name, "maintainer": "0xd3lt4c4t",
+         "previous_maintainer": "deltacat", "adoption": True,
+         "adoption_predicates": ["H044"],
+         "source_repos": [f"https://github.com/undercat037/{name}"]}
+        for name in ("aura-emerge", "lmv", "rowed")
+    ]
+    assert coordinated_adoption(records, min_members=3) == []
+
+
+def test_coordinated_adoption_keeps_distinct_predecessors():
+    records = [
+        {"package": "a", "maintainer": "m", "previous_maintainer": "old-a",
+         "adoption": True, "adoption_predicates": ["H044"]},
+        {"package": "b", "maintainer": "m", "previous_maintainer": "old-b",
+         "adoption": True, "adoption_predicates": ["H044"]},
+        {"package": "c", "maintainer": "m", "previous_maintainer": "old-c",
+         "adoption": True, "adoption_predicates": ["H044"]},
+    ]
+    assert [f["rule_id"] for f in coordinated_adoption(records, 3)] == ["G003"]
+
+
 def test_coordinated_adoption_stands_down_for_a_variant_family_by_name():
     """New packages land in the window with no repo data yet, which made
     the repo relatedness test vacuous for exactly the case it exists for:

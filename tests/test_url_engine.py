@@ -82,3 +82,27 @@ def test_build_context_shares_the_install_hook_context():
     ctx = build_context(_diff("build() {\n  curl x\n}\n"), {})
     assert ctx.line_context is not None
     assert isinstance(ctx.printed_heredoc, frozenset)
+
+
+def test_a_registry_endpoint_is_not_a_source_artifact():
+    """A registry URL resolves a dependency; it is not a fetched artifact.
+
+    The electron-wrapper template sets
+    ``YARN_NPM_REGISTRY_SERVER="${...:-https://registry.yarnpkg.com}"`` and
+    the URL was charged SOURCE_BUCKET (unknown, +20) and novelty as though
+    the package had begun downloading from an unknown host.
+    """
+    from trustsight.differ import extract_urls_from_diff
+
+    body = (
+        "build() {\n"
+        '  export YARN_NPM_REGISTRY_SERVER="${YARN_NPM_REGISTRY_SERVER:-'
+        'https://registry.yarnpkg.com}"\n'
+        "  npm install\n"
+        "}"
+    )
+    changes = extract_urls_from_diff(_diff(body))
+    assert "https://registry.yarnpkg.com" in changes.declared_urls
+    sources = set(changes.added_urls) - set(changes.declared_urls)
+    assert not any("registry.yarnpkg.com" in url for url in sources)
+    assert "SOURCE_BUCKET" not in _ids(body)

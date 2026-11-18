@@ -83,6 +83,7 @@ severity = "LOW"
 category = "network_usage"
 match_target = "raw_line"
 scope = ["function_body"]
+added_only = true
 
 [[rules]]
 id = "R011"
@@ -92,6 +93,7 @@ severity = "LOW"
 category = "network_usage"
 match_target = "raw_line"
 scope = ["function_body"]
+added_only = true
 
 [[rules]]
 id = "R012"

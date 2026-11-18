@@ -352,6 +352,7 @@ def coordinated_adoption(records, min_members: int = 3,
     by_maintainer: dict[str, set[str]] = defaultdict(set)
     predicates: dict[str, set[str]] = defaultdict(set)
     repos: dict[str, list[set[str]]] = defaultdict(list)
+    previous: dict[str, list[str]] = defaultdict(list)
     last_modified: dict[str, list[float]] = defaultdict(list)
     for record in records:
         maintainer = _maintainer_key(record.get("maintainer"))
@@ -360,6 +361,8 @@ def coordinated_adoption(records, min_members: int = 3,
             predicates[maintainer] |= set(
                 record.get("adoption_predicates") or ())
             repos[maintainer].append(set(record.get("source_repos") or ()))
+            previous[maintainer].append(
+                _maintainer_key(record.get("previous_maintainer")))
             last_mod = record.get("last_modified")
             if isinstance(last_mod, (int, float)) and last_mod:
                 last_modified[maintainer].append(last_mod)
@@ -378,6 +381,16 @@ def coordinated_adoption(records, min_members: int = 3,
             # Every member is a naming variant of one project (the
             # appattic/appattic-bin/appattic-qt release shape): H052's
             # family by name, not a coordinated adoption.
+            continue
+        predecessor = [key for key in previous[maintainer] if key]
+        if len(predecessor) == len(members) and len(set(predecessor)) == 1:
+            # Every adopted package came from the same recorded account in
+            # the same cycle: that is one handle renamed across its own
+            # packages (Deltacat -> 0xD3LT4C4T over aura-emerge, lmv and
+            # rowed), not a stranger adopting unrelated ones.  A takeover of
+            # several packages keeps their distinct predecessors, so only
+            # the rename shape stands down; H044/H026 still report the
+            # transition per package either way.
             continue
         dormant_count = sum(
             1 for lm in last_modified[maintainer] if lm < dormant_cutoff)

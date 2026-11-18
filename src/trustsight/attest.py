@@ -12,6 +12,7 @@ import json
 import os
 import re
 import shlex
+import stat
 import tempfile
 from pathlib import Path
 
@@ -22,6 +23,8 @@ __all__ = [
 
 ATTEST_VERSION = 1
 MAX_FILES = 200_000
+MAX_DIRS = 50_000
+MAX_ENTRIES = MAX_FILES + MAX_DIRS
 MAX_BYTES = 2 * 1024 * 1024 * 1024
 MAX_ATTESTATION_BYTES = 1024 * 1024
 _SKIP_DIRS = frozenset({".git", "__pycache__", ".pytest_cache", ".mypy_cache"})
@@ -48,18 +51,44 @@ def _raw_array(text: str, key: str) -> tuple[str, ...]:
 
 
 def _records(root: Path):
-    def walk_error(exc: OSError) -> None:
-        raise AttestError(f"could not walk the source tree: {exc}") from exc
-
     files = 0
+    directories = 0
+    entries_seen = 0
     total = 0
-    for dirpath, dirnames, filenames in os.walk(
-            root, followlinks=False, onerror=walk_error):
-        dirnames[:] = sorted(d for d in dirnames if d not in _SKIP_DIRS)
-        for name in sorted(filenames):
-            path = Path(dirpath) / name
-            if path.is_symlink() or not path.is_file():
-                continue
+    pending = [root]
+    while pending:
+        directory = pending.pop()
+        try:
+            with os.scandir(directory) as scan:
+                entries = []
+                for entry in scan:
+                    entries_seen += 1
+                    if entries_seen > MAX_ENTRIES:
+                        raise AttestError(
+                            "source tree exceeds the attestation entry bound")
+                    entries.append(entry)
+        except OSError as exc:
+            raise AttestError(
+                f"could not walk the source tree: {exc}") from exc
+        for entry in sorted(entries, key=lambda item: item.name):
+            try:
+                if entry.is_symlink():
+                    continue
+                if entry.is_dir(follow_symlinks=False):
+                    if entry.name in _SKIP_DIRS:
+                        continue
+                    directories += 1
+                    if directories > MAX_DIRS:
+                        raise AttestError(
+                            "source tree exceeds the attestation directory bound")
+                    pending.append(Path(entry.path))
+                    continue
+                if not entry.is_file(follow_symlinks=False):
+                    continue
+                path = Path(entry.path)
+            except OSError as exc:
+                raise AttestError(
+                    f"could not inspect a source-tree entry: {exc}") from exc
             rel = path.relative_to(root).as_posix()
             try:
                 stat = path.stat()
@@ -152,6 +181,11 @@ def check_tree(root: str | Path, attestation: str | Path) -> dict:
         raise AttestError(
             f"tree digest changed: expected {expected.get('digest')}, "
             f"got {actual['digest']}")
+    if "unpinned_sources" in expected:
+        current = unpinned_sources(root)
+        if expected["unpinned_sources"] != current:
+            raise AttestError("attestation source inventory changed")
+        actual["unpinned_sources"] = current
     return actual
 
 
@@ -163,10 +197,27 @@ def unpinned_sources(root: str | Path) -> list[dict[str, str]]:
     """
     path = Path(root) / "PKGBUILD"
     try:
-        if path.stat().st_size > 1024 * 1024:
-            return []
-        text = path.read_text(encoding="utf-8", errors="replace")
+        fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
     except OSError:
+        return []
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > 1024 * 1024:
+            os.close(fd)
+            return []
+        before = (info.st_size, info.st_mtime_ns)
+        with os.fdopen(fd, "r", encoding="utf-8", errors="replace") as handle:
+            text = handle.read(1024 * 1024 + 1)
+            after = os.fstat(handle.fileno())
+            if (after.st_size, after.st_mtime_ns) != before:
+                return []
+    except OSError:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        return []
+    if len(text.encode("utf-8", "replace")) > 1024 * 1024:
         return []
     try:
         from .recipedoc import parse_recipe

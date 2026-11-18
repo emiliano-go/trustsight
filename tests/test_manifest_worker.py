@@ -205,6 +205,19 @@ def test_artifact_manifest_rejects_raw_control_text():
             manifest_text='["\x01"]')
 
 
+def test_a_manifest_path_cannot_impersonate_a_worker_operation():
+    """A package file named ``__srcinfo__`` is still parsed as a manifest."""
+    import json
+
+    body = json.dumps({
+        "op": "manifest",
+        "path": "__srcinfo__",
+        "text": "{}",
+    }).encode()
+    response = manifest_worker._handle(body)
+    assert response == {"result": None}
+
+
 def test_artifact_manifest_request_over_the_frame_cap_is_refused(monkeypatch):
     from trustsight.sandbox import manifest_client, protocol
 
@@ -235,4 +248,21 @@ def test_artifact_manifest_reasons_are_bounded(monkeypatch):
                        "reasons": ["x" * (artifact.MAX_LIMIT_REASON_BYTES + 1)]},
         })
     with pytest.raises(manifest_client.ManifestUnavailable, match="limits"):
+        manifest_client.inspect_artifact_manifest(manifest_text="[]")
+
+
+def test_artifact_manifest_rejects_unknown_worker_fields(monkeypatch):
+    from trustsight.sandbox import manifest_client
+
+    monkeypatch.setattr(
+        manifest_client, "_ask",
+        lambda payload: {
+            "findings": [{
+                "rule_id": "A001", "name": "n", "severity": "HIGH",
+                "category": "artifact", "match": "m", "file": "f",
+                "params": {"unexpected": True},
+            }],
+            "limits": {"truncated": False, "reasons": []},
+        })
+    with pytest.raises(manifest_client.ManifestUnavailable, match="unknown"):
         manifest_client.inspect_artifact_manifest(manifest_text="[]")

@@ -50,6 +50,13 @@ def _handle(body: bytes) -> dict:
         request = json.loads(body.decode("utf-8"))
         path = request.get("path")
         text = request.get("text")
+        if request.get("op") == "manifest":
+            if not isinstance(path, str) or not isinstance(text, str):
+                return {"error": "invalid manifest request"}
+            from trustsight.analysis.manifests._parse import parse_manifest_local
+
+            doc = parse_manifest_local(path, text)
+            return {"result": None if doc is None else doc.to_dict()}
         if path == "__tokenizer__":
             from trustsight.sandbox.tokenizer_ops import dispatch
             return {"result": dispatch(

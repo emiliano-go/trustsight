@@ -386,6 +386,10 @@ def _read_manifest(path: str) -> str:
             Path(path), MAX_MANIFEST_BYTES, "artifact manifest")
     except ReadTooLarge as exc:
         raise typer.BadParameter(str(exc)) from exc
+    except OSError as exc:
+        raise typer.BadParameter(
+            f"artifact manifest could not be read: {clean(str(exc), limit=256)}"
+        ) from exc
     try:
         return data.decode("utf-8")
     except UnicodeDecodeError as exc:

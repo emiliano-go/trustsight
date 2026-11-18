@@ -1,6 +1,6 @@
 """The A-series artifact inspection (pure, no execution)."""
 
-from trustsight.analysis.artifact import inspect_manifest
+from trustsight.analysis.artifact import inspect_manifest, inspect_manifest_bounded
 
 
 def _ids(manifest, declared=None):
@@ -405,3 +405,10 @@ def test_verify_build_cli_reports_partial_and_cleans_output(monkeypatch, tmp_pat
     assert result.exit_code == 0, result.stdout
     assert "L9 inspection truncated" in result.stdout
     assert "\x1b" not in result.stdout
+
+
+def test_bounded_inspector_refuses_a_non_list_manifest():
+    result = inspect_manifest_bounded({"path": "/usr/bin/x"}, None)
+    assert result["findings"] == []
+    assert result["limits"]["truncated"] is True
+    assert "invalid manifest" in result["limits"]["reasons"]

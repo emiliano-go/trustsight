@@ -99,3 +99,28 @@ def test_unpinned_sources_lists_vcs_skip_and_unchecksummed(tmp_path):
     from trustsight.attest import write_attestation
     write_attestation(root, out)
     assert len(json.loads(out.read_text())["unpinned_sources"]) == 3
+
+
+def test_unpinned_sources_does_not_follow_a_symlinked_pkgbuild(tmp_path):
+    from trustsight.attest import unpinned_sources
+
+    root = tmp_path / "pkg"
+    root.mkdir()
+    target = tmp_path / "outside"
+    target.write_text(
+        'pkgname=x\nsource=("git+https://example.invalid/x.git")\n'
+    )
+    (root / "PKGBUILD").symlink_to(target)
+    assert unpinned_sources(root) == []
+
+
+def test_attestation_refuses_a_tampered_source_inventory(tmp_path):
+    root = _tree(tmp_path)
+    (root / "PKGBUILD").write_text('pkgname=x\nsource=("x")\nsha256sums=("abc")\n')
+    out = tmp_path / "a.json"
+    write_attestation(root, out)
+    payload = json.loads(out.read_text())
+    payload["unpinned_sources"] = [{"name": "x", "url": "x", "reason": "vcs"}]
+    out.write_text(json.dumps(payload))
+    with pytest.raises(AttestError, match="source inventory"):
+        check_tree(root, out)

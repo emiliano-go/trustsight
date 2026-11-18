@@ -155,7 +155,7 @@ def _ask(payload: bytes):
         worker.requests += 1
         try:
             response = json.loads(raw.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        except (UnicodeDecodeError, json.JSONDecodeError, RecursionError) as exc:
             raise ManifestUnavailable(
                 "manifest worker returned invalid JSON") from exc
         if not isinstance(response, dict) or "result" not in response:
@@ -284,7 +284,7 @@ def parse_manifest(path: str, text: str) -> dict | None:
         if key in _cache:
             return _cache[key]
         payload = json.dumps(
-            {"path": path, "text": text}, ensure_ascii=False,
+            {"op": "manifest", "path": path, "text": text}, ensure_ascii=False,
             separators=(",", ":"),
         ).encode("utf-8")
         result = _ask(payload)
@@ -379,6 +379,7 @@ def _normalise_declared(declared) -> tuple[dict, bool]:
         if text_total + mode_bytes > MAX_MANIFEST_BYTES:
             cut = True
         else:
+            text_total += mode_bytes
             out["mode_intent"] = mode
     elif mode is not None:
         raise ManifestUnavailable(
@@ -577,9 +578,13 @@ def _validate_artifact_result(result) -> dict:
         raise ManifestUnavailable("artifact worker returned unbounded findings")
     if not isinstance(limits, dict):
         raise ManifestUnavailable("artifact worker returned no limits")
+    allowed = {"rule_id", "name", "severity", "category", "match", "file"}
     for finding in findings:
         if not isinstance(finding, dict):
             raise ManifestUnavailable("artifact worker returned a malformed finding")
+        if set(finding) - allowed:
+            raise ManifestUnavailable(
+                "artifact worker returned an unknown finding field")
         rule_id = finding.get("rule_id")
         if (not isinstance(rule_id, str) or len(rule_id) != 4
                 or rule_id[0] != "A" or not rule_id[1:].isdigit()):
@@ -591,6 +596,9 @@ def _validate_artifact_result(result) -> dict:
             if not isinstance(value, str):
                 raise ManifestUnavailable(
                     "artifact worker returned a malformed finding")
+            if _has_raw_control(value):
+                raise ManifestUnavailable(
+                    "artifact worker returned a control character")
             if len(value.encode("utf-8", "replace")) > MAX_FINDING_BYTES:
                 raise ManifestUnavailable(
                     "artifact worker returned an oversized finding")
@@ -606,6 +614,7 @@ def _validate_artifact_result(result) -> dict:
     reasons = limits.get("reasons")
     if (not isinstance(reasons, list) or len(reasons) > MAX_LIMIT_REASONS
             or not all(isinstance(reason, str) for reason in reasons)
+            or any(_has_raw_control(reason) for reason in reasons)
             or any(len(reason.encode("utf-8", "replace")) > MAX_LIMIT_REASON_BYTES
                    for reason in reasons)):
         raise ManifestUnavailable("artifact worker returned malformed limits")

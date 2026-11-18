@@ -78,9 +78,11 @@ shipped registry. None of these fetches a package URL, connects to a host,
 reads a credential, or extracts an archive. The attestation write is atomic,
 and the gate records a digest only after the operator approves the review, so
 a refused tree leaves no attestation. The tree walk is bounded (200,000
-files, 2 GiB, 1 MiB attestation document), refuses an unreadable directory,
-and re-stats each file after hashing so a tree that changes mid-walk is a
-named refusal rather than a digest of mixed bytes.
+files, 50,000 directories, 250,000 entries, 2 GiB, 1 MiB attestation
+document), refuses an unreadable directory, and re-stats each file after
+hashing so a tree that changes mid-walk is a named refusal rather than a
+digest of mixed bytes. A check also re-derives the VCS, `SKIP` and
+unchecksummed source inventory, so editing that metadata alone is refused.
 
 ### Assumptions
 

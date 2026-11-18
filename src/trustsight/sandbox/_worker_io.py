@@ -14,6 +14,10 @@ import signal
 import time
 from typing import Callable
 
+#: A compromised or noisy worker can emit an unbounded stderr line.  Read
+#: fixed-size chunks so draining it cannot become an allocation primitive.
+MAX_STDERR_LINE = 4096
+
 
 def read_exact(stream, n: int, deadline: float, error: type[Exception]) -> bytes:
     """Read exactly *n* bytes from *stream* before *deadline*.
@@ -46,7 +50,10 @@ def drain_stderr(proc, on_line: Callable[[str], None]) -> None:
     if proc is None or proc.stderr is None:
         return
     try:
-        for line in proc.stderr:
+        while True:
+            line = proc.stderr.readline(MAX_STDERR_LINE)
+            if not line:
+                return
             on_line(line.decode("utf-8", "replace").rstrip())
     except (OSError, ValueError):
         pass

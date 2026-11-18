@@ -183,6 +183,9 @@ def _udev_runs_program(content: str) -> bool:
 
 
 def _cap_utf8(value: str, limit: int) -> tuple[str, bool]:
+    if len(value) > limit:
+        encoded = value[:limit].encode("utf-8", "replace")
+        return encoded[:limit].decode("utf-8", "ignore"), True
     encoded = value.encode("utf-8", "replace")
     if len(encoded) <= limit:
         return value, False
@@ -273,7 +276,12 @@ def inspect_manifest_bounded(manifest, declared=None) -> dict:
     entries_seen = 0
     invalid_entries = 0
 
-    for index, entry in enumerate(manifest or ()):
+    if not isinstance(manifest, (list, tuple)):
+        if manifest is not None:
+            truncated = True
+            note("invalid manifest")
+        manifest = ()
+    for index, entry in enumerate(manifest):
         if index >= MAX_MANIFEST_ENTRIES:
             truncated = True
             note("manifest entries")
@@ -379,19 +387,21 @@ def inspect_manifest_bounded(manifest, declared=None) -> dict:
 
         raw_caps = entry.get("caps")
         if raw_caps:
-            caps_text, cut = _cap_utf8(
-                raw_caps if isinstance(raw_caps, str) else str(raw_caps),
-                MAX_CAPS_DISPLAY,
-            )
-            if cut:
+            if not isinstance(raw_caps, str):
+                invalid_entries += 1
                 truncated = True
-                note("caps display")
-            out.append({
-                "rule_id": "A006", "name": "File Capabilities In Artifact",
-                "severity": "HIGH", "category": "artifact",
-                "match": f"{path} carries Linux file capabilities: {caps_text}",
-                "file": path,
-            })
+                note("invalid entries")
+            else:
+                caps_text, cut = _cap_utf8(raw_caps, MAX_CAPS_DISPLAY)
+                if cut:
+                    truncated = True
+                    note("caps display")
+                out.append({
+                    "rule_id": "A006", "name": "File Capabilities In Artifact",
+                    "severity": "HIGH", "category": "artifact",
+                    "match": f"{path} carries Linux file capabilities: {caps_text}",
+                    "file": path,
+                })
         if _is_privileged_surface(path):
             out.append({
                 "rule_id": "A007", "name": "Privileged Surface In Artifact",

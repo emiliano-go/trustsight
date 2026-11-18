@@ -448,6 +448,7 @@ modules = [
   "analysis/_dependency_arrays.py",
   "analysis/_path_trust.py",
   "analysis/artifact.py",
+  "attest.py",
   "analysis/build.py",
   "analysis/crossfire/_common.py",
   "analysis/crossfire/_engine.py",

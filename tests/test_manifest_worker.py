@@ -32,6 +32,15 @@ def test_sandbox_unavailable_is_a_named_refusal(monkeypatch):
         manifests.parse_manifest("package.json", "{}")
 
 
+def test_spawn_failure_is_a_named_refusal(monkeypatch):
+    monkeypatch.setattr(manifest_client, "_worker", None)
+    monkeypatch.setattr(
+        manifest_client, "spawn_isolated",
+        lambda *a, **k: (_ for _ in ()).throw(OSError("no sandbox")))
+    with pytest.raises(manifest_client.ManifestUnavailable, match="no sandbox"):
+        manifest_client.parse_srcinfo("pkgbase = demo\n")
+
+
 def test_worker_applies_the_linux_sandbox():
     source = inspect.getsource(manifest_worker.main)
     assert '_linux_sandbox.apply("read"' in source

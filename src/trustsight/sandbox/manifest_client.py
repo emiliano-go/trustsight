@@ -44,7 +44,11 @@ class _Worker:
         self._stderr_thread = None
 
     def start(self) -> None:
-        self.proc = spawn_isolated(WORKER_MODULE)
+        try:
+            self.proc = spawn_isolated(WORKER_MODULE)
+        except OSError as exc:
+            raise ManifestUnavailable(
+                f"could not start the manifest sandbox: {exc}") from exc
         self.requests = 0
         self.stderr = []
         self._stderr_thread = threading.Thread(

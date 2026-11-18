@@ -49,7 +49,7 @@ might complement.
 
 **L9 (artifact lane).** The optional build lane that inspects an externally
 built package manifest instead of the diff (`trustsight verify-build
---manifest`), reporting artifact rules `A001` through `A008`. It is off by default,
+--manifest`), reporting artifact rules `A001` through `A015`. It is off by default,
 carries no `L1`-`L8` layer, and never changes the static score. With no
 manifest it reports `l9_unavailable`; a disagreement with the static analysis
 adds `l9_divergence`. See [Artifact](../rules/artifact.md).

@@ -50,10 +50,45 @@ def _handle(body: bytes) -> dict:
         request = json.loads(body.decode("utf-8"))
         path = request.get("path")
         text = request.get("text")
+        if request.get("op") == "manifest":
+            if not isinstance(path, str) or not isinstance(text, str):
+                return {"error": "invalid manifest request"}
+            from trustsight.analysis.manifests._parse import parse_manifest_local
+
+            doc = parse_manifest_local(path, text)
+            return {"result": None if doc is None else doc.to_dict()}
         if path == "__tokenizer__":
             from trustsight.sandbox.tokenizer_ops import dispatch
             return {"result": dispatch(
                 request.get("token_op"), request.get("input"))}
+        if path == "__artifact_manifest__":
+            from trustsight.analysis.artifact import (
+                MAX_MANIFEST_BYTES,
+                MAX_MANIFEST_ENTRIES,
+                inspect_manifest_bounded,
+            )
+
+            if not isinstance(text, str):
+                return {"error": "invalid artifact manifest request"}
+            if len(text.encode("utf-8", "replace")) > MAX_MANIFEST_BYTES:
+                return {"error": "artifact manifest exceeds its byte cap"}
+            declared = request.get("declared") or {}
+            if not isinstance(declared, dict):
+                return {"error": "invalid artifact manifest declaration"}
+            try:
+                manifest = json.loads(text)
+            except (TypeError, ValueError, RecursionError):
+                return {"error": "artifact manifest is not valid JSON"}
+            if not isinstance(manifest, list):
+                return {"error": "artifact manifest is not a JSON array"}
+            for index, entry in enumerate(manifest):
+                if index >= MAX_MANIFEST_ENTRIES:
+                    break
+                if not isinstance(entry, dict):
+                    return {"error": "artifact manifest record is not an object"}
+                if not isinstance(entry.get("path"), str) or not entry["path"]:
+                    return {"error": "artifact manifest record has no string path"}
+            return {"result": inspect_manifest_bounded(manifest, declared)}
         if not isinstance(path, str) or not isinstance(text, str):
             return {"error": "invalid manifest request"}
         if path == "__srcinfo__":

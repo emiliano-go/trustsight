@@ -213,18 +213,20 @@ for component in document["components"]:
     print(component["name"], component.get("version", ""))
 ```
 
-### `verify_build(package, *, diff_text="", manifest=None, declared=None, static_clean=None) -> dict`
+### `verify_build(package, *, diff_text="", manifest=None, manifest_text=None, declared=None, static_clean=None) -> dict`
 
-The optional **L9 build lane**, off by default (`[verify] enabled = false`). With the lane disabled or the container unavailable it returns `{"status": "l9_unavailable", ...}` - a weight-0 boundary that never reads as clean or malicious. Given a `manifest` it inspects the built artifact (A001-A015) without executing anything (the build that produced the manifest runs outside the static core) and returns `{"status": "l9_analyzed", "findings": [...]}`. Pass `static_clean` (the L1-L8 outcome) to set `l9_divergence: true` when the two disagree; both profiles render and L9 never edits the static verdict. See [Artifact](../rules/artifact.md).
+The optional **L9 build lane**, off by default (`[verify] enabled = false`). With the lane disabled or the read-role sandbox unavailable it returns `{"status": "l9_unavailable", ...}` - a weight-0 boundary that never reads as clean or malicious. Given a `manifest` list or raw `manifest_text`, the sandbox parses and inspects the built artifact (A001 through A015) without executing anything; the build that produced the manifest runs outside the static core. A complete result is `{"status": "l9_analyzed", "findings": [...], "limits": {...}}`. If an entry, link, path, content or finding cap is reached, the status is `l9_partial`, `truncated` is true, and `limits` names the bound; a partial inspection never reads as clean. Pass `static_clean` (the L1-L8 outcome) to set `l9_divergence: true` when a complete inspection and the static analysis disagree; both profiles render and L9 never edits the static verdict. Prefer `manifest_text` for adversarial input: the parent never parses it. See [Artifact](../rules/artifact.md).
 
 ```python
 result = ts.verify_build(
     "some-package",
-    manifest=manifest,
+    manifest_text=manifest_json,
     static_clean=True,
 )
 if result["status"] == "l9_unavailable":
     print(result["reason"])
+elif result["status"] == "l9_partial":
+    print(result["limits"])
 ```
 
 ### `review(*, packages=None, limit=0, repos=None, foreign=False, all_repos=False, all_packages=False, on_progress=None, on_warning=None, depth=None, deps=False, record=False) -> ReviewResult`

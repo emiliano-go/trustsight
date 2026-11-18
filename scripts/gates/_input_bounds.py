@@ -8,7 +8,7 @@ import re
 import time
 from scripts.gates._core import Gate, HOSTILE, SRC, _ARTIFACT_MODULES, _ARTIFACT_READ_EXEMPT, _BOUNDED_IO_MODULE, _ENDPOINT_HOST, _FORBIDDEN_CALLS, _MIRROR_HOSTS, _MIRROR_MODULES, _NETWORK_CALLS, _NETWORK_MODULES, _PATH_READ_MODULES, _RELEASE_HOSTS, _RELEASE_MODULES, _URL_LITERAL_RE, _call_name, _enclosing_functions, _hostile_fact, _hostile_result, _python_files, _rel, _render_forget_list, _render_list_rows
 
-__all__ = ['gate_artifact_reads_are_bounded', 'gate_dead_tokenizer_child_fails_the_package', 'gate_every_child_process_gets_an_explicit_environment', 'gate_every_live_regex_is_audited', 'gate_every_stream_read_is_bounded', 'gate_expansion_is_bounded', 'gate_freshness_uses_local_marker', 'gate_git_worker_limit_failures_are_reported', 'gate_git_worker_runs_in_an_os_sandbox', 'gate_fetch_state_is_parent_owned', 'gate_git_worker_startup_is_isolated', 'gate_network_is_confined', 'gate_network_reads_are_bounded', 'gate_provider_tokens_are_redacted', 'gate_no_interpreter_calls', 'gate_no_path_based_archive_extraction', 'gate_regex_patterns_pass_adversarial_audit', 'gate_rich_is_only_in_the_render_worker', 'gate_sandbox_core_limit_failure_refuses', 'gate_sandbox_responses_are_capped_before_framing', 'gate_single_network_host', 'gate_sql_is_parameterised', 'gate_terminal_output_is_inert', 'gate_tokenizer_module_is_isolated', 'gate_tokenizer_pool_wait_is_bounded', 'gate_tokenizer_request_writes_are_bounded', 'gate_tokenizer_smoke_is_deterministic', 'gate_tokenizer_worker_limit_failures_are_reported', 'gate_tokenizer_worker_startup_is_isolated', 'gate_untrusted_text_is_sanitised_where_it_is_rendered', 'gate_a_declared_upstream_target_is_allowlisted_and_pinned', 'gate_an_archive_is_parsed_only_after_its_checksum_verifies', 'gate_upstream_redirects_stay_on_the_forge_cdn_allowlist', 'gate_upstream_reads_are_bounded_and_pinned']
+__all__ = ['gate_artifact_manifest_is_sandboxed', 'gate_artifact_reads_are_bounded', 'gate_dead_tokenizer_child_fails_the_package', 'gate_every_child_process_gets_an_explicit_environment', 'gate_every_live_regex_is_audited', 'gate_every_stream_read_is_bounded', 'gate_expansion_is_bounded', 'gate_freshness_uses_local_marker', 'gate_git_worker_limit_failures_are_reported', 'gate_git_worker_runs_in_an_os_sandbox', 'gate_fetch_state_is_parent_owned', 'gate_git_worker_startup_is_isolated', 'gate_network_is_confined', 'gate_network_reads_are_bounded', 'gate_provider_tokens_are_redacted', 'gate_no_interpreter_calls', 'gate_no_path_based_archive_extraction', 'gate_regex_patterns_pass_adversarial_audit', 'gate_rich_is_only_in_the_render_worker', 'gate_sandbox_core_limit_failure_refuses', 'gate_sandbox_responses_are_capped_before_framing', 'gate_single_network_host', 'gate_sql_is_parameterised', 'gate_terminal_output_is_inert', 'gate_tokenizer_module_is_isolated', 'gate_tokenizer_pool_wait_is_bounded', 'gate_tokenizer_request_writes_are_bounded', 'gate_tokenizer_smoke_is_deterministic', 'gate_tokenizer_worker_limit_failures_are_reported', 'gate_tokenizer_worker_startup_is_isolated', 'gate_untrusted_text_is_sanitised_where_it_is_rendered', 'gate_a_declared_upstream_target_is_allowlisted_and_pinned', 'gate_an_archive_is_parsed_only_after_its_checksum_verifies', 'gate_upstream_redirects_stay_on_the_forge_cdn_allowlist', 'gate_upstream_reads_are_bounded_and_pinned']
 
 def gate_no_interpreter_calls() -> Gate:
     """No path turns text into code, and nothing is unpickled."""
@@ -381,6 +381,46 @@ def gate_manifest_parsing_is_sandboxed() -> Gate:
     if "tarfile.open" in fetch_source:
         problems.append("snapshot parsing still opens the archive in the parent")
     return Gate("manifest parsing is sandboxed", not problems,
+                problems or "parent -> client -> read-role worker")
+
+
+def gate_artifact_manifest_is_sandboxed() -> Gate:
+    """A19: the L9 artifact manifest is parsed and inspected in the worker.
+
+    The parent must send raw text (or a bounded list serialisation) to
+    ``sandbox.manifest_client``; the read-role worker must parse it and call
+    the bounded inspector.  A parent-side ``json.loads`` or direct
+    ``inspect_manifest`` call reopens the hostile-input boundary.
+    """
+    import inspect
+
+    from trustsight.api import TrustSight
+    from trustsight.cli.inspect import commands
+    from trustsight.sandbox import manifest_client, manifest_worker
+
+    problems: list[str] = []
+    api_source = inspect.getsource(TrustSight.verify_build)
+    if "manifest_client" not in api_source:
+        problems.append("verify_build does not use the manifest sandbox client")
+    if "inspect_manifest" in api_source:
+        problems.append("verify_build calls the local artifact inspector")
+    if "json.loads" in api_source:
+        problems.append("verify_build parses manifest JSON in the parent")
+    command_source = inspect.getsource(commands.register_commands)
+    if "manifest_text=loaded" not in command_source:
+        problems.append("verify-build does not hand raw text to the sandbox")
+    read_source = inspect.getsource(commands._read_manifest)
+    if "json.loads" in read_source:
+        problems.append("_read_manifest parses manifest JSON in the parent")
+    worker_source = inspect.getsource(manifest_worker)
+    if "__artifact_manifest__" not in worker_source:
+        problems.append("the manifest worker has no artifact-manifest operation")
+    if "inspect_manifest_bounded" not in worker_source:
+        problems.append("the manifest worker does not call the bounded inspector")
+    client_source = inspect.getsource(manifest_client.inspect_artifact_manifest)
+    if "inspect_manifest" in client_source:
+        problems.append("the client inspects locally")
+    return Gate("artifact manifest parsing is sandboxed", not problems,
                 problems or "parent -> client -> read-role worker")
 
 
@@ -1633,9 +1673,9 @@ def gate_elf_parsing_is_read_only_and_bounded() -> Gate:
 def gate_shipped_hook_content_is_bounded_and_inert() -> Gate:
     """A1/A4/A5: shipped hook/udev/install text is bounded and never executed.
 
-    The L9 manifest is operator-supplied, but the content comes from the
-    package.  The inspector uses byte caps and substring checks, imports no
-    process/transport module, and never evaluates the text.
+    The L9 manifest is attacker-controlled evidence, and its content comes
+    from the package.  The inspector uses byte caps and substring checks,
+    imports no process/transport module, and never evaluates the text.
     """
     from trustsight.analysis import artifact
 

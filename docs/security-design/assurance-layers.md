@@ -91,11 +91,13 @@ Reading it down:
 A ninth category sits outside the static profile: **`L9` (artifact reality)**.
 It is the optional build lane that inspects a package manifest produced by an
 external build (`trustsight verify-build --manifest`), reports artifact rules
-`A001` through `A008`, and is never blended into the L1-L8 score. It is absent from the
-layer profile unless the lane runs; when it is disabled or no manifest is
-supplied, the report carries `l9_unavailable` - a weight-0 boundary, never a
-clean or malicious verdict. When the artifact and the static analysis disagree,
-both profiles stand and the report carries an explicit `l9_divergence` notice.
+`A001` through `A015`, and is never blended into the L1-L8 score. It is absent from the
+layer profile unless the lane runs; when it is disabled, no manifest is
+supplied, or the read-role sandbox is unavailable, the report carries
+`l9_unavailable` - a weight-0 boundary, never a clean or malicious verdict.
+A capped inspection is `l9_partial` and carries `limits`. When a complete
+artifact inspection and the static analysis disagree, both profiles stand and
+the report carries an explicit `l9_divergence` notice.
 See [Artifact](../rules/artifact.md) and
 [Reporting](assurance-layers/reporting.md).
 

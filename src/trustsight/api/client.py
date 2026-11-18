@@ -420,16 +420,17 @@ class TrustSight:
 
     def verify_build(self, package: str, *, diff_text: str = "",
                      manifest: Optional[list] = None,
+                     manifest_text: Optional[str] = None,
                      declared: Optional[dict] = None,
                      static_clean: Optional[bool] = None    ) -> dict:
         """The optional L9 build lane, off by default.
 
-        When ``[verify] enabled`` is false, or the rootless container is
+        When ``[verify] enabled`` is false, or the read-role sandbox is
         unavailable, this returns ``l9_unavailable`` - a weight-0 boundary,
         never a clean or malicious verdict.  When enabled and given a
-        manifest it inspects the artifact (A001-A008) without executing
-        anything; the build that produces the manifest runs outside the
-        static core.
+        manifest it parses and inspects the artifact in that sandbox
+        (A001-A015) without executing anything; the build that produces the
+        manifest runs outside the static core.
 
         *static_clean* is the caller's L1-L8 outcome; when it and the L9
         findings disagree, the result carries ``l9_divergence`` - both
@@ -438,15 +439,19 @@ class TrustSight:
         :param package: package name the result is attributed to.
         :param diff_text: reserved for callers that keep the analysed diff;
             the manifest inspection does not read it.
-        :param manifest: the artifact manifest to inspect, or ``None`` to
-            report the lane as unavailable.
+        :param manifest: the artifact manifest as a Python list.  It is
+            normalised under the manifest caps before being sent to the
+            sandbox; pass ``manifest_text`` to avoid parent-side
+            serialisation.
+        :param manifest_text: raw manifest JSON.  Preferred for adversarial
+            input: the parent never parses it.
         :param declared: the package's declared artifact facts, used by the
             A-series comparisons.
         :param static_clean: the caller's L1-L8 outcome, or ``None`` when it
             was not computed.
-        :returns: a dict with ``package``, ``status`` (``l9_unavailable`` or
-            ``l9_analyzed``), ``findings`` and, on disagreement,
-            ``l9_divergence``.
+        :returns: a dict with ``package``, ``status`` (``l9_unavailable``,
+            ``l9_analyzed`` or ``l9_partial``), ``findings``, ``limits``
+            and, on disagreement, ``l9_divergence``.
 
         Example:
             .. code-block:: python
@@ -471,9 +476,10 @@ class TrustSight:
                 "reason": "the L9 build lane is disabled ([verify] enabled = false)",
                 "findings": [],
             }
-        from ..analysis.artifact import inspect_manifest
+        from ..analysis.artifact import MAX_MANIFEST_BYTES
+        from ..sandbox import manifest_client
 
-        if manifest is None:
+        if manifest is None and manifest_text is None:
             return {
                 "package": package, "status": "l9_unavailable",
                 "reason": (
@@ -482,15 +488,40 @@ class TrustSight:
                     "an external build produced"),
                 "findings": [],
             }
-        findings = inspect_manifest(manifest, declared)
+        if manifest is not None and manifest_text is not None:
+            raise ValueError("pass manifest or manifest_text, not both")
+        if manifest_text is not None:
+            _validate_text(
+                manifest_text, name="manifest_text",
+                maximum=MAX_MANIFEST_BYTES)
+        try:
+            inspected = manifest_client.inspect_artifact_manifest(
+                manifest=manifest, manifest_text=manifest_text,
+                declared=declared)
+        except manifest_client.ManifestUnavailable as exc:
+            return {
+                "package": package, "status": "l9_unavailable",
+                "reason": f"artifact manifest sandbox unavailable: {exc}",
+                "findings": [],
+            }
+        findings = inspected["findings"]
+        limits = inspected["limits"]
+        truncated = bool(limits.get("truncated"))
         strong = any(f.get("severity") in ("HIGH", "CRITICAL") for f in findings)
         result = {
-            "package": package, "status": "l9_analyzed", "findings": findings,
+            "package": package,
+            "status": "l9_partial" if truncated else "l9_analyzed",
+            "findings": findings, "limits": limits,
         }
-        if static_clean is not None and static_clean != (not strong):
-            # Disagreement, either way: L1-L8 clean / L9 anomalous, or the
-            # reverse.  Both profiles are the truth; L9 does not reweight.
-            result["l9_divergence"] = True
+        if truncated:
+            result["truncated"] = True
+        if static_clean is not None and (not truncated or strong):
+            if static_clean != (not strong):
+                # Disagreement, either way: L1-L8 clean / L9 anomalous, or
+                # the reverse.  Both profiles are the truth; L9 does not
+                # reweight.  An incomplete empty inspection cannot establish
+                # the absence of a disagreement.
+                result["l9_divergence"] = True
         return result
 
     def review(

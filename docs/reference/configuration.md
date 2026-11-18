@@ -374,7 +374,7 @@ section is part of `config_fingerprint`.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `enabled` | bool | `false` | Enable the optional L9 artifact-inspection lane. When false, `trustsight verify-build` reports `l9_unavailable`. When true, the lane inspects a manifest supplied with `--manifest`; TrustSight does not build the package, so with no manifest the result is still `l9_unavailable`. L9 findings are never blended into the static score. |
+| `enabled` | bool | `false` | Enable the optional L9 artifact-inspection lane. When false, `trustsight verify-build` reports `l9_unavailable`. When true, the lane parses and inspects a manifest supplied with `--manifest` inside the read-role sandbox; TrustSight does not build the package, so with no manifest the result is still `l9_unavailable`. A capped inspection is `l9_partial`; a host without the sandbox is `l9_unavailable`, never an in-process fallback. L9 findings are never blended into the static score. |
 
 ### `[upstream_scan]`
 

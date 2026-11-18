@@ -362,9 +362,9 @@ If none of these settings are explicitly configured, the tool scans foreign pack
 ### `[namespaces]`
 
 Operator-owned source namespaces used by C035. Each entry is a
-`host/path-prefix` pair; a declared source on that host outside the prefix is
-reported as `Owned Namespace Occupied` at weight 0. The section is part of
-`config_fingerprint`.
+`host/path-prefix` pair; a declared source or upstream `url` on that host
+outside the prefix is reported as `Owned Namespace Occupied` at weight 0. The
+section is part of `config_fingerprint`.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|

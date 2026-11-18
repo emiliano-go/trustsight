@@ -888,8 +888,9 @@ comment deletion is never a finding. The locked benign corpus adjudicates it; th
 - **Severity:** HIGH
 - **Category:** `integrity`
 
-- **Condition:** A declared source URL is on a host in `[namespaces] owned`
-  but its path is outside the operator-owned path prefix for that host.
+- **Condition:** A declared source URL or the upstream `url` is on a host in
+  `[namespaces] owned` but its path is outside the operator-owned path prefix
+  for that host.
 
 The operator owns the host and path prefix, not the whole forge. A package
 that declares the same host under another owner is reported at weight 0

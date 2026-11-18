@@ -6,25 +6,61 @@
 
 ### Added
 
-- **L9 inspects shipped artifact content and ELF metadata.** The artifact
+- **L9 artifact rules inspect shipped content and ELF metadata.** The artifact
   manifest may carry bounded content for `.hook`, `.rules` and `.install`
   files; A011 reports a broad hook trigger, A012 a fetch or user-path program,
   and A013 a udev rule that runs a program. A014 and A015 report an unsafe
   ELF runpath and a packed or encrypted ELF section. All five are anergic and
   report at weight 0 until calibrated.
+- **L9 manifests are parsed and inspected in the read-role sandbox.**
+  `trustsight verify-build` and `TrustSight.verify_build` send raw manifest text
+  to `sandbox/manifest_worker.py`; the parent never parses attacker JSON and
+  never calls the artifact inspector directly. Bounds produce `l9_partial` with
+  limits, and a dead, timed-out or unavailable sandbox is `l9_unavailable`
+  with no in-process fallback.
 - **Findings carry descriptive CWE and remediation metadata.** The labels do
   not change scoring, matching or the report's evidence claims.
 - **CycloneDX 1.5 SBOM export.** `trustsight sbom <pkg>` and
   `TrustSight.sbom` export the package, its declared sources and its
   dependency components, with findings attached to the component their
-  evidence names.
+  evidence names. VCS, `SKIP` and unchecksummed sources are marked opaque.
 - **C035 reports an occupied operator-owned namespace.** The `[namespaces]`
   section names hosts and path prefixes the operator owns; a declared source
-  on that host under another owner is C035, anergic at weight 0. The
-  section is part of `config_fingerprint`.
-- **W015 reports ambiguous source archives.** Duplicate archive members are
-  reported as a weight-0 archive-structure boundary instead of silently
-  selecting one copy.
+  or upstream URL on that host under another owner is C035, anergic at weight
+  0. The section is part of `config_fingerprint`.
+- **W015 reports ambiguous source archives.** Duplicate normalised members,
+  overlapping member data ranges and GNU sparse headers are reported as a
+  weight-0 archive-structure boundary instead of silently selecting one view.
+- **`trustsight diff` compares against the last stored analysis.** It reports
+  the previous and current score and band, the score delta, and new and
+  resolved findings. It is presentation only and never changes stored history.
+- **Threat coverage is generated from the registry.**
+  `docs/reference/threat-coverage.md` lists every rule with its vector, stage,
+  category, layer, severity, weight, CWE and boundary state. The
+  `threat coverage matches the registry` and `artifact ranges end at the
+  catalog` gates fail on drift.
+- **Deterministic source-tree attestation.** `trustsight-attest` records or
+  checks a SHA-256 tree digest without running `makepkg`; `--list-unpinned`
+  lists VCS, `SKIP` and unchecksummed declared sources, and the same list is
+  stored in the attestation document. `trustsight-gate --attest FILE --dir DIR`
+  writes it only after approval. Output is atomic, bounded, and refuses a tree
+  that changes while it is being hashed.
+
+### Fixed
+
+- **A014 rejects `$ORIGIN` escapes to the filesystem root.** `$ORIGIN/..`,
+  `$ORIGIN/../..`, a direct `/` and duplicate-slash temp paths are now unsafe;
+  `$ORIGIN` below its package directory remains safe.
+- **C035 normalises paths before comparing namespaces.** Percent-encoded and
+  literal `..` segments can no longer hide an occupied namespace, and the
+  owned prefix and URL path are compared case-insensitively. Malformed source
+  URLs are skipped rather than raising.
+- **A012 no longer misses a printer piped to an absolute shell path.**
+  `echo ... | /bin/sh` is still in scope, while a printer that only mentions a
+  client or path remains quiet.
+- **Attestation fails closed.** Unreadable directories, read/stat races,
+  oversize documents and interrupted serialisation are named refusals; a
+  failed write leaves the previous attestation intact.
 
 ## [0.29.2] - 2026-11-17
 

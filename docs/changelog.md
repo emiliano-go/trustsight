@@ -2,6 +2,23 @@
 
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **L9 inspects shipped artifact content and ELF metadata.** The artifact
+  manifest may carry bounded content for `.hook`, `.rules` and `.install`
+  files; A011 reports a broad hook trigger, A012 a fetch or user-path program,
+  and A013 a udev rule that runs a program. A014 and A015 report an unsafe
+  ELF runpath and a packed or encrypted ELF section. All five are anergic and
+  report at weight 0 until calibrated.
+- **Findings carry descriptive CWE and remediation metadata.** The labels do
+  not change scoring, matching or the report's evidence claims.
+- **CycloneDX 1.5 SBOM export.** `trustsight sbom <pkg>` and
+  `TrustSight.sbom` export the package, its declared sources and its
+  dependency components, with findings attached to the component their
+  evidence names.
+
 ## [0.29.2] - 2026-11-17
 
 ### Fixed
@@ -136,7 +153,6 @@
 - **The public watcher publishes dependency-walk coverage.** Every `trustsight.scans` record now carries a bounded `dependency_analysis` summary: the requested depth, dependencies examined, deepest level reached, whether the walk was truncated, and the identities of dependencies that independently cleared the review threshold (full dependency findings stay out of the signed document). The feed stores the summary and renders it on the package page, so a reader can tell a completed direct-only walk from a truncated deep one.
 - **`full-aur` accepts `--depth`.** The watch loop already accepted a depth internally but the CLI never defined the option, so a watcher could only change it through `[depth] levels`. The option now reaches both `--watch` and single-shot cycles, prints the effective depth in the watch banner, and rejects values below `-1`. The shipped watcher compose file uses `--depth -1`, subject to the existing 8-level and 200-node per-root ceilings.
 - **G015 reports sleeper adoption campaigns.** {#sleeper-adoption-campaign} A multi-account cohort of dormant adopted packages is joined when the same maintainers reactivate most of it after a cooling-off period. The base finding is MEDIUM and alert-only; a curated payload or takeover signal raises it to HIGH. G015 primes campaign state on both severities and never adds its severity to a member's score.
-
 - **CycloneDX 1.5 SBOM export.** `trustsight sbom <pkg>` and
   `TrustSight.sbom` list the package, its declared sources and its dependency
   components, attaching the findings that name each one. Sources are marked

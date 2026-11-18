@@ -428,6 +428,13 @@ tests = [
 # --- classified, not narrated ---------------------------------------------
 
 [[exempt]]
+reason = "lazy-initialisation latch and a pure deterministic projection: the client's readiness flag is one-way and process-local, and the SBOM builder carries no cross-call lifecycle"
+modules = [
+  "api/client.py",
+  "sbom.py",
+]
+
+[[exempt]]
 reason = "single-pass scanner or bounded loop: the state is a local cursor, quote/depth or redirect counter carried across one call, with no persisted or cross-call lifecycle"
 modules = [
   "_tokenizer_engine/_common.py",

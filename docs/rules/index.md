@@ -49,7 +49,7 @@ context and its rule definitions.
 | [Meta and Confluence](meta.md) | `meta` | 6 | A claim about other findings: a declared practice contradicted by structure, or a composition only visible from the whole profile. |
 | [Entropy](entropy.md) | `entropy` | 3 | The added content is statistically abnormal - a distribution outlier, not a known pattern. Suspicion, never a verdict. |
 | [Correlation](correlation.md) | `correlation` | 15 | The pattern is across packages, not inside one: a host, literal or adopter shared by several packages in a window. |
-| [Artifact](artifact.md) | `artifact` | 10 | The built package does not match the recipe: the L9 artifact layer, off by default, never blended into the static score. |
+| [Artifact](artifact.md) | `artifact` | 15 | The built package does not match the recipe: the L9 artifact layer, off by default, never blended into the static score. |
 | [Indicators](indicator.md) | `indicator` | 1 | A declared surface matches an entry in signed external data: the IOC list, or a federated publisher's indicator set.  Outside the heuristic score and alerted at maximum priority. |
 | [Upstream Manifests](upstream-manifests.md) | `upstream-manifests` | 9 | A committed dependency manifest changed: a dependency moved, a new remote source entered the recipe's reach, or the resolver is being redirected.  Read from the repository, never fetched. |
 | [Upstream Release Integrity](upstream-release.md) | `upstream-release` | 6 | What a recipe declares about upstream - its URL, its sources, their access mode - and the CI surface it commits.  Upstream content is never read (A2/A8); the CI exfil and history-sweep shapes arrive over the signed federation channel instead. |
@@ -80,10 +80,10 @@ generated from it.
 | `E` | Entropy | 3 |
 | `T` | Temporal | 12 |
 | `G` | Correlation | 15 |
-| `A` | Artifact | 10 |
+| `A` | Artifact | 15 |
 | `I` | Indicator | 0 |
 | `U` | Upstream | 15 |
-The catalog lists 301 rule IDs across 15 series; 277 of them contribute to the heuristic score.
+The catalog lists 306 rule IDs across 15 series; 277 of them contribute to the heuristic score.
 <!-- /generated: series-counts -->
 
 `P` and `I` carry no catalog IDs in this build: declared-practice findings

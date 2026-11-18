@@ -63,6 +63,26 @@ See [A009: Executable Binary In Source Archive](../../rules/artifact.md#a009).
 
 See [A010: Setuid File In Source Archive](../../rules/artifact.md#a010).
 
+### A011 {#a011}
+
+See [A011: Hook Runs On Every Transaction](../../rules/artifact.md#a011).
+
+### A012 {#a012}
+
+See [A012: Shipped Hook Or Udev Fetches Or Runs A User Path](../../rules/artifact.md#a012).
+
+### A013 {#a013}
+
+See [A013: Udev Rule Runs A Program](../../rules/artifact.md#a013).
+
+### A014 {#a014}
+
+See [A014: Unsafe ELF Runpath](../../rules/artifact.md#a014).
+
+### A015 {#a015}
+
+See [A015: Packed Or Encrypted ELF Section](../../rules/artifact.md#a015).
+
 ### C001 {#c001}
 
 See [C001: Checksum Changed Without Source Change With Stable Version](../../rules/integrity.md#c001).
@@ -166,26 +186,6 @@ See [C025: Hardening Option Disabled](../../rules/staging-and-recon.md#c025).
 ### C026 {#c026}
 
 See [C026: Empty File Added](../../rules/integrity.md#c026).
-
-### A014 {#a014}
-
-See [A014: Unsafe ELF Runpath](../../rules/artifact.md#a014).
-
-### A015 {#a015}
-
-See [A015: Packed Or Encrypted ELF Section](../../rules/artifact.md#a015).
-
-### A011 {#a011}
-
-See [A011: Hook Runs On Every Transaction](../../rules/artifact.md#a011).
-
-### A012 {#a012}
-
-See [A012: Shipped Hook Or Udev Fetches Or Runs A User Path](../../rules/artifact.md#a012).
-
-### A013 {#a013}
-
-See [A013: Udev Rule Runs A Program](../../rules/artifact.md#a013).
 
 ### C027 {#c027}
 

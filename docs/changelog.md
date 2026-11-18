@@ -45,6 +45,12 @@
   stored in the attestation document. `trustsight-gate --attest FILE --dir DIR`
   writes it only after approval. Output is atomic, bounded, and refuses a tree
   that changes while it is being hashed.
+- **The documentation site publishes an agent-discovery surface.**
+  `docs.trustsight.org` now serves `robots.txt` with explicit AI-crawler
+  groups and Content-Signal preferences, RFC 8288 `Link` headers, an RFC 9727
+  API catalog, an AI catalog, an agent-skills index, an MCP server card,
+  protected-resource metadata, `auth.md`, a docs-navigation `SKILL.md`, and
+  WebMCP tools that search the documentation index and open a page.
 
 ### Fixed
 
@@ -83,6 +89,25 @@
   capped before traversal, a symlinked `PKGBUILD` is not followed, and
   `--check` re-derives the VCS/`SKIP`/unchecksummed inventory so tampering
   with that metadata alone is refused.
+- **A notification no longer invents a full-addition diff for an unchanged
+  adoption.** When no previous recipe revision was retained, the ownership
+  event carries no diff instead of rendering the whole PKGBUILD as new; an
+  empty retained recipe is treated the same way.
+- **The 2026-11-17 triage fixes are included.** X024 accepts a filter that
+  rewrites its own flags variable; C021 is the `checkdepends` shape it
+  documents; E001/E002 ignore checksum arrays; D004 recognises an ecosystem
+  prefix on its own pkgbase; H100 treats cache refreshers as inert; G004
+  keeps one project's packagings together; and the exact official and forge
+  hosts found by triage are bucketed.
+- **The 2026-11-18 triage fixes are included.** R010/R011 read the added
+  lines only; H106 stands down for a canonical registry override; registry
+  endpoint URLs stop carrying `SOURCE_BUCKET`/`NOVELTY`; G003 recognises one
+  predecessor across a batch; and `load_rules` backfills `added_only` and
+  `include_comments` for an existing `rules.toml`.
+- **Terminal output from stored and package-controlled fields is sanitised.**
+  `trustsight diff` cleans the stored timestamp and bands, and
+  `trustsight-attest --list-unpinned` cleans the package-controlled source
+  names and URLs.
 
 ## [0.29.2] - 2026-11-17
 

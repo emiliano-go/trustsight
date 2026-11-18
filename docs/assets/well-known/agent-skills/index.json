@@ -1,0 +1,12 @@
+{
+  "$schema": "https://schemas.agentskills.io/discovery/0.2.0/schema.json",
+  "skills": [
+    {
+      "name": "trustsight-docs",
+      "type": "skill-md",
+      "description": "Find the right TrustSight documentation page for a question about installation, rules, reports, measurements or limits.",
+      "url": "https://docs.trustsight.org/.well-known/agent-skills/trustsight-docs/SKILL.md",
+      "digest": "sha256:f5020b977af9752175b0c5ef4a282b1e7ff33931c760ef48bcfcacfb6722c82a"
+    }
+  ]
+}

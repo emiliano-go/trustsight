@@ -1,0 +1,24 @@
+# auth.md
+
+The TrustSight documentation is **public and read-only**. It has no account
+registration, no OAuth authorization server, and no bearer token requirement.
+
+- Documentation: <https://docs.trustsight.org/>
+- Product site: <https://trustsight.org/>
+- Watcher read API: <https://watcher.trustsight.org/api>
+- OpenAPI description: <https://watcher.trustsight.org/api/openapi.json>
+
+## For agents
+
+Use the documentation pages directly. If you need a compact map, fetch
+`<https://docs.trustsight.org/sitemap.xml>` or the individual pages. The public
+watcher API is GET-only, CORS-open, and rate-limited; a `429` response carries
+`Retry-After`.
+
+## Machine-readable metadata
+
+- API catalog: <https://docs.trustsight.org/.well-known/api-catalog>
+- AI catalog: <https://docs.trustsight.org/.well-known/ai-catalog.json>
+- Protected-resource metadata: <https://docs.trustsight.org/.well-known/oauth-protected-resource>
+- MCP server card: <https://docs.trustsight.org/.well-known/mcp/server-card.json>
+- Agent skill: <https://docs.trustsight.org/.well-known/agent-skills/trustsight-docs/SKILL.md>

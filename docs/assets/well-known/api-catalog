@@ -1,0 +1,25 @@
+{
+  "linkset": [
+    {
+      "anchor": "https://watcher.trustsight.org/api",
+      "service-desc": [
+        {
+          "href": "https://watcher.trustsight.org/api/openapi.json",
+          "type": "application/vnd.oai.openapi+json;version=3.1"
+        }
+      ],
+      "service-doc": [
+        {
+          "href": "https://watcher.trustsight.org/api",
+          "type": "text/html"
+        }
+      ],
+      "status": [
+        {
+          "href": "https://watcher.trustsight.org/api/stats",
+          "type": "application/json"
+        }
+      ]
+    }
+  ]
+}

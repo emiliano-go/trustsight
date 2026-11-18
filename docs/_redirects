@@ -1,0 +1,7 @@
+/auth.md /assets/agent/auth.txt 200
+/.well-known/api-catalog /assets/well-known/api-catalog 200
+/.well-known/ai-catalog.json /assets/well-known/ai-catalog.json 200
+/.well-known/agent-skills/index.json /assets/well-known/agent-skills/index.json 200
+/.well-known/agent-skills/trustsight-docs/SKILL.md /assets/agent/trustsight-docs.txt 200
+/.well-known/mcp/server-card.json /assets/well-known/mcp/server-card.json 200
+/.well-known/oauth-protected-resource /assets/well-known/oauth-protected-resource 200

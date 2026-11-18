@@ -84,8 +84,15 @@ def unsafe_runpath(value) -> bool:
         if (resolved == "/__trustsight_origin__"
                 or resolved.startswith("/__trustsight_origin__/")):
             return False
+        if resolved == "/":
+            return True
         path = resolved
     if path in (".", "..") or not path.startswith("/"):
+        return True
+    if path.startswith("/"):
+        path = "/" + path.lstrip("/")
+        path = posixpath.normpath(path)
+    if path == "/":
         return True
     for prefix in ("/tmp", "/var/tmp", "/dev/shm", "/home", "/root"):
         if path == prefix or path.startswith(prefix + "/"):
@@ -131,7 +138,8 @@ def _runs_fetch_or_user_path(content: str) -> bool:
         # command.  Command substitution and a pipe still execute and remain
         # in scope.
         if (re.match(r"^(?:\S*/)?(?:echo|printf)\b", line, re.IGNORECASE)
-                and not re.search(r"\$\(|`|\|\s*(?:ba|z|da|k)?sh\b", line)):
+                and not re.search(
+                    r"\$\(|`|\|\s*(?:\S*/)?(?:ba|z|da|k)?sh\b", line)):
             continue
         lowered = line.lower()
         for token in ("curl", "wget", "aria2c"):

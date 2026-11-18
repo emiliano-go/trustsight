@@ -474,6 +474,23 @@ def test_main_without_targets_is_an_error():
     assert "no target packages" in out.getvalue()
 
 
+def test_main_attests_only_an_approved_tree(monkeypatch, tmp_path):
+    (tmp_path / ".SRCINFO").write_text("pkgname = demo\n")
+    monkeypatch.setattr(gate, "run_inspect",
+                        lambda name, **kw: _body(package=name))
+    out = io.StringIO()
+    attestation = tmp_path / "attest.json"
+    assert gate.main(["--yes", "--dir", str(tmp_path),
+                      "--attest", str(attestation)], out=out) == gate.EXIT_APPROVED
+    assert attestation.is_file()
+
+    refused = tmp_path / "refused.json"
+    out = io.StringIO()
+    assert gate.main(["--no", "--dir", str(tmp_path),
+                      "--attest", str(refused)], out=out) == gate.EXIT_REFUSED
+    assert not refused.exists()
+
+
 def test_main_disable_bypass_is_visible(monkeypatch):
     monkeypatch.setenv("TRUSTSIGHT_GATE_DISABLE", "1")
     monkeypatch.setattr(

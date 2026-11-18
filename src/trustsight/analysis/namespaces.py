@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from urllib.parse import urlparse
+import posixpath
+from urllib.parse import unquote, urlparse
 
 from ..findings import stamp
 
@@ -15,7 +16,11 @@ def _split_owned(value: str) -> tuple[str, str] | None:
         return None
     host, _, path = raw.partition("/")
     host = host.strip().lower()
-    path = "/" + path.strip("/") if path.strip("/") else ""
+    if path.strip("/"):
+        path = "/" + posixpath.normpath(
+            "/" + path.strip("/")).lstrip("/").lower()
+    else:
+        path = ""
     if not host or not path:
         return None
     return host, path
@@ -23,8 +28,16 @@ def _split_owned(value: str) -> tuple[str, str] | None:
 
 def _urls(recipe_text: str) -> list[str]:
     from ..differ import urls_from_pkgbuild_text
+    from ..recipedoc import parse_recipe
 
-    return list(urls_from_pkgbuild_text(recipe_text or ""))
+    urls = list(urls_from_pkgbuild_text(recipe_text or ""))
+    try:
+        declared = parse_recipe(recipe_text or "").scalars.get("url")
+    except Exception:  # noqa: BLE001 - a broken recipe has no scalar
+        declared = None
+    if isinstance(declared, str) and declared:
+        urls.append(declared)
+    return sorted(set(urls))
 
 
 def owned_namespace_findings(
@@ -45,7 +58,11 @@ def owned_namespace_findings(
     for url in _urls(recipe_text):
         parsed = urlparse(url)
         host = (parsed.hostname or "").lower()
-        path = "/" + parsed.path.strip("/") if parsed.path.strip("/") else ""
+        raw_path = unquote(parsed.path)
+        path = ("/" + posixpath.normpath(raw_path).lower().lstrip("/")
+                if raw_path.strip("/") else "")
+        if path == "/.":
+            path = ""
         for owned_host, owned_path in owned:
             if host != owned_host:
                 continue

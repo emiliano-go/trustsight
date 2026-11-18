@@ -46,3 +46,31 @@ def test_attestation_is_deterministic_and_omits_git(tmp_path):
     write_attestation(root, b)
     assert a.read_text() == b.read_text()
     assert json.loads(a.read_text())["files"] == 2
+
+
+def test_a_failed_write_does_not_replace_the_previous_file(tmp_path, monkeypatch):
+    root = _tree(tmp_path)
+    out = tmp_path / "attest.json"
+    out.write_text("previous")
+    import trustsight.attest as attest
+
+    def fail(*args, **kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(attest.json, "dumps", fail)
+    with pytest.raises(OSError):
+        write_attestation(root, out)
+    assert out.read_text() == "previous"
+    assert not list(tmp_path.glob(".*.tmp"))
+
+
+def test_unreadable_tree_fails_closed(tmp_path):
+    root = tmp_path / "pkg"; root.mkdir()
+    blocked = root / "blocked"; blocked.mkdir()
+    (blocked / "file").write_text("x")
+    blocked.chmod(0)
+    try:
+        with pytest.raises(AttestError, match="could not walk"):
+            digest_tree(root)
+    finally:
+        blocked.chmod(0o700)

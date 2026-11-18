@@ -361,9 +361,8 @@ already states that upstream content is not read at all.
 - **Severity:** INFO
 - **Category:** `unverifiable`
 
-- **Condition:** A fetched source archive contains duplicate member names or
-  another archive-structure ambiguity that makes the retained bytes
-  ambiguous.
+- **Condition:** A fetched source archive contains duplicate normalised member
+  names, so more than one byte sequence claims the same archive path.
 
 The archive is read in the read-role sandbox. Nothing is extracted to disk or
 executed, and the boundary is always reported at weight 0.

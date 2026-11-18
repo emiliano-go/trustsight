@@ -115,8 +115,6 @@ def test_coordinated_adoption_fires_when_one_member_is_unrelated():
 
 def test_g003_escalates_for_a_first_seen_account_adopting_dormant_packages(
         monkeypatch):
-    import time
-
     # A fixed clock: the escalation window is 30 days, so a hard-coded
     # "first seen" date turns this test red on the calendar rather than on
     # a regression.

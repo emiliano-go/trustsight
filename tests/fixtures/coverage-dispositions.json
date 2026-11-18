@@ -29,6 +29,36 @@
     "plan": "add_artifact_or_manifest",
     "status": "deferred"
   },
+  "A011": {
+    "note": "Add a benign shipped hook with a broad trigger to the artifact corpus.",
+    "phase": "1",
+    "plan": "add_artifact_or_manifest",
+    "status": "deferred"
+  },
+  "A012": {
+    "note": "Add a benign shipped hook that runs a system helper to the artifact corpus.",
+    "phase": "1",
+    "plan": "add_artifact_or_manifest",
+    "status": "deferred"
+  },
+  "A013": {
+    "note": "Add a benign udev rule to the artifact corpus.",
+    "phase": "1",
+    "plan": "add_artifact_or_manifest",
+    "status": "deferred"
+  },
+  "A014": {
+    "note": "Add a benign artifact ELF with an ordinary runpath to the artifact corpus.",
+    "phase": "1",
+    "plan": "add_artifact_or_manifest",
+    "status": "deferred"
+  },
+  "A015": {
+    "note": "Add a benign packed/encrypted artifact ELF to the artifact corpus.",
+    "phase": "1",
+    "plan": "add_artifact_or_manifest",
+    "status": "deferred"
+  },
   "C006": {
     "expected_strata": [
       "maintainer_churn"
@@ -117,6 +147,12 @@
     ],
     "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
     "phase": "D",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "C035": {
+    "note": "Operator-owned namespace config is local; add a synthetic owned/occupied pair and a benign in-namespace twin.",
+    "phase": "1",
     "plan": "add_benign_shape",
     "status": "deferred"
   },
@@ -1066,6 +1102,12 @@
   },
   "W014": {
     "note": "Boundary/aggregate id, not a corpus rule; covered by integration tests.",
+    "phase": "0",
+    "plan": "pseudo",
+    "status": "resolved"
+  },
+  "W015": {
+    "note": "Boundary/aggregate id, not a corpus rule; covered by archive integration and fuzz tests.",
     "phase": "0",
     "plan": "pseudo",
     "status": "resolved"

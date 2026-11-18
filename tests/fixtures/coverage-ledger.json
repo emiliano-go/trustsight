@@ -2,22 +2,77 @@
   "anergic": {
     "A009": {
       "changelog": "upstream-scan-lane",
-      "decided_in": "",
-      "promoted_in": "Unreleased",
+      "decided_in": "0.29.0",
+      "promoted_in": "0.29.0",
       "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
       "rule_id": "A009",
       "signal": "artifact shape inside a fetched source archive; needs a corpus rate before it can score",
       "since": "0.28.9",
-      "status": "anergic",
-      "weight": null
+      "status": "promoted",
+      "weight": 0
     },
     "A010": {
+      "changelog": "upstream-scan-lane",
+      "decided_in": "0.29.0",
+      "promoted_in": "0.29.0",
+      "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
+      "rule_id": "A010",
+      "signal": "artifact shape inside a fetched source archive; needs a corpus rate before it can score",
+      "since": "0.28.9",
+      "status": "promoted",
+      "weight": 0
+    },
+    "A011": {
       "changelog": "upstream-scan-lane",
       "decided_in": "",
       "promoted_in": "Unreleased",
       "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
-      "rule_id": "A010",
-      "signal": "artifact shape inside a fetched source archive; needs a corpus rate before it can score",
+      "rule_id": "A011",
+      "signal": "shipped hook/udev/install content in the L9 manifest; needs a corpus rate before it can score",
+      "since": "0.28.9",
+      "status": "anergic",
+      "weight": null
+    },
+    "A012": {
+      "changelog": "upstream-scan-lane",
+      "decided_in": "",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
+      "rule_id": "A012",
+      "signal": "shipped hook/udev/install content in the L9 manifest; needs a corpus rate before it can score",
+      "since": "0.28.9",
+      "status": "anergic",
+      "weight": null
+    },
+    "A013": {
+      "changelog": "upstream-scan-lane",
+      "decided_in": "",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
+      "rule_id": "A013",
+      "signal": "shipped hook/udev/install content in the L9 manifest; needs a corpus rate before it can score",
+      "since": "0.28.9",
+      "status": "anergic",
+      "weight": null
+    },
+    "A014": {
+      "changelog": "upstream-scan-lane",
+      "decided_in": "",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
+      "rule_id": "A014",
+      "signal": "ELF metadata from an artifact/source archive; needs a corpus rate before it can score",
+      "since": "0.28.9",
+      "status": "anergic",
+      "weight": null
+    },
+    "A015": {
+      "changelog": "upstream-scan-lane",
+      "decided_in": "",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
+      "rule_id": "A015",
+      "signal": "ELF metadata from an artifact/source archive; needs a corpus rate before it can score",
       "since": "0.28.9",
       "status": "anergic",
       "weight": null
@@ -44,71 +99,82 @@
       "status": "promoted",
       "weight": null
     },
-    "G015": {
-      "changelog": "sleeper-adoption-campaign",
+    "C035": {
+      "changelog": "owned-namespace-occupancy",
       "decided_in": "",
       "promoted_in": "Unreleased",
-      "promotion": "run the weekly anergic calibration, then set weight and decided_in",
-      "rule_id": "G015",
-      "signal": "full-AUR benign replay fire-rate < 0.30 plus a positive sleeper-adoption campaign and a benign dormant-reactivation twin",
+      "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
+      "rule_id": "C035",
+      "signal": "operator-owned namespace source mismatch; needs a corpus rate before it can score",
       "since": "Unreleased",
       "status": "anergic",
       "weight": null
     },
+    "G015": {
+      "changelog": "sleeper-adoption-campaign",
+      "decided_in": "0.29.0",
+      "promoted_in": "0.29.0",
+      "promotion": "run the weekly anergic calibration, then set weight and decided_in",
+      "rule_id": "G015",
+      "signal": "full-AUR benign replay fire-rate < 0.30 plus a positive sleeper-adoption campaign and a benign dormant-reactivation twin",
+      "since": "Unreleased",
+      "status": "promoted",
+      "weight": 0
+    },
     "H009": {
       "changelog": "runtime-surface-lane",
-      "decided_in": "",
-      "promoted_in": "0.28.0",
+      "decided_in": "0.29.0",
+      "promoted_in": "0.29.0",
       "promotion": "run the weekly anergic calibration, then set weight and decided_in",
       "rule_id": "H009",
       "signal": "weekly calibration review: assign an explicit weight (0 keeps it report-only, a positive weight promotes it) after a true-positive twin and a quiet benign replay",
       "since": "0.28.0",
-      "status": "anergic",
-      "weight": null
+      "status": "promoted",
+      "weight": 0
     },
     "H010": {
       "changelog": "runtime-surface-lane",
-      "decided_in": "",
-      "promoted_in": "0.28.0",
+      "decided_in": "0.29.0",
+      "promoted_in": "0.29.0",
       "promotion": "run the weekly anergic calibration, then set weight and decided_in",
       "rule_id": "H010",
       "signal": "weekly calibration review: assign an explicit weight (0 keeps it report-only, a positive weight promotes it) after a true-positive twin and a quiet benign replay",
       "since": "0.28.0",
-      "status": "anergic",
-      "weight": null
+      "status": "promoted",
+      "weight": 0
     },
     "H011": {
       "changelog": "runtime-surface-lane",
-      "decided_in": "",
-      "promoted_in": "0.28.0",
+      "decided_in": "0.29.0",
+      "promoted_in": "0.29.0",
       "promotion": "run the weekly anergic calibration, then set weight and decided_in",
       "rule_id": "H011",
       "signal": "weekly calibration review: assign an explicit weight (0 keeps it report-only, a positive weight promotes it) after a true-positive twin and a quiet benign replay",
       "since": "0.28.0",
-      "status": "anergic",
-      "weight": null
+      "status": "promoted",
+      "weight": 0
     },
     "H012": {
       "changelog": "runtime-surface-lane",
-      "decided_in": "",
-      "promoted_in": "0.28.0",
+      "decided_in": "0.29.0",
+      "promoted_in": "0.29.0",
       "promotion": "run the weekly anergic calibration, then set weight and decided_in",
       "rule_id": "H012",
       "signal": "weekly calibration review: assign an explicit weight (0 keeps it report-only, a positive weight promotes it) after a true-positive twin and a quiet benign replay",
       "since": "0.28.0",
-      "status": "anergic",
-      "weight": null
+      "status": "promoted",
+      "weight": 0
     },
     "H013": {
       "changelog": "runtime-surface-lane",
-      "decided_in": "",
-      "promoted_in": "0.28.0",
+      "decided_in": "0.29.0",
+      "promoted_in": "0.29.0",
       "promotion": "run the weekly anergic calibration, then set weight and decided_in",
       "rule_id": "H013",
       "signal": "weekly calibration review: assign an explicit weight (0 keeps it report-only, a positive weight promotes it) after a true-positive twin and a quiet benign replay",
       "since": "0.28.0",
-      "status": "anergic",
-      "weight": null
+      "status": "promoted",
+      "weight": 0
     },
     "T004": {
       "changelog": "missing-self-axis",
@@ -134,100 +200,100 @@
     },
     "T008": {
       "changelog": "full-aur-history-campaigns",
-      "decided_in": "",
-      "promoted_in": "0.28.0",
+      "decided_in": "0.29.0",
+      "promoted_in": "0.29.0",
       "promotion": "remove status or mark promoted after the full-AUR benign replay checkpoint; record the measured rate in the changelog",
       "rule_id": "T008",
       "signal": "full-AUR benign replay fire-rate < 0.30 plus positive delayed-adoption and benign transition twins",
       "since": "0.27.1",
-      "status": "anergic",
-      "weight": null
+      "status": "promoted",
+      "weight": 0
     },
     "T009": {
       "changelog": "full-aur-history-campaigns",
-      "decided_in": "",
-      "promoted_in": "0.28.0",
+      "decided_in": "0.29.0",
+      "promoted_in": "0.29.0",
       "promotion": "remove status or mark promoted after the full-AUR benign replay checkpoint; record the measured rate in the changelog",
       "rule_id": "T009",
       "signal": "full-AUR benign replay fire-rate < 0.30 plus positive dormant-takeover and active/low-exposure transition twins",
       "since": "0.27.1",
-      "status": "anergic",
-      "weight": null
+      "status": "promoted",
+      "weight": 0
     },
     "T010": {
       "changelog": "full-aur-history-campaigns",
-      "decided_in": "",
-      "promoted_in": "0.28.0",
+      "decided_in": "0.29.0",
+      "promoted_in": "0.29.0",
       "promotion": "remove status or mark promoted after the full-AUR benign replay checkpoint; record the measured rate in the changelog",
       "rule_id": "T010",
       "signal": "full-AUR benign replay fire-rate < 0.30 plus positive dependency-redirection and established/related-target twins",
       "since": "0.27.1",
-      "status": "anergic",
-      "weight": null
+      "status": "promoted",
+      "weight": 0
     },
     "T011": {
       "changelog": "full-aur-history-campaigns",
-      "decided_in": "",
-      "promoted_in": "0.28.0",
+      "decided_in": "0.29.0",
+      "promoted_in": "0.29.0",
       "promotion": "remove status or mark promoted after the full-AUR benign replay checkpoint; record the measured rate in the changelog",
       "rule_id": "T011",
       "signal": "full-AUR benign replay fire-rate < 0.30 plus positive reappearance and first-appearance/no-removal twins",
       "since": "0.27.1",
-      "status": "anergic",
-      "weight": null
+      "status": "promoted",
+      "weight": 0
     },
     "T012": {
       "changelog": "full-aur-history-campaigns",
-      "decided_in": "",
-      "promoted_in": "0.28.0",
+      "decided_in": "0.29.0",
+      "promoted_in": "0.29.0",
       "promotion": "remove status or mark promoted after the full-AUR benign replay checkpoint; record the measured rate in the changelog",
       "rule_id": "T012",
       "signal": "full-AUR benign replay fire-rate < 0.30 plus positive trust-erosion and no-precursor/no-terminal twins",
       "since": "0.27.1",
-      "status": "anergic",
-      "weight": null
+      "status": "promoted",
+      "weight": 0
     },
     "U013": {
       "changelog": "upstream-scan-lane",
-      "decided_in": "",
-      "promoted_in": "Unreleased",
+      "decided_in": "0.29.0",
+      "promoted_in": "0.29.0",
       "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
       "rule_id": "U013",
       "signal": "local CI shape over a fetched upstream workflow; needs a corpus rate before it can score",
       "since": "0.28.9",
-      "status": "anergic",
-      "weight": null
+      "status": "promoted",
+      "weight": 0
     },
     "U014": {
       "changelog": "upstream-scan-lane",
-      "decided_in": "",
-      "promoted_in": "Unreleased",
+      "decided_in": "0.29.0",
+      "promoted_in": "0.29.0",
       "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
       "rule_id": "U014",
       "signal": "local CI shape over a fetched upstream workflow; needs a corpus rate before it can score",
       "since": "0.28.9",
-      "status": "anergic",
-      "weight": null
+      "status": "promoted",
+      "weight": 0
     },
     "U015": {
       "changelog": "upstream-scan-lane",
-      "decided_in": "",
-      "promoted_in": "Unreleased",
+      "decided_in": "0.29.0",
+      "promoted_in": "0.29.0",
       "promotion": "run the weekly calibration, then set an explicit weight after the signed observations cover the corpus",
       "rule_id": "U015",
       "signal": "signed server-side manifest observations; needs a corpus rate before it can score",
       "since": "0.28.9",
-      "status": "anergic",
-      "weight": null
+      "status": "promoted",
+      "weight": 0
     }
   },
-  "catalog_size": 313,
+  "catalog_size": 320,
   "corpus_content_sha256": "a4cbea4ef14029c97d7746e2be080a2e5c931502429ee261d974810b35f5cafc",
   "counts": {
     "adversarial_only": 18,
     "cold_only": 42,
     "measured": 174,
-    "zero_fire": 79
+    "zero_fire": 86
   },
   "rules": {
     "A001": {
@@ -1964,14 +2030,14 @@
       "expected_strata_met": [
         "source_patched"
       ],
-      "fires": 75,
+      "fires": 49,
       "id": "C033",
       "pseudo": false,
       "reason": "",
       "series": "C",
       "sources": {
         "cold": {
-          "fires": 74,
+          "fires": 48,
           "strata": [
             "bin_repack",
             "data_fonts",
@@ -2055,7 +2121,7 @@
       "fires": 0,
       "id": "C035",
       "pseudo": false,
-      "reason": "no benign shape in the locked corpus yet; operator-owned namespaces are configuration-specific",
+      "reason": "no benign shape in the locked corpus yet; add a shape stratum, never a rule-targeted sample",
       "series": "C",
       "sources": {},
       "state": "zero_fire",
@@ -2477,14 +2543,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 40,
+      "fires": 39,
       "id": "E003",
       "pseudo": false,
       "reason": "",
       "series": "E",
       "sources": {
         "cold": {
-          "fires": 39,
+          "fires": 38,
           "strata": [
             "autotools",
             "bin_repack",
@@ -3684,14 +3750,14 @@
         "dkms_kernel",
         "source_patched"
       ],
-      "fires": 1688,
+      "fires": 1689,
       "id": "H023",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 1688,
+          "fires": 1689,
           "strata": [
             "autotools",
             "bin_repack",
@@ -3894,14 +3960,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 1115,
+      "fires": 1105,
       "id": "H027",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 1088,
+          "fires": 1078,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -6815,14 +6881,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 582,
+      "fires": 556,
       "id": "M002",
       "pseudo": false,
       "reason": "",
       "series": "M",
       "sources": {
         "cold": {
-          "fires": 579,
+          "fires": 553,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -6895,14 +6961,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 301,
+      "fires": 300,
       "id": "M003",
       "pseudo": false,
       "reason": "",
       "series": "M",
       "sources": {
         "cold": {
-          "fires": 269,
+          "fires": 268,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -7370,14 +7436,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 3733,
+      "fires": 3736,
       "id": "P007",
       "pseudo": true,
       "reason": "",
       "series": "P",
       "sources": {
         "cold": {
-          "fires": 3725,
+          "fires": 3728,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -7629,14 +7695,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 140,
+      "fires": 139,
       "id": "R007",
       "pseudo": false,
       "reason": "",
       "series": "R",
       "sources": {
         "cold": {
-          "fires": 127,
+          "fires": 126,
           "strata": [
             "autotools",
             "bin_repack",
@@ -8973,14 +9039,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 1327,
+      "fires": 1280,
       "id": "SOURCE_BUCKET",
       "pseudo": true,
       "reason": "",
       "series": "S",
       "sources": {
         "cold": {
-          "fires": 1264,
+          "fires": 1217,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -10552,7 +10618,7 @@
       "fires": 0,
       "id": "W015",
       "pseudo": false,
-      "reason": "Boundary/aggregate id, not a corpus rule; covered by integration and fuzz tests.",
+      "reason": "no benign shape in the locked corpus yet; add a shape stratum, never a rule-targeted sample",
       "series": "W",
       "sources": {},
       "state": "zero_fire",

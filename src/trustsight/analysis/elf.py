@@ -30,6 +30,13 @@ MAX_NAME_BYTES = 256
 _SHT_DYNAMIC = 6
 _SHT_STRTAB = 3
 
+#: Section names that are packer or encrypted-section markers.  This is a
+#: marker list, not an entropy claim: the parser never unpacks or decrypts.
+_PACKER_SECTION_NAMES = frozenset({
+    ".upx", "UPX0", "UPX1", ".packed", ".aspack", ".mpress", ".nsp",
+    ".petite", ".themida", ".vmp0", ".vmp1", ".encrypted", ".crypt",
+})
+
 
 @dataclass(frozen=True)
 class ElfInfo:
@@ -167,7 +174,7 @@ def parse_elf(data, *, max_bytes: int = MAX_ELF_BYTES) -> ElfInfo | None:
 
     section_names = tuple(names[index] for index in sorted(names))[:MAX_SECTIONS]
     packed = (
-        any(name in (".upx", "UPX0", "UPX1", ".packed") for name in section_names)
+        any(name in _PACKER_SECTION_NAMES for name in section_names)
         or b"UPX!" in data[: min(len(data), 64 * 1024)]
     )
     return ElfInfo(

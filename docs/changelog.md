@@ -153,14 +153,6 @@
 - **The public watcher publishes dependency-walk coverage.** Every `trustsight.scans` record now carries a bounded `dependency_analysis` summary: the requested depth, dependencies examined, deepest level reached, whether the walk was truncated, and the identities of dependencies that independently cleared the review threshold (full dependency findings stay out of the signed document). The feed stores the summary and renders it on the package page, so a reader can tell a completed direct-only walk from a truncated deep one.
 - **`full-aur` accepts `--depth`.** The watch loop already accepted a depth internally but the CLI never defined the option, so a watcher could only change it through `[depth] levels`. The option now reaches both `--watch` and single-shot cycles, prints the effective depth in the watch banner, and rejects values below `-1`. The shipped watcher compose file uses `--depth -1`, subject to the existing 8-level and 200-node per-root ceilings.
 - **G015 reports sleeper adoption campaigns.** {#sleeper-adoption-campaign} A multi-account cohort of dormant adopted packages is joined when the same maintainers reactivate most of it after a cooling-off period. The base finding is MEDIUM and alert-only; a curated payload or takeover signal raises it to HIGH. G015 primes campaign state on both severities and never adds its severity to a member's score.
-- **CycloneDX 1.5 SBOM export.** `trustsight sbom <pkg>` and
-  `TrustSight.sbom` list the package, its declared sources and its dependency
-  components, attaching the findings that name each one. Sources are marked
-  opaque when they are VCS entries, carry `SKIP`, or have no checksum; the
-  root is opaque when a coverage gap leaves the graph incomplete. The document
-  is deterministic and bounded, and nothing is fetched or executed to build
-  it.
-
 - **Provider credentials are safe by default.** `trustsight auth
   login|status|logout` stores a GitHub/GitLab/Codeberg/Bitbucket token in the
   OS keyring (optional `keyring` extra), or reads a systemd credential, a
@@ -214,19 +206,6 @@
   binary (A009) or a setuid/setgid file (A010) is reported at weight 0
   (anergic). The bits and magic are read from the archive, nothing is
   extracted to disk or executed.
-
-- **ELF metadata is read with a bounded parser (A014/A015).** An artifact or
-  upstream-source ELF is parsed read-only for `DT_NEEDED`, `RPATH`/`RUNPATH`
-  and packer markers; an unsafe runpath (A014) and a packed/encrypted binary
-  (A015) are reported at weight 0 (anergic). The parser never invokes `ldd`,
-  `objdump` or `readelf`, and hostile input is bounded.
-
-- **Shipped hook/udev/install content is inspected in L9 (A011-A013).** An
-  artifact manifest may carry bounded `content` for `.hook`, `.rules` and
-  `.install` files; a broad hook trigger (A011), a fetch/user-path program
-  (A012) and a udev `RUN+=`/`PROGRAM==` (A013) are reported at weight 0
-  (anergic). The text is parsed with bounded substring checks; nothing is
-  executed.
 
 ## [0.28.8] - 2026-11-13
 

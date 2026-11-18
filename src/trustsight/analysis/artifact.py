@@ -16,6 +16,9 @@ The static core never executes package code.  Nothing here runs anything.
 
 from __future__ import annotations
 
+import posixpath
+import re
+
 from ..tokenizer import split_lines
 
 __all__ = ["inspect_manifest", "unsafe_runpath"]
@@ -70,7 +73,18 @@ def unsafe_runpath(value) -> bool:
     if not path:
         return True
     if "$ORIGIN" in path or "${ORIGIN}" in path:
-        return False
+        # Resolve the expansion against a sentinel package directory, then
+        # normalise the lexical path.  A token such as ``$ORIGIN/../../tmp``
+        # must not inherit blanket trust merely because it mentions ORIGIN.
+        resolved = path.replace("${ORIGIN}", "$ORIGIN").replace(
+            "$ORIGIN", "/__trustsight_origin__")
+        if not resolved.startswith("/"):
+            return True
+        resolved = posixpath.normpath(resolved)
+        if (resolved == "/__trustsight_origin__"
+                or resolved.startswith("/__trustsight_origin__/")):
+            return False
+        path = resolved
     if path in (".", "..") or not path.startswith("/"):
         return True
     for prefix in ("/tmp", "/var/tmp", "/dev/shm", "/home", "/root"):
@@ -106,14 +120,27 @@ def _strip_comments(content: str) -> str:
 
 def _runs_fetch_or_user_path(content: str) -> bool:
     """A hook/udev/install body that fetches, or runs from a user/temp path."""
-    lowered = _strip_comments(content).lower()
-    for token in ("curl", "wget", "aria2c"):
-        if token in lowered:
-            return True
-    for token in ("/tmp/", "/dev/shm", "/var/tmp/", "$home", "${home}",
-                  "~/", "/home/", "/root/"):
-        if token in lowered:
-            return True
+    for raw in split_lines(content):
+        line = raw.strip()
+        if not line or line.startswith(("#", ";")):
+            continue
+        if line.lower().startswith("exec"):
+            _, _, command = line.partition("=")
+            line = command.strip()
+        # A printer that only mentions a client or a path is output, not a
+        # command.  Command substitution and a pipe still execute and remain
+        # in scope.
+        if (re.match(r"^(?:\S*/)?(?:echo|printf)\b", line, re.IGNORECASE)
+                and not re.search(r"\$\(|`|\|\s*(?:ba|z|da|k)?sh\b", line)):
+            continue
+        lowered = line.lower()
+        for token in ("curl", "wget", "aria2c"):
+            if token in lowered:
+                return True
+        for token in ("/tmp/", "/dev/shm", "/var/tmp/", "$home", "${home}",
+                      "~/", "/home/", "/root/"):
+            if token in lowered:
+                return True
     return False
 
 

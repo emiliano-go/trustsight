@@ -12,10 +12,12 @@ shipped scorer, so they fail before a release rather than after a bad one.
 
 from __future__ import annotations
 
+import re
 import tomllib
 from scripts.gates._core import ROOT, Gate
 
 __all__ = [
+    "gate_artifact_ranges_end_at_the_catalog",
     "gate_threat_coverage_matches_registry",
     "gate_anergic_entries_are_changelogged",
     "gate_anergic_promotions_are_changelogged",
@@ -172,3 +174,21 @@ def gate_threat_coverage_matches_registry() -> Gate:
     return Gate("threat coverage matches the registry", actual == expected,
                 {"bytes": len(actual)},
                 "" if actual == expected else "run scripts/build_threat_coverage.py")
+
+
+def gate_artifact_ranges_end_at_the_catalog() -> Gate:
+    """Any advertised ``A001-A0NN`` range must end at the shipped artifact rule."""
+    from trustsight.registry import REGISTRY
+
+    artifact = [r.id for r in REGISTRY.all() if r.id.startswith("A")]
+    if not artifact:
+        return Gate("artifact ranges end at the catalog", False, "no A rules")
+    highest = max(int(rule[1:]) for rule in artifact)
+    offenders = []
+    for path in sorted((ROOT / "docs").rglob("*.md")):
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for match in re.finditer(r"\bA001-A(\d{3})\b", text):
+            if int(match.group(1)) != highest:
+                offenders.append(
+                    f"{path.relative_to(ROOT)} advertises A001-A{match.group(1)}")
+    return Gate("artifact ranges end at the catalog", not offenders, offenders)

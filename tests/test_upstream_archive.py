@@ -6,6 +6,7 @@ import struct
 
 import io
 import tarfile
+import warnings
 import zipfile
 
 from trustsight.analysis.upstream_archive import parse_upstream_archive
@@ -26,11 +27,20 @@ def _tar(entries) -> bytes:
     return buf.getvalue()
 
 
-def _zip(entries) -> bytes:
+def _zip(entries, *, allow_duplicates: bool = False) -> bytes:
     buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w") as archive:
-        for name, data in entries:
-            archive.writestr(name, data)
+    with warnings.catch_warnings():
+        if allow_duplicates:
+            # A duplicate member is the fixture, not an accident.  Python
+            # 3.14 warns when the same name is written twice; capture that
+            # warning in the fixture helper so the test proves the parser's
+            # ambiguity result without turning the suite output into noise.
+            warnings.filterwarnings(
+                "ignore", message="Duplicate name: .*", category=UserWarning,
+                module="zipfile")
+        with zipfile.ZipFile(buf, "w") as archive:
+            for name, data in entries:
+                archive.writestr(name, data)
     return buf.getvalue()
 
 
@@ -83,7 +93,7 @@ def test_duplicate_members_are_ambiguous_not_silently_overridden():
     zip_out = parse_upstream_archive(_zip([
         ("pkg/Cargo.toml", b"[package]\nname='one'\n"),
         ("pkg/Cargo.toml", b"[package]\nname='two'\n"),
-    ]))
+    ], allow_duplicates=True))
     assert zip_out["ambiguous"]
     assert zip_out["complete"] is False
 

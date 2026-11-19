@@ -17,7 +17,12 @@ description = "Real prepare() with patches. Exercises tokenizer and R001 scope."
 target = 40
 selection = "PKGBUILD contains 'patch' or pkgname ends in '-patched'"
 source = "grep"
-expected_rules = ["C033", "H001", "H002", "H015", "H023", "T005"]
+# C033 left this stratum when the rule started standing down on wholesale
+# rewrites (2026-11-19): a patch-bearing recipe that rewrites its comments
+# alongside the code it patches is not a gutting.  The rule still fires on
+# benign data in four other strata (data_fonts, dependency_heavy,
+# large_electron, maintainer_churn).
+expected_rules = ["H001", "H002", "H015", "H023", "T005"]
 
 [strata.dkms_kernel]
 description = "Kernel modules. .install runs depmod/dkms as root."

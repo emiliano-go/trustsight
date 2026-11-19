@@ -104,6 +104,11 @@ H032. H042 claims only the hidden drop none of those own.
 
 Fire rate: 0 on the v1 corpus.
 
+The target is resolved the same way H032 resolves one: a hidden write under
+a variable that the recipe assigned inside `$srcdir`, `$pkgdir` or a
+`mktemp -d` stays in the build tree and is not a drop. An unresolved
+expansion is unknown, and keeps the rule firing.
+
 ### H076: Build Writes Outside Staging Root {#h076}
 
 - **Severity:** HIGH (weight 25)

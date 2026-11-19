@@ -551,7 +551,7 @@ def _structural_findings_from_request(request: ScanRequest) -> list[dict]:
     # H101 - a verifiable source becomes a moving target.  P008 says where
     # a floating source stands; this says the package *lost* pinning,
     # which is the transition a watch replay exists to catch.
-    lost = pinning_lost(diff_text)
+    lost = pinning_lost(diff_text, package_name)
     if lost:
         name, old_url, new_url, span, renamed = lost[0]
         # A pin that moved in place (same local name) is MEDIUM, the H099
@@ -856,5 +856,4 @@ def _dispatch_families(diff_text, config, add, ctx, urlctx, package_name,
     # predates this diff is still a fact about the package being reviewed.
     _ioc_findings(diff_text, package_name, config or {}, add,
                   current_text=current_text)
-
 

@@ -280,6 +280,7 @@ def _pinning_of(url: str) -> str:
 
 def pinning_lost(
     diff_text: str,
+    package_name: str = "",
 ) -> list[tuple[str, str, str, object | None, bool]]:
     """``(local name, old url, new url, span, renamed)`` where an entry went
     pinned to floating (H101).
@@ -290,7 +291,14 @@ def pinning_lost(
     entries on both sides compare, the H099 keying.  *renamed* is True when
     the local name itself changed - a pinned tarball replaced by a floating
     VCS entry under a new name, a stronger loss than a pin moving in place.
+
+    A package whose own name carries a VCS suffix (``-git``, ``-svn``,
+    ``-hg``, ``-bzr``, ``-cvs``, ``-darcs``) is expected to track that
+    source; a ``git+`` entry there is the package's shape, not a lost pin.
+    polo-git moved a vendored build patch into its git source and read as a
+    pin dropped, which no reviewer of a ``-git`` package would call a loss.
     """
+    by_design = _VCS_PACKAGE_SUFFIX_RE.search(package_name or "") is not None
     pre, post = _recipe_states(diff_text)
     old = _source_urls_by_local_name(pre)
     new = _source_urls_by_local_name(post)
@@ -299,6 +307,8 @@ def pinning_lost(
         old_url = old[name][0]
         new_url, new_span = new[name]
         if old_url == new_url:
+            continue
+        if by_design and _VCS_SOURCE_RE.search(new_url):
             continue
         if _pinning_of(old_url) == "pinned" and _pinning_of(new_url) == "floating":
             lost.append((name, old_url, new_url, new_span, False))
@@ -312,9 +322,17 @@ def pinning_lost(
                    if n not in new and _pinning_of(old[n][0]) == "pinned"]
     new_floating = [n for n in new
                     if n not in old and _pinning_of(new[n][0]) == "floating"]
+    if by_design:
+        new_floating = [n for n in new_floating
+                        if not _VCS_SOURCE_RE.search(new[n][0])]
     if gone_pinned and new_floating:
         old_name = gone_pinned[0]
         new_name = new_floating[0]
         lost.append((new_name, old[old_name][0],
                      new[new_name][0], new[new_name][1], True))
     return lost
+
+
+#: Package names that are a VCS checkout by convention.
+_VCS_PACKAGE_SUFFIX_RE = re.compile(
+    r"-(?:git|svn|hg|bzr|cvs|darcs)$", re.IGNORECASE)

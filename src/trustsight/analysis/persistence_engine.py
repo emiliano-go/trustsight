@@ -70,6 +70,7 @@ from .persistence import (
     _WW_DIR_RE,
     _is_staged,
     _raw_targets,
+    _target_in_build_tree,
     collapse_path_slashes,
 )
 
@@ -137,7 +138,7 @@ def emit_home_rc(ctx: GraphContext, add: Callable) -> None:
             continue
         for t in _raw_targets(_strip_comment(line[1:])):
             t_clean = t.strip().strip("\"'")
-            if _is_staged(t_clean):
+            if _target_in_build_tree(t_clean, ctx.lines, i):
                 continue
             # `mkdir -p "$HOME"` creates the directory tools put caches in;
             # it is not a file dropped into somebody's profile.

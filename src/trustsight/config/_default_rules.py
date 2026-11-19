@@ -758,6 +758,10 @@ domains = [
     "edgedl.me.gvt1.com",             # Google's Android Studio download CDN
     "ftp.postgresql.org",             # pgAdmin's own apt repository (PostgreSQL)
     "release.files.ghostty.org",      # Ghostty's own release host (libghostty-vt)
+    # Mozilla's ESR download CDN.  Every Firefox-derived package declares
+    # mozilla.org as url= while the artifact comes from this host, so it is
+    # the vendor's distribution surface and not a third-party bucket.
+    "download-installer.cdn.mozilla.net",
     # Overte's own release bucket on DigitalOcean Spaces.  The parent
     # domain is a multi-tenant object store, so only this bucket is the
     # project's distribution surface (overte-appimage).

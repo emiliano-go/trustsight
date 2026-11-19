@@ -762,6 +762,12 @@ or another floating ref. Only same-name entries on both sides of the diff
 compare, the H099 keying, so a partially shown array cannot mis-pair an
 entry.
 
+A package whose own name carries a VCS suffix (`-git`, `-svn`, `-hg`,
+`-bzr`, `-cvs`, `-darcs`) is expected to track that source. A `git+` entry
+there is the package's shape, not a lost pin, so the rule stands down when
+the name and the new source agree on VCS; a moveless package that turns a
+pinned archive into a floating VCS entry still fires.
+
 ### C014: Array Order Manipulation {#c014}
 
 - **Severity:** MEDIUM (weight 15) when an array's entries change order and the array also gains or loses an entry; LOW for an insertion at a different index
@@ -881,6 +887,12 @@ Honest edits rarely gut prose wholesale. A campaign that removes comments
 shrinks what a reviewer reads without touching the payload. The ratio and
 the absolute floor are config-pinned and corpus-adjudicated; a one-line
 comment deletion is never a finding. The locked benign corpus adjudicates it; the measured rate is recorded in the changelog.
+
+A wholesale rewrite is not the shape. When the diff removed at least as
+many non-comment code lines as comment lines from the same files, the file
+simply shrank and the prose left with the code it described; the rule
+stands down. It still fires when the prose disappears while the payload
+stays (or grows), which is the reviewer-loses-context signal it exists for.
 
 ### C035: Owned Namespace Occupied {#c035}
 

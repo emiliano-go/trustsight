@@ -258,6 +258,23 @@ def comment_deletion_findings(diff_doc, add, config=None) -> None:
     ratio = len(deleted) / len(before)
     if ratio < min_ratio:
         return
+    # A wholesale rewrite deletes the code the prose described, so the prose
+    # leaves with it.  This rule exists for the other shape: the prose goes
+    # while the payload stays (or grows), and the reviewer loses the context
+    # for code that is still there.  When the diff removed at least as much
+    # non-comment code as comment lines from the same files, the file simply
+    # shrank and the ratio is not evidence of a gutting.  synthos-git
+    # rewrote its PKGBUILD (91 deletions, 51 insertions) and was reported as
+    # 21 of 21 comments removed, which reads as a campaign.
+    removed_code = sum(
+        1 for line in diff_lines
+        if getattr(line, "side", "") == "remove"
+        and getattr(line, "file", "") in deleted_files
+        and getattr(line, "content", "").strip()
+        and not _is_comment(getattr(line, "content", ""))
+    )
+    if removed_code >= len(deleted):
+        return
     add(
         "C033", "Context Bleed", "MEDIUM", "integrity",
         f"{len(deleted)} of {len(before)} pre-existing comment line(s) "

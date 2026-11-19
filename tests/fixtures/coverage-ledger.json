@@ -25,7 +25,7 @@
     "A011": {
       "changelog": "upstream-scan-lane",
       "decided_in": "",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.30.0",
       "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
       "rule_id": "A011",
       "signal": "shipped hook/udev/install content in the L9 manifest; needs a corpus rate before it can score",
@@ -36,7 +36,7 @@
     "A012": {
       "changelog": "upstream-scan-lane",
       "decided_in": "",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.30.0",
       "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
       "rule_id": "A012",
       "signal": "shipped hook/udev/install content in the L9 manifest; needs a corpus rate before it can score",
@@ -47,7 +47,7 @@
     "A013": {
       "changelog": "upstream-scan-lane",
       "decided_in": "",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.30.0",
       "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
       "rule_id": "A013",
       "signal": "shipped hook/udev/install content in the L9 manifest; needs a corpus rate before it can score",
@@ -58,7 +58,7 @@
     "A014": {
       "changelog": "upstream-scan-lane",
       "decided_in": "",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.30.0",
       "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
       "rule_id": "A014",
       "signal": "ELF metadata from an artifact/source archive; needs a corpus rate before it can score",
@@ -69,7 +69,7 @@
     "A015": {
       "changelog": "upstream-scan-lane",
       "decided_in": "",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.30.0",
       "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
       "rule_id": "A015",
       "signal": "ELF metadata from an artifact/source archive; needs a corpus rate before it can score",
@@ -102,7 +102,7 @@
     "C035": {
       "changelog": "owned-namespace-occupancy",
       "decided_in": "",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.30.0",
       "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
       "rule_id": "C035",
       "signal": "operator-owned namespace source mismatch; needs a corpus rate before it can score",
@@ -2008,50 +2008,28 @@
       ],
       "benign_state": "fire",
       "benign_strata": [
-        "bin_repack",
         "data_fonts",
         "dependency_heavy",
-        "dkms_kernel",
-        "lang_deep",
         "large_electron",
-        "maintainer_churn",
-        "multi_client_fetch",
-        "persist_surface",
-        "signed_sources",
-        "source_patched",
-        "vcs_git",
-        "vcs_other"
+        "maintainer_churn"
       ],
       "disposition": null,
       "expected_met": true,
-      "expected_strata": [
-        "source_patched"
-      ],
-      "expected_strata_met": [
-        "source_patched"
-      ],
-      "fires": 49,
+      "expected_strata": [],
+      "expected_strata_met": [],
+      "fires": 7,
       "id": "C033",
       "pseudo": false,
       "reason": "",
       "series": "C",
       "sources": {
         "cold": {
-          "fires": 48,
+          "fires": 6,
           "strata": [
-            "bin_repack",
             "data_fonts",
             "dependency_heavy",
-            "dkms_kernel",
-            "lang_deep",
             "large_electron",
-            "maintainer_churn",
-            "multi_client_fetch",
-            "persist_surface",
-            "signed_sources",
-            "source_patched",
-            "vcs_git",
-            "vcs_other"
+            "maintainer_churn"
           ]
         },
         "malicious": {
@@ -2061,19 +2039,10 @@
       },
       "state": "measured",
       "strata": [
-        "bin_repack",
         "data_fonts",
         "dependency_heavy",
-        "dkms_kernel",
-        "lang_deep",
         "large_electron",
-        "maintainer_churn",
-        "multi_client_fetch",
-        "persist_surface",
-        "signed_sources",
-        "source_patched",
-        "vcs_git",
-        "vcs_other"
+        "maintainer_churn"
       ],
       "uid": "TS-0285"
     },
@@ -3960,14 +3929,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 1105,
+      "fires": 1054,
       "id": "H027",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 1078,
+          "fires": 1027,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -6613,21 +6582,20 @@
         "dependency_heavy",
         "multi_client_fetch",
         "signed_sources",
-        "source_patched",
-        "vcs_git"
+        "source_patched"
       ],
       "disposition": null,
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 15,
+      "fires": 14,
       "id": "H101",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 13,
+          "fires": 12,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -6635,8 +6603,7 @@
             "dependency_heavy",
             "multi_client_fetch",
             "signed_sources",
-            "source_patched",
-            "vcs_git"
+            "source_patched"
           ]
         },
         "malicious": {
@@ -6652,8 +6619,7 @@
         "dependency_heavy",
         "multi_client_fetch",
         "signed_sources",
-        "source_patched",
-        "vcs_git"
+        "source_patched"
       ],
       "uid": "TS-0157"
     },
@@ -6881,14 +6847,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 556,
+      "fires": 492,
       "id": "M002",
       "pseudo": false,
       "reason": "",
       "series": "M",
       "sources": {
         "cold": {
-          "fires": 553,
+          "fires": 489,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -6961,14 +6927,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 300,
+      "fires": 297,
       "id": "M003",
       "pseudo": false,
       "reason": "",
       "series": "M",
       "sources": {
         "cold": {
-          "fires": 268,
+          "fires": 265,
           "strata": [
             "appimage_repack",
             "autotools",

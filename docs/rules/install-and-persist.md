@@ -190,6 +190,13 @@ runs scriptlets as root during the transaction. Nothing a package installs
 belongs in somebody's home directory, and root reaching into one is
 categorical rather than suspicious.
 
+A path that *begins with a variable* is resolved before the claim: recipes
+name their staging directory once (`test_home="${srcdir}/test-home"`) and
+then write `${test_home}/.config`. When the visible assignment resolves
+inside `$srcdir`, `$pkgdir` or a `mktemp -d`, the write is staged and the
+rule stays silent. A variable with no visible assignment is unresolved, not
+staged, and keeps the rule firing.
+
 ### H039: Systemd ExecStart From Runtime-Writable Path {#h039}
 
 - **Severity:** HIGH (weight 25)

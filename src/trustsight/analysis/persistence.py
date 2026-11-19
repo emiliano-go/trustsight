@@ -181,6 +181,69 @@ def _relative_target(target: str, lines: list[str], index: int) -> bool:
     return False
 
 
+_STAGED_ASSIGN_WINDOW = 50
+_SHELL_TMP_RE = re.compile(r"\bmktemp\b")
+
+
+def _leading_variable(target: str) -> str | None:
+    match = re.match(
+        r"\$(\{)?([A-Za-z_][A-Za-z0-9_]*)", target.strip().strip("\"'"))
+    return match.group(2) if match is not None else None
+
+
+def _variable_is_staged(target: str, lines: list[str], index: int) -> bool:
+    """True when *target*'s leading variable resolves inside the build tree.
+
+    A recipe that stages work in ``$srcdir`` usually names the directory
+    once - ``test_home="${srcdir}/test-home"`` - and then writes
+    ``${test_home}/.config``.  The literal target starts with a variable, so
+    the staged-prefix test cannot see it and the home-write and hidden-drop
+    rules both read the path as the reviewer's own.  Resolve the visible
+    assignment (following one hop of indirection) and answer from the value.
+
+    An assignment that resolves to nothing recognisable keeps the rule
+    firing: an unresolved expansion is unknown, not staged.
+    """
+    horizon = max(-1, index - _STAGED_ASSIGN_WINDOW)
+    value = target
+    for _hop in range(3):
+        name = _leading_variable(value)
+        if name is None:
+            return False
+        if name.upper() in {"HOME", "PKGDIR", "SRCDIR", "STARTDIR", "BUILDDIR"}:
+            # The staging roots are handled by `_is_staged`; a bare `$HOME`
+            # is the home-write claim itself, never an exemption.
+            return False
+        assigned: str | None = None
+        for previous in range(index - 1, horizon, -1):
+            text = lines[previous]
+            if text[:1] == "-":
+                # A removed line is the pre-image recipe.  Resolving from it
+                # would let a deleted assignment exempt a live write.
+                continue
+            text = text[1:] if text[:1] == "+" else text
+            found = _X042_ASSIGN_RE.match(text)
+            if found is not None and found.group(1) == name:
+                assigned = found.group(2).strip().strip("\"'")
+                break
+        if assigned is None:
+            return False
+        if _is_staged(assigned) or _SHELL_TMP_RE.search(assigned):
+            return True
+        if not assigned.startswith("$"):
+            return False
+        value = assigned
+    return False
+
+
+def _target_in_build_tree(target: str, lines: list[str], index: int) -> bool:
+    """True when a write target is provably inside the build or package tree."""
+    value = target.strip().strip("\"'")
+    return (_is_staged(value)
+            or _variable_is_staged(value, lines, index)
+            or _relative_target(value, lines, index))
+
+
 # ---------------------------------------------------------------------------
 # Path classification
 # ---------------------------------------------------------------------------
@@ -286,8 +349,8 @@ def edge_hidden_drop(ctx, add) -> None:
         body = _strip_comment(line[1:])
         for t in _raw_targets(body):
             t_clean = t.strip().strip("\"'")
-            if (_is_staged(t_clean) or _HIDDEN_EXEMPT_RE.search(t_clean)
-                    or _relative_target(t_clean, lines, i)):
+            if (_target_in_build_tree(t_clean, lines, i)
+                    or _HIDDEN_EXEMPT_RE.search(t_clean)):
                 continue
             if _WW_DIR_RE.search(t_clean) or _HOME_PREFIX_RE.search(t_clean):
                 continue

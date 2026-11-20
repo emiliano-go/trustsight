@@ -70,6 +70,7 @@ The rules that make up this category are listed below, each with the series that
 | [H090](#h090) | Committed Companion Carries A Fetch-Execute Payload | CRITICAL |
 | [H094](#h094) | Unread Script Executed During Packaging | HIGH |
 | [H107](#h107) | Credential Store Access With Egress | HIGH |
+| [H109](#h109) | Build Helper Executed From A Secondary Source | HIGH |
 | [R001](#r001) | Remote Script Execution | CRITICAL |
 | [R002](#r002) | Wget Pipe to Shell | CRITICAL |
 | [R008](#r008) | Unexpected File Download | HIGH |
@@ -649,6 +650,18 @@ stores, `/etc/shadow`, GPG material and `/proc/*/environ`.
 
 The rule requires both halves. A package that reads its own configuration
 without any egress must stay quiet.
+
+### H109: Build Helper Executed From A Secondary Source {#h109}
+
+- **Target:** programmatic (declared secondary source + execution sink)
+- **Severity:** HIGH (weight 0, report-only)
+- **Category:** `execution`
+
+- **Condition:** An interpreted script is run in `prepare()`, `build()`, `package()` or `check()`, the script lives inside a declared `source=()` entry, the source comes from a different org than the declared upstream, and the source is a VCS clone or has no checksum.
+
+The 2025 CHAOS RAT packages used this shape: an otherwise ordinary recipe added a patch repository under the uploader's account and ran a helper from that checkout. H105 catches the same act after an ownership change; this rule catches a new or unchanged package where the secondary source is the only unusual input.
+
+A patch repository under the upstream's own org is still primary. Executing a helper from the primary source, applying a patch as data, and running a script from a checksum-pinned archive are ordinary packaging.
 
 ## Interpretation
 

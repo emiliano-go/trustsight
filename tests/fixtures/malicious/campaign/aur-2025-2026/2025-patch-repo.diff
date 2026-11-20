@@ -1,0 +1,17 @@
+diff --git a/PKGBUILD b/PKGBUILD
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,5 +1,9 @@
+ pkgname=firefox-patch-bin
+ pkgver=1.0
+ arch=('x86_64')
+-source=("https://example.invalid/firefox.tar.gz")
+-sha256sums=('SKIP')
++url=https://github.com/upstream/firefox
++source=("https://example.invalid/firefox.tar.gz"
++        "patch::git+https://github.com/danikpapas/zenbrowser-patch.git")
++sha256sums=('SKIP' 'SKIP')
++build() {
++  cd "$srcdir"
++  bash patch/install.sh
++}

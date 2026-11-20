@@ -135,6 +135,22 @@
       "weight": 0,
       "decided_in": "0.29.0"
     },
+    "A016": {
+      "changelog": "upstream-scan-lane",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
+      "signal": "release-asset divergence; needs a corpus rate and a stable generated-file model",
+      "since": "Unreleased",
+      "status": "anergic"
+    },
+    "H109": {
+      "changelog": "secondary-source-execution",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
+      "signal": "secondary-source execution; needs a benign corpus rate before it can score",
+      "since": "Unreleased",
+      "status": "anergic"
+    },
     "T004": {
       "changelog": "missing-self-axis",
       "promoted_in": "0.27.0",

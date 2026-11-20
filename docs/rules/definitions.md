@@ -24,6 +24,7 @@ exactly one category page; this catalog only points at it.
 | [A013](artifact.md#a013) | Udev Rule Runs A Program | Artifact | MEDIUM | [Artifact](artifact.md) |
 | [A014](artifact.md#a014) | Unsafe ELF Runpath | Artifact | HIGH | [Artifact](artifact.md) |
 | [A015](artifact.md#a015) | Packed Or Encrypted ELF Section | Artifact | MEDIUM | [Artifact](artifact.md) |
+| [A016](artifact.md#a016) | Release Asset Diverges From Its Tag | Artifact | HIGH | [Artifact](artifact.md) |
 | [C001](integrity.md#c001) | Checksum Changed Without Source Change With Stable Version | Integrity-change | HIGH | [Integrity and Verification](integrity.md) |
 | [C002](integrity.md#c002) | Checksum Updated With Version Bump | Integrity-change | INFO | [Integrity and Verification](integrity.md) |
 | [C003](integrity.md#c003) | Source URL Changed Without Version Bump | Integrity-change | INFO | [Integrity and Verification](integrity.md) |
@@ -190,6 +191,7 @@ exactly one category page; this catalog only points at it.
 | [H106](naming-and-dependency.md#h106) | Registry Or Index Override | Heuristic | MEDIUM | [Naming and Dependencies](naming-and-dependency.md) |
 | [H107](fetch-and-execution.md#h107) | Credential Store Access With Egress | Heuristic | HIGH | [Fetch and Execution](fetch-and-execution.md) |
 | [H108](install-and-persist.md#h108) | Service Or Cron Enable Command | Heuristic | HIGH | [Install and Persistence](install-and-persist.md) |
+| [H109](fetch-and-execution.md#h109) | Build Helper Executed From A Secondary Source | Heuristic | HIGH | [Fetch and Execution](fetch-and-execution.md) |
 | [M001](meta.md#m001) | Claim Contradicted By Structure | Meta | HIGH | [Meta and Confluence](meta.md) |
 | [M002](meta.md#m002) | Weak Signal Across Layers | Meta | MEDIUM | [Meta and Confluence](meta.md) |
 | [M003](meta.md#m003) | Composition Not Owned Elsewhere | Meta | MEDIUM | [Meta and Confluence](meta.md) |

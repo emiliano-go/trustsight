@@ -2,6 +2,22 @@
 
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **H109 covers build helpers executed from a secondary source.** The rule
+  reports a script run from a declared source that is a different org from
+  the package's upstream and is a VCS clone or has no checksum. It ships
+  anergic at weight 0; the 2025 CHAOS RAT shape is its positive control.
+- **A016 compares a release asset with its tag tree.** The upstream lane can
+  now use the archive inventory to report a build input present only in the
+  asset, or a content mismatch. It ships anergic at weight 0 and ignores
+  generated autotools files.
+- **Archive parsing returns a bounded inventory.** `parse_upstream_archive`
+  records `(name, size, sha256)` for up to 4,096 members without retaining
+  or materialising content; going over the cap refuses the archive.
+
 ## [0.30.0] - 2026-11-18
 
 ### Added

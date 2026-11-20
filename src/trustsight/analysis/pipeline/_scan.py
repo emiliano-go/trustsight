@@ -211,6 +211,20 @@ def scan_diff(
             "match": "validpgpkeys was populated and is now empty or removed",
         }))
 
+    from ..secondary import secondary_source_execution_finding
+
+    h109_recipe = current_text
+    if not h109_recipe:
+        h109_recipe = "\n".join(
+            parse_diff_lines(split_lines(diff_text)).post_lines())
+    h109 = secondary_source_execution_finding(
+        package_name=package_name,
+        findings=triggered_rules,
+        diff_text=diff_text,
+        recipe_text=h109_recipe,
+    )
+    if h109:
+        triggered_rules.append(h109)
     triggered_rules.extend(_meta_annotations(triggered_rules, config))
 
     rule_ids = [r["rule_id"] for r in triggered_rules]

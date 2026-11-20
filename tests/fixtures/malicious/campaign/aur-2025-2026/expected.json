@@ -1,0 +1,64 @@
+{
+  "2018-acroread.diff": {
+    "min_score": 65,
+    "must_fire": [
+      "H001",
+      "H083"
+    ]
+  },
+  "2025-patch-repo.diff": {
+    "min_score": 20,
+    "must_fire": [
+      "H109",
+      "SOURCE_BUCKET"
+    ]
+  },
+  "2026-06-npm.diff": {
+    "min_score": 100,
+    "must_fire": [
+      "H017",
+      "H100",
+      "R010"
+    ]
+  },
+  "2026-06-bun.diff": {
+    "min_score": 95,
+    "must_fire": [
+      "H035",
+      "H100",
+      "X002"
+    ]
+  },
+  "2026-07-optimizer-sudo.diff": {
+    "min_score": 100,
+    "must_fire": [
+      "H035",
+      "H068",
+      "H100"
+    ]
+  },
+  "2026-07-optimizer-plain.diff": {
+    "min_score": 55,
+    "must_fire": [
+      "H016",
+      "H069",
+      "R010"
+    ]
+  },
+  "2026-09-dirtyblanket.diff": {
+    "min_score": 100,
+    "must_fire": [
+      "H075",
+      "H077",
+      "X034"
+    ]
+  },
+  "2026-10-yyay.diff": {
+    "min_score": 100,
+    "must_fire": [
+      "H075",
+      "H077",
+      "X034"
+    ]
+  }
+}

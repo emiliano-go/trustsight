@@ -326,7 +326,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 ## A-series: **Artifact** Built-Package Inspection {#a-series}
 
-**Count:** 15 rules (A001-A015)
+**Count:** 15 rules (A001-A016)
 
 **Mechanism:** Inspects the built `pkg.tar.zst` manifest - file list, modes, types and the `.INSTALL` payload - not the diff. A is the optional **L9 build lane**: mechanically distinct from every text-analysis series, off by default, run only inside the project's rootless, networkless container, and never blended into the static score. Nothing in the built package's code is executed; the container runs `makepkg`, nothing else.
 

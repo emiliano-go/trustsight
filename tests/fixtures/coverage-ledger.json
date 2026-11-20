@@ -710,7 +710,12 @@
       "benign_sources": [],
       "benign_state": "zero_fire",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "The upstream lane is opt-in and the locked corpus has no benign release-asset comparison yet; measure it before scoring.",
+        "phase": "5",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],

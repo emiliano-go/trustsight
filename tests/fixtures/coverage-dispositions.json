@@ -59,6 +59,12 @@
     "plan": "add_artifact_or_manifest",
     "status": "deferred"
   },
+  "A016": {
+    "note": "The upstream lane is opt-in and the locked corpus has no benign release-asset comparison yet; measure it before scoring.",
+    "phase": "5",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
   "C006": {
     "expected_strata": [
       "maintainer_churn"

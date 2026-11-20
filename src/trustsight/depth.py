@@ -437,6 +437,17 @@ def _analyse_one(
     )
 
 
+def _is_official_package(name: str) -> bool:
+    """Official-repository membership, with the same fallback as the rules.
+
+    Imported lazily so ``depth`` stays importable in the corpus/replay paths
+    that have no database.
+    """
+    from .db import is_established_package
+
+    return is_established_package(name)
+
+
 class SnapshotMetadata:
     """Answers from the corpus metadata snapshot, with no network at all.
 
@@ -445,8 +456,10 @@ class SnapshotMetadata:
     nothing beyond the analyses themselves.
     """
 
-    def __init__(self, packages: dict):
+    def __init__(self, packages: dict, *, is_official=None):
         self._packages = packages
+        self._is_official = is_official or _is_official_package
+        self._official_cache: dict[str, bool] = {}
         from .deps import normalize_dependency
 
         candidates: dict[str, set[str]] = {}
@@ -460,6 +473,17 @@ class SnapshotMetadata:
             if len(names) == 1
         }
 
+    def _is_official_name(self, name: str) -> bool:
+        """Whether *name* belongs to an official repository.
+
+        Kept lazy: a snapshot is built in contexts that have no package
+        database, and the fallback observation count is the best answer
+        those contexts have.
+        """
+        if name not in self._official_cache:
+            self._official_cache[name] = bool(self._is_official(name))
+        return self._official_cache[name]
+
     @property
     def packages(self) -> dict:
         return self._packages
@@ -470,8 +494,19 @@ class SnapshotMetadata:
         return True
 
     def aur_name(self, name: str) -> str:
-        """Resolve a unique virtual Provides name, or leave it unchanged."""
-        return name if name in self._packages else self._aliases.get(name, name)
+        """Resolve a unique virtual Provides name, or leave it unchanged.
+
+        An official package name is not a virtual provide.  AUR has a
+        ``libx11-git`` that provides ``libx11``; resolving ``libx11`` to it
+        makes every official dependency look like an AUR package, and the
+        resulting analysis failures leave a ``deps_not_scanned`` gap on
+        ordinary packages.
+        """
+        if name in self._packages:
+            return name
+        if self._is_official_name(name):
+            return name
+        return self._aliases.get(name, name)
 
     def is_aur(self, name: str) -> bool:
         return name in self._packages

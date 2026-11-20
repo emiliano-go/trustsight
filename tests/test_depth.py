@@ -57,7 +57,7 @@ def test_snapshot_walk_resolves_unique_provides_aliases():
     metadata = SnapshotMetadata({
         "app": {"Depends": ["virtual"]},
         "provider": {"Provides": ["virtual=1.0"]},
-    })
+    }, is_official=lambda _name: False)
     result = walk_dependencies(
         "app", depth=1, metadata=metadata, analyse=lambda name: FakeFact())
     assert [report.name for report in result.reports] == ["provider"]
@@ -66,9 +66,20 @@ def test_snapshot_walk_resolves_unique_provides_aliases():
         "app": {"Depends": ["virtual"]},
         "provider": {"Provides": ["virtual"]},
         "other": {"Provides": ["virtual"]},
-    })
+    }, is_official=lambda _name: False)
     result = walk_dependencies(
         "app", depth=1, metadata=ambiguous, analyse=lambda name: FakeFact())
+    assert result.reports == []
+
+
+def test_an_official_name_is_not_resolved_to_an_aur_provider():
+    metadata = SnapshotMetadata({
+        "app": {"Depends": ["libx11"]},
+        "libx11-git": {"Provides": ["libx11=1.8"]},
+    }, is_official=lambda name: name == "libx11")
+    assert metadata.aur_name("libx11") == "libx11"
+    result = walk_dependencies(
+        "app", depth=1, metadata=metadata, analyse=lambda name: FakeFact())
     assert result.reports == []
 
 

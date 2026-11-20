@@ -84,7 +84,6 @@ def test_zip_selects_manifests():
 
 
 def test_duplicate_members_are_ambiguous_not_silently_overridden():
-    # nursoda reported this warning by mail.
     tar_out = parse_upstream_archive(_tar([
         ("pkg/Cargo.toml", b"[package]\nname='one'\n", "file"),
         ("pkg/Cargo.toml", b"[package]\nname='two'\n", "file"),

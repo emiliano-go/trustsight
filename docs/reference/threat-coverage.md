@@ -24,6 +24,7 @@ claim of complete coverage.
 | A013 | Udev Rule Runs A Program | artifact |  | artifact |  | MEDIUM | 0 (anergic) | CWE-506 | calibration |
 | A014 | Unsafe ELF Runpath | artifact |  | artifact |  | HIGH | 0 (anergic) | CWE-506 | calibration |
 | A015 | Packed Or Encrypted ELF Section | artifact |  | artifact |  | MEDIUM | 0 (anergic) | CWE-506 | calibration |
+| A016 | Release Asset Diverges From Its Tag | artifact |  | artifact |  | HIGH | 0 (anergic) | CWE-506 | calibration |
 | C001 | Checksum Changed Without Source Change With Stable Version |  |  | integrity | L1 | HIGH | 25 | CWE-354 |  |
 | C002 | Checksum Updated With Version Bump |  |  | integrity | L1 | INFO | 0 | CWE-354 |  |
 | C003 | Source URL Changed Without Version Bump |  |  | integrity | L1 | INFO | 0 | CWE-354 |  |
@@ -190,6 +191,7 @@ claim of complete coverage.
 | H106 | Registry Or Index Override | dependency | registry | naming-and-dependency | L5 | MEDIUM | 15 | CWE-427 |  |
 | H107 | Credential Store Access With Egress | exfil | exfil | fetch-and-execution | L5 | HIGH | 25 | CWE-94 |  |
 | H108 | Service Or Cron Enable Command | persistence | persistence | install-and-persist | L5 | HIGH | 25 | CWE-506 |  |
+| H109 | Build Helper Executed From A Secondary Source | execution |  | fetch-and-execution | L5 | HIGH | 0 (anergic) | CWE-94 | calibration |
 | M001 | Claim Contradicted By Structure | meta |  | meta |  | HIGH | 25 | CWE-693 |  |
 | M002 | Weak Signal Across Layers | meta |  | meta |  | MEDIUM | 15 | CWE-693 |  |
 | M003 | Composition Not Owned Elsewhere | meta |  | meta |  | MEDIUM | 15 | CWE-693 |  |

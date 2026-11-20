@@ -77,6 +77,17 @@
       "status": "anergic",
       "weight": null
     },
+    "A016": {
+      "changelog": "upstream-scan-lane",
+      "decided_in": "",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
+      "rule_id": "A016",
+      "signal": "release-asset divergence; needs a corpus rate and a stable generated-file model",
+      "since": "Unreleased",
+      "status": "anergic",
+      "weight": null
+    },
     "C001": {
       "changelog": "c001-upstream-hash-corroboration",
       "decided_in": "",
@@ -175,6 +186,17 @@
       "since": "0.28.0",
       "status": "promoted",
       "weight": 0
+    },
+    "H109": {
+      "changelog": "secondary-source-execution",
+      "decided_in": "",
+      "promoted_in": "Unreleased",
+      "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
+      "rule_id": "H109",
+      "signal": "secondary-source execution; needs a benign corpus rate before it can score",
+      "since": "Unreleased",
+      "status": "anergic",
+      "weight": null
     },
     "T004": {
       "changelog": "missing-self-axis",
@@ -287,13 +309,13 @@
       "weight": 0
     }
   },
-  "catalog_size": 320,
+  "catalog_size": 322,
   "corpus_content_sha256": "a4cbea4ef14029c97d7746e2be080a2e5c931502429ee261d974810b35f5cafc",
   "counts": {
     "adversarial_only": 18,
     "cold_only": 42,
-    "measured": 174,
-    "zero_fire": 86
+    "measured": 175,
+    "zero_fire": 87
   },
   "rules": {
     "A001": {
@@ -683,6 +705,29 @@
       "state": "zero_fire",
       "strata": [],
       "uid": "TS-0303"
+    },
+    "A016": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": {
+        "note": "The upstream lane is opt-in and the locked corpus has no benign release-asset comparison yet; measure it before scoring.",
+        "phase": "5",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
+      "expected_met": false,
+      "expected_strata": [],
+      "expected_strata_met": [],
+      "fires": 0,
+      "id": "A016",
+      "pseudo": false,
+      "reason": "no benign shape in the locked corpus yet; add a shape stratum, never a rule-targeted sample",
+      "series": "A",
+      "sources": {},
+      "state": "zero_fire",
+      "strata": [],
+      "uid": "TS-0310"
     },
     "C001": {
       "benign_sources": [
@@ -6791,6 +6836,41 @@
         "bin_repack"
       ],
       "uid": "TS-0284"
+    },
+    "H109": {
+      "benign_sources": [
+        "cold"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "signed_sources"
+      ],
+      "disposition": null,
+      "expected_met": true,
+      "expected_strata": [],
+      "expected_strata_met": [],
+      "fires": 2,
+      "id": "H109",
+      "pseudo": false,
+      "reason": "",
+      "series": "H",
+      "sources": {
+        "cold": {
+          "fires": 1,
+          "strata": [
+            "signed_sources"
+          ]
+        },
+        "malicious": {
+          "fires": 1,
+          "strata": []
+        }
+      },
+      "state": "measured",
+      "strata": [
+        "signed_sources"
+      ],
+      "uid": "TS-0309"
     },
     "M001": {
       "benign_sources": [],

@@ -28,6 +28,15 @@ A sophisticated attack against an established package would:
 
 TrustSight would score this package 0 (UNFLAGGED) because nothing in the PKGBUILD changed except the version and checksum. The attack is invisible to PKGBUILD-level auditing. The defense against this class of attack is upstream signing and reproducible builds, not diff analysis.
 
+#### Self-hosted dist tarballs are outside the fetch boundary
+
+The upstream release-asset comparison only fetches declared sources on the
+forge and large-vendor hosts in the source bucket. A project that publishes
+its dist tarball from its own domain is therefore not compared with its tag
+tree. This is the xz 5.6.x boundary: a maintainer who crafts the release
+tarball on a project-controlled host is not visible to this comparison. The
+run reports the source as unread rather than clean.
+
 #### What can be tracked instead
 
 The payload is out of reach, but the *carrier* has an identity, and that

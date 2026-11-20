@@ -83,6 +83,10 @@ See [A014: Unsafe ELF Runpath](../../rules/artifact.md#a014).
 
 See [A015: Packed Or Encrypted ELF Section](../../rules/artifact.md#a015).
 
+### A016 {#a016}
+
+See [A016: Release Asset Diverges From Its Tag](../../rules/artifact.md#a016).
+
 ### C001 {#c001}
 
 See [C001: Checksum Changed Without Source Change With Stable Version](../../rules/integrity.md#c001).
@@ -746,6 +750,10 @@ See [H107: Credential Store Access With Egress](../../rules/fetch-and-execution.
 ### H108 {#h108}
 
 See [H108: Service Or Cron Enable Command](../../rules/install-and-persist.md#h108).
+
+### H109 {#h109}
+
+See [H109: Build Helper Executed From A Secondary Source](../../rules/fetch-and-execution.md#h109).
 
 ### M001 {#m001}
 

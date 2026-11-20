@@ -204,3 +204,28 @@ def test_multiple_small_elves_are_all_parsed():
     assert all(a["elf_info"] is not None for a in infos)
     assert all(not a["elf_info"]["truncated"] for a in infos)
     assert out["refused"] is False
+
+
+def test_archive_inventory_is_bounded_and_hashed():
+    import hashlib
+
+    data = _tar([
+        ("pkg/Cargo.toml", b"[package]\nname='x'\n", "file"),
+        ("pkg/README.md", b"# docs\n", "file"),
+    ])
+    out = parse_upstream_archive(data)
+    assert [(name, size) for name, size, _digest in out["inventory"]] == [
+        ("pkg/Cargo.toml", len(b"[package]\nname='x'\n")),
+        ("pkg/README.md", len(b"# docs\n")),
+    ]
+    assert out["inventory"][0][2] == hashlib.sha256(
+        b"[package]\nname='x'\n").hexdigest()
+
+
+def test_inventory_caps_large_archives():
+    entries = [(f"pkg/f{i}.txt", b"x", "file") for i in range(4097)]
+    out = parse_upstream_archive(_tar(entries))
+    assert out["inventory_truncated"] is True
+    assert out["refused"] is True
+    assert out["complete"] is False
+    assert len(out["inventory"]) == 4096

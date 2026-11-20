@@ -134,6 +134,15 @@
     "target": "ELF in the artifact/upstream lane",
     "uid": "TS-0303"
   },
+  "a016": {
+    "canonical": true,
+    "capability": "artifact",
+    "name": "Release Asset Diverges From Its Tag",
+    "severity": "HIGH",
+    "severity_text": "HIGH (weight 0, report-only)",
+    "target": "declared release asset vs tag tree (opt-in upstream lane)",
+    "uid": "TS-0310"
+  },
   "c001": {
     "canonical": true,
     "capability": null,
@@ -1636,6 +1645,15 @@
     "severity_text": "HIGH (weight 25)",
     "target": "programmatic (resolved build/install lines, position-scoped)",
     "uid": "TS-0284"
+  },
+  "h109": {
+    "canonical": true,
+    "capability": "execution",
+    "name": "Build Helper Executed From A Secondary Source",
+    "severity": "HIGH",
+    "severity_text": "HIGH (weight 0, report-only)",
+    "target": "programmatic (declared secondary source + execution sink)",
+    "uid": "TS-0309"
   },
   "m001": {
     "canonical": true,

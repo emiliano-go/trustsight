@@ -43,8 +43,9 @@ ANCHOR_RULE_IDS: frozenset[str] = frozenset({
 #: gate and ``tests/test_h_reduction.py``).  The set only ever shrinks: a
 #: retired id moves to :data:`RETIRED_RULE_IDS` and stays out of the freeze
 #: so its former id is never reused for a new rule.  H104 was admitted
-#: deliberately, after the freeze, for the placeholder signal.
-FROZEN_H_IDS = frozenset(f"H{n:03d}" for n in range(1, 109))
+#: deliberately, after the freeze, for the placeholder signal; H109 is the
+#: campaign-gap admission for secondary-source execution.
+FROZEN_H_IDS = frozenset(f"H{n:03d}" for n in range(1, 110))
 
 #: Retired H ids, mapped to the survivor that now carries their detection
 #: **Empty on purpose**: the overlap audit has been

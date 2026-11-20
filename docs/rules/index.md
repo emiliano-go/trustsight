@@ -31,7 +31,7 @@ context and its rule definitions.
 <!-- generated: legend -->
 | Category | Slug | Rules | What a rule here claims |
 |----------|------|-------|-------------------------|
-| [Fetch and Execution](fetch-and-execution.md) | `fetch-and-execution` | 40 | Code reaches the machine and runs: a fetch, an execution, or the path between the two. |
+| [Fetch and Execution](fetch-and-execution.md) | `fetch-and-execution` | 41 | Code reaches the machine and runs: a fetch, an execution, or the path between the two. |
 | [Obfuscation](obfuscation.md) | `obfuscation` | 8 | The recipe hides what it does from a reader by encoding, indirection, or runtime assembly. |
 | [Deception and Anti-Analysis](deception.md) | `deception` | 6 | The recipe targets whoever reviews it rather than the shell that runs it, or checks whether it is being watched. |
 | [Install and Persistence](install-and-persist.md) | `install-and-persist` | 23 | Something survives the build: a root-time hook, a unit, a privileged bit, a file in the user's profile. |
@@ -49,7 +49,7 @@ context and its rule definitions.
 | [Meta and Confluence](meta.md) | `meta` | 6 | A claim about other findings: a declared practice contradicted by structure, or a composition only visible from the whole profile. |
 | [Entropy](entropy.md) | `entropy` | 3 | The added content is statistically abnormal - a distribution outlier, not a known pattern. Suspicion, never a verdict. |
 | [Correlation](correlation.md) | `correlation` | 15 | The pattern is across packages, not inside one: a host, literal or adopter shared by several packages in a window. |
-| [Artifact](artifact.md) | `artifact` | 15 | The built package does not match the recipe: the L9 artifact layer, off by default, never blended into the static score. |
+| [Artifact](artifact.md) | `artifact` | 16 | The built package does not match the recipe: the L9 artifact layer, off by default, never blended into the static score. |
 | [Indicators](indicator.md) | `indicator` | 1 | A declared surface matches an entry in signed external data: the IOC list, or a federated publisher's indicator set.  Outside the heuristic score and alerted at maximum priority. |
 | [Upstream Manifests](upstream-manifests.md) | `upstream-manifests` | 9 | A committed dependency manifest changed: a dependency moved, a new remote source entered the recipe's reach, or the resolver is being redirected.  Read from the repository, never fetched. |
 | [Upstream Release Integrity](upstream-release.md) | `upstream-release` | 6 | What a recipe declares about upstream - its URL, its sources, their access mode - and the CI surface it commits.  Upstream content is never read (A2/A8); the CI exfil and history-sweep shapes arrive over the signed federation channel instead. |
@@ -70,7 +70,7 @@ generated from it.
 |--------|-----------|-------|
 | `C` | Integrity-change | 35 |
 | `R` | Regex | 37 |
-| `H` | Heuristic | 108 |
+| `H` | Heuristic | 109 |
 | `D` | Dependency | 5 |
 | `S` | Sabotage | 8 |
 | `X` | Crossfire | 34 |
@@ -80,10 +80,10 @@ generated from it.
 | `E` | Entropy | 3 |
 | `T` | Temporal | 12 |
 | `G` | Correlation | 15 |
-| `A` | Artifact | 15 |
+| `A` | Artifact | 16 |
 | `I` | Indicator | 0 |
 | `U` | Upstream | 15 |
-The catalog lists 308 rule IDs across 15 series; 278 of them contribute to the heuristic score.
+The catalog lists 310 rule IDs across 15 series; 279 of them contribute to the heuristic score.
 <!-- /generated: series-counts -->
 
 `P` and `I` carry no catalog IDs in this build: declared-practice findings
@@ -92,7 +92,7 @@ shipped indicator mechanism is H056, filed under [Indicators](indicator.md).
 
 Two further families are reported but never weighted: declared-practice
 findings P001-P009 (P004 is skipped) and unverifiable findings W001-W015. The
-optional L9 build lane adds artifact rules A001-A015, reported outside the
+optional L9 build lane adds artifact rules A001-A016, reported outside the
 heuristic when enabled.
 
 ## How rules contribute

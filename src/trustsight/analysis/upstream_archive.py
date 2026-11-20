@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import bz2
 import gzip
+import hashlib
 import io
 import lzma
 import tarfile
@@ -40,11 +41,15 @@ __all__ = ["parse_upstream_archive"]
 MAX_ARCHIVE_MEMBERS = 10_000
 MAX_ARCHIVE_UNCOMPRESSED = 64 * 1024 * 1024
 MAX_ARCHIVE_FILE_BYTES = 512 * 1024
+#: Bounded inventory: enough to compare a release asset with its tag tree
+#: without retaining or materialising a single member.
+MAX_ARCHIVE_INVENTORY = 4_096
 #: Hard ceilings: a caller may lower these, never raise them.
 _HARD_MEMBERS = 10_000
 _HARD_FILE_BYTES = 1024 * 1024
 _HARD_TOTAL_BYTES = 256 * 1024 * 1024
 _HARD_FILES = 64
+_HARD_INVENTORY = 4_096
 
 _ZIP_MAGIC = b"PK\x03\x04"
 _ELF_MAGIC = b"\x7fELF"
@@ -121,6 +126,8 @@ def _empty() -> dict:
     return {
         "manifest_texts": [],
         "artifacts": [],
+        "inventory": [],
+        "inventory_truncated": False,
         "ambiguous": [],
         "complete": True,
         "refused": False,
@@ -140,6 +147,38 @@ def _decompressed(data: bytes):
     if data[:6] == _XZ_MAGIC:
         return lzma.LZMAFile(io.BytesIO(data))
     return io.BytesIO(data)
+
+
+def _record_inventory(result: dict, name: str, size: int,
+                      digest: str, limit: int) -> bool:
+    """Record one member in the bounded inventory.
+
+    Returns False when the inventory ceiling was reached.  The caller marks
+    the archive refused rather than returning a partial inventory as if it
+    were complete.
+    """
+    if len(result["inventory"]) >= limit:
+        result["inventory_truncated"] = True
+        result["complete"] = False
+        result["refused"] = True
+        return False
+    result["inventory"].append((name, size, digest))
+    return True
+
+
+def _hash_handle(handle, *, max_bytes: int) -> str:
+    """SHA-256 of a member, refusing rather than reading past the cap."""
+    digest = hashlib.sha256()
+    total = 0
+    while True:
+        chunk = handle.read(64 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise _ArchiveTooLarge("member exceeded the inventory read cap")
+        digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _record_artifact(result: dict, name: str, mode: int, prefix: bytes,
@@ -166,7 +205,8 @@ def _record_artifact(result: dict, name: str, mode: int, prefix: bytes,
 
 
 def _tar(data: bytes, result: dict, *, max_members: int,
-         max_file_bytes: int, max_total_bytes: int, max_files: int) -> None:
+         max_file_bytes: int, max_total_bytes: int, max_files: int,
+         max_inventory: int) -> None:
     texts = result["manifest_texts"]
     seen = kept = inspected = elf_parsed = elf_bytes = 0
     names: set[str] = set()
@@ -216,7 +256,34 @@ def _tar(data: bytes, result: dict, *, max_members: int,
                 continue
             names.add(name)
             mode = member.mode or 0
+            # One pass per member: hash it for the inventory, retain only the
+            # bytes this analysis already needed, and never seek in the tar
+            # stream.  A second read of a streaming member would consume the
+            # next header.
+            handle = tar.extractfile(member)
+            if handle is None:
+                continue
+            keep_raw = _selected(name) and 0 < member.size <= max_file_bytes
+            digest = hashlib.sha256()
             prefix = b""
+            raw = bytearray()
+            elf_raw = bytearray()
+            while True:
+                chunk = handle.read(64 * 1024)
+                if not chunk:
+                    break
+                digest.update(chunk)
+                if len(prefix) < _ARTIFACT_PREFIX:
+                    prefix += chunk[:_ARTIFACT_PREFIX - len(prefix)]
+                if keep_raw:
+                    raw.extend(chunk)
+                elif (prefix[:4] == _ELF_MAGIC
+                      and len(elf_raw) < MAX_ELF_BYTES):
+                    elf_raw.extend(chunk[:MAX_ELF_BYTES - len(elf_raw)])
+            if not _record_inventory(result, name, member.size,
+                                     digest.hexdigest(), max_inventory):
+                return
+            elf_info = None
             if _selected(name):
                 if member.size <= 0 or member.size > max_file_bytes:
                     result["refused"] = True
@@ -225,37 +292,27 @@ def _tar(data: bytes, result: dict, *, max_members: int,
                     result["complete"] = False
                     result["refused"] = True
                     return
-                handle = tar.extractfile(member)
-                if handle is None:
-                    continue
-                raw = handle.read(max_file_bytes + 1)
-                if len(raw) > max_file_bytes or b"\x00" in raw:
+                value = bytes(raw)
+                if b"\x00" in value:
                     result["refused"] = True
                     continue
-                prefix = raw[:4]
-                texts.append((name, raw.decode("utf-8", errors="replace")))
+                texts.append((name, value.decode("utf-8", errors="replace")))
                 kept += 1
-            elf_info = None
-            if _selected(name):
                 if prefix[:4] == _ELF_MAGIC and elf_parsed < MAX_ELF_ARTIFACTS:
-                    info = parse_elf(raw)
+                    info = parse_elf(value)
                     elf_info = info.to_dict() if info is not None else None
                     elf_parsed += 1
             elif inspected < _MAX_INSPECTED:
-                handle = tar.extractfile(member)
-                if handle is not None:
-                    prefix = handle.read(_ARTIFACT_PREFIX)
-                    if prefix[:4] == _ELF_MAGIC:
-                        want = min(member.size, MAX_ELF_BYTES)
-                        if (elf_parsed >= MAX_ELF_ARTIFACTS
-                                or elf_bytes + want > MAX_ELF_TOTAL_BYTES):
-                            result["refused"] = True
-                        else:
-                            rest = handle.read(MAX_ELF_BYTES - len(prefix))
-                            info = parse_elf(prefix + rest)
-                            elf_info = info.to_dict() if info is not None else None
-                            elf_parsed += 1
-                            elf_bytes += len(prefix) + len(rest)
+                if prefix[:4] == _ELF_MAGIC:
+                    want = min(member.size, MAX_ELF_BYTES)
+                    if (elf_parsed >= MAX_ELF_ARTIFACTS
+                            or elf_bytes + want > MAX_ELF_TOTAL_BYTES):
+                        result["refused"] = True
+                    else:
+                        info = parse_elf(bytes(elf_raw))
+                        elf_info = info.to_dict() if info is not None else None
+                        elf_parsed += 1
+                        elf_bytes += len(elf_raw)
                 inspected += 1
             _record_artifact(result, name, mode, prefix, member.size, elf_info)
     stream.close()
@@ -277,7 +334,8 @@ def _zip_declared_entries(data: bytes) -> int | None:
 
 
 def _zip(data: bytes, result: dict, *, max_members: int,
-         max_file_bytes: int, max_total_bytes: int, max_files: int) -> None:
+         max_file_bytes: int, max_total_bytes: int, max_files: int,
+         max_inventory: int) -> None:
     texts = result["manifest_texts"]
     declared = _zip_declared_entries(data)
     if declared is not None and declared > max_members:
@@ -312,6 +370,14 @@ def _zip(data: bytes, result: dict, *, max_members: int,
                 continue
             names.add(name)
             mode = (info.external_attr >> 16) & 0o7777
+            with archive.open(info) as inventory_handle:
+                digest = _hash_handle(
+                    inventory_handle,
+                    max_bytes=max_total_bytes,
+                )
+            if not _record_inventory(result, name, info.file_size, digest,
+                                     max_inventory):
+                return
             prefix = b""
             if _selected(name):
                 if info.file_size <= 0 or info.file_size > max_file_bytes:
@@ -368,6 +434,7 @@ def parse_upstream_archive(
     max_file_bytes: int = MAX_ARCHIVE_FILE_BYTES,
     max_total_bytes: int = MAX_ARCHIVE_UNCOMPRESSED,
     max_files: int = MAX_UPSTREAM_MANIFEST_FILES,
+    max_inventory: int = MAX_ARCHIVE_INVENTORY,
 ) -> dict:
     """Return ``manifest_texts``, ``complete``, ``refused`` and ``malformed``.
 
@@ -382,15 +449,18 @@ def parse_upstream_archive(
     max_file_bytes = _clamp(max_file_bytes, _HARD_FILE_BYTES)
     max_total_bytes = _clamp(max_total_bytes, _HARD_TOTAL_BYTES)
     max_files = _clamp(max_files, _HARD_FILES)
+    max_inventory = _clamp(max_inventory, _HARD_INVENTORY)
     try:
         if data[:4] == _ZIP_MAGIC:
             _zip(data, result, max_members=max_members,
                  max_file_bytes=max_file_bytes,
-                 max_total_bytes=max_total_bytes, max_files=max_files)
+                 max_total_bytes=max_total_bytes, max_files=max_files,
+                 max_inventory=max_inventory)
         else:
             _tar(data, result, max_members=max_members,
                  max_file_bytes=max_file_bytes,
-                 max_total_bytes=max_total_bytes, max_files=max_files)
+                 max_total_bytes=max_total_bytes, max_files=max_files,
+                 max_inventory=max_inventory)
     except _ArchiveTooLarge:
         result["complete"] = False
         result["refused"] = True

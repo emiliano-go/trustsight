@@ -49,6 +49,7 @@ from ...schema import ExecutionChanges, PackageFact, SourceChanges, with_changes
 from ...scoring import calculate_score, declared_claims
 from ...tokenizer import tokenize_and_resolve_indexed
 from ..adoption import credential_egress_finding, source_takeover_finding
+from ..secondary import secondary_source_execution_finding
 from ..base import _has_install_hook
 from ..buildfetch import has_unpinned_build_deps
 from ..composition import (
@@ -288,6 +289,14 @@ def scan_recipe(scan: ScanInput, config: dict) -> ScanResult:
     )
     if h105:
         triggered_rules.append(h105)
+    h109 = secondary_source_execution_finding(
+        package_name=scan.package,
+        findings=triggered_rules,
+        diff_text=diff_text,
+        recipe_text=recipe_text,
+    )
+    if h109:
+        triggered_rules.append(h109)
     h107 = credential_egress_finding(
         package_name=scan.package,
         findings=triggered_rules,

@@ -130,6 +130,7 @@ The rules that make up this category are listed below, each with the series that
 | [A013](#a013) | Udev Rule Runs A Program | MEDIUM |
 | [A014](#a014) | Unsafe ELF Runpath | HIGH |
 | [A015](#a015) | Packed Or Encrypted ELF Section | MEDIUM |
+| [A016](#a016) | Release Asset Diverges From Its Tag | HIGH |
 <!-- /generated: page-index -->
 
 ### A001: Setuid File In Artifact {#a001}
@@ -295,6 +296,18 @@ read only; nothing is executed. Weight 0 (anergic) until calibrated.
 
 A udev rule can launch a command as root whenever a device appears. Read-only
 inspection; weight 0 (anergic) until calibrated.
+
+### A016: Release Asset Diverges From Its Tag {#a016}
+
+- **Target:** declared release asset vs tag tree (opt-in upstream lane)
+- **Severity:** HIGH (weight 0, report-only)
+- **Category:** `artifact`
+
+- **Condition:** A declared release asset on a trusted host is compared with the tag tree it claims to represent, and a build input (`.m4`, `Makefile.am`, `configure.ac`, `*.in`) is present in the asset but absent from the tree, or a file present in both has different content.
+
+This is the upstream lane's xz 5.6.x shape: the release tarball carried automake fragments that did not exist in the tag. Automatic forge archives are generated from the tree and cannot diverge this way, so they are out of scope.
+
+Generated files (`configure`, `Makefile.in`, `aclocal.m4`, `config.h.in`, objects, `.deps`) and `export-ignore` paths are ignored. An unresolved tag, an unreachable host, a weak checksum or a capped inventory is an existing W-rule boundary, never a clean result.
 
 ## Interpretation
 

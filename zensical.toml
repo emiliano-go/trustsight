@@ -203,6 +203,7 @@ Contributing = [
   {"Blinded Evaluation" = "contributing/blinded-evaluation.md"},
   {"Publishing Baselines" = "contributing/publishing-baselines.md"},
   {"Reviewing a Security Control" = "contributing/security-review.md"},
+  {"Rule Lifespan" = "contributing/rule-lifespan.md"},
   {Releasing = "contributing/releasing.md"},
   {Documentation = [
     {"Documentation Policy" = "contributing/documentation-policy.md"},

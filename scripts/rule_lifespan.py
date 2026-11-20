@@ -50,7 +50,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--health", type=Path, required=True)
     parser.add_argument("--today", type=dt.date.fromisoformat)
     args = parser.parse_args(argv)
-    today = args.today or dt.date.today()
+    today = args.today or dt.datetime.now(dt.timezone.utc).date()
     try:
         rows = load(args.health)
         stale = check(rows, today)

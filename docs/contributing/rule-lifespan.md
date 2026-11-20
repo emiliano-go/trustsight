@@ -1,3 +1,5 @@
+<!-- description: How rule measurement age is checked and how a demotion is proposed, without letting the analyser rewrite its own rules. -->
+
 # Rule lifespan
 
 Every rule carries a measurement date and a review horizon. The rule lab

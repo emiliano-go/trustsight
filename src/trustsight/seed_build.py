@@ -135,11 +135,17 @@ def _normalise_maintainer(raw: dict) -> dict:
     packages = raw.get("packages")
     if packages is not None and not isinstance(packages, list):
         raise ValueError("packages must be a list")
-    package_count = int(raw.get("package_count", 0) or 0)
-    # The list itself is not shipped, but its length is a useful,
-    # non-identifying count when the caller supplied no explicit count.
-    if not package_count and packages:
+    if "package_count" in raw:
+        package_count = int(raw.get("package_count") or 0)
+    elif packages:
+        # The list itself is not shipped, but its length is a useful,
+        # non-identifying count when the caller supplied no explicit count.
         package_count = len(packages)
+    else:
+        # A bare name is one observation.  Keeping that default separate
+        # from an explicit zero is what lets an alias row be known without
+        # claiming an active package.
+        package_count = 1
     return {
         "name": name,
         "email": email,
@@ -199,6 +205,7 @@ def build_seed(
             "first_seen": None,
             "package_count": 0,
             "source": "aur",
+            "primary": False,
         }
     )
     for raw in raw_maintainers:
@@ -209,7 +216,12 @@ def build_seed(
         ):
             bucket["first_seen"] = rec["first_seen"]
         bucket["package_count"] += rec["package_count"]
-        if rec["source"]:
+        if rec["package_count"] > 0:
+            # An active record owns the source label.  A zero-count alias
+            # must never overwrite the provenance of the primary row.
+            bucket["primary"] = True
+            bucket["source"] = rec["source"]
+        elif not bucket["primary"] and rec["source"]:
             bucket["source"] = rec["source"]
 
     count = len(by_name)
@@ -229,7 +241,7 @@ def build_seed(
         line = {
             "name_hash": name_hash,
             "first_seen": rec["first_seen"] or now,
-            "package_count": max(1, package_count) if package_count else 1,
+            "package_count": package_count,
             "source": rec["source"],
         }
         maintainer_lines.append(line)

@@ -629,3 +629,43 @@ def test_maintainer_identity_ignores_the_email_comment_form():
     salt = "a" * 64
     assert _hash_value("Alice <alice@example.org>", salt) == _hash_value("alice", salt)
     assert _hash_value("Alice", salt) == _hash_value("alice", salt)
+
+
+def test_zero_count_alias_is_kept_without_a_primary_source():
+    raw = [
+        {"name": "Old Name", "package_count": 0,
+         "source": "aur-comment-alias"},
+        {"name": "Active Name", "package_count": 2,
+         "source": "aur-metadata"},
+    ]
+    import tempfile
+    from pathlib import Path
+
+    with tempfile.TemporaryDirectory() as tmp:
+        result = build_seed(raw, Path(tmp))
+        rows = [json.loads(line) for line in
+                (Path(result["seed_dir"]) / "maintainers.jsonl")
+                .read_text().splitlines()]
+    by_source = {row["source"]: row for row in rows}
+    assert by_source["aur-comment-alias"]["package_count"] == 0
+    assert by_source["aur-metadata"]["package_count"] == 2
+
+
+def test_primary_source_survives_an_alias_in_either_order():
+    import tempfile
+    from pathlib import Path
+
+    raw = [
+        {"name": "Alice", "package_count": 0,
+         "source": "aur-comment-alias"},
+        {"name": "Alice", "package_count": 2,
+         "source": "aur-metadata"},
+    ]
+    with tempfile.TemporaryDirectory() as tmp:
+        result = build_seed(raw, Path(tmp))
+        rows = [json.loads(line) for line in
+                (Path(result["seed_dir"]) / "maintainers.jsonl")
+                .read_text().splitlines()]
+    assert len(rows) == 1
+    assert rows[0]["package_count"] == 2
+    assert rows[0]["source"] == "aur-metadata"

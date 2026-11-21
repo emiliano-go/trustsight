@@ -6,6 +6,13 @@
 
 ### Added
 
+- **The seed uses authoritative AUR maintainer data.** The canonical builder
+  now reads the AUR metadata snapshot's `Maintainer` field and keeps a stale
+  PKGBUILD comment as a zero-count alias, so an established name is not
+  reported as first-seen because the recipe comment lags. Orphans contribute
+  no active maintainer. The v3 hashed format and privacy rules are unchanged;
+  co-maintainers remain out of scope because AUR does not expose them through
+  the RPC.
 - **H109 covers build helpers executed from a secondary source.** The rule
   reports a script run from a declared source that is a different org from
   the package's upstream and is a VCS clone or has no checksum. It ships

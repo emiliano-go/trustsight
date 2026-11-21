@@ -306,6 +306,8 @@ def build(
             metadata_loaded=bool(metadata),
         )
         coverage[kind] += 1
+        if kind == "metadata" and len(records) > 1:
+            coverage["alias"] += 1
         if urls:
             packages_with_sources += 1
         for url in urls:
@@ -392,14 +394,17 @@ def build(
     print(f"Elapsed:        {time.time() - start:.1f}s")
     return {
         "urls": len(url_counter),
-        "maintainers": len(maintainer_rows),
+        "maintainers": len({
+            _identity_key(name) for name in maintainer_rows
+        }),
         "maintainer_observations": sum(
             row["count"] for row in maintainer_rows.values()),
         "dependency_names": len(dep_counter),
         "observations": packages_with_sources,
         "package_count": len(branches),
         "authoritative_maintainers": coverage["metadata"],
-        "comment_aliases": coverage["metadata"] + coverage["orphan"],
+        "comment_aliases": (
+            coverage["alias"] + coverage["orphan"] + coverage["missing"]),
         "orphan_packages": coverage["orphan"],
         "missing_metadata_packages": coverage["missing"],
         "comment_only_packages": coverage["comment"],

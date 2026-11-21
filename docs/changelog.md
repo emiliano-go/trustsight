@@ -34,6 +34,13 @@
   of unique identities. The builder now folds them and records the true
   count.
 
+### Changed
+
+- **The shipped `[seed] baseline_tag` advances to `baseline-2026-11-21`.**
+  The new seed records 195,023 source URLs, 224,423 dependency names and
+  43,815 unique hashed maintainers, including 23,252 zero-count aliases.
+  The previous seed missed 68% of the current metadata maintainer names.
+
 ## [0.30.0] - 2026-11-18
 
 ### Added

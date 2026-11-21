@@ -222,7 +222,7 @@ auto_import = true
 # baseline assets - can never serve it; without this the fetch 404s the
 # moment the unauthenticated API quota is spent.  Bumped in the same
 # release that publishes a new baseline.
-baseline_tag = "baseline-2026-10-22"
+baseline_tag = "baseline-2026-11-21"
 
 [release]
 # The release channel the baseline seed and corpus are pulled from, as a

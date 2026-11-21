@@ -23,7 +23,7 @@ imported into the user's database on first run (or manually with
 `trustsight-seed-v2/` directory of salted SHA-256 hashes rather than a SQLite
 file of plaintext values. Its three kinds of prior knowledge are:
 
-- **source URLs** (185,902, normalised), with first-seen timestamps
+- **source URLs** (195,023, normalised), with first-seen timestamps
   and use counts;
 - **hashed maintainers**: salted hashes of maintainer *names* only, with
   package counts and first-seen timestamps, so no plaintext identity leaves
@@ -31,11 +31,11 @@ file of plaintext values. Its three kinds of prior knowledge are:
   v3 dropped the email hash and the per-maintainer package list: the salt is
   public, so a salted hash of a guessed address is trivially confirmed and a
   package list re-identifies the person even when the hash does not;
-- **dependency names**: 215,504 dependency names, package names and `provides`
+- **dependency names**: 224,423 dependency names, package names and `provides`
   aliases, with observation counts.
 
 The figures above are the counts in the published `baseline-2026-09-24` seed
-(36,912 hashed maintainers). They grow with each rebuild; the shipped
+(43,815 hashed maintainers). They grow with each rebuild; the shipped
 `seed_meta.json` and `seed-provenance.json` inside the archive record the
 exact numbers for a given seed.
 
@@ -183,7 +183,7 @@ comment, which is one reason it remains a degraded fallback.
 The gap is not cosmetic. The lock is a calibration corpus, not a sample of
 the AUR: a seed built from the lock (202 packages) contains about 137
 distinct maintainers, while the canonical seed built from the full AUR
-mirror (about 116,000 package branches) contains about 36,912. Shipping the
+mirror (about 116,000 package branches) contains about 43,815. Shipping the
 lock-derived seed would reduce novelty coverage by 99.6%, flagging
 experienced maintainers as new on every package outside the lock. That is
 why the canonical seed is always the one a fresh install fetches, and why

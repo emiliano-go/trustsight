@@ -14,21 +14,21 @@
   "doc_claims": {
     "README.md": [
       "about **1 in 15** review workload items",
-      "185,902 known source URLs",
-      "36,912 hashed maintainer identities and 215,504 dependency names",
+      "195,023 known source URLs",
+      "43,815 hashed maintainer identities and 224,423 dependency names",
       "213 self-authored, labelled malicious fixtures"
     ],
     "docs/explanation/scoring-and-verdicts.md": [
-      "records 185,902",
-      "36,912 maintainers, and 215,504 dependency names"
+      "records 195,023",
+      "43,815 maintainers, and 224,423 dependency names"
     ],
     "docs/explanation/static-analysis-and-resolution.md": [
       "about 6.3% of benign diffs enter the review queue"
     ],
     "docs/explanation/threat-intelligence.md": [
-      "(185,902, normalised)",
-      "(36,912 hashed maintainers)",
-      "215,504 dependency names"
+      "(195,023, normalised)",
+      "(43,815 hashed maintainers)",
+      "224,423 dependency names"
     ],
     "docs/reference/configuration.md": [
       "about 6.3% of locked benign-corpus diffs enter the review queue"
@@ -94,9 +94,9 @@
     ]
   },
   "seed": {
-    "dependency_names": 215504,
-    "hashed_maintainers": 36912,
-    "source_urls": 185902
+    "dependency_names": 224423,
+    "hashed_maintainers": 43815,
+    "source_urls": 195023
   },
   "tests": {
     "count": 9669,

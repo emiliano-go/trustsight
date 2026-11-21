@@ -547,7 +547,7 @@ def asset_url(asset_name: str, tag: str | None = None,
         raise ReleaseFetchError(
             f"no {asset_name} is reachable: the release API is unavailable "
             "and no fallback baseline tag is configured; pass --tag "
-            "(e.g. --tag baseline-2026-10-22) or set [seed] baseline_tag"
+            "(e.g. --tag baseline-2026-11-21) or set [seed] baseline_tag"
         )
     if asset_name.startswith("watchlist-"):
         watchlist_tag = _resolve_watchlist_tag(channel) or (

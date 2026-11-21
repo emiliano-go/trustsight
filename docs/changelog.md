@@ -25,6 +25,15 @@
   records `(name, size, sha256)` for up to 4,096 members without retaining
   or materialising content; going over the cap refuses the archive.
 
+### Fixed
+
+- **The seed builder folds duplicate hashes before writing `maintainers.jsonl`.**
+  A handful of historical names with nested angle groups normalise twice to
+  the same hash. The duplicate rows violated the importer's concept of one
+  primary key and left the published maintainer count higher than the number
+  of unique identities. The builder now folds them and records the true
+  count.
+
 ## [0.30.0] - 2026-11-18
 
 ### Added

@@ -208,6 +208,7 @@ def maintainer_records(
     comment: str,
     *,
     metadata_present: bool,
+    metadata_loaded: bool = True,
 ) -> tuple[list[dict], str]:
     """Return the seed records for one package and a coverage label.
 
@@ -231,7 +232,7 @@ def maintainer_records(
                 "source": "aur-comment-alias",
             })
         return records, "metadata"
-    if metadata_present:
+    if metadata_loaded and metadata_present:
         if alias:
             return [{
                 "name": alias,
@@ -239,6 +240,14 @@ def maintainer_records(
                 "source": "aur-comment-orphan",
             }], "orphan"
         return [], "orphan"
+    if metadata_loaded and not metadata_present:
+        if alias:
+            return [{
+                "name": alias,
+                "package_count": 0,
+                "source": "aur-comment-missing",
+            }], "missing"
+        return [], "missing"
     if alias:
         return [{
             "name": alias,
@@ -294,6 +303,7 @@ def build(
             str((meta or {}).get("Maintainer") or ""),
             comment or "",
             metadata_present=meta is not None,
+            metadata_loaded=bool(metadata),
         )
         coverage[kind] += 1
         if urls:
@@ -391,6 +401,7 @@ def build(
         "authoritative_maintainers": coverage["metadata"],
         "comment_aliases": coverage["metadata"] + coverage["orphan"],
         "orphan_packages": coverage["orphan"],
+        "missing_metadata_packages": coverage["missing"],
         "comment_only_packages": coverage["comment"],
         "metadata_package_count": len(metadata),
         "metadata_sha256": metadata_digest,
@@ -413,6 +424,7 @@ def build_provenance(
     authoritative_maintainers: int = 0,
     comment_aliases: int = 0,
     orphan_packages: int = 0,
+    missing_metadata_packages: int = 0,
 ) -> dict:
     """Assemble the seed-provenance record for a fresh build.
 
@@ -439,6 +451,7 @@ def build_provenance(
         "authoritative_maintainers": authoritative_maintainers,
         "comment_aliases": comment_aliases,
         "orphan_packages": orphan_packages,
+        "missing_metadata_packages": missing_metadata_packages,
     }
 
 
@@ -485,6 +498,7 @@ def main():
             authoritative_maintainers=stats["authoritative_maintainers"],
             comment_aliases=stats["comment_aliases"],
             orphan_packages=stats["orphan_packages"],
+            missing_metadata_packages=stats["missing_metadata_packages"],
         )
         args.provenance_out.parent.mkdir(parents=True, exist_ok=True)
         args.provenance_out.write_text(

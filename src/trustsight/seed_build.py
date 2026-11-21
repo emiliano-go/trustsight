@@ -224,17 +224,15 @@ def build_seed(
         elif not bucket["primary"] and rec["source"]:
             bucket["source"] = rec["source"]
 
-    count = len(by_name)
     meta = {
         "format_version": SEED_FORMAT_VERSION,
         "salt": salt,
         "hash_algorithm": hash_algorithm,
-        "count": count,
         "built_at": now,
         "seed_hash": "",  # filled after hashing the contents
     }
 
-    maintainer_lines = []
+    maintainer_lines: dict[str, dict] = {}
     for name, rec in by_name.items():
         name_hash = _hash_value(name, salt, hash_algorithm)
         package_count = rec["package_count"]
@@ -244,12 +242,27 @@ def build_seed(
             "package_count": package_count,
             "source": rec["source"],
         }
-        maintainer_lines.append(line)
+        # ``_identity_key`` is not idempotent for a handful of historical
+        # names with nested angle groups, so two source records can hash to
+        # one value. Fold them here; otherwise the JSONL contains duplicate
+        # primary keys and the importer silently keeps only the first.
+        previous = maintainer_lines.get(name_hash)
+        if previous is None:
+            maintainer_lines[name_hash] = line
+            continue
+        previous["package_count"] += package_count
+        if package_count > 0:
+            previous["source"] = line["source"]
+        if line["first_seen"] < previous["first_seen"]:
+            previous["first_seen"] = line["first_seen"]
+
+    lines = sorted(maintainer_lines.values(), key=lambda x: x["name_hash"])
+    meta["count"] = len(lines)
 
     # Deterministic seed_hash over the final contents.
     h = hashlib.sha256()
     h.update(json.dumps(meta, sort_keys=True, separators=(",", ":")).encode("utf-8"))
-    for line in sorted(maintainer_lines, key=lambda x: x["name_hash"]):
+    for line in lines:
         h.update(json.dumps(line, sort_keys=True, separators=(",", ":")).encode("utf-8"))
     meta["seed_hash"] = h.hexdigest()
 
@@ -261,7 +274,7 @@ def build_seed(
         fh.write("\n")
 
     with open(maint_path, "w", encoding="utf-8") as fh:
-        for line in maintainer_lines:
+        for line in lines:
             fh.write(json.dumps(line, separators=(",", ":")) + "\n")
 
     if raw_source_urls:

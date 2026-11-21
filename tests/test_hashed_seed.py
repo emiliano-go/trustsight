@@ -669,3 +669,20 @@ def test_primary_source_survives_an_alias_in_either_order():
     assert len(rows) == 1
     assert rows[0]["package_count"] == 2
     assert rows[0]["source"] == "aur-metadata"
+
+
+def test_duplicate_hashes_are_folded():
+    import tempfile
+    from pathlib import Path
+
+    raw = [
+        {"name": "lks <lukas <.> graetz <@> web", "package_count": 1},
+        {"name": "lks <lukas <.> graetz  web", "package_count": 2},
+    ]
+    with tempfile.TemporaryDirectory() as tmp:
+        result = build_seed(raw, Path(tmp))
+        lines = (Path(result["seed_dir"]) / "maintainers.jsonl").read_text().splitlines()
+        rows = [json.loads(line) for line in lines]
+    assert len(rows) == 1
+    assert rows[0]["package_count"] == 3
+    assert result["count"] == 1

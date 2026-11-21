@@ -49,10 +49,20 @@ def test_orphan_comment_is_known_but_not_active(generate_seed):
 
 def test_missing_metadata_falls_back_to_the_comment(generate_seed):
     records, kind = generate_seed.maintainer_records(
-        "", "alice", metadata_present=False)
+        "", "alice", metadata_present=False, metadata_loaded=False)
     assert kind == "comment"
     assert records == [
         {"name": "alice", "package_count": 1, "source": "aur-comment"},
+    ]
+
+
+def test_loaded_metadata_that_lacks_a_branch_is_an_alias(generate_seed):
+    records, kind = generate_seed.maintainer_records(
+        "", "alice", metadata_present=False, metadata_loaded=True)
+    assert kind == "missing"
+    assert records == [
+        {"name": "alice", "package_count": 0,
+         "source": "aur-comment-missing"},
     ]
 
 

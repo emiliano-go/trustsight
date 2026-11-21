@@ -48,6 +48,13 @@ longer maintains. An orphaned package has no active maintainer, so its
 comment is an alias only. Co-maintainers are not in the AUR RPC response,
 and the seed does not scrape package pages for them.
 
+A branch that is present in the git mirror but absent from the metadata
+snapshot is treated as a known alias, not an active package. That is the
+normal shape of a deleted or stale branch: the comment still names someone,
+but the metadata says the package is gone. The alias keeps the name from
+being reported as first-seen without restoring a package count the package
+does not have.
+
 It exists because a cold database makes novelty meaningless: with an empty
 `source_urls` table every URL, including github.com, is globally novel, and
 with no analysis history `maturity()` returns 0, which gates the novelty tier

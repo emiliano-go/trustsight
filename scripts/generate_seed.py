@@ -22,6 +22,7 @@ Usage:
 
 import argparse
 import gzip
+import hashlib
 import json
 import shutil
 import sqlite3
@@ -39,12 +40,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 from trustsight.novelty import normalize_url  # noqa: E402
 from trustsight.deps import normalize_dependency  # noqa: E402
 from trustsight.fetcher import extract_maintainer  # noqa: E402
+from trustsight.seed_build import _identity_key  # noqa: E402
 from trustsight.srcinfo import parse_srcinfo  # noqa: E402
 
 CACHE_DIR = Path.home() / ".cache" / "trustsight"
 AUR_REPO = CACHE_DIR / "aur.git"
+DEFAULT_METADATA = CACHE_DIR / "corpus" / "packages-meta-ext-v1.json"
 
 SEED_TIMESTAMP = "2024-01-01T00:00:00"
+MAX_METADATA_BYTES = 512 * 1024 * 1024
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS packages (
@@ -63,7 +67,8 @@ CREATE TABLE IF NOT EXISTS source_urls (
 );
 CREATE TABLE IF NOT EXISTS maintainer_counts (
     name TEXT PRIMARY KEY,
-    count INTEGER
+    count INTEGER,
+    source TEXT
 );
 CREATE TABLE IF NOT EXISTS metadata (
     key TEXT PRIMARY KEY,
@@ -165,7 +170,90 @@ def extract_dependency_names(srcinfo_text: str) -> list[str]:
     return names
 
 
-def build(out_path: Path, limit: int = 0, progress_every: int = 2000) -> dict:
+def load_metadata(path: Path) -> tuple[dict[str, dict], str]:
+    """Load the AUR metadata snapshot and index it by package base.
+
+    The snapshot is the authority for the current maintainer.  The AUR git
+    mirror is the authority for the recipe, but its ``# Maintainer:``
+    comment can be stale, so it is kept as a named alias rather than
+    discarded.
+    """
+    if path.stat().st_size > MAX_METADATA_BYTES:
+        raise ValueError(
+            f"metadata snapshot exceeds {MAX_METADATA_BYTES} bytes: {path}")
+    raw = path.read_bytes()
+    digest = hashlib.sha256(raw).hexdigest()
+    entries = json.loads(raw.decode("utf-8"))
+    if not isinstance(entries, list):
+        raise ValueError("metadata snapshot must be a JSON array")
+    index: dict[str, dict] = {}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        base = str(entry.get("PackageBase") or entry.get("Name") or "").strip()
+        if not base:
+            continue
+        # A split package may appear before its base with no maintainer.
+        # Keep the first non-empty value, and never replace it with an
+        # empty one.
+        if base not in index or (
+            not index[base].get("Maintainer") and entry.get("Maintainer")
+        ):
+            index[base] = entry
+    return index, digest
+
+
+def maintainer_records(
+    authoritative: str,
+    comment: str,
+    *,
+    metadata_present: bool,
+) -> tuple[list[dict], str]:
+    """Return the seed records for one package and a coverage label.
+
+    The authoritative field owns the active package count.  The comment is
+    an alias with count zero, so it makes an established name known to
+    novelty lookups without inflating its package count.  An orphan has no
+    active maintainer; its comment is still useful as a known alias.
+    """
+    primary = (authoritative or "").strip()
+    alias = (comment or "").strip()
+    if primary:
+        records = [{
+            "name": primary,
+            "package_count": 1,
+            "source": "aur-metadata",
+        }]
+        if alias and _identity_key(alias) != _identity_key(primary):
+            records.append({
+                "name": alias,
+                "package_count": 0,
+                "source": "aur-comment-alias",
+            })
+        return records, "metadata"
+    if metadata_present:
+        if alias:
+            return [{
+                "name": alias,
+                "package_count": 0,
+                "source": "aur-comment-orphan",
+            }], "orphan"
+        return [], "orphan"
+    if alias:
+        return [{
+            "name": alias,
+            "package_count": 1,
+            "source": "aur-comment",
+        }], "comment"
+    return [], "none"
+
+
+def build(
+    out_path: Path,
+    limit: int = 0,
+    progress_every: int = 2000,
+    metadata_path: Path | None = None,
+) -> dict:
     if not AUR_REPO.exists():
         print(f"AUR mirror not found at {AUR_REPO}.", file=sys.stderr)
         print("Run scripts/build_corpus.py first to create it.", file=sys.stderr)
@@ -178,10 +266,18 @@ def build(out_path: Path, limit: int = 0, progress_every: int = 2000) -> dict:
         branches = branches[:limit]
     print(f"  {len(branches)} branches")
 
+    metadata: dict[str, dict] = {}
+    metadata_digest = ""
+    if metadata_path is not None:
+        print(f"=== Reading metadata {metadata_path} ===")
+        metadata, metadata_digest = load_metadata(metadata_path)
+        print(f"  {len(metadata)} package bases")
+
     url_counter: Counter[str] = Counter()
-    maint_counter: Counter[str] = Counter()
+    maintainer_rows: dict[str, dict] = {}
     dep_counter: Counter[str] = Counter()
     packages_with_sources = 0
+    coverage = Counter()
     start = time.time()
 
     print("\n=== Reading .SRCINFO ===")
@@ -192,15 +288,31 @@ def build(out_path: Path, limit: int = 0, progress_every: int = 2000) -> dict:
         urls = extract_sources(srcinfo_text)
         # The maintainer is a PKGBUILD comment, so it must be read the
         # same way the running tool reads it or the names will not match.
-        maintainer = extract_maintainer(pkgbuild_text)
+        comment = extract_maintainer(pkgbuild_text, srcinfo_text)
+        meta = metadata.get(branch)
+        records, kind = maintainer_records(
+            str((meta or {}).get("Maintainer") or ""),
+            comment or "",
+            metadata_present=meta is not None,
+        )
+        coverage[kind] += 1
         if urls:
             packages_with_sources += 1
         for url in urls:
             url_counter[normalize_url(url)] += 1
         for dep in extract_dependency_names(srcinfo_text):
             dep_counter[dep] += 1
-        if maintainer:
-            maint_counter[maintainer] += 1
+        for record in records:
+            name = record["name"]
+            row = maintainer_rows.setdefault(
+                name, {"count": 0, "source": record["source"],
+                       "primary": False})
+            row["count"] += record["package_count"]
+            if record["package_count"] > 0:
+                row["source"] = record["source"]
+                row["primary"] = True
+            elif not row["primary"]:
+                row["source"] = record["source"]
         if i % progress_every == 0:
             rate = i / max(time.time() - start, 0.001)
             print(f"  {i}/{len(branches)} branches, {len(url_counter)} urls "
@@ -208,8 +320,9 @@ def build(out_path: Path, limit: int = 0, progress_every: int = 2000) -> dict:
 
     print(f"\n  {packages_with_sources} packages had source URLs")
     print(f"  {len(url_counter)} distinct normalized URLs")
-    print(f"  {len(maint_counter)} distinct maintainers")
+    print(f"  {len(maintainer_rows)} distinct maintainers")
     print(f"  {len(dep_counter)} distinct dependency names")
+    print(f"  maintainer coverage: {dict(coverage)}")
 
     if out_path.exists():
         out_path.unlink()
@@ -230,8 +343,10 @@ def build(out_path: Path, limit: int = 0, progress_every: int = 2000) -> dict:
         [(u, SEED_TIMESTAMP, c, SEED_TIMESTAMP) for u, c in url_counter.items()],
     )
     conn.executemany(
-        "INSERT OR REPLACE INTO maintainer_counts (name, count) VALUES (?, ?)",
-        list(maint_counter.items()),
+        """INSERT OR REPLACE INTO maintainer_counts (name, count, source)
+           VALUES (?, ?, ?)""",
+        [(name, row["count"], row["source"])
+         for name, row in maintainer_rows.items()],
     )
     conn.executemany(
         """INSERT OR IGNORE INTO dependency_names
@@ -267,11 +382,18 @@ def build(out_path: Path, limit: int = 0, progress_every: int = 2000) -> dict:
     print(f"Elapsed:        {time.time() - start:.1f}s")
     return {
         "urls": len(url_counter),
-        "maintainers": len(maint_counter),
-        "maintainer_observations": sum(maint_counter.values()),
+        "maintainers": len(maintainer_rows),
+        "maintainer_observations": sum(
+            row["count"] for row in maintainer_rows.values()),
         "dependency_names": len(dep_counter),
         "observations": packages_with_sources,
         "package_count": len(branches),
+        "authoritative_maintainers": coverage["metadata"],
+        "comment_aliases": coverage["metadata"] + coverage["orphan"],
+        "orphan_packages": coverage["orphan"],
+        "comment_only_packages": coverage["comment"],
+        "metadata_package_count": len(metadata),
+        "metadata_sha256": metadata_digest,
     }
 
 
@@ -285,6 +407,12 @@ def build_provenance(
     mirror_size_bytes: int,
     command: str,
     built_at: str | None = None,
+    maintainer_source: str = "aur-comment",
+    metadata_sha256: str = "",
+    metadata_package_count: int = 0,
+    authoritative_maintainers: int = 0,
+    comment_aliases: int = 0,
+    orphan_packages: int = 0,
 ) -> dict:
     """Assemble the seed-provenance record for a fresh build.
 
@@ -305,6 +433,12 @@ def build_provenance(
         "mirror_size_bytes": mirror_size_bytes,
         "built_at": built_at or datetime.now(timezone.utc).isoformat(),
         "command": command,
+        "maintainer_source": maintainer_source,
+        "metadata_sha256": metadata_sha256,
+        "metadata_package_count": metadata_package_count,
+        "authoritative_maintainers": authoritative_maintainers,
+        "comment_aliases": comment_aliases,
+        "orphan_packages": orphan_packages,
     }
 
 
@@ -322,8 +456,17 @@ def main():
                         help="Only read this many branches (for a quick run)")
     parser.add_argument("--provenance-out", type=Path, default=None,
                         help="Write seed-provenance.json describing this build")
+    parser.add_argument(
+        "--metadata", type=Path, default=None,
+        help=("AUR packages-meta-ext JSON snapshot. Defaults to the cached "
+              "corpus snapshot when present; otherwise the PKGBUILD comment "
+              "is used as a fallback."),
+    )
     args = parser.parse_args()
-    stats = build(args.out, limit=args.limit)
+    metadata_path = args.metadata
+    if metadata_path is None and DEFAULT_METADATA.is_file():
+        metadata_path = DEFAULT_METADATA
+    stats = build(args.out, limit=args.limit, metadata_path=metadata_path)
 
     if args.provenance_out:
         provenance = build_provenance(
@@ -334,6 +477,14 @@ def main():
             observation_count=stats["maintainer_observations"],
             mirror_size_bytes=_mirror_size_bytes(AUR_REPO),
             command=" ".join(sys.argv),
+            maintainer_source=(
+                "aur-metadata" if stats["authoritative_maintainers"] else
+                "aur-comment"),
+            metadata_sha256=stats["metadata_sha256"],
+            metadata_package_count=stats["metadata_package_count"],
+            authoritative_maintainers=stats["authoritative_maintainers"],
+            comment_aliases=stats["comment_aliases"],
+            orphan_packages=stats["orphan_packages"],
         )
         args.provenance_out.parent.mkdir(parents=True, exist_ok=True)
         args.provenance_out.write_text(

@@ -39,6 +39,15 @@ The figures above are the counts in the published `baseline-2026-09-24` seed
 `seed_meta.json` and `seed-provenance.json` inside the archive record the
 exact numbers for a given seed.
 
+The authoritative maintainer comes from the AUR metadata snapshot's
+`Maintainer` field, not the `# Maintainer:` comment in the PKGBUILD. A
+comment that names a different person is still imported as a **zero-count
+alias**, because the review path reads the recipe and must recognise the
+person who appears there; it must not claim an active package that person no
+longer maintains. An orphaned package has no active maintainer, so its
+comment is an alias only. Co-maintainers are not in the AUR RPC response,
+and the seed does not scrape package pages for them.
+
 It exists because a cold database makes novelty meaningless: with an empty
 `source_urls` table every URL, including github.com, is globally novel, and
 with no analysis history `maturity()` returns 0, which gates the novelty tier
@@ -160,6 +169,9 @@ seed is built by the maintainer from the full AUR mirror; CI rebuilds only
 when the release has no `baseline-seed.tar.gz` yet, from a mirror
 reconstructed from the corpus lockfile. The fallback is auditable but smaller
 than the canonical full-mirror seed, and never overwrites an uploaded one.
+The canonical build also reads the AUR metadata snapshot for maintainer
+authority; the CI fallback has no snapshot and falls back to the recipe
+comment, which is one reason it remains a degraded fallback.
 
 The gap is not cosmetic. The lock is a calibration corpus, not a sample of
 the AUR: a seed built from the lock (202 packages) contains about 137

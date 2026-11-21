@@ -98,6 +98,12 @@ command line. Anyone reproducing the seed from the same mirror state can
 compare it directly against the published record (see
 [seed provenance](../explanation/threat-intelligence.md)).
 
+The canonical maintainer build should pass `--metadata` with the AUR
+`packages-meta-ext` snapshot. The provenance then records the snapshot digest,
+the authoritative maintainer count and the number of comment aliases and
+orphans. Without a snapshot the generator falls back to the recipe comment,
+which is the weaker path used by the CI fallback.
+
 ## Prerequisites: the signing key
 
 Signed baselines verify against the ed25519 key pinned in the repo at

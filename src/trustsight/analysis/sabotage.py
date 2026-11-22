@@ -351,6 +351,7 @@ _DESTRUCTIVE_TRAP_RE = re.compile(
     r"(?:(?!\1).)*\1\s+(?:EXIT|0)\b", re.IGNORECASE)
 _ORPHAN_RE = re.compile(
     _CMD + r"(?:nohup|setsid|disown)\b", re.IGNORECASE)
+_DOUBLE_FORK_RE = re.compile(r"\(\s*[^()]*&\s*\)", re.IGNORECASE)
 _TRAP_IGNORE_RE = re.compile(
     r"\btrap\s+(['\"])\1\s+(?:TERM|HUP|INT|QUIT)\b", re.IGNORECASE)
 _EXEC_SHELL_RE = re.compile(
@@ -600,7 +601,7 @@ def _self_reference_findings(diff_text, add) -> None:
             emit("self-delete", "removes the running script")
         if _DESTRUCTIVE_TRAP_RE.search(text):
             emit("destructive-exit-trap", "destructive EXIT trap")
-        if _ORPHAN_RE.search(text):
+        if _ORPHAN_RE.search(text) or _DOUBLE_FORK_RE.search(text):
             emit("orphan", "detaches from the reaping parent")
         if _TRAP_IGNORE_RE.search(text):
             emit("ignore-termination", "ignores termination signals")

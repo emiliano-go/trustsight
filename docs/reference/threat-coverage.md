@@ -83,6 +83,7 @@ claim of complete coverage.
 | G013 | Shared Fetch Target | correlation |  | correlation | L8 | HIGH | 25 | CWE-506 |  |
 | G014 | Shared Adoption Window | correlation |  | correlation | L8 | HIGH | 25 | CWE-506 |  |
 | G015 | Sleeper Adoption Campaign | correlation |  | correlation | L8 | MEDIUM | 15 | CWE-506 |  |
+| G016 | Account Blast Radius | correlation |  | correlation | L8 | INFO | 0 (anergic) | CWE-506 | calibration |
 | H001 | Checksum Disabled | integrity |  | integrity | L5 | HIGH | 25 | CWE-354 |  |
 | H002 | Checksum Emptied | integrity |  | integrity | L5 | HIGH | 25 | CWE-354 |  |
 | H003 | Insecure Download Protocol | integrity |  | fetch-and-execution | L5 | LOW | 5 | CWE-94 |  |

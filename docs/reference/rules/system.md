@@ -319,6 +319,10 @@ See [G014: Shared Adoption Window](../../rules/correlation.md#g014).
 
 See [G015: Sleeper Adoption Campaign](../../rules/correlation.md#g015).
 
+### G016 {#g016}
+
+See [G016: Account Blast Radius](../../rules/correlation.md#g016).
+
 ### H001 {#h001}
 
 See [H001: Checksum Disabled](../../rules/integrity.md#h001).

@@ -45,6 +45,12 @@
 
 ### Added
 
+- **G016 reports account blast radius as bystander context.** A package that
+  fires a curated payload rule or FATAL is joined to the other packages its
+  account had processed in the same cycle. The finding is INFO, weight 0 and
+  anergic; siblings are named but never scored, and the account is not called
+  compromised. It is the bystander-activation counterpart to G006's cytokine
+  neighbourhood context.
 - **L9 artifact rules inspect shipped content and ELF metadata.** The artifact
   manifest may carry bounded content for `.hook`, `.rules` and `.install`
   files; A011 reports a broad hook trigger, A012 a fetch or user-path program,

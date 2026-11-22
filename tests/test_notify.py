@@ -668,6 +668,32 @@ def test_burst_clusters_are_not_campaigns():
     assert "H052" not in payload["title"]
 
 
+def test_account_blast_radius_is_context_not_a_campaign():
+    cycle = _cycle(cluster_findings=[{
+        "rule_id": "G016",
+        "match": "one account maintains 2 other package(s) processed this cycle; evil fired R001",
+        "params": {
+            "account": "same@account",
+            "members": ["sibling-a", "sibling-b"],
+            "trigger_packages": ["evil"],
+            "trigger_rules": ["R001"],
+            "fatal": False,
+            "sibling_count": 2,
+        },
+    }])
+    payload = alert_payload(cycle)
+    assert payload["campaign_cluster"] == []
+    assert payload["account_context"] == [{
+        "account": "same@account",
+        "members": ["sibling-a", "sibling-b"],
+        "trigger_packages": ["evil"],
+        "trigger_rules": ["R001"],
+        "fatal": False,
+        "match": "one account maintains 2 other package(s) processed this cycle; evil fired R001",
+    }]
+    assert "G016" not in payload["title"]
+
+
 def test_payload_leads_with_an_impersonation_campaign():
     cycle = _cycle(
         cluster_findings=[{

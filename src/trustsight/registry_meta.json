@@ -665,6 +665,15 @@
     "target": "programmatic (adoption history and cycle records)",
     "uid": "TS-0295"
   },
+  "g016": {
+    "canonical": true,
+    "capability": "correlation",
+    "name": "Account Blast Radius",
+    "severity": "INFO",
+    "severity_text": "INFO (weight 0)",
+    "target": "programmatic (cycle records)",
+    "uid": "TS-0313"
+  },
   "h001": {
     "canonical": true,
     "capability": "integrity",

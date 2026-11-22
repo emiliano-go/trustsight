@@ -83,6 +83,7 @@ exactly one category page; this catalog only points at it.
 | [G013](correlation.md#g013) | Shared Fetch Target | Correlation | HIGH | [Correlation](correlation.md) |
 | [G014](correlation.md#g014) | Shared Adoption Window | Correlation | HIGH | [Correlation](correlation.md) |
 | [G015](correlation.md#g015) | Sleeper Adoption Campaign | Correlation | MEDIUM | [Correlation](correlation.md) |
+| [G016](correlation.md#g016) | Account Blast Radius | Correlation | INFO | [Correlation](correlation.md) |
 | [H001](integrity.md#h001) | Checksum Disabled | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
 | [H002](integrity.md#h002) | Checksum Emptied | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
 | [H003](fetch-and-execution.md#h003) | Insecure Download Protocol | Heuristic | LOW | [Fetch and Execution](fetch-and-execution.md) |

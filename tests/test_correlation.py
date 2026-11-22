@@ -1,6 +1,7 @@
 """The G-series cross-package correlation."""
 
 from trustsight.analysis.correlation import (
+    account_blast_radius,
     coordinated_adoption,
     correlate,
     package_creation_burst,
@@ -618,9 +619,11 @@ def test_correlation_records_carry_cycle_findings(tmp_path, monkeypatch):
     monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
     init_db()
     detail = {"a": {"rules": ["R001"],
+                    "findings": [{"rule_id": "R013", "severity": "FATAL"}],
                     "payload_urls": ["https://evil.example/x.sh"]}}
     records = _correlation_records({}, None, {"a"}, detail=detail)
     assert records[0]["rules"] == ["R001"]
+    assert records[0]["fatal"] is True
     assert records[0]["payload_urls"] == ["https://evil.example/x.sh"]
 
 
@@ -760,3 +763,71 @@ def test_package_creation_burst_is_silent_on_the_benign_triage_shape():
     )
     assert len(fixture["records"]) == 65
     assert package_creation_burst(fixture["records"]) == []
+
+
+def _account_records():
+    return [
+        {"package": "evil", "maintainer": "same@account", "rules": ["R001"]},
+        {"package": "sibling-a", "maintainer": "same@account", "rules": []},
+        {"package": "sibling-b", "maintainer": "same@account", "rules": []},
+        {"package": "other", "maintainer": "other@account", "rules": ["R001"]},
+    ]
+
+
+def test_account_blast_radius_reports_siblings_without_the_trigger():
+    found = account_blast_radius(_account_records(), min_siblings=2)
+    assert [f["rule_id"] for f in found] == ["G016"]
+    assert found[0]["severity"] == "INFO"
+    assert found[0]["params"]["members"] == ["sibling-a", "sibling-b"]
+    assert found[0]["params"]["trigger_packages"] == ["evil"]
+    assert found[0]["params"]["trigger_rules"] == ["R001"]
+    assert "compromised" not in found[0]["match"].lower()
+
+
+def test_account_blast_radius_needs_enough_siblings():
+    assert account_blast_radius(_account_records(), min_siblings=3) == []
+
+
+def test_account_blast_radius_ignores_broad_rules():
+    records = [
+        {"package": "a", "maintainer": "acct", "rules": ["R010"]},
+        {"package": "b", "maintainer": "acct", "rules": []},
+    ]
+    assert account_blast_radius(records) == []
+
+
+def test_account_blast_radius_accepts_fatal():
+    records = [
+        {"package": "a", "maintainer": "acct", "rules": [], "fatal": True},
+        {"package": "b", "maintainer": "acct", "rules": []},
+    ]
+    found = account_blast_radius(records, min_siblings=1)
+    assert found[0]["params"]["fatal"] is True
+    assert found[0]["params"]["trigger_packages"] == ["a"]
+
+
+def test_correlate_uses_the_g016_threshold():
+    config = {"thresholds": {"g016": {"min_siblings": 3}}}
+    assert correlate(_account_records(), config) == []
+
+
+def test_account_context_is_attached_to_each_sibling_only():
+    from trustsight.full_aur.pipeline import _attach_account_context
+
+    findings = [{
+        "rule_id": "G016",
+        "match": "one account maintains 2 other package(s) processed this cycle; evil fired R001",
+        "params": {"members": ["sibling-a", "sibling-b"],
+                   "trigger_packages": ["evil"]},
+    }]
+    detail = {
+        "evil": {"rules": ["R001"], "findings": []},
+        "sibling-a": {"rules": [], "findings": []},
+        "sibling-b": {"rules": [], "findings": []},
+    }
+    _attach_account_context(findings, detail)
+    assert "G016" not in detail["evil"]["rules"]
+    for member in ("sibling-a", "sibling-b"):
+        assert detail[member]["rules"] == ["G016"]
+        assert detail[member]["findings"][0]["rule_id"] == "G016"
+        assert detail[member]["findings"][0]["weight"] == 0

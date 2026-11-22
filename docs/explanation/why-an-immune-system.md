@@ -265,6 +265,22 @@ Source:
 - [Detection and Evidence - Neighborhood Elevation](https://docs.trustsight.org/explanation/detection-and-evidence/)
 - [Correlation Rules - G006](https://docs.trustsight.org/rules/correlation/)
 
+### Bystander activation: G016 account blast radius
+
+A second, weaker field effect appears one level up: when one package on an
+account fires a specific payload rule or a FATAL finding, other packages that
+the same account had processed in that cycle are **bystanders**. The biology
+is bystander activation: antigen-nonspecific cells can be activated by
+cytokines during an ongoing response, without direct recognition of the
+antigen.
+
+G016 reports that shared-account context. It does not say the account is
+compromised and it does not score the siblings. Unregulated bystander
+activation can itself cause immune pathology, which is why G016 is weight zero
+and anergic rather than a promotion path into the package score.
+
+Source: [Mechanisms governing bystander activation of T cells](https://pmc.ncbi.nlm.nih.gov/articles/PMC11635090/)
+
 ---
 
 ## 8. Trained immunity: G007 and bounded campaign priming
@@ -681,6 +697,7 @@ Sources:
 | Danger Theory | Danger over stranger; Contact Ledger | Explicitly documented |
 | Clonal recognition | G-series campaign correlation | Explicitly documented |
 | Cytokine signalling | G006 neighborhood elevation | Explicitly documented |
+| Bystander activation | G016 account blast radius | Interpretive analogy; context only, never a compromise claim |
 | Trained immunity | G007 and campaign priming | Explicitly documented |
 | Opsonization / complement | Weight-zero tags and `tag_panel` | Explicitly documented |
 | Sickness behavior | W013 and campaign-wide posture | Explicitly documented |

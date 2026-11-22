@@ -53,6 +53,7 @@ from .payload_signals import SHARED_PAYLOAD_RULES
 
 __all__ = ["correlate", "shared_gained_host", "shared_added_literal",
            "coordinated_adoption", "shared_upstream_dependency",
+           "account_blast_radius",
            "first_seen_adoption_burst", "package_creation_burst",
            "watchlisted_maintainer",
            "shared_payload_signal", "shared_fetch_target",
@@ -655,6 +656,64 @@ def watchlisted_maintainer(records, config=None) -> list[dict]:
     return out
 
 
+def account_blast_radius(records, min_siblings: int = 2) -> list[dict]:
+    """G016: one account has other packages in the cycle after a trigger.
+
+    Report-only bystander context.  A trigger is a specific payload rule
+    (``SHARED_PAYLOAD_RULES``) or a FATAL finding on one package.  The other
+    packages this account had processed in the same cycle are named as
+    siblings; they are not members of a campaign, receive no weight, and do
+    not change any verdict.
+    """
+    by_account: dict[str, dict[str, dict]] = defaultdict(dict)
+    for record in records:
+        account = _maintainer_key(record.get("maintainer"))
+        package = str(record.get("package", "") or "")
+        if account and package:
+            by_account[account][package] = record
+
+    out: list[dict] = []
+    for account, packages in sorted(by_account.items()):
+        trigger_packages: list[str] = []
+        trigger_rules: set[str] = set()
+        fatal = False
+        for package, record in packages.items():
+            rules = set(_seq(record.get("rules")))
+            specific = rules & SHARED_PAYLOAD_RULES
+            if specific:
+                trigger_packages.append(package)
+                trigger_rules.update(specific)
+            if record.get("fatal"):
+                trigger_packages.append(package)
+                fatal = True
+        triggers = sorted(set(trigger_packages))
+        if not triggers:
+            continue
+        siblings = sorted(set(packages) - set(triggers))
+        if len(siblings) < max(1, int(min_siblings)):
+            continue
+        named_rules = ", ".join(sorted(trigger_rules)) if trigger_rules else "FATAL"
+        out.append({
+            "rule_id": "G016",
+            "name": "Account Blast Radius",
+            "severity": "INFO",
+            "category": "correlation",
+            "match": (
+                f"one account maintains {len(siblings)} other package(s) "
+                f"processed this cycle; {', '.join(triggers)} fired "
+                f"{named_rules}"),
+            "params": {
+                "account": account,
+                "members": siblings,
+                "trigger_packages": triggers,
+                "trigger_rules": sorted(trigger_rules),
+                "fatal": fatal,
+                "sibling_count": len(siblings),
+            },
+        })
+    return out
+
+
 def _shared_groups(records, field: str, normalize, min_packages: int,
                    min_maintainers: int):
     """Yield ``(key, members, accounts)`` for a cross-package shared signal."""
@@ -1099,4 +1158,7 @@ def correlate(records, config=None) -> list[dict]:
         records, adopt_window_n, adopt_window_m,
         adopt_window_dormant, adopt_window_days))
     out.extend(watchlisted_maintainer(records, config))
+    g016 = _section(thresholds.get("g016"))
+    min_siblings = max(1, _safe_int(g016.get("min_siblings", 2), 2))
+    out.extend(account_blast_radius(records, min_siblings))
     return out

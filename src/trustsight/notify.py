@@ -58,7 +58,12 @@ _MAX_RESPONSE_BYTES = 64 * 1024
 #: payload as evidence but never become the notification headline: the scored
 #: package is the signal a reader acts on, and "Campaign across 50 packages
 #: (G010)" on a routine bulk refresh trains the reader to ignore the title.
-_CONTEXT_CLUSTER_RULES = frozenset({"G006", "G010"})
+_CONTEXT_CLUSTER_RULES = frozenset({"G006", "G010", "G016"})
+
+#: Context findings that are not campaign clusters at all.  G010 is context
+#: for the headline but remains in campaign_cluster as a census; G006 and
+#: G016 are bounded neighbourhood/bystander context and never enter it.
+_NO_CAMPAIGN_CLUSTER_RULES = frozenset({"G006", "G016"})
 
 #: A cluster is a membership list, not a data structure for hostile values.
 MAX_CLUSTER_MEMBERS = 1_000
@@ -436,7 +441,9 @@ def alert_payload(cycle) -> dict:
         # coordinated set: the sweep emits H061 dependency hubs one member each,
         # and a bulk sweep of them read as "hundreds of campaign cluster(s)".
         # G006 is bounded neighbourhood context, never a campaign either.
-        if not rule_id.startswith("G") or rule_id == "G006" or len(members) < 2:
+        if (not rule_id.startswith("G")
+                or rule_id in _NO_CAMPAIGN_CLUSTER_RULES
+                or len(members) < 2):
             continue
         cluster = {
             "rule_id": rule_id,
@@ -479,6 +486,29 @@ def alert_payload(cycle) -> dict:
         for finding in (getattr(cycle, "cluster_findings", None) or ())
         if isinstance(finding, dict) and finding.get("rule_id") == "G005"
     ]
+    account_context = []
+    for finding in (getattr(cycle, "cluster_findings", None) or ()):
+        if not isinstance(finding, dict) or finding.get("rule_id") != "G016":
+            continue
+        params = finding.get("params")
+        if not isinstance(params, dict):
+            params = {}
+        account_context.append({
+            "account": clean(str(params.get("account", "")), limit=200),
+            "members": _member_list(finding, "members")[:MAX_CLUSTER_MEMBERS],
+            "trigger_packages": [
+                clean(str(value), limit=200)
+                for value in (params.get("trigger_packages") or ())
+                if isinstance(value, str) and value
+            ][:MAX_CLUSTER_MEMBERS],
+            "trigger_rules": [
+                clean(str(value), limit=80)
+                for value in (params.get("trigger_rules") or ())
+                if isinstance(value, str) and value
+            ][:32],
+            "fatal": bool(params.get("fatal", False)),
+            "match": clean(str(finding.get("match", "")), limit=500),
+        })
     headline = _headline(cycle, detail, iocs, campaign_cluster, impersonation)
     title = f"TrustSight: {headline}"
     if day:
@@ -504,6 +534,7 @@ def alert_payload(cycle) -> dict:
         "ioc_matches": iocs,
         "campaign_cluster": campaign_cluster,
         "impersonation": impersonation,
+        "account_context": account_context,
         # A refusal names a package the analysis could not fully read.  The
         # name alone does not explain *what* was incomplete, so the refusing
         # X026/X027 findings (rule, file, line, reason) ride along; without

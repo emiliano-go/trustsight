@@ -309,12 +309,12 @@
       "weight": 0
     }
   },
-  "catalog_size": 322,
+  "catalog_size": 324,
   "corpus_content_sha256": "a4cbea4ef14029c97d7746e2be080a2e5c931502429ee261d974810b35f5cafc",
   "counts": {
     "adversarial_only": 18,
     "cold_only": 42,
-    "measured": 175,
+    "measured": 177,
     "zero_fire": 87
   },
   "measured_at": "2026-11-02",
@@ -3975,14 +3975,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 1054,
+      "fires": 1062,
       "id": "H027",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 1027,
+          "fires": 1035,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -6928,14 +6928,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 492,
+      "fires": 483,
       "id": "M002",
       "pseudo": false,
       "reason": "",
       "series": "M",
       "sources": {
         "cold": {
-          "fires": 489,
+          "fires": 480,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -7008,14 +7008,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 297,
+      "fires": 299,
       "id": "M003",
       "pseudo": false,
       "reason": "",
       "series": "M",
       "sources": {
         "cold": {
-          "fires": 265,
+          "fires": 267,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -9052,6 +9052,74 @@
       "state": "measured",
       "strata": [],
       "uid": "TS-0210"
+    },
+    "S009": {
+      "benign_sources": [
+        "cold"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "signed_sources"
+      ],
+      "disposition": null,
+      "expected_met": true,
+      "expected_strata": [],
+      "expected_strata_met": [],
+      "fires": 1,
+      "id": "S009",
+      "pseudo": false,
+      "reason": "",
+      "series": "S",
+      "sources": {
+        "cold": {
+          "fires": 1,
+          "strata": [
+            "signed_sources"
+          ]
+        }
+      },
+      "state": "measured",
+      "strata": [
+        "signed_sources"
+      ],
+      "uid": "TS-0311"
+    },
+    "S010": {
+      "benign_sources": [
+        "cold"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "dkms_kernel",
+        "lang_deep",
+        "source_patched"
+      ],
+      "disposition": null,
+      "expected_met": true,
+      "expected_strata": [],
+      "expected_strata_met": [],
+      "fires": 26,
+      "id": "S010",
+      "pseudo": false,
+      "reason": "",
+      "series": "S",
+      "sources": {
+        "cold": {
+          "fires": 26,
+          "strata": [
+            "dkms_kernel",
+            "lang_deep",
+            "source_patched"
+          ]
+        }
+      },
+      "state": "measured",
+      "strata": [
+        "dkms_kernel",
+        "lang_deep",
+        "source_patched"
+      ],
+      "uid": "TS-0312"
     },
     "SOURCE_BUCKET": {
       "benign_sources": [

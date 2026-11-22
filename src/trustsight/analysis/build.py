@@ -556,7 +556,11 @@ def _recipe_lines(current_text: str | None) -> list[str] | None:
 # (``bash <<< "$(curl ...)"``).  Each still executes remote code at build
 # time, so it must not be left at R010/R011's "uses curl/wget" LOW.
 _REMOTE_PROC_SUBST_RE = re.compile(
-    r"(?:\b(?:" + _SHELL_EXEC + r")\b|\bsource\b|\.)\s*<\s*\(\s*(?:curl|wget)\b",
+    r"(?:(?:command|builtin|exec|env|sudo|doas|nohup|time)\s+)*"
+    r"(?:/(?:usr/)?bin/)?"
+    r"(?:\b(?:" + _SHELL_EXEC + r")\b|\bsource\b|\.)\s*<\s*\(\s*"
+    r"(?:(?:command|builtin|exec|env)\s+)*"
+    r"(?:/(?:usr/)?bin/)?(?:curl|wget)\b",
     re.IGNORECASE,
 )
 _REMOTE_XARGS_SHELL_RE = re.compile(

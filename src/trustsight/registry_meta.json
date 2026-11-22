@@ -2114,6 +2114,24 @@
     "target": null,
     "uid": "TS-0210"
   },
+  "s009": {
+    "canonical": true,
+    "capability": "sabotage",
+    "name": "Privileged Account Or udev Rule",
+    "severity": "HIGH",
+    "severity_text": "HIGH (weight 25)",
+    "target": null,
+    "uid": "TS-0311"
+  },
+  "s010": {
+    "canonical": true,
+    "capability": "sabotage",
+    "name": "Kernel Module Loaded During Build",
+    "severity": "HIGH",
+    "severity_text": "HIGH (weight 25)",
+    "target": null,
+    "uid": "TS-0312"
+  },
   "t001": {
     "canonical": true,
     "capability": "temporal",

@@ -238,7 +238,7 @@ This is the cross-package signal H104 exists for. Individually a placeholder is 
 
 - **Condition:** The same specific payload rule fired in at least `[thresholds] g012.min_packages` (default 3) unrelated packages from at least `g012.min_maintainers` (default 2) distinct maintainers in one cycle.
 
-A per-package rule names one package's payload. This is the cross-account join: three unrelated maintainers shipping the same payload technique in one window is a campaign, not three coincidences. Only the curated payload allowlist counts (`R001`, `R002`, `R003`, `R008`, `H017`, `H035`, `H041`, `H075`, `H090`, `C016`, `C032`, `S001`-`S008`); broad practice rules such as `R010` (uses curl) or `H001` (checksum `SKIP`) are deliberately excluded so ordinary ecosystem churn cannot read as coordination.
+A per-package rule names one package's payload. This is the cross-account join: three unrelated maintainers shipping the same payload technique in one window is a campaign, not three coincidences. Only the curated payload allowlist counts (`R001`, `R002`, `R003`, `R008`, `H017`, `H035`, `H041`, `H075`, `H090`, `C016`, `C032`, `S001`-`S010`); broad practice rules such as `R010` (uses curl) or `H001` (checksum `SKIP`) are deliberately excluded so ordinary ecosystem churn cannot read as coordination.
 
 The join runs over this cycle's recorded rule ids, so a prior cycle cannot re-fire it. Split outputs of one pkgbase and one naming family stand down, the same way G003 refuses a variant family. The finding names the members, the shared rule and the maintainer count. It is alert-only: a member's own score is not inflated by belonging to the cluster, and the campaign is what escalates (G006/G007), not the member's number.
 

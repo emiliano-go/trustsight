@@ -126,7 +126,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 ## S-series: **Sabotage** Hostile Impact Detection {#s-series}
 
-**Count:** 8 rules (S001-S008)
+**Count:** 10 rules (S001-S010)
 
 **Mechanism:** Detects payloads intended to harm, abuse, compromise, or exploit the operator environment. These rules are distinguished from general payload detection because they specifically identify actions intended to negatively impact the host: resource exhaustion (fork bombs, disk fill), file deletion, privilege abuse, service disruption, data exfiltration, and resource theft.
 
@@ -497,7 +497,7 @@ default, and both fire on zero diffs of the benign corpus.
 
 ### Per-package code rules
 
-H086-H088 are per-package findings, not Class D corpus findings. S001-S008
+H086-H088 are per-package findings, not Class D corpus findings. S001-S010
 and X001-X034 are the sabotage and crossfire families; their category pages
 are authoritative for their conditions and severities.
 

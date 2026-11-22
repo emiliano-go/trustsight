@@ -48,7 +48,9 @@ _WORKER_CPU_SECONDS = 5
 _WORKER_NOFILE = 64
 
 _PR_SET_NO_NEW_PRIVS = 38
+_PR_GET_NO_NEW_PRIVS = 39
 _CLONE_NEWNET = 0x40000000
+_ANCHOR: dict = {}
 
 
 _DEGRADED: list[str] = []
@@ -85,6 +87,46 @@ def _apply_limits() -> list[str]:
     if not no_new_privs:
         failures.append("PR_SET_NO_NEW_PRIVS not applied: prctl failed")
     return failures
+
+
+def _has_no_new_privs() -> bool:
+    """Read PR_GET_NO_NEW_PRIVS without changing it."""
+    try:
+        libc = ctypes.CDLL(None, use_errno=True)
+        return libc.prctl(_PR_GET_NO_NEW_PRIVS, 0, 0, 0, 0) == 1
+    except (OSError, AttributeError):
+        return False
+
+
+def _anchorage() -> dict:
+    """The stable anchors a worker's death-on-detachment check needs."""
+    try:
+        net_inode = os.stat("/proc/self/ns/net").st_ino
+    except OSError:
+        net_inode = None
+    return {
+        "uid": os.geteuid(),
+        "cwd": os.getcwd(),
+        "net_inode": net_inode,
+        "no_new_privs": _has_no_new_privs(),
+    }
+
+
+def _anchorage_lost() -> str:
+    """Return the first lost anchor, or an empty string while anchored."""
+    if os.geteuid() != _ANCHOR.get("uid"):
+        return "effective uid changed"
+    if os.getcwd() != _ANCHOR.get("cwd"):
+        return "working directory changed"
+    if _ANCHOR.get("no_new_privs") and not _has_no_new_privs():
+        return "no_new_privs dropped"
+    if _ANCHOR.get("net_inode") is not None:
+        try:
+            if os.stat("/proc/self/ns/net").st_ino != _ANCHOR["net_inode"]:
+                return "network namespace changed"
+        except OSError:
+            return "network namespace unavailable"
+    return ""
 
 
 def _no_new_privs() -> bool:
@@ -153,9 +195,20 @@ def main() -> int:
         os.chdir("/")
     except OSError:
         pass
+    global _ANCHOR
+    _ANCHOR = _anchorage()
     stdin = sys.stdin.buffer
     stdout = sys.stdout.buffer
     while True:
+        lost = _anchorage_lost()
+        if lost:
+            print(
+                "trustsight-tokenizer-sandbox-refused: anchorage lost: "
+                + lost,
+                file=sys.stderr,
+                flush=True,
+            )
+            return 4
         try:
             body = protocol.read_frame(stdin)
         except protocol.FrameError:

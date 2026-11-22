@@ -249,7 +249,7 @@ def test_failed_request_releases_capacity_and_preserves_refusal(monkeypatch):
     with pytest.raises(TokenizerUnavailable, match="forced read failure"):
         client._send("lines", "pkgname=example")
 
-    worker.stop.assert_called_once_with()
+    worker.stop.assert_called_once_with("request_error")
     assert not occupied
 
 
@@ -266,7 +266,7 @@ def test_dead_idle_worker_is_removed_before_replacement(monkeypatch):
     monkeypatch.setattr(client, "_Worker", lambda: replacement)
 
     assert client._acquire() is replacement
-    dead.stop.assert_called_once_with()
+    dead.stop.assert_called_once_with("dead_idle")
     replacement.start.assert_called_once_with()
     assert occupied == [replacement]
 
@@ -348,7 +348,7 @@ def test_a_malformed_response_is_a_refusal(monkeypatch):
 
     with pytest.raises(TokenizerUnavailable, match="malformed response"):
         client._send("lines", "x")
-    worker.stop.assert_called_once_with()
+    worker.stop.assert_called_once_with("request_error")
 
 
 def test_degraded_limits_are_reported_once(monkeypatch, caplog):

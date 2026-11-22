@@ -46,6 +46,50 @@ def _line_has_scheme(line: str) -> bool:
     lowered = line.lower()
     return any(marker in lowered for marker in _SCHEME_MARKERS)
 
+def _mask_quoted(line: str) -> str:
+    """Blank out quoted literals, keeping ``$(...)`` bodies visible.
+
+    Inside single quotes nothing expands, so the whole span is data.  Inside
+    double quotes only the literal characters are data; a command
+    substitution still runs, so its body is copied through.
+    """
+    out: list[str] = []
+    i, n = 0, len(line)
+    while i < n:
+        ch = line[i]
+        if ch == "'":
+            i += 1
+            while i < n and line[i] != "'":
+                i += 1
+            i += 1
+            out.append(" ")
+            continue
+        if ch == '"':
+            i += 1
+            while i < n and line[i] != '"':
+                if line[i] == "$" and i + 1 < n and line[i + 1] == "(":
+                    depth = 0
+                    start = i
+                    while i < n:
+                        if line[i] == "(":
+                            depth += 1
+                        elif line[i] == ")":
+                            depth -= 1
+                            if depth == 0:
+                                i += 1
+                                break
+                        i += 1
+                    out.append(line[start:i])
+                    continue
+                i += 1
+            i += 1
+            out.append(" ")
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
 def _package_fetch_client(body: str) -> str | None:
     """The first fetch command in a function body, or ``None``.
 
@@ -60,10 +104,15 @@ def _package_fetch_client(body: str) -> str | None:
         if (re.match(r"(?:export\s+|local\s+)?[A-Za-z_]\w*\s*\+?=", stripped)
                 and "$(" not in stripped and "`" not in stripped):
             continue
-        match = _FETCH_IN_PACKAGE_RE.search(raw_line)
+        # A client inside a quoted string is text, not a command: the
+        # `hush install  (links the config …)` message in an install hook
+        # read as `links` the browser and made C015 claim package() fetched.
+        # Command substitutions stay visible, because `x="$(curl …)"` runs.
+        probe = _mask_quoted(raw_line)
+        match = _FETCH_IN_PACKAGE_RE.search(probe)
         if match:
             return match.group(0).strip()
-        interpreter = _INTERPRETER_FETCH_RE.search(raw_line)
+        interpreter = _INTERPRETER_FETCH_RE.search(probe)
         if interpreter and _line_has_scheme(raw_line):
             return interpreter.group(0)
     return None

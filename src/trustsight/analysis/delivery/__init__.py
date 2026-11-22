@@ -263,6 +263,12 @@ def edge_write_execute(ctx, add) -> None:
                         or _PKGDIR_TARGET_RE.search(path or "")
                         or _PKGDIR_TARGET_RE.search(body or "")):
                     continue
+                if fn == "check":
+                    # check() generating a file and running it is the test
+                    # harness running the package's own tests; H069 claims a
+                    # payload staged in the build and then executed, which
+                    # is prepare/build/package work.
+                    continue
                 if (fn, wpath) in h069_claimed:
                     continue
                 if _is_data_artifact(base) or _is_data_artifact(

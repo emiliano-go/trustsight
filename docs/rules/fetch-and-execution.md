@@ -428,6 +428,10 @@ consumes is not generation-then-execution and does not fire.
 
 Fire rate: 0 on the v1 corpus.
 
+`check()` is the package's own test harness: generating a file there and running it
+runs the package's tests. The rule claims a payload staged in the build and then
+executed, which is prepare/build/package work.
+
 ### H072: Write Then Execute {#h072}
 
 - **Severity:** HIGH (weight 25)
@@ -612,6 +616,11 @@ dependency list or a comment is not a fetch, and `python -m pip install .`
 (a local install) stands down because the interpreter arm requires a
 scheme-bearing address on the line. Measured on the locked benign corpus:
 7 on the v1 corpus (0.19%).
+
+Only a command-position client counts. A client name inside a quoted string is
+printed text, not a fetch: the `hush install  (links the config …)` message in an
+install hook is not the `links` browser. A command substitution inside double
+quotes still runs and is still a fetch.
 
 ### C016: Interpreter Invocation In Install Hook {#c016}
 

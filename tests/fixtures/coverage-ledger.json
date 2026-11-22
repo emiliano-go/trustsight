@@ -336,8 +336,8 @@
   "counts": {
     "adversarial_only": 18,
     "cold_only": 42,
-    "measured": 178,
-    "zero_fire": 88
+    "measured": 177,
+    "zero_fire": 89
   },
   "measured_at": "2026-11-02",
   "rules": {
@@ -4020,14 +4020,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 1063,
+      "fires": 1061,
       "id": "H027",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 1036,
+          "fires": 1034,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -6243,42 +6243,28 @@
       "uid": "TS-0144"
     },
     "H089": {
-      "benign_sources": [
-        "cold"
-      ],
-      "benign_state": "fire",
-      "benign_strata": [
-        "appimage_repack",
-        "multi_client_fetch",
-        "source_patched"
-      ],
-      "disposition": null,
-      "expected_met": true,
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": {
+        "note": "The three benign fires were the heredoc-context false positive fixed on 2026-11-20: the install destination after an unterminated heredoc was read as packaged content. No benign shape remains in the locked corpus; schedule one.",
+        "phase": "2",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "persist_surface"
       ],
       "expected_strata_met": [],
-      "fires": 3,
+      "fires": 0,
       "id": "H089",
       "pseudo": false,
-      "reason": "",
+      "reason": "no benign shape in the locked corpus; expected from persist_surface",
       "series": "H",
-      "sources": {
-        "cold": {
-          "fires": 3,
-          "strata": [
-            "appimage_repack",
-            "multi_client_fetch",
-            "source_patched"
-          ]
-        }
-      },
-      "state": "measured",
-      "strata": [
-        "appimage_repack",
-        "multi_client_fetch",
-        "source_patched"
-      ],
+      "sources": {},
+      "state": "zero_fire",
+      "strata": [],
       "uid": "TS-0145"
     },
     "H090": {
@@ -6973,14 +6959,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 485,
+      "fires": 486,
       "id": "M002",
       "pseudo": false,
       "reason": "",
       "series": "M",
       "sources": {
         "cold": {
-          "fires": 482,
+          "fires": 483,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -7053,14 +7039,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 303,
+      "fires": 304,
       "id": "M003",
       "pseudo": false,
       "reason": "",
       "series": "M",
       "sources": {
         "cold": {
-          "fires": 271,
+          "fires": 272,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -9245,14 +9231,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 1280,
+      "fires": 1237,
       "id": "SOURCE_BUCKET",
       "pseudo": true,
       "reason": "",
       "series": "S",
       "sources": {
         "cold": {
-          "fires": 1217,
+          "fires": 1174,
           "strata": [
             "appimage_repack",
             "autotools",

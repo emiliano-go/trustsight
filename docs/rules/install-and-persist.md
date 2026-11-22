@@ -299,6 +299,11 @@ named on the opener.
 
 Zero occurrences in the v1 benign corpus.
 
+The claim is about content staged into the package, not about the destination: an
+`install` line whose *destination* is `$pkgdir/...` is staging as usual. A heredoc
+opened in the hunk closes on whichever line spells its terminator, including an
+unchanged context line, so the lines after it stay outside its body.
+
 ### H093: Committed Config Points At A Build-Only Path {#h093}
 
 - **Severity:** HIGH (weight 25)

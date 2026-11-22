@@ -300,6 +300,7 @@ def _quoted_items(contents: str) -> list[str] | None:
     items: list[str] = []
     current: list[str] = []
     quote = ""
+    line_end = False
     for ch in inner:
         if quote:
             current.append(ch)
@@ -309,13 +310,24 @@ def _quoted_items(contents: str) -> list[str] | None:
         if ch in "'\"":
             quote = ch
             current.append(ch)
+        elif ch == "#":
+            # A comment ends the element and the *line*, not the array:
+            # `md5sums=('a' # upstream uses md5\n 'b')` declares two
+            # entries, and stopping at the `#` counted one, which made
+            # H091 report a short array on a recipe that declared both.
+            line_end = True
+        elif ch == "\n":
+            if line_end and current:
+                items.append("".join(current))
+                current = []
+            line_end = False
         elif ch.isspace():
             if current:
                 items.append("".join(current))
                 current = []
-        elif ch == "#":
-            # A comment inside the array ends the element and the line.
-            break
+        elif line_end:
+            # Inside a comment: the rest of the line is prose, not a token.
+            continue
         else:
             current.append(ch)
     if current:

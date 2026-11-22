@@ -577,6 +577,9 @@ checksum list nobody recounted is caught on both paths.
 
 Zero occurrences in the v1 benign corpus.
 
+A comment inside the array ends the *line*, not the array: `md5sums=('a' # upstream
+ 'b')` declares two entries, and a recipe that declares both must not be read as short.
+
 ### H103: Metadata And Recipe Disagree {#h103}
 
 - **Severity:** HIGH (weight 25) for a field divergence or a source the

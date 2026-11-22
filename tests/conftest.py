@@ -213,3 +213,15 @@ def _no_outbound_network(monkeypatch):
         return real_connect(self, address, *args, **kwargs)
 
     monkeypatch.setattr(_socket.socket, "connect", guarded)
+
+
+@pytest.fixture(autouse=True)
+def _reset_sandbox_worker_restart_budget():
+    """A failed-worker budget is process state; isolate each test from it."""
+    from trustsight.sandbox import client as sandbox_client
+
+    with sandbox_client._restart_lock:
+        sandbox_client._restart_times.clear()
+    yield
+    with sandbox_client._restart_lock:
+        sandbox_client._restart_times.clear()

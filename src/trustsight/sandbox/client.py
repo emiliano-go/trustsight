@@ -26,9 +26,10 @@ import queue
 import select
 import threading
 import time
-from collections import OrderedDict
+from collections import OrderedDict, deque
 
 from . import _worker_io, protocol
+from .worker_lifecycle import write_corpse
 from ._spawn import launch_args, spawn_isolated
 from ..subproc import minimal_env
 
@@ -60,6 +61,13 @@ CPU_RETIRE_SECONDS = 3.5
 #: source constant` gate can hold it.
 WORKER_POOL_SIZE = 4
 
+#: A pool that repeatedly replaces failed workers is in a deterministic
+#: crash loop; a crawler that restarts forever spends the budget on a dead
+#: input.  Three restarts in a minute is enough to tell a transient kill from
+#: a reproducible one; the pool then shuts itself down.
+WORKER_RESTART_LIMIT = 3
+WORKER_RESTART_WINDOW_SECONDS = 60.0
+
 
 class TokenizerUnavailable(RuntimeError):
     """The sandboxed tokenizer could not answer for this input.
@@ -82,6 +90,8 @@ class _Worker:
         self.degraded: list = []
         self._degraded_reported = False
         self._stderr_thread = None
+        self._death_lock = threading.Lock()
+        self._dead = False
 
     def start(self) -> None:
         self.proc = spawn_isolated(_WORKER_MODULE)
@@ -100,10 +110,30 @@ class _Worker:
     def alive(self) -> bool:
         return self.proc is not None and self.proc.poll() is None
 
-    def stop(self) -> None:
-        proc = self.proc
-        self.proc = None
-        _worker_io.stop_process(proc)
+    def stop(self, reason: str = "retired") -> None:
+        """Run the fixed effector teardown exactly once.
+
+        The order is the contract: stop intake, record the corpse, release
+        the process group and pipes.  Nothing here reads analysed content or
+        raises; a second stop is a no-op.
+        """
+        with self._death_lock:
+            if self._dead:
+                return
+            self._dead = True
+            proc = self.proc
+            self.proc = None
+            exit_code = (
+                proc.poll() if proc is not None
+                and callable(getattr(proc, "poll", None)) else None)
+            write_corpse({
+                "pid": getattr(proc, "pid", None),
+                "reason": reason,
+                "requests": self.requests,
+                "degraded": list(self.degraded),
+                "exit_code": exit_code,
+            })
+            _worker_io.stop_process(proc)
 
     def request(self, body: bytes) -> bytes:
         if self.proc is None or self.proc.stdin is None or self.proc.stdout is None:
@@ -194,6 +224,23 @@ _pool: queue.Queue = queue.Queue()
 _all: list[_Worker] = []
 _lock = threading.Condition()
 _shutdown = threading.Event()
+_restart_lock = threading.Lock()
+_restart_times: deque[float] = deque()
+
+def _restart_budget_exhausted() -> bool:
+    """Record one failed-worker restart; true once the pool must stand down."""
+    now = time.monotonic()
+    with _restart_lock:
+        while _restart_times and now - _restart_times[0] > WORKER_RESTART_WINDOW_SECONDS:
+            _restart_times.popleft()
+        _restart_times.append(now)
+        exhausted = len(_restart_times) >= WORKER_RESTART_LIMIT
+    if exhausted:
+        _shutdown.set()
+        with _lock:
+            _lock.notify_all()
+    return exhausted
+
 
 def _acquire() -> _Worker:
     deadline = time.monotonic() + REQUEST_TIMEOUT_SECONDS
@@ -209,9 +256,14 @@ def _acquire() -> _Worker:
                 # A worker that died while idle is not capacity.  Retire it
                 # and keep looking rather than handing it back: the request
                 # would fail and mark the package NOT vetted while an empty
-                # slot was available.
+                # slot was available.  Repeated replacement is a crash loop,
+                # not transient churn.
+                if _restart_budget_exhausted():
+                    raise TokenizerUnavailable(
+                        "tokenizer_unavailable: worker restart budget exhausted"
+                    )
                 try:
-                    worker.stop()
+                    worker.stop("dead_idle")
                 finally:
                     _forget(worker)
             if len(_all) < WORKER_POOL_SIZE:
@@ -271,7 +323,7 @@ def _release(worker: _Worker) -> None:
             _lock.notify()
             return
     try:
-        worker.stop()
+        worker.stop("retired")
     finally:
         _forget(worker)
 
@@ -290,7 +342,7 @@ def _terminate_all() -> None:
         _all.clear()
         _lock.notify_all()
     for worker in workers:
-        worker.stop()
+        worker.stop("pool_shutdown")
 
 
 atexit.register(_terminate_all)
@@ -310,6 +362,8 @@ def reset_after_fork() -> None:
         _all.clear()
         _shutdown.clear()
         _lock.notify_all()
+    with _restart_lock:
+        _restart_times.clear()
     if getattr(_cache, "entries", None) is not None:
         _cache.entries.clear()
         _cache.bytes = 0
@@ -461,8 +515,12 @@ def _send(op: str, payload):
         if "error" not in response and "result" not in response:
             raise _WorkerError("response carried neither result nor error")
     except Exception as exc:
-        worker.stop()
+        worker.stop("request_error")
         _forget(worker)
+        if _restart_budget_exhausted():
+            raise TokenizerUnavailable(
+                "tokenizer_unavailable: worker restart budget exhausted"
+            ) from exc
         raise TokenizerUnavailable(f"tokenizer_unavailable: {exc}") from exc
     degraded = response.get("degraded")
     if degraded:

@@ -92,6 +92,7 @@ The rules that make up this category are listed below, each with the series that
 | [S008](#s008) | Shell History Or Log Destruction | MEDIUM |
 | [S009](#s009) | Privileged Account Or udev Rule | HIGH |
 | [S010](#s010) | Kernel Module Loaded During Build | HIGH |
+| [S011](#s011) | Self-Referential Payload Teardown | INFO |
 <!-- /generated: page-index -->
 
 ### S001: Recursive Self-Spawn {#s001}
@@ -236,6 +237,24 @@ build or package body loading an arbitrary module is changing the running
 kernel from the build recipe. The file header distinguishes the two cases.
 
 The rule is HIGH and weight 25. It reports once per diff.
+
+### S011: Self-Referential Payload Teardown {#s011}
+
+- **Severity:** INFO (weight 0)
+- **Category:** `sabotage`
+
+- **Condition:** a recipe removes or shreds its own running script (`$0` or `$BASH_SOURCE`), removes a payload path it executed earlier in the same diff, detaches with `nohup`/`setsid`/`disown`, ignores termination signals with `trap '' TERM HUP`, replaces the shell with `exec`, or writes an empty executable into the package.
+
+This is the self-referential gap that R099/R104 and the composition chain
+cannot see. R099 catches a trap, and R104 catches `trap '' ERR`; S011 catches
+the trap aimed at erasing the payload, the script deleting itself, and the
+process trying not to be reaped. It is narrower than R099 by construction:
+ordinary build cleanup, an ordinary `EXIT` trap, and a `trap` used for error
+handling do not match.
+
+The rule is **INFO and weight 0**, anergic on arrival. The six shapes are
+reported as `params.shape` so a reviewer can tell self-deletion from
+orphaning or corpse forgery. They do not move a score or verdict.
 
 ## Interpretation
 

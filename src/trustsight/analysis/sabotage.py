@@ -341,6 +341,26 @@ _UDEV_RULE_RE = re.compile(
 # a PKGBUILD build/package body has no such reason.
 _MODPROBE_RE = re.compile(r"\b(?:modprobe|insmod|rmmod)\b", re.IGNORECASE)
 
+# S011: self-referential teardown.  These are the shapes R099/R104 cannot see
+# because the trap or removal is aimed at the payload itself.
+_SELF_PATH_RE = r"(?:\$0|\$\{0\}|\$BASH_SOURCE|\$\{BASH_SOURCE\})"
+_SELF_DELETE_RE = re.compile(
+    _CMD + r"(?:rm|unlink|shred)\b[^\n;&|]*" + _SELF_PATH_RE, re.IGNORECASE)
+_DESTRUCTIVE_TRAP_RE = re.compile(
+    r"\btrap\s+(['\"])(?:(?!\1).)*\b(?:rm|shred|unlink)\b"
+    r"(?:(?!\1).)*\1\s+(?:EXIT|0)\b", re.IGNORECASE)
+_ORPHAN_RE = re.compile(
+    _CMD + r"(?:nohup|setsid|disown)\b", re.IGNORECASE)
+_TRAP_IGNORE_RE = re.compile(
+    r"\btrap\s+(['\"])\1\s+(?:TERM|HUP|INT|QUIT)\b", re.IGNORECASE)
+_EXEC_SHELL_RE = re.compile(
+    _CMD + r"exec\s+(?:-\S+\s+)*(?:/\S*/)?(?:ba|z|k|da)?sh\b",
+    re.IGNORECASE)
+_EMPTY_EXECUTABLE_RE = re.compile(
+    r"\b(?:install|cp)\s+[^\n;&|]*(?:/dev/null|/dev/zero)"
+    r"[^\n;&|]*(?:/usr/bin|/usr/sbin|/bin)\b", re.IGNORECASE)
+
+
 
 # ---------------------------------------------------------------------------
 # S007: resource theft.
@@ -519,6 +539,7 @@ def _sabotage_findings(diff_text, config, add) -> None:
                  line_no, body=quoted)
 
     _system_mutation_findings(diff_text, add)
+    _self_reference_findings(diff_text, add)
 
 
 def _system_mutation_findings(diff_text, add) -> None:
@@ -553,3 +574,51 @@ def _system_mutation_findings(diff_text, add) -> None:
             add("S010", "Kernel Module Loaded During Build", "HIGH", "sabotage",
                 f"loads a kernel module from the recipe: {body.strip()[:120]}",
                 line=line_no, body=body.strip()[:120])
+
+
+def _self_reference_findings(diff_text, add) -> None:
+    """Emit S011 for self-referential teardown shapes.
+
+    One finding per shape, each at INFO.  The rule is anergic, so these
+    findings are context and never move a score or verdict.
+    """
+    shapes: set[str] = set()
+    executed: set[str] = set()
+    for line_no, body in _added_bodies(diff_text):
+        quoted = body.strip()[:120]
+        text = _strip_comment(body)
+
+        def emit(shape: str, reason: str) -> None:
+            if shape in shapes:
+                return
+            shapes.add(shape)
+            add("S011", "Self-Referential Payload Teardown", "INFO",
+                "sabotage", f"{reason}: {quoted}", line=line_no,
+                shape=shape, body=quoted)
+
+        if _SELF_DELETE_RE.search(text):
+            emit("self-delete", "removes the running script")
+        if _DESTRUCTIVE_TRAP_RE.search(text):
+            emit("destructive-exit-trap", "destructive EXIT trap")
+        if _ORPHAN_RE.search(text):
+            emit("orphan", "detaches from the reaping parent")
+        if _TRAP_IGNORE_RE.search(text):
+            emit("ignore-termination", "ignores termination signals")
+        if _EXEC_SHELL_RE.search(text):
+            emit("exec-replacement", "replaces the shell after staging")
+        if _EMPTY_EXECUTABLE_RE.search(text):
+            emit("corpse-forgery", "writes an empty executable")
+
+        # Payload erasure: a path executed earlier in the same added set is
+        # later removed.  The join is intentionally local to this diff.
+        for match in re.finditer(
+                r"\b(?:bash|sh|source|\.)\s+(['\"]?)([^'\"\s;]+)\1",
+                text):
+            executed.add(match.group(2))
+        if executed and re.search(r"\b(?:rm|unlink|shred)\b", text):
+            removed = {
+                token.strip("'\"") for token in
+                re.findall(r"[^\s;&|]+", text)
+            }
+            if removed & executed:
+                emit("payload-erasure", "removes a payload it executed")

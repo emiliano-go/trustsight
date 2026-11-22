@@ -14,7 +14,7 @@ Three properties make state a correctness problem rather than an implementation 
 
 **Determinism.** The same diff, effective configuration and observation history must produce the same evidence. A module-global cursor or a thread-local flag that leaks between packages breaks that promise quietly: the report still looks plausible, it is just about a different run.
 
-**Fail-closed.** A reader that loses track of where it is must record the uncertainty, not guess. A truncated diff sets a coverage gap; an unresolved source URL becomes `unresolved_source`; a dead sandbox worker becomes a named refusal. The state machine's failure mode is part of the security model.
+**Fail-closed.** A reader that loses track of where it is must record the uncertainty, not guess. A truncated diff sets a coverage gap; an unresolved source URL becomes `unresolved_source`; a dead sandbox worker becomes a named refusal. A worker death is staged and discoverable: one bounded corpse record at a fixed path, one fixed teardown order, and a restart budget that stops the pool after three failed replacements in a minute. A worker that loses an anchor (uid, cwd, `no_new_privs`, network namespace, or a root that was read-only at spawn) dies by contract rather than continuing to report unaudited results. The state machine's failure mode is part of the security model.
 
 **No partial reads presented as whole ones.** A hunk whose declared count does not match its body, an array whose closer sits outside the fragment, an IOC manifest imported without its signature: each is a state that must be distinguishable from the complete version. Collapsing the two is how a partial analysis becomes a clean verdict.
 

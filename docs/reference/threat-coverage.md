@@ -246,6 +246,7 @@ claim of complete coverage.
 | S008 | Shell History Or Log Destruction | sabotage | anti_analysis | sabotage | L3 | MEDIUM | 15 | CWE-506 |  |
 | S009 | Privileged Account Or udev Rule | sabotage |  | sabotage | L3 | HIGH | 25 | CWE-506 |  |
 | S010 | Kernel Module Loaded During Build | sabotage |  | sabotage | L3 | HIGH | 25 | CWE-506 |  |
+| S011 | Self-Referential Payload Teardown | sabotage |  | sabotage | L3 | INFO | 0 (anergic) | CWE-506 | calibration |
 | T001 | Signing-Key Novelty | temporal |  | temporal | L6 | HIGH | 25 | CWE-494 |  |
 | T002 | Maintainer Domain Novelty | temporal |  | temporal | L6 | MEDIUM | 15 | CWE-506 |  |
 | T003 | Signing Key Rotated | temporal |  | temporal | L6 | HIGH | 25 | CWE-494 |  |

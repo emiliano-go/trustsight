@@ -762,6 +762,28 @@ domains = [
     # mozilla.org as url= while the artifact comes from this host, so it is
     # the vendor's distribution surface and not a third-party bucket.
     "download-installer.cdn.mozilla.net",
+    # Vendors' own distribution hosts that the bucket table read as
+    # unknown: Unity's Hub CDN, the Gosuslugi portal's plugin host, the
+    # Dolphin Anty CDN, and Arch's own GitLab (source files fetched from
+    # its API for linux-stub).
+    "hub-dist.unity3d.com",
+    "gu-st.ru",
+    "dolphin-anty-cdn.com",
+    "gitlab.archlinux.org",
+    # Shared object stores only when the path names the vendor's own
+    # release prefix: the host carries every tenant's bucket, so a bare
+    # host entry would trust all of Google Cloud Storage or all of S3.
+    "storage.googleapis.com/flutter_infra_release/",
+    "s3.amazonaws.com/outline-releases/",
+    # The StegSolve tool's own download host (the project's canonical
+    # archive lives at narthorn.com; wechall.net republishes it) and Cursor's
+    # release CDN, which serves the grok-bot desktop package.
+    "www.narthorn.com",
+    "narthorn.com",
+    "downloads.cursor.com",
+    # A project's own code-hosting CDN and a font author's site.
+    "cnb.cool",
+    "viznut.fi",
     # Overte's own release bucket on DigitalOcean Spaces.  The parent
     # domain is a multi-tenant object store, so only this bucket is the
     # project's distribution surface (overte-appimage).

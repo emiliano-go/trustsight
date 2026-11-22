@@ -379,6 +379,13 @@ def _classify_prepared(
 
     if domain in official_hosts:
         return "official", domain
+    # A shared object store is official only for the vendor's own prefix:
+    # `storage.googleapis.com/flutter_infra_release/` trusts Flutter's
+    # releases without trusting every other bucket on the host.
+    for entry in official_hosts:
+        host, sep, prefix = entry.partition("/")
+        if sep and host == domain and parsed.path.startswith("/" + prefix):
+            return "official", entry
 
     # The registered domain is only needed for the forge comparison, and
     # computing it is the expensive part of this function.

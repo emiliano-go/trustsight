@@ -644,6 +644,12 @@
     "plan": "add_history_or_warm",
     "status": "deferred"
   },
+  "H089": {
+    "note": "The three benign fires were the heredoc-context false positive fixed on 2026-11-20: the install destination after an unterminated heredoc was read as packaged content. No benign shape remains in the locked corpus; schedule one.",
+    "phase": "2",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
   "H090": {
     "expected_strata": [
       "multi_client_fetch"

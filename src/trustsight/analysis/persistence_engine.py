@@ -414,14 +414,19 @@ def emit_packaged_content(ctx: GraphContext, add: Callable) -> None:
     open_target = ""
     delims: list[str] = []
     for i, line in enumerate(ctx.lines):
-        if not line.startswith("+"):
-            continue
-        raw = line[1:]
+        # The terminator is consumed whether it is an added line or an
+        # unchanged context line: a heredoc opened inside the hunk closes on
+        # whichever line says so, and skipping context lines left it open so
+        # every later line was read as its content (flutter-bin's install
+        # destination then read as a packaged file naming $pkgdir).
+        raw = line[1:] if line[:1] in "+- " else line
         stripped = raw.strip()
-        if delims and stripped == delims[-1]:
+        if line[:1] != "-" and delims and stripped == delims[-1]:
             delims.pop()
             if not delims:
                 open_target = ""
+            continue
+        if not line.startswith("+"):
             continue
         if delims:
             if open_target and _BUILD_ONLY_PATH_RE.search(raw):
@@ -433,7 +438,12 @@ def emit_packaged_content(ctx: GraphContext, add: Callable) -> None:
         body = _strip_comment(raw)
         opener = _HEREDOC_OPEN_RE.search(body)
         if opener and opener.group(2):
-            delims.append(opener.group(2))
+            # `<< 'END'` declares the same terminator as `<< END`; storing
+            # the quoted spelling made the closing line never match, so
+            # every later line was read as heredoc content and an install
+            # dest that names $pkgdir was reported as a packaged file
+            # naming a build-only path.
+            delims.append(opener.group(2).strip("'\""))
             open_target = body if _PKGDIR_TARGET_RE.search(body) else ""
             continue
         cut = body.rfind(">")

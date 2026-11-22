@@ -502,6 +502,12 @@ def impersonation_campaign(records, min_members: int = 3) -> list[dict]:
     return out
 
 
+#: Seconds by which the recorded first sighting may precede the burst's own
+#: earliest event without it meaning a prior cycle (the two timestamps come
+#: from the same row, so only clock/precision skew is tolerated).
+_FIRST_SEEN_SLACK = 60.0
+
+
 def first_seen_adoption_burst(records, config=None) -> list[dict]:
     """G008: a first-seen account adopting many dormant packages at once.
 
@@ -549,6 +555,7 @@ def first_seen_adoption_burst(records, config=None) -> list[dict]:
 
         # One package contributes once, however many transitions it has.
         packages: dict[str, float] = {}
+        earliest_event_ts: float | None = None
         for event in events:
             observed_at = event.get("adoption_observed_at", "")
             if not observed_at:
@@ -559,6 +566,8 @@ def first_seen_adoption_burst(records, config=None) -> list[dict]:
                 continue
             if observed_ts < window_start:
                 continue
+            if earliest_event_ts is None or observed_ts < earliest_event_ts:
+                earliest_event_ts = observed_ts
             pkg = str(event.get("package", ""))
             if not pkg:
                 continue
@@ -567,6 +576,12 @@ def first_seen_adoption_burst(records, config=None) -> list[dict]:
                 packages[pkg] = float(last_mod or 0)
             else:
                 packages.setdefault(pkg, 0.0)
+        # The account was already observed before this burst: the first-seen
+        # claim would be false, and a repeat sweep is G003's signal.  A
+        # first burst always carries the account's earliest event.
+        if (earliest_event_ts is not None
+                and first_seen_ts < earliest_event_ts - _FIRST_SEEN_SLACK):
+            continue
         packages_in_window = sorted(packages)
         dormant_count = sum(
             1 for last_mod in packages.values()

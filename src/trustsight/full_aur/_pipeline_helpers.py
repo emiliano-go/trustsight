@@ -60,7 +60,8 @@ _FLAGGED_REPORT_LIMIT = 10
 # H061 (a centrality hub) are weight-0 context, and a sweep emits hundreds of
 # H061 hubs at once.  Passing them to record_alerts made a routine sweep read
 # as "226 campaign cluster(s) ... 226 new alert(s)".
-_NON_ALERTING_CLUSTER_RULES = frozenset({"H057", "H060", "H061", "G006", "G010"})
+_NON_ALERTING_CLUSTER_RULES = frozenset({
+    "H057", "H060", "H061", "G006", "G010", "G016"})
 
 #: Burst/share clusters that fire on legitimate variant families as readily
 #: as on a typosquat campaign.  They score and alert only when one of their
@@ -621,6 +622,42 @@ def _neighborhood_elevation(records: list[dict]) -> list[dict]:
     ]
 
 
+def _attach_account_context(findings: list[dict], detail: dict) -> None:
+    """Copy G016 context onto each named sibling's detail.
+
+    The cycle finding is one object, but a package report reads
+    ``detail[package]["findings"]``.  Copying the INFO entry onto every
+    sibling makes the context visible where a reader is looking, without
+    adding it to the trigger package or giving any member weight.
+    """
+    for finding in findings:
+        if not isinstance(finding, dict) or finding.get("rule_id") != "G016":
+            continue
+        params = finding.get("params")
+        if not isinstance(params, dict):
+            continue
+        for member in params.get("members", ()) or ():
+            entry = detail.get(member)
+            if not isinstance(entry, dict):
+                continue
+            item = {
+                "rule_id": "G016",
+                "severity": "INFO",
+                "weight": 0,
+                "file": "",
+                "line": 0,
+                "reason": str(finding.get("match", ""))[:500],
+            }
+            rows = entry.setdefault("findings", [])
+            if isinstance(rows, list) and not any(
+                    isinstance(row, dict) and row.get("rule_id") == "G016"
+                    for row in rows):
+                rows.append(item)
+            rules = entry.setdefault("rules", [])
+            if isinstance(rules, list) and "G016" not in rules:
+                rules.append("G016")
+
+
 def _correlation_records(
     new_meta: dict,
     old_meta: Optional[dict],
@@ -718,6 +755,14 @@ def _correlation_records(
             "adoption_observed_at": info.get("adoption_observed_at", ""),
             # G012: this cycle's rule ids for the package (payload signals).
             "rules": list(package_detail.get("rules", ()) or ()),
+            # G016: a FATAL is the strongest one-package trigger.  The
+            # record carries the boolean, not the finding list, so a cycle
+            # with thousands of records stays bounded.
+            "fatal": any(
+                str(f.get("severity", "")).upper() == "FATAL"
+                for f in package_detail.get("findings", ()) or ()
+                if isinstance(f, dict)
+            ),
             # G013: canonical URLs the payload findings reported.
             "payload_urls": list(package_detail.get("payload_urls", ()) or ()),
             # G015: substantive updates and the score are read from the same

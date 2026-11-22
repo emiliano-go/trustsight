@@ -78,6 +78,7 @@ from ._pipeline_helpers import (  # noqa: F401
     _report_reactivation_pressure,
     _report_expired_campaigns,
     _neighborhood_elevation,
+    _attach_account_context,
     _correlation_records,
     _contacts_enabled,
     _record_contacts_and_g010,
@@ -236,6 +237,7 @@ def _run_corpus_sweep(
             len(refused), clean(", ".join(sorted(refused))),
         )
     findings.extend(_neighborhood_elevation(records))
+    _attach_account_context(findings, detail_map)
 
     _apply_cluster_weights(findings, new_meta, popular, scores)
     return findings

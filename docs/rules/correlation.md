@@ -82,6 +82,7 @@ The rules that make up this category are listed below, each with the series that
 | [G013](#g013) | Shared Fetch Target | HIGH |
 | [G014](#g014) | Shared Adoption Window | HIGH |
 | [G015](#g015) | Sleeper Adoption Campaign | MEDIUM |
+| [G016](#g016) | Account Blast Radius | INFO |
 <!-- /generated: page-index -->
 
 ### G001: Shared Gained Host {#g001}
@@ -277,6 +278,30 @@ The finding names the members, the maintainer count and the dormant count. Split
 G003, G008 and G014 see the adoption wave while it is fresh. This is the delayed counterpart: a multi-account sleeper cohort that waits through the cooling-off period (`g015.min_adoption_age_days`, default 30) and then reactivates most of its dormant packages together. Adoptions older than `g015.max_adoption_age_days` (default 365), cohorts spread over more than `g015.adoption_window_days` (default 180), active-package adoptions, routine checksum or version refreshes, split outputs and naming families stand down.
 
 The base finding is MEDIUM and alert-only: membership does not add to a member's own score, and the campaign state G006/G007 reads is the escalation. A curated payload or takeover rule on a member raises the campaign to HIGH. `g015.orphan_only` (default true) keeps the cohort to orphan adoptions; setting it false includes ordinary ownership transfers.
+
+### G016: Account Blast Radius {#g016}
+
+- **Target:** programmatic (cycle records)
+- **Severity:** INFO (weight 0)
+- **Category:** `correlation`
+
+- **Condition:** one package by an account fires a member of `SHARED_PAYLOAD_RULES` or a FATAL finding, and the same account has at least `[thresholds.g016] min_siblings` other packages processed in the same cycle.
+
+This is **bystander activation** as an analogy, not an accusation. A specific
+payload signal in one package is the antigen-bearing focus; the account is the
+local environment; the other packages are antigen-nonspecific bystanders. The
+finding names the account and the sibling packages so a reader can look at the
+account once, without treating any sibling as malicious.
+
+It is INFO and weight 0. Siblings are not campaign members, do not receive the
+finding's weight, and do not change their score or verdict. It does not reuse
+campaign state and cannot become a campaign cluster or a notification headline.
+
+The finding says only: "these packages share an account with one that fired
+X." It does not say the account is compromised. The biological analogue is
+bystander activation, where cytokine exposure activates nearby cells without
+direct antigen recognition; unregulated, that response is harmful, which is
+why G016 stays report-only.
 
 ## Interpretation
 

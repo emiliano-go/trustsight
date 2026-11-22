@@ -287,6 +287,12 @@
     "plan": "add_cycle_corpus",
     "status": "deferred"
   },
+  "G016": {
+    "note": "Needs a benign cycle fixture where a busy account has one package with a curated payload signal and siblings; the context must stay report-only.",
+    "phase": "3",
+    "plan": "add_cycle_corpus",
+    "status": "deferred"
+  },
   "H005": {
     "note": "Add a packaging shape that contains the benign context; Phase 2.",
     "phase": "2",

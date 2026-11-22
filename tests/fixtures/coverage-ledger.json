@@ -132,6 +132,17 @@
       "status": "promoted",
       "weight": 0
     },
+    "G016": {
+      "changelog": "account-blast-radius",
+      "decided_in": "",
+      "promoted_in": "0.30.0",
+      "promotion": "run the weekly calibration, then promote only with a second signal",
+      "rule_id": "G016",
+      "signal": "shared-account bystander context after one specific payload or FATAL; needs a benign rate before it can score",
+      "since": "0.30.0",
+      "status": "anergic",
+      "weight": 0
+    },
     "H009": {
       "changelog": "runtime-surface-lane",
       "decided_in": "0.29.0",
@@ -309,13 +320,13 @@
       "weight": 0
     }
   },
-  "catalog_size": 324,
+  "catalog_size": 325,
   "corpus_content_sha256": "a4cbea4ef14029c97d7746e2be080a2e5c931502429ee261d974810b35f5cafc",
   "counts": {
     "adversarial_only": 18,
     "cold_only": 42,
     "measured": 177,
-    "zero_fire": 87
+    "zero_fire": 88
   },
   "measured_at": "2026-11-02",
   "rules": {
@@ -2947,6 +2958,29 @@
       "state": "zero_fire",
       "strata": [],
       "uid": "TS-0295"
+    },
+    "G016": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": {
+        "note": "Needs a benign cycle fixture where a busy account has one package with a curated payload signal and siblings; the context must stay report-only.",
+        "phase": "3",
+        "plan": "add_cycle_corpus",
+        "status": "deferred"
+      },
+      "expected_met": false,
+      "expected_strata": [],
+      "expected_strata_met": [],
+      "fires": 0,
+      "id": "G016",
+      "pseudo": false,
+      "reason": "no benign shape in the locked corpus yet; add a shape stratum, never a rule-targeted sample",
+      "series": "G",
+      "sources": {},
+      "state": "zero_fire",
+      "strata": [],
+      "uid": "TS-0313"
     },
     "H001": {
       "benign_sources": [

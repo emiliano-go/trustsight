@@ -1,17 +1,21 @@
-<!-- description: TrustSight audits AUR PKGBUILDs before you update: catches careless malice and structural risk, and tells you what it could not verify. See beyond the package. -->
+<!-- description: TrustSight is immune-inspired security intelligence for the AUR: it audits PKGBUILDs, remembers ecosystem history, and reports what it could not verify. An immune system for the AUR. -->
 
 # TrustSight
 
-**See beyond the package.**
+**An immune system for the AUR.**
 
-TrustSight is a security analysis and intelligence platform for the Arch User
-Repository ecosystem. It audits a package update before you build it, reads the
-recipe and the change around it, and reports deterministic, evidence-linked
-findings: what changed, what matched, and what the analysis could not see.
+TrustSight is immune-inspired security intelligence for the Arch User
+Repository. It audits a package update before you build it, reads the recipe
+and the change around it, remembers what the ecosystem has seen, and reports
+deterministic, evidence-linked findings: what changed, what matched, and what
+the analysis could not see.
 
 It is an **instrument, not a judge**. A quiet result is not a certificate of
 safety, and no report authorizes skipping review. TrustSight gives you the
 evidence; the decision stays with you.
+
+[Why an immune system?](explanation/why-an-immune-system.md) explains the
+model, including the human loop that completes it.
 
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white&style=for-the-badge)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/License-MIT-10AC84?style=for-the-badge)](https://github.com/emiliano-go/trustsight/blob/master/LICENSE)

@@ -103,6 +103,7 @@ Workflows = [
   ]},
   {"How TrustSight Works" = [
     {Overview = "security-design/how-it-works.md"},
+    {"Why an Immune System?" = "explanation/why-an-immune-system.md"},
     {"Architecture and Pipeline" = "explanation/architecture-and-pipeline.md"},
     {"Static Analysis and Resolution" = "explanation/static-analysis-and-resolution.md"},
     {"Detection and Evidence" = "explanation/detection-and-evidence.md"},

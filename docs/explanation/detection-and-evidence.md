@@ -313,6 +313,9 @@ to look at, remember what it has seen, raise its posture without accusing any
 one package, and say when it is blind. These are the borrowings, and the one
 inspiration that is rejected.
 
+[Why an Immune System?](why-an-immune-system.md) is the full map, including
+the human loop - triage, reporting, and action - that completes the system.
+
 ### Missing-self (NK cells)
 
 The immune system does not wait for a foreign antigen. It kills cells that

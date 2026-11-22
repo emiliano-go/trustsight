@@ -1,7 +1,7 @@
 <h3 align="center">TrustSight</h3>
 
 <p align="center">
-  <em>See beyond the package.</em>
+  <em>An immune system for the AUR.</em>
 </p>
 
 <p align="center">
@@ -42,11 +42,25 @@
 
 ---
 
-TrustSight is a security analysis and intelligence platform for the Arch User Repository ecosystem. It combines static analysis, supply-chain intelligence, behavioral heuristics, dependency graph analysis, threat intelligence, and historical correlation to uncover suspicious package updates and emerging threats.
+TrustSight is immune-inspired security intelligence for the Arch User Repository. It audits PKGBUILD updates, remembers what the ecosystem has seen, recognizes changes that matter, and correlates campaigns across packages. It combines static analysis, supply-chain intelligence, behavioral heuristics, dependency graph analysis, threat intelligence, and historical correlation to turn package changes into deterministic, evidence-linked reports: what changed, who is behind it, and what the analysis could not see.
 
-Beyond package analysis, TrustSight tracks ecosystem activity and lifecycle signals, including maintainer histories and changes, package adoptions and orphan status, ownership transitions, release patterns, and dependency relationships. It uses these signals to identify unusual behavior, suspicious takeovers, stale package revivals, and coordinated activity across packages.
+Beyond a single package, TrustSight tracks maintainer histories, package adoptions and orphan status, ownership transitions, release patterns, and dependency relationships. It uses those signals to identify unusual behavior, suspicious takeovers, stale package revivals, and coordinated activity across packages.
 
-It transforms package changes and ecosystem signals into deterministic, evidence-linked security assessments, helping you understand what changed, who is behind it, and what it might mean before you install.
+The unit of protection is the AUR ecosystem, not one machine. A bad update still lands on your machine, but the pattern that identifies it may only be visible across thousands of packages, maintainers, and update waves. TrustSight watches that surface at a scale one person cannot.
+
+It is not an antivirus and not a gate. It is the sensing and memory layer of a system completed by people.
+
+---
+
+## Why an immune system?
+
+An immune system does not only destroy pathogens. It watches, remembers, signals, and coordinates a response. TrustSight brings those functions to the AUR: a signed seed of prior ecosystem knowledge, local history, diverse recognition rules, campaign correlation, bounded alerting, and a report that names its own blind spots.
+
+TrustSight is not the whole system. You triage and report. Maintainers and Arch volunteers act on reports. The watcher and public feed carry shared memory. The loop between those parts is the AUR immune system.
+
+TrustSight detects, remembers, and correlates what one person cannot. You decide what matters.
+
+[Read the full argument →](https://docs.trustsight.org/explanation/why-an-immune-system/)
 
 ---
 

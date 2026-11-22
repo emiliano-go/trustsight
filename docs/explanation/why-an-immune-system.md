@@ -234,6 +234,25 @@ G016 reports that shared-account context. It does not say the account is comprom
 
 Source: [Mechanisms governing bystander activation of T cells](https://pmc.ncbi.nlm.nih.gov/articles/PMC11635090/)
 
+### Apoptosis and anoikis: the sandbox worker
+
+The worker lifecycle is the engineering analogue of apoptosis. A death is
+staged, not incidental: a detector stops intake, one effector writes a
+bounded corpse record, then the process group and pipes are released. The
+corpse is discoverable by contract, not by a crash trace.
+
+Anoikis is the closest sub-analogue for the anchorage check. The worker
+checks its own anchors on every loop: effective uid, cwd, `no_new_privs`,
+network namespace, and a root that was read-only at spawn. Losing one is a
+death signal, because results produced after detachment are unaudited. The
+pool also has a restart-intensity contract: three failed replacements in a
+minute stop it, rather than restarting a deterministic failure forever.
+
+This is a design note, not a rule. No package is scored because a worker
+died, and the corpse is one silent record rather than an alert cascade.
+
+Source: [Where, O Death, Is Thy Sting?](https://pmc.ncbi.nlm.nih.gov/articles/PMC2894370/), [Anoikis](https://pmc.ncbi.nlm.nih.gov/articles/PMC11401975/)
+
 ---
 
 ## 8. Trained immunity: G007 and bounded campaign priming
@@ -586,6 +605,7 @@ Sources:
 | Clonal recognition | G-series campaign correlation | Explicitly documented |
 | Cytokine signaling | G006 neighborhood elevation | Explicitly documented |
 | Bystander activation | G016 account blast radius | Interpretive analogy; context only, never a compromise claim |
+| Apoptosis / anoikis | Sandbox worker teardown and restart budget | Engineering analogue; staged death, corpse record and anchorage loss, not a rule claim |
 | Trained immunity | G007 and campaign priming | Explicitly documented |
 | Opsonization / complement | Weight-zero tags and `tag_panel` | Explicitly documented |
 | Sickness behavior | W013 and campaign-wide posture | Explicitly documented |

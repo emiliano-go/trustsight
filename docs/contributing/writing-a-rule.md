@@ -10,7 +10,7 @@ The normative standards for a rule change are in [Standards](../standards.md); t
 | H-series  | H001-H103   | `analysis/*.py`  | No                | Heuristics: code-emitted detection |
 | D-series  | D001-D005   | `analysis/*.py`  | No                | Dependency-graph rules      |
 | C-series  | C001-C035   | `analysis/*.py`  | No                | Structural / multi-condition |
-| S-series  | S001-S010   | `analysis/sabotage.py` | No          | Sabotage: payloads aimed at the machine |
+| S-series  | S001-S011   | `analysis/sabotage.py` | No          | Sabotage: payloads aimed at the machine |
 | X-series  | X001-X034   | `analysis/crossfire.py` | No         | Crossfire: the evasion technique itself |
 | P-series  | P001-P009 (P004 skipped) | `scoring.py` | No          | Declared practice, reported at weight 0 |
 | W-series  | W001-W015   | `analysis/*.py`  | No                | Unverifiable: what this run could not read, weight 0 |

@@ -209,6 +209,17 @@
       "status": "anergic",
       "weight": null
     },
+    "S011": {
+      "changelog": "apoptosis-completion",
+      "decided_in": "",
+      "promoted_in": "0.30.0",
+      "promotion": "run the weekly calibration, then promote only with a malicious twin and a benign twin",
+      "rule_id": "S011",
+      "signal": "self-referential teardown, orphaning, destructive EXIT trap, exec replacement and corpse forgery; needs a benign rate before it can score",
+      "since": "0.30.0",
+      "status": "anergic",
+      "weight": 0
+    },
     "T004": {
       "changelog": "missing-self-axis",
       "decided_in": "",
@@ -320,12 +331,12 @@
       "weight": 0
     }
   },
-  "catalog_size": 325,
+  "catalog_size": 326,
   "corpus_content_sha256": "a4cbea4ef14029c97d7746e2be080a2e5c931502429ee261d974810b35f5cafc",
   "counts": {
     "adversarial_only": 18,
     "cold_only": 42,
-    "measured": 177,
+    "measured": 178,
     "zero_fire": 88
   },
   "measured_at": "2026-11-02",
@@ -4009,14 +4020,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 1062,
+      "fires": 1063,
       "id": "H027",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 1035,
+          "fires": 1036,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -6962,14 +6973,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 483,
+      "fires": 485,
       "id": "M002",
       "pseudo": false,
       "reason": "",
       "series": "M",
       "sources": {
         "cold": {
-          "fires": 480,
+          "fires": 482,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -7042,14 +7053,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 299,
+      "fires": 303,
       "id": "M003",
       "pseudo": false,
       "reason": "",
       "series": "M",
       "sources": {
         "cold": {
-          "fires": 267,
+          "fires": 271,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -9154,6 +9165,58 @@
         "source_patched"
       ],
       "uid": "TS-0312"
+    },
+    "S011": {
+      "benign_sources": [
+        "cold"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "dkms_kernel",
+        "lang_deep",
+        "large_electron",
+        "maintainer_churn",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git"
+      ],
+      "disposition": null,
+      "expected_met": true,
+      "expected_strata": [],
+      "expected_strata_met": [],
+      "fires": 43,
+      "id": "S011",
+      "pseudo": false,
+      "reason": "",
+      "series": "S",
+      "sources": {
+        "cold": {
+          "fires": 43,
+          "strata": [
+            "dkms_kernel",
+            "lang_deep",
+            "large_electron",
+            "maintainer_churn",
+            "persist_surface",
+            "signed_sources",
+            "source_patched",
+            "vcs_git"
+          ]
+        }
+      },
+      "state": "measured",
+      "strata": [
+        "dkms_kernel",
+        "lang_deep",
+        "large_electron",
+        "maintainer_churn",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git"
+      ],
+      "uid": "TS-0314"
     },
     "SOURCE_BUCKET": {
       "benign_sources": [

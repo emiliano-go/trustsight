@@ -54,6 +54,29 @@ def test_restart_budget_shuts_the_pool_down(monkeypatch):
 def test_anchorage_loss_is_reported_by_the_child_view(monkeypatch):
     monkeypatch.setattr(expand_worker, "_ANCHOR", {
         "uid": 1000, "cwd": "/", "net_inode": None, "no_new_privs": False,
+        "root_read_only": False,
     })
     monkeypatch.setattr(expand_worker.os, "geteuid", lambda: 0)
     assert expand_worker._anchorage_lost() == "effective uid changed"
+
+
+def test_lost_read_only_root_is_anchorage_loss(monkeypatch):
+    monkeypatch.setattr(expand_worker, "_ANCHOR", {
+        "uid": expand_worker.os.geteuid(), "cwd": expand_worker.os.getcwd(),
+        "net_inode": None, "no_new_privs": False, "root_read_only": True,
+    })
+    monkeypatch.setattr(expand_worker, "_root_read_only", lambda: False)
+    monkeypatch.setattr(expand_worker, "_has_no_new_privs", lambda: False)
+    assert expand_worker._anchorage_lost() == "root mount became writable"
+
+
+def test_analysed_content_has_no_teardown_operation():
+    """The worker protocol exposes only pure tokenizer operations."""
+    from trustsight.sandbox import tokenizer_ops
+
+    for op in ("kill", "stop", "shutdown", "teardown", "signal"):
+        try:
+            tokenizer_ops.dispatch(op, "x")
+        except tokenizer_ops.UnknownOp:
+            continue
+        raise AssertionError(f"teardown-shaped operation is reachable: {op}")

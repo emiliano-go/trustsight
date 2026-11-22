@@ -98,6 +98,14 @@ def _has_no_new_privs() -> bool:
         return False
 
 
+def _root_read_only() -> bool:
+    """Whether the worker's root mount is read-only."""
+    try:
+        return bool(os.statvfs("/").f_flag & getattr(os, "ST_RDONLY", 1))
+    except OSError:
+        return False
+
+
 def _anchorage() -> dict:
     """The stable anchors a worker's death-on-detachment check needs."""
     try:
@@ -109,6 +117,7 @@ def _anchorage() -> dict:
         "cwd": os.getcwd(),
         "net_inode": net_inode,
         "no_new_privs": _has_no_new_privs(),
+        "root_read_only": _root_read_only(),
     }
 
 
@@ -126,6 +135,8 @@ def _anchorage_lost() -> str:
                 return "network namespace changed"
         except OSError:
             return "network namespace unavailable"
+    if _ANCHOR.get("root_read_only") and not _root_read_only():
+        return "root mount became writable"
     return ""
 
 

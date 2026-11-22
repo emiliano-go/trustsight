@@ -156,7 +156,7 @@ R-series rules are regex-based and match against resolved strings or raw diff li
 
 C-series rules (C001-C035) enforce structural invariants that depend on comparing multiple parsed fields (checksum state, source URL set, pkgver value). They are hard-coded because writing them as TOML patterns would require embedding logic in regex.
 
-S-series sabotage rules (S001-S010) use command-position matching to distinguish build-sandbox cleanup from system damage: `rm -rf "$srcdir/x"` is housekeeping, `rm -rf /` is not.
+S-series sabotage rules (S001-S011) use command-position matching to distinguish build-sandbox cleanup from system damage: `rm -rf "$srcdir/x"` is housekeeping, `rm -rf /` is not.
 
 X-series crossfire rules (X001-X034) are anti-evasion rules that detect patterns designed to exploit the analysis itself.
 
@@ -431,7 +431,7 @@ discards. The git worker uses the same encoder. Both workers now run behind the 
 confinement described in A16: the tokenizer worker is a `read`-role sandbox
 with no socket syscalls and no writable filesystem, and the git worker adds
 the fetch-role proxy bridge. A missing Landlock ABI 6, seccomp, user
-namespace or network namespace is a startup refusal, not a degraded run.
+namespace or network namespace is a startup refusal, not a degraded run. A worker that loses an anchor after startup (uid, cwd, `no_new_privs`, network namespace, or a root that was read-only at spawn) refuses with exit 4. Its death is staged: one parent-side effector writes a bounded corpse JSON record, kills the process group and closes the pipes; the pool stops after three failed replacements in a minute instead of restarting a deterministic failure forever.
 
 The sandbox covers the whole tokenizer module, so `split_lines` and
 `join_line_continuations` are sandboxed too, not only the expansion

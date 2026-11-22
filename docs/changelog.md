@@ -45,6 +45,7 @@
 
 ### Added
 
+- **S011 reports self-referential payload teardown.** It covers `$0`/`$BASH_SOURCE` deletion, payload erasure after execution, orphaning, destructive `EXIT` traps, `exec` replacement and empty-executable corpse forgery. It ships INFO at weight 0 and anergic; R099/R104 remain the broader trap rules.
 - **G016 reports account blast radius as bystander context.** A package that
   fires a curated payload rule or FATAL is joined to the other packages its
   account had processed in the same cycle. The finding is INFO, weight 0 and

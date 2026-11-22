@@ -971,6 +971,10 @@ See [S009: Privileged Account Or udev Rule](../../rules/sabotage.md#s009).
 
 See [S010: Kernel Module Loaded During Build](../../rules/sabotage.md#s010).
 
+### S011 {#s011}
+
+See [S011: Self-Referential Payload Teardown](../../rules/sabotage.md#s011).
+
 ### T001 {#t001}
 
 See [T001: Signing-Key Novelty](../../rules/temporal.md#t001).

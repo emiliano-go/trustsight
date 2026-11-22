@@ -168,6 +168,15 @@
       "since": "Unreleased",
       "status": "anergic"
     },
+    "S011": {
+      "changelog": "apoptosis-completion",
+      "promoted_in": "0.30.0",
+      "promotion": "run the weekly calibration, then promote only with a malicious twin and a benign twin",
+      "signal": "self-referential teardown, orphaning, destructive EXIT trap, exec replacement and corpse forgery; needs a benign rate before it can score",
+      "since": "0.30.0",
+      "status": "anergic",
+      "weight": 0
+    },
     "T004": {
       "changelog": "missing-self-axis",
       "promoted_in": "0.27.0",

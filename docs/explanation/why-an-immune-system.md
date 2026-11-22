@@ -2,13 +2,15 @@
 
 # Why an immune system?
 
+This is a more *personal* page than the other docs: immunology is what drives the tool itself. I've studied it for years as a side interest, and I never expected those concepts to apply to distributed systems, much less to securing them. TrustSight wasn't planned around the immune system; I only recognized the pattern when the G-series took shape. I suspect it grew that way because the AUR and our bodies face similarly shaped problems.
+
 ## A comprehensive map of the immunological ideas in TrustSight
 
-**Core thesis:** TrustSight is an immune-inspired security intelligence system for the Arch User Repository. It builds prior ecosystem knowledge, recognizes suspicious changes, remembers behavior, correlates activity across packages, primes bounded responses to known campaigns, shares threat intelligence, and monitors the reliability and limits of its own analysis.
+TrustSight is an immune-inspired security intelligence system for the Arch User Repository. It builds prior ecosystem knowledge, recognizes suspicious changes, remembers behavior, correlates activity across packages, primes bounded responses to known campaigns, shares threat intelligence, and monitors the reliability and limits of its own analysis.
 
 **The system is a loop.** The AUR is the organism. TrustSight supplies sensing, memory, and correlation. A person supplies judgment, triage, and action; maintainers and Arch volunteers act on reports. The immune system is the loop between those parts, not the software alone.
 
-This is more than a marketing metaphor. TrustSight's documentation explicitly uses immunological concepts including **trained immunity, cytokine signalling, cytokine storms, superantigens, autoimmune disease, missing-self recognition, NK cells, opsonization, refractory periods, lateral inhibition, nociception, interoception, anergy, and two-signal activation**. Other mappings, such as the novelty seed as a vaccine or the overall detector stack as innate immunity, are useful architectural interpretations, but should be labelled as analogies rather than literal biology.
+TrustSight's documentation explicitly uses immunological concepts including **trained immunity, cytokine signalling, cytokine storms, superantigens, autoimmune disease, missing-self recognition, NK cells, opsonization, refractory periods, lateral inhibition, nociception, interoception, anergy, and two-signal activation**. Other mappings, such as the novelty seed as a vaccine or the overall detector stack as innate immunity, are useful architectural interpretations, but should be labelled as analogies rather than literal biology.
 
 ---
 
@@ -16,39 +18,34 @@ This is more than a marketing metaphor. TrustSight's documentation explicitly us
 
 Each section connects an immunological idea to a TrustSight mechanism. Read the connection as a design lineage: the biological principle supplied a way to think about a security problem, and the implementation expresses that thinking in software. Where the documentation explicitly names the connection, the section says so. Where the connection is an architectural interpretation, it is identified as such. The biological language is therefore neither decorative branding nor a claim of literal equivalence.
 
-The document retains the project's detailed terminology, rule references, examples, limitations, and source links. Its purpose is to make the origin and direction of the design influence easier to recognize while preserving the technical map.
+This page keeps the project's detailed terminology, rule references, examples, limitations, and source links. Its purpose is to make the origin and direction of the design influence easier to recognize while preserving the technical map.
 
 ---
 
 ## The loop: who is the immune system?
 
-The AUR is the organism. A package update is a cell change. A malicious
-campaign is a systemic infection. TrustSight is a sensory and memory organ;
-people are the response.
+The AUR is the organism. A package update is a cell change. A malicious campaign is a systemic infection. TrustSight is a sensory and memory organ; people are the response.
 
-The unit of protection is the AUR ecosystem, not one machine. A bad update
-still lands on a user's machine, but the pattern that identifies it may only
-be visible across thousands of packages, maintainers, and update waves.
+The unit of protection is the AUR ecosystem, not one machine. A bad update still lands on a user's machine, but the pattern that identifies it may only be visible across thousands of packages, maintainers, and update waves.
 
 | Stage | TrustSight | People and community |
 |---|---|---|
 | Sense | Rules, diff analysis, the watcher, signed indicators | Read the report and inspect the evidence |
 | Remember | Local observation database, the signed seed, the public feed | Incident notes and maintainer history |
-| Correlate | G-series cross-package correlation | Recognise the campaign context and affected packages |
+| Correlate | G-series cross-package correlation | Recognize the campaign context and affected packages |
 | Signal | Findings, campaign alerts, coverage gaps, `self_state` | Prioritise what needs attention |
 | Act | Recommendations only; no enforcement | Triage, report, escalate, remove locally; maintainers remove from the repository |
 | Learn | New observations and shared feed data | Report outcomes, tune rules, contribute detections |
 
-An alert is not a passive notification. It is the signal that recruits the
-response. In a system where the effector is a person, signal quality *is*
-protection.
+An alert is not a passive notification. It is the signal that recruits the response. In a system where the effector is a person, signal quality *is* protection.
+
+The decision stays with the user, because only a person can judge context and act.
 
 ---
 
 ## 1. The vaccine: the novelty seed
 
-**Biological foundation / design connection: immunization / priming prior immune memory.**  
-**Implementation: signed, AUR-derived novelty seed.**
+**Immunization / priming prior immune memory: signed, AUR-derived novelty seed.**
 
 A fresh TrustSight installation has a cold local observation database. Without prior observations, every source URL and maintainer looks newly encountered. Novelty would therefore be nearly meaningless: even ordinary, common sources would appear novel simply because this particular machine had not seen them.
 
@@ -78,7 +75,7 @@ The seed is also tightly constrained:
 
 A hostile or forged seed must not be able to fabricate positive findings or rewrite local history. The documented residual risk is narrower: a malicious but validly signed seed could make an attacker's URL or maintainer appear familiar and thereby weaken novelty signals. The additive boundary limits the damage, but the signing key and provenance still matter.
 
-**Immune interpretation:** the seed inoculates a cold installation with historical ecosystem familiarity. It primes recognition; it does not prove health.
+The seed inoculates a cold installation with historical ecosystem familiarity. It primes recognition; it does not prove health.
 
 Sources:
 - [Historical and Behavioral Analysis](https://docs.trustsight.org/explanation/historical-and-behavioral-analysis/)
@@ -90,8 +87,7 @@ Sources:
 
 ## 2. Adaptive immunity: temporal and historical memory
 
-**Biological foundation / design connection: adaptive immune memory.**  
-**Implementation: the observation database, novelty context, temporal rules, and corpus history.**
+**Adaptive immune memory: the observation database, novelty context, temporal rules, and corpus history.**
 
 TrustSight does not only match static signatures. It remembers what it has previously observed and compares current activity with historical behavior.
 
@@ -108,7 +104,7 @@ The T-series is explicitly described in immune-memory terms: the same observatio
 
 The system uses maturity gates. A cold database does not pretend to know what it has not observed. Novelty weight ramps with effective observations and reaches full weight at 50 observations. A verified seed can provide bootstrap observations, after which real local analyses take over.
 
-**Immune interpretation:** the seed primes the system; local observations develop its own memory; temporal rules use that memory to recognize departures from normal behavior.
+The seed primes the system; local observations develop its own memory; temporal rules use that memory to recognize departures from normal behavior.
 
 Sources:
 - [Temporal Rules](https://docs.trustsight.org/rules/temporal/)
@@ -119,10 +115,9 @@ Sources:
 
 ## 3. Innate immunity: immediate threat recognition
 
-**Biological foundation / design connection: innate immune recognition.**  
-**Implementation: complementary deterministic rule families.**
+**Innate immune recognition: complementary deterministic rule families.**
 
-This is an architectural analogy rather than a claim that TrustSight contains literal innate immune cells. Its immediate recognition machinery includes multiple types of deterministic analysis:
+This is an architectural analogy, not a claim that TrustSight contains literal innate immune cells. Its immediate recognition machinery includes multiple types of deterministic analysis:
 
 | TrustSight mechanism | What it recognizes |
 |---|---|
@@ -141,7 +136,7 @@ This is an architectural analogy rather than a claim that TrustSight contains li
 
 The important feature is diversity. TrustSight is not simply a large collection of regular expressions. Different mechanisms examine different evidence: commands, structural relationships, history, package metadata, upstream declarations, known indicators, and correlations between packages.
 
-**Immune interpretation:** multiple recognition mechanisms provide complementary sensors, rather than requiring one universal signature detector.
+Multiple recognition mechanisms provide complementary sensors, rather than requiring one universal signature detector. A threat has to evade several kinds of sensor, not one signature.
 
 Sources:
 - [Rule Series](https://docs.trustsight.org/rules/series/)
@@ -152,12 +147,11 @@ Sources:
 
 ## 4. Missing-self recognition: NK-cell analogy
 
-**Biological foundation / design connection: natural killer (NK) cells recognizing loss of normal self-signals.**  
-**Implementation: rules that detect the removal or degradation of expected package properties.**
+**Natural killer (NK) cells recognizing loss of normal self-signals: rules that detect the removal or degradation of expected package properties.**
 
 TrustSight explicitly describes a missing-self axis. The detector does not only ask what suspicious thing was added; it also asks what a package stopped having.
 
-Examples documented by the project:
+Examples are:
 
 - **T004 - Vouch Surface Removed:** partial removal of `validpgpkeys` without replacement.
 - **T005 - Scheme Downgrade:** same source host falls from TLS while the URL path also changes.
@@ -166,7 +160,7 @@ Examples documented by the project:
 
 The docs make the contrast explicit: G008 watches who arrived; T004/T005 watch what disappeared when they did.
 
-**Immune interpretation:** missing-self detection complements foreign-pattern recognition. A threat can be indicated by the loss of a previously expected trust or identity feature.
+Missing-self detection complements foreign-pattern recognition. A threat can be indicated by the loss of a previously expected trust or identity feature.
 
 Source:
 - [Detection and Evidence - Missing-self (NK cells)](https://docs.trustsight.org/explanation/detection-and-evidence/)
@@ -176,8 +170,7 @@ Source:
 
 ## 5. Danger over stranger: Matzinger's Danger Theory
 
-**Biological foundation / design connection: danger signals matter more than foreignness alone.**  
-**Implementation: first-contact observations, contextual tags, and weight-zero evidence.**
+**Danger signals matter more than foreignness alone: first-contact observations, contextual tags, and weight-zero evidence.**
 
 TrustSight explicitly references the “danger over stranger” idea associated with Polly Matzinger's Danger Theory.
 
@@ -187,7 +180,7 @@ The Contact Ledger records first contacts as contextual observations rather than
 
 C033 and C034 extend the same philosophy to internal reviewability signals: missing recipe context or inconsistent generated metadata can be a damage signal about the integrity of the review surface without proving that a malicious payload exists.
 
-**Immune interpretation:** TrustSight should respond to suspicious evidence, not merely to unfamiliarity.
+TrustSight should respond to suspicious evidence, not merely to unfamiliarity.
 
 Source:
 - [Detection and Evidence - Danger over stranger](https://docs.trustsight.org/explanation/detection-and-evidence/)
@@ -196,8 +189,7 @@ Source:
 
 ## 6. Clonal recognition: the G-series campaign immune system
 
-**Biological foundation / design connection: shared antigen recognition and clonal response.**  
-**Implementation: cross-package correlation.**
+**Shared antigen recognition and clonal response: cross-package correlation.**
 
 The G-series is the clearest example of ecosystem-level immunity. The documentation says directly that the G-series is TrustSight's immune system, imported from the campaign-alert design.
 
@@ -236,8 +228,7 @@ The malicious delivery used committed `.install` files while the upstream recipe
 
 This is an important demonstration of correlation: the system could recognize coordinated malicious activity from the ecosystem pattern even before its payload-specific detector recognized that exact carrier.
 
-The incident was covered by BleepingComputer on October 15, 2026:
-[Fake Arch Linux packages push malware with root privileges](https://www.bleepingcomputer.com/news/security/fake-arch-linux-packages-push-malware-with-root-privileges/).
+The incident was covered by BleepingComputer on October 15, 2026: [Fake Arch Linux packages push malware with root privileges](https://www.bleepingcomputer.com/news/security/fake-arch-linux-packages-push-malware-with-root-privileges/).
 
 Sources:
 - [Correlation Rules](https://docs.trustsight.org/rules/correlation/)
@@ -248,8 +239,7 @@ Sources:
 
 ## 7. Cytokine signalling: neighborhood elevation
 
-**Biological foundation / design connection: alerted cells signal surrounding tissue.**  
-**Implementation: G006 - Neighborhood Under Campaign Alert.**
+**Alerted cells signal surrounding tissue: G006 - Neighborhood Under Campaign Alert.**
 
 When a campaign is active, packages around it may deserve additional attention even if they have not themselves been corroborated as part of the campaign.
 
@@ -259,7 +249,7 @@ Crucially, G006 is weight zero. It is reported as context, not scored as malicio
 
 The documentation explicitly compares this local, temporary readiness signal to cytokine signaling.
 
-**Immune interpretation:** a recognized threat can raise awareness in its neighborhood without automatically treating the entire neighborhood as infected.
+A recognized threat can raise awareness in its neighborhood without automatically treating the entire neighborhood as infected.
 
 Source:
 - [Detection and Evidence - Neighborhood Elevation](https://docs.trustsight.org/explanation/detection-and-evidence/)
@@ -267,17 +257,9 @@ Source:
 
 ### Bystander activation: G016 account blast radius
 
-A second, weaker field effect appears one level up: when one package on an
-account fires a specific payload rule or a FATAL finding, other packages that
-the same account had processed in that cycle are **bystanders**. The biology
-is bystander activation: antigen-nonspecific cells can be activated by
-cytokines during an ongoing response, without direct recognition of the
-antigen.
+A second, weaker field effect appears one level up: when one package on an account fires a specific payload rule or a FATAL finding, other packages that the same account had processed in that cycle are **bystanders**. The biology is bystander activation: antigen-nonspecific cells can be activated by cytokines during an ongoing response, without direct recognition of the antigen.
 
-G016 reports that shared-account context. It does not say the account is
-compromised and it does not score the siblings. Unregulated bystander
-activation can itself cause immune pathology, which is why G016 is weight zero
-and anergic rather than a promotion path into the package score.
+G016 reports that shared-account context. It does not say the account is compromised and it does not score the siblings. Unregulated bystander activation can itself cause immune pathology, which is why G016 is weight zero and anergic rather than a promotion path into the package score.
 
 Source: [Mechanisms governing bystander activation of T cells](https://pmc.ncbi.nlm.nih.gov/articles/PMC11635090/)
 
@@ -285,8 +267,7 @@ Source: [Mechanisms governing bystander activation of T cells](https://pmc.ncbi.
 
 ## 8. Trained immunity: G007 and bounded campaign priming
 
-**Biological foundation / design connection: temporary heightened readiness after an earlier infection.**  
-**Implementation: G007 and campaign alert mode.**
+**Temporary heightened readiness after an earlier infection: G007 and campaign alert mode.**
 
 After a campaign is corroborated, TrustSight can retain its scope for a bounded number of observations. A package later encountered in that scope can receive a G007 corroboration record carrying the campaign ID.
 
@@ -300,7 +281,7 @@ This state is deliberately bounded:
 - repeated reactivation is reported through M006;
 - expiration is visible rather than silently forgotten.
 
-**Immune interpretation:** past campaign recognition primes the system for a limited period, enabling faster contextual recognition of related activity without creating permanent suspicion.
+Past campaign recognition primes the system for a limited period, enabling faster contextual recognition of related activity without creating permanent suspicion.
 
 Source:
 - [Correlation Rules - G007](https://docs.trustsight.org/rules/correlation/)
@@ -311,8 +292,7 @@ Source:
 
 ## 9. Opsonization: tag first, clear later
 
-**Biological foundation / design connection: complement-mediated tagging that makes later recognition easier.**  
-**Implementation: weight-zero events, `tag_panel`, and `TAG_CONVERGENCE`.**
+**Complement-mediated tagging that makes later recognition easier: weight-zero events, `tag_panel`, and `TAG_CONVERGENCE`.**
 
 TrustSight groups contextual observations such as:
 
@@ -326,7 +306,7 @@ These are not automatically treated as evidence of malice. They are recorded in 
 
 The documentation explicitly describes this as opsonization: “Tag first, clear later.”
 
-**Immune interpretation:** contextual signals mark observations for later interpretation, rather than prematurely turning every mark into an accusation.
+Contextual signals mark observations for later interpretation, rather than prematurely turning every mark into an accusation, as noise makes reviewing harder.
 
 Source:
 - [Detection and Evidence - Opsonization](https://docs.trustsight.org/explanation/detection-and-evidence/)
@@ -336,8 +316,7 @@ Source:
 
 ## 10. Sickness behavior: the system changes its posture
 
-**Biological foundation / design connection: systemic infection changes the organism's overall behavior.**  
-**Implementation: W013, `campaign_hold`, and campaign perimeter context.**
+**Systemic infection changes the organism's overall behavior: W013, `campaign_hold`, and campaign perimeter context.**
 
 When a campaign perimeter is active, a package inside that perimeter may already have an analysis boundary: an upstream manifest not examined, an unverifiable surface, or a coverage gap.
 
@@ -347,7 +326,7 @@ The report can also carry `campaign_hold` and `campaign_state` for downstream en
 
 The documentation explicitly describes this as sickness behavior: systemic infection changes the posture of the organism, but fever is not a verdict about an individual cell.
 
-**Immune interpretation:** when the ecosystem is under a recognized campaign alert, relevant blind spots and boundaries become more visible across the affected neighborhood.
+When the ecosystem is under a recognized campaign alert, relevant blind spots and boundaries become more visible across the affected neighborhood.
 
 Source:
 - [Detection and Evidence - Sickness Behavior](https://docs.trustsight.org/explanation/detection-and-evidence/)
@@ -358,8 +337,7 @@ Source:
 
 ## 11. Refractory periods: one stimulus, one alert
 
-**Biological foundation / design connection: a refractory period prevents meaningless repeated firing.**  
-**Implementation: persisted campaign alert deduplication.**
+**A refractory period prevents meaningless repeated firing: persisted campaign alert deduplication.**
 
 TrustSight emits one alert per `(rule, campaign-cell)` per campaign window. The refractory state is part of the cycle audit record, making replay deterministic.
 
@@ -371,7 +349,7 @@ The rendering side has a related mechanism: when N packages share one campaign f
 
 The documentation explicitly calls this lateral inhibition.
 
-**Immune interpretation:** repeated signals are controlled so that the response remains informative and does not turn into noise.
+Repeated signals are controlled so that the response remains informative and does not turn into noise.
 
 Source:
 - [Detection and Evidence - Refractory Period](https://docs.trustsight.org/explanation/detection-and-evidence/)
@@ -381,8 +359,7 @@ Source:
 
 ## 12. Superantigens and cytokine storms: controlling alert overload
 
-**Biological foundation / design connection: excessive immune activation can harm the host.**  
-**Implementation: alert budgets, W010, campaign caps, and cycle caps.**
+**Excessive immune activation can harm the host: alert budgets, W010, campaign caps, and cycle caps.**
 
 TrustSight explicitly compares noisy alert floods to a superantigen. A tool can be turned against a reviewer by filling the screen until important findings are overlooked. The response becomes part of the threat.
 
@@ -395,7 +372,7 @@ TrustSight addresses this with:
 
 It also describes unbounded campaign-neighborhood elevation as a cytokine-storm failure mode. That is why neighborhood alerts are weight zero, contextual, and bounded by campaign lifetime.
 
-**Immune interpretation:** defensive signaling must remain targeted, bounded, and readable. Alert volume itself must never become evidence against one package.
+Defensive signaling must remain targeted, bounded, and readable. Alert volume itself must never become evidence against one package.
 
 Source:
 - [Detection and Evidence - Alert Budget](https://docs.trustsight.org/explanation/detection-and-evidence/)
@@ -405,8 +382,7 @@ Source:
 
 ## 13. Chronic inflammation: M006 and campaign re-arming
 
-**Biological foundation / design connection: a defensive state that never stands down becomes harmful.**  
-**Implementation: M006 - Campaign Re-armed Too Often.**
+**A defensive state that never stands down becomes harmful: M006 - Campaign Re-armed Too Often.**
 
 A campaign can be refreshed when evidence supports it, but repeated reactivation at an excessive rate is itself surfaced as a tool-health observation.
 
@@ -414,7 +390,7 @@ M006 does not simply block reactivation. It reports the churn, helping operators
 
 The docs compare an unbounded campaign posture to chronic inflammation: the defense can become part of the disease if it never returns to baseline.
 
-**Immune interpretation:** campaigns must expire, and repeated activation must be observable rather than silently becoming permanent suspicion.
+Campaigns must expire, and repeated activation must be observable rather than silently becoming permanent suspicion.
 
 Source:
 - [Meta and Confluence - M006](https://docs.trustsight.org/rules/meta/)
@@ -424,8 +400,7 @@ Source:
 
 ## 14. Autoimmune disease: self-tolerance and the M-series
 
-**Biological foundation / design connection: an immune system that attacks its own body.**  
-**Implementation: Meta and Confluence rules M001-M006.**
+**An immune system that attacks its own body: meta and confluence rules M001-M006.**
 
 TrustSight explicitly describes an autoimmune failure mode: the detection system itself can become unreliable, contradictory, noisy, or overreactive.
 
@@ -443,7 +418,7 @@ Examples include:
 
 The docs describe confluence as a further immune idea: a single immune cell binding an antigen is not enough to launch a full response. In TrustSight, multiple independent signals can provide a stronger basis for escalation than one isolated observation.
 
-**Immune interpretation:** the detection system must distinguish a threat to the ecosystem from malfunction or overreaction in its own recognition mechanisms.
+The detection system must distinguish a threat to the ecosystem from malfunction or overreaction in its own recognition mechanisms.
 
 Source:
 - [Meta and Confluence Rules](https://docs.trustsight.org/rules/meta/)
@@ -453,8 +428,7 @@ Source:
 
 ## 15. Anergy and two-signal activation: new detectors must earn authority
 
-**Biological foundation / design connection: anergy / tolerance after incomplete activation.**  
-**Implementation: the anergy ledger, weight-zero rules, and explicit promotion.**
+**Anergy / tolerance after incomplete activation: the anergy ledger, weight-zero rules, and explicit promotion.**
 
 A new detection shape is not automatically a calibrated detector.
 
@@ -464,7 +438,7 @@ The documentation calls this **two-signal activation**: the existence of a suspi
 
 The project also records a standing anergy state and has process gates that refuse silent promotion.
 
-**Immune interpretation:** immature recognition mechanisms can observe and learn without immediately launching a full response against the ecosystem.
+Immature recognition mechanisms can observe and learn without immediately launching a full response against the ecosystem.
 
 Source:
 - [Detection and Evidence - Two-Signal Activation](https://docs.trustsight.org/explanation/detection-and-evidence/)
@@ -475,8 +449,7 @@ Source:
 
 ## 16. Nociception: unresolved pain becomes a prioritization signal
 
-**Biological foundation / design connection: detecting and communicating pain without necessarily diagnosing tissue damage.**  
-**Implementation: the tender-point notice for unresolved review decisions.**
+**Detecting and communicating pain without necessarily diagnosing tissue damage: the tender-point notice for unresolved review decisions.**
 
 A package with repeated unresolved review verdicts can receive a tender-point notice in the report header: for example, “N unresolved in M months; a human should look once.”
 
@@ -491,8 +464,7 @@ Source:
 
 ## 17. Interoception: the system knows its own condition
 
-**Biological foundation / design connection: sensing one's own internal state.**  
-**Implementation: the `self_state` report block.**
+**Sensing one's own internal state: the `self_state` report block.**
 
 TrustSight exposes its own analysis state rather than expecting users to infer it from silence.
 
@@ -511,7 +483,7 @@ This prevents a cold database, stale intelligence channel, unavailable subsystem
 
 The documentation says that an organism unable to feel its own state confuses blindness with safety.
 
-**Immune interpretation:** the instrument must report not just what it sees, but also whether its own sensors and memory are available.
+The instrument must report not just what it sees, but also whether its own sensors and memory are available.
 
 Sources:
 - [Detection and Evidence - Interoception](https://docs.trustsight.org/explanation/detection-and-evidence/)
@@ -522,8 +494,7 @@ Sources:
 
 ## 18. Gain control: an immune-inspired mechanism TrustSight deliberately rejected
 
-**Biological foundation / design connection: continuously adapting response thresholds to recent signal levels.**  
-**Implementation: explicitly rejected as a runtime mechanism.**
+**Continuously adapting response thresholds to recent signal levels: explicitly rejected as a runtime mechanism.**
 
 TrustSight considered dynamically adapting thresholds to recent signal levels. It rejected that approach because the same package diff could then receive different scores depending on where the observation epoch happened to sit.
 
@@ -540,8 +511,7 @@ Source:
 
 ## 19. IOC Federation: shared knowledge of known pathogens
 
-**Biological foundation / design connection: shared recognition of previously identified threats.**  
-**Implementation: signed, curator-attributed IOC baselines.**
+**Shared recognition of previously identified threats: signed, curator-attributed IOC baselines.**
 
 The novelty seed, local history, corpus baseline, and IOC federation are distinct kinds of knowledge.
 
@@ -558,7 +528,7 @@ Independent curators can publish signed indicator sets. TrustSight verifies thei
 
 IOC matches are reported outside the ordinary heuristic score, at their own alert priority. An expired indicator remains visibly expired rather than silently disappearing.
 
-**Immune interpretation:** the system can recognize a previously characterized threat using shared, attributed intelligence rather than having to rediscover it from local behavior.
+The system can recognize a previously characterized threat using shared, attributed intelligence rather than having to rediscover it from local behavior.
 
 Source:
 - [IOC Federation](https://docs.trustsight.org/reference/ioc/)
@@ -569,8 +539,7 @@ Source:
 
 ## 20. The Watcher: continuous systemic surveillance
 
-**Biological foundation / design connection: ongoing surveillance throughout the organism.**  
-**Implementation: `trustsight full-aur --watch`.**
+**Ongoing surveillance throughout the organism: `trustsight full-aur --watch`.**
 
 The watcher moves TrustSight beyond local, one-package-at-a-time analysis. It continuously observes AUR changes, analyzes changed packages, maintains historical state, joins cross-package observations, and reports new clusters.
 
@@ -587,7 +556,7 @@ It supports:
 
 A daily heartbeat distinguishes “nothing new was found” from “the watcher is dead.” A failed delivery is retained and retried rather than silently lost.
 
-**Immune interpretation:** the watcher is systemic surveillance, continuously observing the ecosystem rather than waiting for one user to ask about one package.
+The watcher is systemic surveillance, continuously observing the ecosystem rather than waiting for one user to ask about one package.
 
 Sources:
 - [Watching the AUR Continuously](https://docs.trustsight.org/workflows/watching-the-aur-continuously/)
@@ -595,10 +564,9 @@ Sources:
 
 ---
 
-## 21. The shared immune network: watcher.trustsight.org
+## 21. The shared immune network: [The Watcher](https://watcher.trustsight.org/)
 
-**Biological foundation / design connection: distributed threat awareness and communication.**  
-**Implementation: the public TrustSight watcher feed.**
+**Distributed threat awareness and communication: the public TrustSight watcher feed.**
 
 The shared feed at [watcher.trustsight.org](https://watcher.trustsight.org/) receives signed watcher-cycle reports and stores searchable alerts.
 
@@ -624,8 +592,7 @@ Sources:
 
 ## 22. Self-protection: the immune apparatus must not be infected
 
-**Biological foundation / design connection: protecting the defense machinery itself.**  
-**Implementation: static analysis, bounded reads, sandboxed parsers, and fail-closed behavior.**
+**Protecting the defense machinery itself: static analysis, bounded reads, sandboxed parsers, and fail-closed behavior.**
 
 TrustSight consumes hostile package-controlled text and metadata. The analysis engine itself is therefore an attack surface.
 
@@ -644,7 +611,7 @@ The optional upstream-scan lane is a deliberate exception with strict controls: 
 
 This is not a failure to inspect upstream. It is a design that adds upstream and artifact inspection through explicit, bounded lanes rather than executing arbitrary package code to obtain more visibility.
 
-**Immune interpretation:** the system must protect its own analysis machinery and preserve its trust boundary while examining adversarial inputs.
+The system must protect its own analysis machinery and preserve its trust boundary while examining adversarial inputs.
 
 Sources:
 - [Static Analysis and Resolution](https://docs.trustsight.org/explanation/static-analysis-and-resolution/)
@@ -657,8 +624,7 @@ Sources:
 
 ## 23. Homeostasis: false-positive control and calibration
 
-**Biological foundation / design connection: maintaining a responsive but non-destructive equilibrium.**  
-**Implementation: maturity gates, calibration corpora, visible suppression, anergy, and evidence boundaries.**
+**Maintaining a responsive but non-destructive equilibrium: maturity gates, calibration corpora, visible suppression, anergy, and evidence boundaries.**
 
 A defense system that attacks everything unfamiliar or generates endless alerts is not healthy.
 
@@ -675,7 +641,7 @@ TrustSight has several explicit mechanisms to avoid that failure:
 
 The published benchmark documentation reports 8,393 benign diffs and 213 self-authored labelled malicious fixtures. These are internal regression measurements, not independent real-world efficacy estimates.
 
-**Immune interpretation:** homeostasis is the balance between responsiveness, tolerance, and restraint. The system must defend the ecosystem without treating every unfamiliarity as disease.
+Homeostasis is the balance between responsiveness, tolerance, and restraint. The system must defend the ecosystem without treating every unfamiliarity as disease.
 
 Sources:
 - [Benchmarks and Methodology](https://docs.trustsight.org/reports/benchmarks-and-methodology/)
@@ -736,32 +702,6 @@ Source: [Security Model](https://docs.trustsight.org/security-design/security-mo
 
 ---
 
-## 26. The public explanation
-
-> **An immune system for the AUR.**
->
-> TrustSight is the sensing and memory layer of that system. It inoculates fresh installations with historical ecosystem knowledge, recognizes suspicious package changes, remembers normal behavior, detects coordinated campaigns across packages, and shares attributed threat intelligence. Its campaign response can prime neighboring observations without automatically accusing them, while its self-tolerance mechanisms control false positives, alert overload, and overreaction. It also reports its own blind spots and protects its analysis machinery from hostile inputs.
->
-> TrustSight doesn't just scan packages for malware. It detects, remembers, and correlates what one person cannot. You triage, report, and act. The AUR's immune system is the loop between you, TrustSight, and the people who maintain the repository.
-
-### Short brand vocabulary
-
-- **Seed:** inoculation / priming.
-- **Local history:** adaptive memory.
-- **Rule families:** recognition repertoire.
-- **G-series:** collective campaign recognition.
-- **G006:** cytokine-like neighborhood signalling.
-- **G007:** trained immunity.
-- **IOC Federation:** shared known-threat intelligence.
-- **Watcher:** systemic surveillance.
-- **M-series:** self-tolerance.
-- **Anergy:** uncalibrated detectors held in reserve.
-- **Refractory windows:** response control.
-- **`self_state`:** interoception.
-- **Sandboxing and fail-closed boundaries:** protection of the immune apparatus.
-
----
-
 ## Documentation index
 
 The following pages are the most important primary sources for the immune-system mapping:
@@ -784,5 +724,3 @@ The following pages are the most important primary sources for the immune-system
 16. [Complete Changelog](https://docs.trustsight.org/changelog/)
 
 ---
-
-*Prepared from the TrustSight documentation and source repository. This document records immunology as an origin of the architecture: biological principles are distinguished from their engineering translations and from interpretive analogies, so the project's intellectual lineage is clear without claiming that software reproduces biology literally.*

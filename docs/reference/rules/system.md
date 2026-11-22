@@ -959,6 +959,14 @@ See [S007: Cryptocurrency Miner](../../rules/sabotage.md#s007).
 
 See [S008: Shell History Or Log Destruction](../../rules/sabotage.md#s008).
 
+### S009 {#s009}
+
+See [S009: Privileged Account Or udev Rule](../../rules/sabotage.md#s009).
+
+### S010 {#s010}
+
+See [S010: Kernel Module Loaded During Build](../../rules/sabotage.md#s010).
+
 ### T001 {#t001}
 
 See [T001: Signing-Key Novelty](../../rules/temporal.md#t001).

@@ -243,6 +243,8 @@ exactly one category page; this catalog only points at it.
 | [S006](sabotage.md#s006) | System Service Disruption | Sabotage | HIGH | [Sabotage](sabotage.md) |
 | [S007](sabotage.md#s007) | Cryptocurrency Miner | Sabotage | HIGH | [Sabotage](sabotage.md) |
 | [S008](sabotage.md#s008) | Shell History Or Log Destruction | Sabotage | MEDIUM | [Sabotage](sabotage.md) |
+| [S009](sabotage.md#s009) | Privileged Account Or udev Rule | Sabotage | HIGH | [Sabotage](sabotage.md) |
+| [S010](sabotage.md#s010) | Kernel Module Loaded During Build | Sabotage | HIGH | [Sabotage](sabotage.md) |
 | [T001](temporal.md#t001) | Signing-Key Novelty | Temporal | HIGH | [Temporal Context](temporal.md) |
 | [T002](temporal.md#t002) | Maintainer Domain Novelty | Temporal | MEDIUM | [Temporal Context](temporal.md) |
 | [T003](temporal.md#t003) | Signing Key Rotated | Temporal | HIGH | [Temporal Context](temporal.md) |

@@ -33,7 +33,7 @@ import re
 
 from ..deps import _strip_comment
 from .base import _CMD
-from ..tokenizer import join_line_continuations, resolve_added_lines
+from ..tokenizer import join_line_continuations, resolve_added_lines, split_lines
 from ..rules import clamp_text
 
 # ---------------------------------------------------------------------------
@@ -297,7 +297,8 @@ _CRITICAL_UNITS = (
     r"sshd?", r"systemd-\w+", r"NetworkManager", r"systemd-networkd",
     r"firewalld", r"iptables", r"ip6tables", r"nftables", r"ufw",
     r"auditd", r"rsyslog", r"syslog-ng", r"systemd-journald",
-    r"apparmor", r"selinux", r"fail2ban", r"clamav-\w+",
+    r"apparmor", r"selinux", r"fail2ban", r"clamav-\w+", r"clamd",
+    r"freshclam",
     r"dbus", r"polkit", r"systemd-logind", r"systemd-resolved",
 )
 _CRITICAL_UNIT_ALT = "|".join(_CRITICAL_UNITS)
@@ -310,13 +311,35 @@ _SERVICE_DISRUPT_RE = re.compile(
     # nothing a package build legitimately does reboots the machine.
     + _CMD + r"systemctl\s+(?:--\S+\s+)*(?:isolate|poweroff|reboot|halt)\b|"
     # Killing a system daemon by name.
-    + _CMD + r"(?:killall|pkill)\s+(?:-\w+\s+)*(?:-9\s+)?"
+    + _CMD + r"(?:(?:command|builtin|exec|env)\s+)?"
+    r"(?:/(?:usr/)?bin/)?(?:killall|pkill)\s+(?:-\w+\s+)*(?:-9\s+)?"
     r"[\"']?(?:" + _CRITICAL_UNIT_ALT + r")\b|"
     # Turning the firewall off outright.
     + _CMD + r"(?:ufw\s+disable|firewall-cmd\s+[^\n]*?--(?:remove-service|panic-off))\b|"
     + _CMD + r"setenforce\s+0\b",
     re.IGNORECASE | re.MULTILINE,
 )
+
+# S009: privileged account provisioning or a udev rule that runs a program.
+# These are not service-disruption events, but they share the same property:
+# the recipe changes the operator's machine outside the staged package.
+_PRIVILEGED_ACCOUNT_RE = re.compile(
+    r"\b(?:useradd|usermod)\b[^\n]*(?:-G|--groups?)\s+[^\n]*"
+    r"(?:wheel|sudo|root)\b|\bchpasswd\b",
+    re.IGNORECASE,
+)
+_UDEV_RULE_RE = re.compile(
+    r"(?:(?:/etc/udev/rules\.d|/usr/lib/udev/rules\.d|/lib/udev/rules\.d)"
+    r"[^\n]*\bRUN\s*(?:\+?=)"
+    r"|\bRUN\s*(?:\+?=)[^\n]*"
+    r"(?:/etc/udev/rules\.d|/usr/lib/udev/rules\.d|/lib/udev/rules\.d))",
+    re.IGNORECASE,
+)
+
+# S010: loading an arbitrary kernel module during the package function.
+# `.install` scripts legitimately modprobe the module they just installed;
+# a PKGBUILD build/package body has no such reason.
+_MODPROBE_RE = re.compile(r"\b(?:modprobe|insmod|rmmod)\b", re.IGNORECASE)
 
 
 # ---------------------------------------------------------------------------
@@ -494,3 +517,39 @@ def _sabotage_findings(diff_text, config, add) -> None:
             once("S008", "Shell History Or Log Destruction", "MEDIUM",
                  f"erases the record of what ran: {quoted}",
                  line_no, body=quoted)
+
+    _system_mutation_findings(diff_text, add)
+
+
+def _system_mutation_findings(diff_text, add) -> None:
+    """Emit S009/S010 from added raw lines.
+
+    The sabotage loop above runs on resolved lines and has no file context.
+    These two rules need the diff's file header: `modprobe` in a `.install`
+    script is ordinary packaging, while the same call in a PKGBUILD build
+    body is loading a module the package did not stage.
+    """
+    file_name = ""
+    fired: set[str] = set()
+    for line_no, raw in enumerate(split_lines(diff_text), start=1):
+        if raw.startswith("+++ b/"):
+            file_name = raw[6:].strip()
+            continue
+        if not raw.startswith("+") or raw.startswith("+++"):
+            continue
+        body = _strip_comment(raw[1:])
+        if not body.strip():
+            continue
+        if "S009" not in fired and (
+            _PRIVILEGED_ACCOUNT_RE.search(body) or _UDEV_RULE_RE.search(body)
+        ):
+            fired.add("S009")
+            add("S009", "Privileged Account Or udev Rule", "HIGH", "sabotage",
+                f"changes an account or device rule outside the staged package: "
+                f"{body.strip()[:120]}", line=line_no, body=body.strip()[:120])
+        if ("S010" not in fired and file_name == "PKGBUILD"
+                and _MODPROBE_RE.search(body)):
+            fired.add("S010")
+            add("S010", "Kernel Module Loaded During Build", "HIGH", "sabotage",
+                f"loads a kernel module from the recipe: {body.strip()[:120]}",
+                line=line_no, body=body.strip()[:120])

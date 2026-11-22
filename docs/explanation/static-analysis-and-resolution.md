@@ -156,7 +156,7 @@ R-series rules are regex-based and match against resolved strings or raw diff li
 
 C-series rules (C001-C035) enforce structural invariants that depend on comparing multiple parsed fields (checksum state, source URL set, pkgver value). They are hard-coded because writing them as TOML patterns would require embedding logic in regex.
 
-S-series sabotage rules (S001-S008) use command-position matching to distinguish build-sandbox cleanup from system damage: `rm -rf "$srcdir/x"` is housekeeping, `rm -rf /` is not.
+S-series sabotage rules (S001-S010) use command-position matching to distinguish build-sandbox cleanup from system damage: `rm -rf "$srcdir/x"` is housekeeping, `rm -rf /` is not.
 
 X-series crossfire rules (X001-X034) are anti-evasion rules that detect patterns designed to exploit the analysis itself.
 
@@ -180,7 +180,7 @@ LOW = 5
 INFO = 0
 ```
 
-**`[review]`** selects a profile and its flagging threshold. Three profiles ship: `default` (threshold 20, about 6.3% of benign diffs enter the review queue), `quiet` (threshold 40, smaller queue), and `strict` (threshold 10, broader queue for operators who prefer sensitivity). Changing a profile does not change a score, risk band, or calibration result; it changes only the reports marked for review.
+**`[review]`** selects a profile and its flagging threshold. Three profiles ship: `default` (threshold 20, about 6.6% of benign diffs enter the review queue), `quiet` (threshold 40, smaller queue), and `strict` (threshold 10, broader queue for operators who prefer sensitivity). Changing a profile does not change a score, risk band, or calibration result; it changes only the reports marked for review.
 
 ```toml
 [review]

@@ -90,6 +90,8 @@ The rules that make up this category are listed below, each with the series that
 | [S006](#s006) | System Service Disruption | HIGH |
 | [S007](#s007) | Cryptocurrency Miner | HIGH |
 | [S008](#s008) | Shell History Or Log Destruction | MEDIUM |
+| [S009](#s009) | Privileged Account Or udev Rule | HIGH |
+| [S010](#s010) | Kernel Module Loaded During Build | HIGH |
 <!-- /generated: page-index -->
 
 ### S001: Recursive Self-Spawn {#s001}
@@ -207,6 +209,33 @@ Anti-forensics, and MEDIUM because on its own it is weak evidence: a
 misguided recipe might clear history for tidiness. Its value is compositional
 - erasing the record of what ran is a strong signal *beside* something that
 ran, and H027 counts capability spread across families.
+
+### S009: Privileged Account Or udev Rule {#s009}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `sabotage`
+
+- **Condition:** a recipe adds or changes a privileged account (`useradd`/`usermod` with `wheel`, `sudo` or `root`, or `chpasswd`), or writes a udev rule whose `RUN` action executes a program.
+
+A package build has no reason to grant an account privileged group
+membership or set its password. Shipping a udev rule that launches a program
+is persistence on device events, outside the staged package tree. Ordinary
+service-account creation through `sysusers.d` is not this condition.
+
+The rule is HIGH and weight 25. It reports once per diff.
+
+### S010: Kernel Module Loaded During Build {#s010}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `sabotage`
+
+- **Condition:** an added line in a `PKGBUILD` runs `modprobe`, `insmod` or `rmmod`.
+
+A `.install` script can legitimately load the module it shipped; a PKGBUILD
+build or package body loading an arbitrary module is changing the running
+kernel from the build recipe. The file header distinguishes the two cases.
+
+The rule is HIGH and weight 25. It reports once per diff.
 
 ## Interpretation
 

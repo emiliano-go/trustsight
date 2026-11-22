@@ -44,7 +44,7 @@ context and its rule definitions.
 | [Count-Based](count-based.md) | `count-based` | 5 | A count of indicators crossed a fixed threshold within one artifact or one cluster. |
 | [Corpus Behavioral](corpus-behavioral.md) | `corpus-behavioral` | 6 | The package's position in, or deviation from, the corpus baseline - silent without prior observations. |
 | [Crossfire](crossfire.md) | `crossfire` | 34 | The evasion technique itself, not the payload it hides: a rule here fires on how a thing was written rather than on what it does. |
-| [Sabotage](sabotage.md) | `sabotage` | 8 | A payload aimed at the operator's machine rather than at getting something out of it: resource exhaustion, deletion, permission sabotage, service disruption, resource theft. |
+| [Sabotage](sabotage.md) | `sabotage` | 10 | A payload aimed at the operator's machine rather than at getting something out of it: resource exhaustion, deletion, permission sabotage, service disruption, resource theft. |
 | [Unverifiable](unverifiable.md) | `unverifiable` | 15 | Not a claim about the recipe but about the analysis: something the package will run that this run could not read. Weight 0 always, and always shown. |
 | [Meta and Confluence](meta.md) | `meta` | 6 | A claim about other findings: a declared practice contradicted by structure, or a composition only visible from the whole profile. |
 | [Entropy](entropy.md) | `entropy` | 3 | The added content is statistically abnormal - a distribution outlier, not a known pattern. Suspicion, never a verdict. |
@@ -72,7 +72,7 @@ generated from it.
 | `R` | Regex | 37 |
 | `H` | Heuristic | 109 |
 | `D` | Dependency | 5 |
-| `S` | Sabotage | 8 |
+| `S` | Sabotage | 10 |
 | `X` | Crossfire | 34 |
 | `W` | Unverifiable | 15 |
 | `P` | Declared-practice | 0 |
@@ -83,7 +83,7 @@ generated from it.
 | `A` | Artifact | 16 |
 | `I` | Indicator | 0 |
 | `U` | Upstream | 15 |
-The catalog lists 310 rule IDs across 15 series; 279 of them contribute to the heuristic score.
+The catalog lists 312 rule IDs across 15 series; 281 of them contribute to the heuristic score.
 <!-- /generated: series-counts -->
 
 `P` and `I` carry no catalog IDs in this build: declared-practice findings

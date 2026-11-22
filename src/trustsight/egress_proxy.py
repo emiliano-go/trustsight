@@ -229,15 +229,27 @@ def handle_client(conn: socket.socket, *, resolver=socket.getaddrinfo,
             pass
 
 
-def serve(listen: str = "0.0.0.0:3128", audit_log: str | None = None,
+DEFAULT_LISTEN = "127.0.0.1:3128"
+
+
+def _listen_parts(listen: str) -> tuple[str, int]:
+    """Parse ``host:port``, defaulting an omitted host to loopback.
+
+    Binding to all interfaces is a deployment choice: the compose service
+    passes ``0.0.0.0:3128`` explicitly on an internal network.  The library
+    and CLI default must stay on loopback.
+    """
+    host, _, port_text = listen.rpartition(":")
+    return host or "127.0.0.1", int(port_text)
+
+
+def serve(listen: str = DEFAULT_LISTEN, audit_log: str | None = None,
           auth_token: str | None = None,
           alert_url: str | None = None) -> None:
-    host, _, port_text = listen.rpartition(":")
-    if not host:
-        host = "0.0.0.0"
+    host, port = _listen_parts(listen)
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server.bind((host, int(port_text)))
+    server.bind((host, port))
     server.listen(16)
     allowed = ALLOWED_HOSTS | _env_extra_hosts()
     slots = threading.BoundedSemaphore(MAX_CONNECTIONS)
@@ -263,7 +275,7 @@ def serve(listen: str = "0.0.0.0:3128", audit_log: str | None = None,
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--listen", default="0.0.0.0:3128")
+    parser.add_argument("--listen", default=DEFAULT_LISTEN)
     parser.add_argument("--audit-log", default=None)
     args = parser.parse_args(argv)
     try:

@@ -188,3 +188,11 @@ def test_a_refused_connect_can_alert(monkeypatch):
         client.close()
     assert calls[0][0] == "https://alerts.example/proxy"
     assert calls[0][1]["event"] == "trustsight.proxy_denied"
+
+
+def test_default_listen_is_loopback():
+    from trustsight.egress_proxy import DEFAULT_LISTEN, _listen_parts
+
+    assert DEFAULT_LISTEN == "127.0.0.1:3128"
+    assert _listen_parts(DEFAULT_LISTEN) == ("127.0.0.1", 3128)
+    assert _listen_parts(":3128") == ("127.0.0.1", 3128)

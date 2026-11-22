@@ -39,7 +39,7 @@ The decision stays with the user, because only a person can judge context and ac
 
 A new TrustSight install has a cold local observation database. Without prior observations, every source URL and maintainer looks new. Novelty would mean almost nothing, because ordinary sources would look novel just because this machine had not seen them.
 
-The novelty seed fixes that. It gives a new install a point-in-time body of AUR history before the first local review, and it ships as a signed release asset.
+A vaccine works by giving the immune system a safe preview of an antigen. The antigen is the thing the immune system learns to recognize. An adjuvant is the extra signal that tells the innate system the antigen matters. The first exposure primes the response, and a later exposure produces a faster, stronger one. That is the useful part of the analogy. The seed gives a new install a preview of the AUR's common shapes, so the first local review is not starting from zero.
 
 At the September 24, 2026 snapshot, the published seed contains:
 
@@ -49,11 +49,9 @@ At the September 24, 2026 snapshot, the published seed contains:
 
 Maintainer identities are salted hashes. The seed does not redistribute plaintext identity data.
 
-### Why "vaccine" fits
-
 The seed is not a whitelist of safe packages. It does not certify that a URL, maintainer, or dependency is harmless. It supplies prior observations so the detector can tell "new to this installation" apart from "new or unusual in the AUR."
 
-The analogy is immune priming, not a vaccine with a weakened pathogen and not a safety certificate.
+Calling it a vaccine is a shorthand, and a loose one. There is no weakened pathogen and no adjuvant. There is a signed body of historical observations. The accurate word is priming, or an antigen library. The seed teaches the novelty layer what ordinary looks like before the first local review.
 
 The seed is tightly constrained:
 
@@ -65,6 +63,10 @@ The seed is tightly constrained:
 
 A forged seed must not be able to fabricate positive findings or rewrite local history. The residual risk is narrower: a malicious but validly signed seed could make an attacker's URL or maintainer look familiar and weaken novelty signals. The additive boundary limits the damage, but the signing key and provenance still matter.
 
+The seed also has a time problem of its own. A vaccine trains the immune system against a pathogen that may still exist. The seed describes the AUR at one moment, and the AUR moves. A maintainer who was ordinary in September may be hostile in December. A source that was rare may become common. The seed is a starting point, not a permanent definition of normal.
+
+That is why local observations take over. The seed gives the cold install a first layer, and the local database replaces it as the install sees more. The novelty weight ramps with effective observations and reaches full weight at 50. A verified seed can supply bootstrap observations, but it cannot keep the system at the bootstrap stage.
+
 The seed gives a cold install historical familiarity. It primes recognition; it does not prove health.
 
 Sources:
@@ -73,11 +75,15 @@ Sources:
 - [Baseline Keys](https://docs.trustsight.org/reference/baseline-keys/)
 - [Security Boundaries - A12/A13](https://docs.trustsight.org/security-design/security-boundaries/)
 
+Further reading: [Vaccine](https://en.wikipedia.org/wiki/Vaccine), [Immunization](https://en.wikipedia.org/wiki/Immunization), [Adjuvant](https://en.wikipedia.org/wiki/Adjuvant), and [Immunological memory](https://en.wikipedia.org/wiki/Immunological_memory).
+
 ---
 
 ## 2. Adaptive immunity: temporal and historical memory
 
-TrustSight does not only match static signatures. It remembers what it has seen and compares current activity with past behavior.
+Adaptive immunity is the slow, specific branch. B cells and T cells are selected by what they bind. The ones that fit are expanded, and some become memory cells. A later encounter with the same antigen produces a faster response because the clone is already there. The system does not remember every possible pathogen. It remembers the ones it met.
+
+TrustSight remembers the AUR it has seen. The observation database stores the source URLs, maintainer identities, signing keys, dependency relationships, and package histories that the temporal rules compare against. A maintainer who has owned a package for years is different from a maintainer who appeared last week, and the difference is only visible if the history exists.
 
 Its history can capture:
 
@@ -88,9 +94,13 @@ Its history can capture:
 - whether a package was dormant and is active again;
 - whether ownership, provenance, integrity, or dependency behavior changed before a suspicious payload appeared.
 
-The T-series uses the same observation store as the alerting layer. That store lets temporal rules detect changes in identity and behavior, not just earlier activity.
+The T-series uses the same observation store as the alerting layer. A signing-key change, a maintainer change, a dormant package waking up, or a source host that has never appeared before can all be checked against the store. The rule does not need to know the payload. It needs to know what normal looked like for this package.
 
-Novelty has maturity gates. A cold database does not pretend to know what it has not observed. Novelty weight climbs with effective observations and reaches full weight at 50 observations. A verified seed can provide bootstrap observations, after which local analyses take over.
+Novelty has maturity gates. A cold database does not pretend to know what it has not observed. Novelty weight climbs with effective observations and reaches full weight at 50 observations. A verified seed can provide bootstrap observations, after which local analyses take over. The ramp is the software version of affinity maturation: the response gets stronger as the evidence accumulates, and it does not start at full strength on a hunch.
+
+There is a useful distinction between the seed and the local database. The seed is a snapshot of the ecosystem. The local database is what this installation has actually seen. A seed can make a new install useful on day one, but it cannot tell the install what changed yesterday. That is the difference between inherited memory and lived memory.
+
+The adaptive analogy has a limit. B and T cells are selected against antigens, and the selection is physical. TrustSight selects rules and observations, not cells. A local database can be thin, stale, or poisoned by a bad observation. The seed can be validly signed and still describe a hostile history. The system does not have a thymus that deletes self-reactive clones. It has calibration, explicit promotion, and the ability to revise a rule.
 
 The seed primes the system. Local observations build its own memory, and temporal rules use that memory to spot departures from normal behavior.
 
@@ -99,11 +109,15 @@ Sources:
 - [Historical and Behavioral Analysis](https://docs.trustsight.org/explanation/historical-and-behavioral-analysis/)
 - [Scoring and Verdicts](https://docs.trustsight.org/explanation/scoring-and-verdicts/)
 
+Further reading: [Adaptive immune system](https://en.wikipedia.org/wiki/Adaptive_immune_system), [Clonal selection](https://en.wikipedia.org/wiki/Clonal_selection), [Affinity maturation](https://en.wikipedia.org/wiki/Affinity_maturation), [Memory B cell](https://en.wikipedia.org/wiki/Memory_B_cell), and [Plasma cell](https://en.wikipedia.org/wiki/Plasma_cell).
+
 ---
 
 ## 3. Innate immunity: immediate threat recognition
 
-The immediate rules work like innate recognition. That is an architectural analogy, not a claim that TrustSight has immune cells. The machinery is deterministic:
+Innate immunity is fast and broad. It does not learn a specific pathogen the way adaptive immunity does. It recognizes molecular shapes that usually mean danger: pathogen-associated molecular patterns on microbes, damage-associated molecular patterns from stressed or dying cells, and the absence of normal self-signals. The receptors are germline-encoded, and they cover classes of threat rather than one strain.
+
+The immediate rules work the same way. They do not need a named malware family. They need a command shape, a structural break, a behavioral pattern, or an unresolved construct. The machinery is deterministic:
 
 | TrustSight mechanism | What it recognizes |
 |---|---|
@@ -120,55 +134,81 @@ The immediate rules work like innate recognition. That is an architectural analo
 | U-series | Declared upstream manifests and release surfaces |
 | A-series | Optional artifact and built-package inspection |
 
+The receptor families in immunology are a useful comparison. Toll-like receptors recognize conserved microbial structures. NOD-like receptors sense intracellular damage and microbial products, and some assemble the inflammasome. RIG-I-like receptors recognize viral RNA. The cGAS-STING pathway senses misplaced DNA. Each family covers a different compartment and a different kind of evidence. A pathogen that hides from one can still trigger another.
+
+TrustSight's families are not receptors. They are rule sets, and they run on text. But the design logic is similar. R, H, C, and X cover different evidence surfaces. C watches structure. H watches behavior. R watches known dangerous commands. X watches the attempt to keep a command from resolving. A package that avoids one still has to pass the others.
+
 The diversity matters. This is not a pile of regular expressions. The rules look at commands, structural relationships, history, package metadata, upstream declarations, known indicators, and correlations between packages. A threat has to evade several kinds of detector, not one signature.
+
+The analogy has two limits. First, innate immunity is a biological system with cells, receptors, and signaling. TrustSight has none of those. Second, not every rule family is innate. The T-series is memory, the G-series is correlation, and the I-series is exact known-threat matching. Calling the whole rule set innate would flatten the distinctions the rest of this page is trying to make.
+
+The C-series is a good example of the difference between a receptor and a rule. A tight junction does not recognize a pathogen. It maintains a barrier, and the loss of the barrier is the signal. C033 and C034 do something similar for the review surface. They do not need a payload. They need the structure to be wrong.
 
 Sources:
 - [Rule Series](https://docs.trustsight.org/rules/series/)
 - [Evidence Categories](https://docs.trustsight.org/reference/evidence-categories/)
 - [Assurance Layers](https://docs.trustsight.org/security-design/assurance-layers/)
 
+Further reading: [Innate immune system](https://en.wikipedia.org/wiki/Innate_immune_system), [Pattern recognition receptor](https://en.wikipedia.org/wiki/Pattern_recognition_receptor), [Pathogen-associated molecular pattern](https://en.wikipedia.org/wiki/Pathogen-associated_molecular_pattern), [Damage-associated molecular pattern](https://en.wikipedia.org/wiki/Damage-associated_molecular_pattern), [Macrophage](https://en.wikipedia.org/wiki/Macrophage), and [Dendritic cell](https://en.wikipedia.org/wiki/Dendritic_cell).
+
 ---
 
 ## 4. Missing-self recognition: NK-cell analogy
 
-The missing-self idea maps to rules that notice what a package stopped having, not just what it added.
+Natural killer cells do not only look for a foreign antigen. They look for the absence of MHC class I, the molecule that tells the immune system a cell is self. Many viruses downregulate MHC class I to hide from cytotoxic T cells. NK cells catch that move because the loss of the self-marker is itself a signal. The missing-self hypothesis is the idea that the absence can be more informative than the presence.
 
-Examples:
-- T004 (Vouch Surface Removed): partial removal of `validpgpkeys` without replacement.
-- T005 (Scheme Downgrade): the same source host falls from TLS while the URL path also changes.
-- C033 (Context Bleed): a diff removes a large fraction of the recipe's comment or prose context.
-- C034 (Metadata Inconsistency): committed `.SRCINFO` and PKGBUILD disagree on version fields.
+T004 is the cleanest software example. A package that used to carry `validpgpkeys` loses it without a replacement. The source may still be the same, and the build may still work. The trust surface that told the user which key was expected is gone. T005 is the same shape with a different surface: the same source host falls from TLS while the URL path changes. The connection is still there, but the expected security property is not.
 
-G008 watches who arrived; T004 and T005 watch what disappeared when they did.
+C033 and C034 extend the idea to reviewability. C033 removes a large fraction of the recipe's comment or prose context. The commands may be valid, but the reviewer has lost the explanation around them. C034 makes the committed `.SRCINFO` and the PKGBUILD disagree on version fields. The package is presenting two different selves.
 
-Missing-self detection complements foreign-pattern recognition. A threat can show up as the loss of a trust or identity feature that used to be there.
+G008 watches who arrived. T004 and T005 watch what disappeared when they did. The contrast is the point. A new maintainer or a new domain is a presence signal. A removed key surface or a downgraded scheme is an absence signal. The first asks who is new. The second asks what the package stopped proving.
+
+Missing-self detection complements foreign-pattern recognition. A threat can show up as the loss of a trust or identity feature that used to be there. It can also show up as a new feature that does not belong. The two axes cover different failure modes.
+
+NK cells are educated by their inhibitory receptors. A cell that fails to engage the inhibitory receptor is a candidate for killing, but the response depends on the balance of activating and inhibitory signals. The missing-self signal is not a simple absence detector. It is an absence interpreted against a repertoire.
+
+The NK analogy has limits. NK cells are educated against self-MHC, and the missing-self signal is interpreted through activating and inhibitory receptors. TrustSight has no such education. A removed `validpgpkeys` line can be a legitimate cleanup, a key rotation, or a packaging simplification. The rule reports the loss; the reviewer decides what it means.
 
 Source:
 - [Detection and Evidence - Missing-self (NK cells)](https://docs.trustsight.org/explanation/detection-and-evidence/)
 - [Temporal Rules](https://docs.trustsight.org/rules/temporal/)
 
+Further reading: [Natural killer cell](https://en.wikipedia.org/wiki/Natural_killer_cell), [Missing self](https://en.wikipedia.org/wiki/Missing_self), [MHC class I](https://en.wikipedia.org/wiki/MHC_class_I), and [Killer-cell immunoglobulin-like receptor](https://en.wikipedia.org/wiki/Killer-cell_immunoglobulin-like_receptor).
+
 ---
 
 ## 5. Danger over stranger: Matzinger's Danger Theory
 
-This is Polly Matzinger's danger model. A new domain, maintainer, or dependency is not automatically malicious. Unknown does not mean dangerous.
+Polly Matzinger's danger model changed the question immunology was asking. The older view was that the immune system distinguishes self from non-self. The danger model says the immune system responds to danger signals, which can come from pathogens or from damaged tissue. A foreign molecule without a danger signal may be ignored. A damaged self-tissue can trigger a response without a pathogen.
 
-The Contact Ledger records first contacts as context. It does not attack them with a score. The system waits for damage, suspicious behavior, or corroborating changes before escalating.
+The model is contested, and it is not the whole story. But it is useful for TrustSight because it explains why unfamiliarity alone is a weak signal. A new domain is not automatically malicious. A new maintainer is not automatically malicious. A new dependency is not automatically malicious. Unknown does not mean dangerous.
 
-C033 and C034 apply the same idea to internal review surfaces. Missing recipe context or inconsistent generated metadata can signal damage to the review surface without proving that a malicious payload exists.
+DAMPs are the damage side of the model. They include molecules released by dying cells, such as ATP, HMGB1, and mitochondrial DNA. Alarmins are a related class of signals that recruit and activate immune cells. The innate system can respond to a damaged tissue without knowing which pathogen, or whether there is one.
+
+The Contact Ledger records first contacts as context. It does not attack them with a score. The system waits for damage, suspicious behavior, or corroborating changes before escalating. That is the software version of a danger signal: something has to be wrong, not just new.
+
+C033 and C034 apply the same idea to internal review surfaces. Missing recipe context or inconsistent generated metadata can signal damage to the review surface without proving that a malicious payload exists. The damage is to the reviewability of the package, not to the user's machine. The distinction matters because the response is different. A malicious payload needs containment. A damaged review surface needs a human to look.
+
+The innate immune system has a similar split between pathogen-associated and damage-associated patterns. PAMPs say "a microbe is here." DAMPs say "tissue is damaged." The response can overlap, but the signals are not the same. TrustSight's first-contact ledger and its structural findings are the same split. A new URL is a PAMP-like presence signal. A removed key surface is a DAMP-like damage signal.
+
+The danger model also explains why the seed cannot be a whitelist. A familiar URL is not proof of safety. It is a prior observation. If the URL later hosts a malicious payload, the familiarity is exactly what the attacker wants. The model says to look for the damage signal, not to trust the familiar shape.
 
 TrustSight responds to evidence, not to unfamiliarity.
 
 Source:
 - [Detection and Evidence - Danger over stranger](https://docs.trustsight.org/explanation/detection-and-evidence/)
 
+Further reading: [Danger model](https://en.wikipedia.org/wiki/Danger_model), [Damage-associated molecular pattern](https://en.wikipedia.org/wiki/Damage-associated_molecular_pattern), [Alarmin](https://en.wikipedia.org/wiki/Alarmin), and [Pattern recognition receptor](https://en.wikipedia.org/wiki/Pattern_recognition_receptor).
+
 ---
 
 ## 6. Clonal recognition: the G-series campaign immune system
 
-The G-series came out of the campaign-alert design, and it behaves most like an ecosystem-level immune response.
+Clonal selection is the mechanism behind adaptive specificity. A B or T cell that binds an antigen is selected, expanded, and retained. The expansion is clonal because the descendants share the same receptor. A germinal center is where B cells mutate, compete for antigen, and mature their affinity. The result is a response that gets more specific over time.
 
-One package with a suspicious property can be ambiguous. Many unrelated packages gaining the same host, literal, dependency, or coordinated maintainer behavior in a short window can reveal a campaign.
+The G-series is the closest thing TrustSight has to clonal expansion. A single package with a suspicious property can be ambiguous. Many unrelated packages gaining the same host, literal, dependency, or coordinated maintainer behavior in a short window can reveal a campaign. One observation is a clone. The correlated set is the expansion.
+
+The G-series came out of the campaign-alert design, and it behaves most like an ecosystem-level immune response. It does not need one package to be conclusive. It needs several packages to share a shape.
 
 G-series mechanisms include:
 
@@ -190,7 +230,7 @@ G-series mechanisms include:
 | G014 | Shared adoption window |
 | G015 | Sleeper adoption campaign |
 
-A campaign becomes visible when otherwise plausible observations join one shared pattern. TrustSight can then produce one campaign-level alert naming the members instead of N disconnected package alerts.
+A campaign becomes visible when otherwise plausible observations join one shared pattern. TrustSight can then produce one campaign-level alert naming the members instead of N disconnected package alerts. That is the software version of a polyclonal response: many weak recognitions converge on one target.
 
 ### The October 2026 yay name-clone campaign
 
@@ -201,30 +241,32 @@ On October 14, 2026, the watcher raised two clusters:
 
 The malicious delivery used committed `.install` files while the upstream recipe stayed byte-intact. The live watcher identified the coordinated activity through G003, H045, and H052. The install-scriptlet payload rules had not caught the carrier during that live cycle; later rule work, including X034, took lessons from the incident.
 
-Correlation caught the campaign before the payload detector recognized the carrier.
+Correlation caught the campaign before the payload detector recognized the carrier. That is the value of the clonal layer. The individual package may look ordinary. The shared shape is what gives it away.
 
 BleepingComputer reported the incident on October 15, 2026: [Fake Arch Linux packages push malware with root privileges](https://www.bleepingcomputer.com/news/security/fake-arch-linux-packages-push-malware-with-root-privileges/).
+
+The analogy has a limit. Clonal selection is specific, and the G-series is correlational. A cluster can join packages that share a hosting provider, a popular dependency, or a packaging convention without sharing an attacker. That is why G006 is weight zero and why campaign state is bounded. The cluster is evidence, not a verdict.
 
 Sources:
 - [Correlation Rules](https://docs.trustsight.org/rules/correlation/)
 - [October 14, 2026 AUR Name-Clone Waves](https://docs.trustsight.org/reports/2026-10-14-aur-name-clone-waves/)
 - [Detection and Evidence](https://docs.trustsight.org/explanation/detection-and-evidence/)
 
+Further reading: [Clonal selection](https://en.wikipedia.org/wiki/Clonal_selection), [Germinal center](https://en.wikipedia.org/wiki/Germinal_center), [Affinity maturation](https://en.wikipedia.org/wiki/Affinity_maturation), and [Immunological memory](https://en.wikipedia.org/wiki/Immunological_memory).
+
 ---
 
 ## 7. Cytokine signaling: neighborhood elevation
 
-When a campaign is active, packages around it may deserve attention even if they are not corroborated members.
+Cytokines are small signaling proteins. Some act on the cell that released them, some on nearby cells, and some travel through the blood to distant sites. Chemokines are a subset that direct cell movement, often along a concentration gradient. The property that matters here is that a signal can change the behavior of tissue around a threat without making every cell in that tissue part of the threat.
 
-If a package newly gains a host or domain within the campaign's scope, G006 can record that it touches an alerted neighborhood.
+When a campaign is active, packages around it may deserve attention even if they are not corroborated members. If a package newly gains a host or domain within the campaign's scope, G006 can record that it touches an alerted neighborhood.
 
-G006 has weight zero. It is context, not a malicious score. Touching an already-hot host should not inflate a package's risk or accuse its maintainer.
+G006 has weight zero. It is context, not a malicious score. Touching an already-hot host should not inflate a package's risk or accuse its maintainer. This is the cytokine-like move: a recognized threat raises readiness in nearby tissue without treating the whole neighborhood as infected.
 
-This is the cytokine-like move: a recognized threat raises readiness in nearby tissue without treating the whole neighborhood as infected.
+The chemokine part of the analogy is about direction. A chemokine gradient tells a cell where to go. The campaign scope tells the reviewer where to look. G006 does not move a detector; it moves attention. The reviewer sees that a package is near a known cluster and can decide whether to inspect it.
 
-Source:
-- [Detection and Evidence - Neighborhood Elevation](https://docs.trustsight.org/explanation/detection-and-evidence/)
-- [Correlation Rules - G006](https://docs.trustsight.org/rules/correlation/)
+The cytokine part is about dosage. A small local signal can be useful. A systemic flood is a cytokine storm. G006 is deliberately local and temporary. It is bounded by the campaign's observation lifetime, and it is not allowed to become a permanent property of the package.
 
 ### Bystander activation: G016 account blast radius
 
@@ -234,25 +276,21 @@ G016 reports that shared-account context. It does not say the account is comprom
 
 Source: [Mechanisms governing bystander activation of T cells](https://pmc.ncbi.nlm.nih.gov/articles/PMC11635090/)
 
-### Apoptosis and anoikis: the sandbox worker
+The limit is that a cytokine is a molecule with a receptor and a concentration. G006 is a rule with a scope and a TTL. The analogy explains why a local signal should not become a global verdict. It does not explain the exact boundary. That boundary is an engineering choice, and the campaign scope is where it lives.
 
-The worker lifecycle is the engineering analogue of apoptosis. A death is staged, not incidental: a detector stops intake, one effector writes a bounded corpse record, then the process group and pipes are released. The corpse is discoverable by contract, not by a crash trace.
+Sources:
+- [Detection and Evidence - Neighborhood Elevation](https://docs.trustsight.org/explanation/detection-and-evidence/)
+- [Correlation Rules - G006](https://docs.trustsight.org/rules/correlation/)
 
-Anoikis is the closest sub-analogue for the anchorage check. The worker checks its own anchors on every loop: effective uid, cwd, `no_new_privs`, network namespace, and a root that was read-only at spawn. Losing one is a death signal, because results produced after detachment are unaudited. The pool also has a restart-intensity contract: three failed replacements in a minute stop it, rather than restarting a deterministic failure forever.
-
-The distinction between apoptosis and necrosis is the useful part. Apoptosis is controlled and quiet. The cell shrinks, the membrane stays intact, and the corpse is cleared without spilling its contents. Necrosis is uncontrolled. The cell swells, the membrane ruptures, and the contents trigger inflammation. The worker lifecycle is designed to be apoptosis: a bounded record, a clean release, and no alert cascade. A crashed worker that leaves a partial result behind is closer to necrosis, which is why the contract matters.
-
-This is a design note, not a rule. No package is scored because a worker died, and the corpse is one silent record rather than an alert cascade.
-
-Source: [Where, O Death, Is Thy Sting?](https://pmc.ncbi.nlm.nih.gov/articles/PMC2894370/), [Anoikis](https://pmc.ncbi.nlm.nih.gov/articles/PMC11401975/)
+Further reading: [Cytokine](https://en.wikipedia.org/wiki/Cytokine), [Chemokine](https://en.wikipedia.org/wiki/Chemokine), [Cytokine storm](https://en.wikipedia.org/wiki/Cytokine_storm), and [Bystander activation review](https://pmc.ncbi.nlm.nih.gov/articles/PMC11635090/).
 
 ---
 
 ## 8. Trained immunity: G007 and bounded campaign priming
 
-After a campaign is corroborated, TrustSight can keep its scope for a bounded number of observations. A package later found in that scope can get a G007 corroboration record carrying the campaign ID.
+Trained immunity is innate immune memory. It is not the same as adaptive memory. Monocytes, macrophages, and NK cells can be reprogrammed after an encounter, through metabolic and epigenetic changes, so a later challenge produces a stronger innate response. The memory is broad and nonspecific. It is also shorter-lived than adaptive memory, and it can be maladaptive.
 
-This is the trained-immunity part. It is context, not a new risk score.
+After a campaign is corroborated, TrustSight can keep its scope for a bounded number of observations. A package later found in that scope can get a G007 corroboration record carrying the campaign ID. This is the trained-immunity part. It is context, not a new risk score.
 
 The state is bounded:
 
@@ -264,75 +302,107 @@ The state is bounded:
 
 Past campaign recognition primes the system for a while and speeds up contextual recognition of related activity. It does not create permanent suspicion.
 
-Source:
+The difference between trained immunity and adaptive immunity matters here. Adaptive memory is specific. Trained immunity is broad. G007 is broad in the same way: it does not remember a single package. It remembers a campaign scope, and it uses that scope to give context to later observations. The scope is narrower than the whole ecosystem, but wider than one package.
+
+The bound is the safety mechanism. A trained innate response that never resolves becomes chronic inflammation. A campaign scope that never expires becomes permanent suspicion. M006 reports the churn when a campaign keeps re-arming, and the TTL makes the state visible.
+
+Trained immunity is carried by metabolic and epigenetic changes in innate cells. It is not a rearrangement of antigen receptors, and it is not the same as immunological memory in B and T cells. The response is broad, and it can be weaker or stronger depending on the stimulus. The analogy should not be used to claim that G007 has learned a specific attacker.
+
+The analogy is not a claim that TrustSight has trained monocytes. It is a claim that a bounded, nonspecific prior exposure can change how a later observation is read. The software version is a campaign record, a scope, and an expiry.
+
+Sources:
 - [Correlation Rules - G007](https://docs.trustsight.org/rules/correlation/)
 - [Detection and Evidence - Campaign Alert Mode](https://docs.trustsight.org/explanation/detection-and-evidence/)
 - [State and Lifecycles](https://docs.trustsight.org/explanation/state-and-lifecycles/)
+
+Further reading: [Trained immunity](https://en.wikipedia.org/wiki/Trained_immunity), [Immunological memory](https://en.wikipedia.org/wiki/Immunological_memory), and [Innate immune system](https://en.wikipedia.org/wiki/Innate_immune_system).
 
 ---
 
 ## 9. Opsonization: tag first, clear later
 
-Tagging works like opsonization: mark the observation, interpret it later.
+Opsonization is the process of marking a target so a phagocyte can recognize it. Antibodies do it by binding the target and presenting their Fc region to Fc receptors on a macrophage or neutrophil. Complement fragments do it by coating the target with C3b, which binds complement receptors. The mark does not kill anything by itself. It makes the target easier to find and easier to eat.
 
-TrustSight groups contextual observations such as:
+TrustSight tags observations in a similar spirit. A first contact, a campaign context, an entropy bump, an annotation, or a recognized technique can be recorded without being scored as malicious. The tag is a mark for later interpretation.
 
-- first contacts;
-- campaign context;
-- entropy bumps;
-- annotations;
-- recognized techniques.
+The marks go into the report's `tag_panel`. When several distinct kinds of tag converge on one diff, `TAG_CONVERGENCE` can produce one bounded informational ledger entry, never a score. That is the opsonization analogy: the tag makes the observation easier to interpret, but it does not pass judgment.
 
-None of these is automatically evidence of malice. They go into the report's `tag_panel`. When several distinct kinds of tag converge on one diff, `TAG_CONVERGENCE` can produce one bounded informational ledger entry, never a score.
+The biology has a step that TrustSight does not have. Opsonization ends in phagocytosis. A phagocyte recognizes the Fc or complement receptor, engulfs the target, and destroys it. TrustSight has no phagocyte. The human reviewer is the closest equivalent, and the report is the tag that helps the reviewer decide what to look at.
 
-This is opsonization in the design's terms: "Tag first, clear later."
+That missing step is the limit. A tag is not an accusation. A tag panel full of context is not a verdict. If the page used opsonization to imply that a tagged package will be removed, it would be describing a different system.
 
-Tagging keeps observations available without turning noise into an accusation.
+The analogy is still useful because it explains why tags are weight zero. The innate immune system does not need a full adaptive response to opsonize a target. It needs a mark that connects the target to an effector. TrustSight needs a mark that connects an observation to a reviewer. The mark is information, not punishment.
 
-Source:
+Antibodies are not the only opsonin. C3b and its breakdown products coat a target and bind complement receptors on phagocytes. Some pathogens evade opsonization by producing proteins that block complement or bind host regulators. The immune system has to recognize the coated surface, not just the pathogen. TrustSight's tags are closer to the coat than to the pathogen. A tag can be present while the package is benign, and a package can be malicious without a tag.
+
+The `tag_panel` is also a place where context can accumulate without changing the score. A first contact, a campaign neighborhood, an entropy bump, and a recognized technique can all be true at once. The panel preserves the combination. `TAG_CONVERGENCE` reports the combination once. It does not add a point for each tag, because that would turn context into a score.
+
+Sources:
 - [Detection and Evidence - Opsonization](https://docs.trustsight.org/explanation/detection-and-evidence/)
 - [Report Schema](https://docs.trustsight.org/reference/report-schema/)
+
+Further reading: [Opsonization](https://en.wikipedia.org/wiki/Opsonization), [Complement system](https://en.wikipedia.org/wiki/Complement_system), [Phagocytosis](https://en.wikipedia.org/wiki/Phagocytosis), and [Antibody](https://en.wikipedia.org/wiki/Antibody).
 
 ---
 
 ## 10. Sickness behavior: the system changes its posture
 
-When a campaign perimeter is active, a package inside it may already have an analysis boundary: an upstream manifest not examined, an unverifiable surface, or a coverage gap.
+Sickness behavior is the set of changes an organism makes during an infection: fever, fatigue, loss of appetite, reduced movement, and increased pain sensitivity. It is not the pathogen doing those things. It is the immune system signaling the brain, often through cytokines and the vagus nerve, that the body should change its priorities.
 
-W013 can make that boundary visible in the campaign context until the campaign TTL expires. It does not create evidence or accuse the package. It makes the defensive posture explicit.
+When a campaign perimeter is active, a package inside it may already have an analysis boundary: an upstream manifest not examined, an unverifiable surface, or a coverage gap. W013 can make that boundary visible in the campaign context until the campaign TTL expires. It does not create evidence or accuse the package. It makes the defensive posture explicit.
 
-The report can also carry `campaign_hold` and `campaign_state` for downstream enforcement systems.
+The report can also carry `campaign_hold` and `campaign_state` for downstream enforcement systems. That is the posture part. The system is not saying the package is malicious. It is saying the environment is under a campaign alert, and the report should be read in that context.
 
-This is sickness behavior: the organism changes posture during a systemic infection, but fever is not a verdict about one cell.
+The analogy is useful because sickness behavior is adaptive and costly at the same time. Fever helps fight infection, but it also consumes energy and makes the organism vulnerable. A campaign posture helps the reviewer, but it can also inflate attention and create alert fatigue. The TTL and the visible boundary are the controls.
 
-Source:
+The biology has a limit. Sickness behavior is a whole-organism response mediated by the brain and the immune system. TrustSight has no brain and no metabolism. W013 is a report field. It changes how the report is read, not how the machine behaves.
+
+That is enough for the analogy. TrustSight does not get a fever, but a systemic threat can justify a temporary change in posture, and the change should be visible rather than hidden in a score.
+
+Cytokines such as interleukin-1, interleukin-6, and tumor necrosis factor are part of the signaling path that produces fever and sickness behavior. The vagus nerve carries some of that signal to the brain. The acute-phase response changes what the liver produces, which changes the blood chemistry. The response is coordinated across organs, not confined to the site of infection.
+
+TrustSight's version is coordinated across report fields. W013 makes the campaign boundary visible. `campaign_hold` and `campaign_state` give downstream systems the posture. The package's own findings do not change. The context around them does.
+
+Sources:
 - [Detection and Evidence - Sickness Behavior](https://docs.trustsight.org/explanation/detection-and-evidence/)
 - [Unverifiable Rules - W013](https://docs.trustsight.org/rules/unverifiable/)
 - [Report Schema](https://docs.trustsight.org/reference/report-schema/)
+
+Further reading: [Sickness behavior](https://en.wikipedia.org/wiki/Sickness_behavior), [Fever](https://en.wikipedia.org/wiki/Fever), [Acute-phase protein](https://en.wikipedia.org/wiki/Acute-phase_protein), and [Cytokine](https://en.wikipedia.org/wiki/Cytokine).
 
 ---
 
 ## 11. Refractory periods: one stimulus, one alert
 
-TrustSight emits one alert per `(rule, campaign-cell)` per campaign window. The refractory state is part of the cycle audit record, so replay stays deterministic.
+A refractory period is a short window after a response during which the same stimulus cannot produce another full response. Neurons have one. Muscle fibers have one. Immune signaling has desensitization and tachyphylaxis, where repeated exposure to a signal produces a smaller response. The common idea is that a system needs a recovery window or it drowns in its own output.
 
-One alert per stimulus is enough; a repeat would add no information.
+TrustSight emits one alert per `(rule, campaign-cell)` per campaign window. The refractory state is part of the cycle audit record, so replay stays deterministic. One alert per stimulus is enough; a repeat would add no information.
 
-### Lateral inhibition
+This is not silent suppression. The state is recorded. The alert is deduplicated because the same stimulus in the same window would produce the same message. The JSON record still carries the full findings. The terminal or notification layer is what gets the one alert.
 
-When N packages share one campaign finding, the alert names the members once, sorted and deduplicated, instead of rendering N copies.
+The rendering side has a related mechanism: when N packages share one campaign finding, the alert names the members once, sorted and deduplicated, instead of rendering N copies. That is lateral inhibition. The signal stays informative instead of turning into noise.
 
-That is lateral inhibition. Repeated signals stay informative instead of turning into noise.
+The biology here is regulatory physiology more than immunology. A refractory period is not a cell type, and tachyphylaxis is a pharmacological phenomenon as much as an immune one. The analogy is useful because it explains why repetition is not the same as strength. It should not be presented as a core immune mechanism.
 
-Source:
+The limit is the same. A refractory period protects a system from overstimulation. It can also hide a real second event if the window is too wide. TrustSight keeps the state in the cycle audit record and keeps the full findings in JSON, so the deduplication is visible and reviewable.
+
+Desensitization and tachyphylaxis are the pharmacological versions of the same idea. A receptor that is exposed to a signal repeatedly can stop responding, or the downstream pathway can adapt. The response gets smaller even though the stimulus is the same. A refractory window does the same thing for alerts: the second identical stimulus does not produce a second full response.
+
+The difference is that a refractory period is time-based and a desensitized receptor is state-based. TrustSight uses a campaign window and a key. The key is the rule and campaign cell; the window is the campaign's observation lifetime. That is enough to prevent a repeat without suppressing a different rule or a different campaign.
+
+Sources:
 - [Detection and Evidence - Refractory Period](https://docs.trustsight.org/explanation/detection-and-evidence/)
 - [State and Lifecycles](https://docs.trustsight.org/explanation/state-and-lifecycles/)
+
+Further reading: [Refractory period](https://en.wikipedia.org/wiki/Refractory_period), [Desensitization](https://en.wikipedia.org/wiki/Desensitization_(medicine)), [Tachyphylaxis](https://en.wikipedia.org/wiki/Tachyphylaxis), and [Negative feedback](https://en.wikipedia.org/wiki/Negative_feedback).
 
 ---
 
 ## 12. Superantigens and cytokine storms: controlling alert overload
 
-Noisy alert floods are the superantigen problem. A tool can be turned against a reviewer by filling the screen until the important findings disappear. The response becomes part of the threat.
+A superantigen is a molecule that bypasses the normal antigen-specific path. It crosslinks MHC class II on an antigen-presenting cell with the T-cell receptor on many T cells at once, without needing the usual peptide-MHC fit. The result is polyclonal T-cell activation, a massive release of cytokines, and a response that is disproportionate to the threat. The immune system attacks the host's own signaling.
+
+TrustSight compares noisy alert floods to a superantigen. A tool can be turned against a reviewer by filling the screen until the findings that matter disappear. The response becomes part of the threat.
 
 TrustSight addresses that with:
 
@@ -345,33 +415,53 @@ It also treats unbounded campaign-neighborhood elevation as a cytokine-storm fai
 
 Defensive signaling has to stay targeted, bounded, and readable. Alert volume must never become evidence against one package.
 
-Source:
+The superantigen analogy is strong because the failure is not a failure of recognition. The immune system recognizes something, but the recognition is so broad that the response loses specificity. An alert flood does the same thing. It does not prove there are more threats. It proves the response is no longer sorted.
+
+The limit is clinical. A cytokine storm is a medical emergency. An alert budget is a UI and notification control. The analogy explains the shape of the failure, not the severity of the human condition.
+
+The superantigen example is useful because the molecule does not need to be processed like a normal antigen. It binds outside the peptide groove and forces a connection between MHC class II and the T-cell receptor. The result is a large fraction of the T-cell repertoire firing at once. That is the software failure where every finding is rendered at once and the reviewer cannot tell which one matters.
+
+The alert budget is the countermeasure. It caps the rendered output, reports the cap through W010, and keeps the full set in JSON. The reviewer gets a readable summary and the machine keeps the complete evidence. The response is smaller at the interface, not smaller in the record.
+
+Sources:
 - [Detection and Evidence - Alert Budget](https://docs.trustsight.org/explanation/detection-and-evidence/)
 - [Unverifiable Rules - W010](https://docs.trustsight.org/rules/unverifiable/)
+
+Further reading: [Superantigen](https://en.wikipedia.org/wiki/Superantigen), [Cytokine storm](https://en.wikipedia.org/wiki/Cytokine_storm), and [Cytokine release syndrome](https://en.wikipedia.org/wiki/Cytokine_release_syndrome).
 
 ---
 
 ## 13. Chronic inflammation: M006 and campaign re-arming
 
-A campaign can be refreshed when evidence supports it. Repeated reactivation at an excessive rate is itself a tool-health observation.
+Acute inflammation is a short response to injury or infection. Chronic inflammation is what happens when the stimulus does not clear or the response does not shut down. The tissue keeps remodeling, immune cells keep arriving, and the repair process can produce fibrosis or exhaustion. The response becomes part of the disease.
 
-M006 does not simply block reactivation. It reports the churn, so operators can see that the system keeps entering the same alert state.
+A campaign can be refreshed when evidence supports it. Repeated reactivation at an excessive rate is itself a tool-health observation. M006 does not simply block reactivation. It reports the churn, so operators can see that the system keeps entering the same alert state.
 
-An unbounded campaign posture is chronic inflammation: the defense becomes part of the disease if it never returns to baseline.
+An unbounded campaign posture is chronic inflammation: the defense becomes part of the disease if it never returns to baseline. Campaigns expire. Repeated activation stays observable instead of silently becoming permanent suspicion.
 
-Campaigns expire. Repeated activation stays observable instead of silently becoming permanent suspicion.
+The analogy explains why M006 is a tool-health rule, not a package verdict. The finding is about the detector's behavior. A campaign that keeps re-arming may be a real campaign that keeps producing evidence, or it may be a rule that is too eager. The report says which, and the operator decides.
 
-Source:
+The limit is that TrustSight has no tissue. It has state, timers, and rules. The chronic inflammation analogy is about the shape of a response that will not resolve. It is not a claim that a package is causing fibrosis.
+
+The distinction between acute and chronic is useful for M006. An acute campaign is a short response to a real cluster. A chronic campaign is one that keeps re-arming, keeps refreshing its window, and never returns to baseline. M006 reports that churn. It does not decide whether the underlying campaign is real. It says the response is not settling.
+
+The rule is deliberately a report, not a block. Blocking a refresh would make the system less able to respond to a real campaign that keeps producing evidence. Reporting the churn gives the operator the information without making the decision for them.
+
+The control is expiry. A campaign that cannot expire becomes a permanent property of the package or the neighborhood. The TTL and the active campaign cap make the state temporary. M006 makes the churn visible when the temporary state keeps coming back.
+
+Sources:
 - [Meta and Confluence - M006](https://docs.trustsight.org/rules/meta/)
 - [Detection and Evidence - Campaign Alert Mode](https://docs.trustsight.org/explanation/detection-and-evidence/)
+
+Further reading: [Chronic inflammation](https://en.wikipedia.org/wiki/Chronic_inflammation), [Inflammation](https://en.wikipedia.org/wiki/Inflammation), and [T-cell exhaustion](https://en.wikipedia.org/wiki/T_cell_exhaustion).
 
 ---
 
 ## 14. Autoimmune disease: self-tolerance and the M-series
 
-The M-series is the autoimmune check. The detection system itself can become unreliable, contradictory, noisy, or overreactive.
+Autoimmunity is what happens when the immune system recognizes self as foreign. Central tolerance deletes many self-reactive B and T cells in the bone marrow and thymus. Peripheral tolerance catches others in the tissue through anergy, regulatory T cells, and checkpoint signals. When those mechanisms fail, the response can attack the host.
 
-M-series rules look at relationships between findings and the health of the detection process. They do not just add another package-level pattern match.
+The M-series is the autoimmune check. The detection system itself can become unreliable, contradictory, noisy, or overreactive. M-series rules look at relationships between findings and the health of the detection process. They do not just add another package-level pattern match.
 
 Examples include:
 
@@ -381,53 +471,83 @@ Examples include:
 - expected co-firings that do not occur;
 - repeated campaign activation.
 
-### Confluence
-
 Confluence is the same idea: one immune cell binding an antigen is not enough to launch a full response. In TrustSight, several independent signals can support escalation better than one isolated observation.
 
 The detector has to tell a threat to the ecosystem apart from malfunction or overreaction in its own recognition.
 
-Source:
+The analogy needs a strict boundary. Autoimmunity is not any false positive. A false positive is a rule that fired on a benign package. Autoimmunity is the detector attacking its own expectations, or a rule that treats the system's normal behavior as hostile. M001 to M006 are the closest thing to that failure mode. They are not a diagnosis of the package.
+
+The value of the analogy is that it makes self-checks part of immunity. A system that only looks outward misses the case where the detector is the problem.
+
+Central tolerance is the first filter. Developing B and T cells that react strongly to self are deleted or edited. Peripheral tolerance is the second filter. Mature cells that escape the first filter are controlled by anergy, regulatory T cells, and checkpoint signals. The M-series is closer to the second filter. It watches the detector in operation, not during development.
+
+The examples are worth separating. A contradiction between a declared practice and structural evidence is a consistency failure. A combination of multiple evidence layers is a confluence signal. A missing expected co-firing is a failure of the detector to behave the way its own model predicts. Repeated campaign activation is a churn failure. All four are tool-health observations, not package verdicts.
+
+Sources:
 - [Meta and Confluence Rules](https://docs.trustsight.org/rules/meta/)
 - [Detection and Evidence - Immune-Inspired Design](https://docs.trustsight.org/explanation/detection-and-evidence/)
+
+Further reading: [Autoimmunity](https://en.wikipedia.org/wiki/Autoimmunity), [Central tolerance](https://en.wikipedia.org/wiki/Central_tolerance), [Peripheral tolerance](https://en.wikipedia.org/wiki/Peripheral_tolerance), and [Regulatory T cell](https://en.wikipedia.org/wiki/Regulatory_T_cell).
 
 ---
 
 ## 15. Anergy and two-signal activation: new detectors must earn authority
 
-A new detection shape is not a calibrated detector.
+T-cell activation usually needs two signals. Signal one is the antigen presented by MHC. Signal two is costimulation, often through CD28 binding CD80 or CD86 on an antigen-presenting cell. A T cell that receives signal one without signal two can become anergic: alive, but unresponsive. The second signal is how the immune system avoids reacting to every self-antigen it encounters.
 
-TrustSight lets an experimental or insufficiently calibrated rule stay visible while adding zero scoring weight. The anergy ledger records what evidence the rule is waiting for. Promotion is explicit, measured, and recorded in the changelog.
+TrustSight lets an experimental or insufficiently calibrated rule stay visible while adding zero scoring weight. The anergy ledger records what evidence the rule is waiting for. Promotion is explicit, measured, and recorded in the changelog. That is the software version of signal one and signal two. A suspicious pattern is signal one. Calibration and evidence are signal two.
 
-This is two-signal activation: a suspicious-looking pattern is not, by itself, enough for a detector to carry scoring authority.
+This is two-signal activation: a suspicious-looking pattern is not, by itself, enough for a detector to carry scoring authority. The project records a standing anergy state and has process gates that refuse silent promotion. Immature recognition can observe and learn without launching a full response.
 
-The project records a standing anergy state and has process gates that refuse silent promotion. Immature recognition can observe and learn without launching a full response.
+The analogy explains why anergy is not deletion. The rule is still there. It still reports. It simply does not score. That is useful because a rule can be informative before it is trustworthy. Removing it would lose the observation. Promoting it too early would add noise.
 
-Source:
+The limit is that a rule is not a cell. A T cell that receives signal one without signal two becomes unresponsive through a biochemical program. A rule in the anergy ledger is held at weight zero by configuration and process. The analogy is about the two-key structure, not the biochemistry.
+
+Costimulation is the second key. CD28 on the T cell binds CD80 or CD86 on the antigen-presenting cell. Without it, the T cell can become anergic even after antigen recognition. CTLA-4 is the brake that competes with CD28 and limits the response. The immune system has both an accelerator and a brake, and the balance decides whether the response proceeds.
+
+TrustSight's accelerator is promotion. The brake is the anergy ledger and the process gates. A rule can be visible, can produce observations, and can wait for the evidence that promotes it. The wait is not a failure. It is the second signal.
+
+The anergy ledger also makes the wait auditable. Each rule has a reason, a missing evidence class, and a promotion path. A reviewer can see why the rule is not scoring and what would change that. The ledger is the difference between a rule that is quietly ignored and a rule that is explicitly held back.
+
+Sources:
 - [Detection and Evidence - Two-Signal Activation](https://docs.trustsight.org/explanation/detection-and-evidence/)
 - [Standards](https://docs.trustsight.org/standards/)
 - [Changelog](https://docs.trustsight.org/changelog/)
+
+Further reading: [Anergy](https://en.wikipedia.org/wiki/Anergy), [Co-stimulation](https://en.wikipedia.org/wiki/Co-stimulation), [T cell](https://en.wikipedia.org/wiki/T_cell), and [Immune tolerance](https://en.wikipedia.org/wiki/Immune_tolerance).
 
 ---
 
 ## 16. Nociception: unresolved pain becomes a prioritization signal
 
-A package with repeated unresolved review verdicts can get a tender-point notice in the report header, for example: "N unresolved in M months; a human should look once."
+Nociception is the nervous system's detection of harmful or potentially harmful stimuli. Nociceptors are not the same as pain. Pain is the conscious experience, and it can exist without tissue damage. Nociception is the signal that something needs attention.
 
-That does not say the package is broken, and it does not score. It tells a reviewer that an unresolved issue has piled up and deserves attention.
+A package with repeated unresolved review verdicts can get a tender-point notice in the report header, for example: "N unresolved in M months; a human should look once." That does not say the package is broken, and it does not score. It tells a reviewer that an unresolved issue has piled up and deserves attention.
 
-The principle is pain as prioritization without a damage claim.
+The principle is pain as prioritization without a damage claim. The notice is a signal that the review process has not resolved something, not a finding that the package is malicious.
 
-Source:
+The neuroimmune angle is real. Nociceptors can be sensitized by inflammatory mediators, and the immune system can change pain sensitivity. Sickness behavior and pain overlap. But the analogy here is narrow: a persistent unresolved signal becomes more salient over time.
+
+The limit is that TrustSight has no nervous system. A tender-point notice is a report field, not a sensation. The value is that it makes an unresolved state visible without pretending it is a detection.
+
+Nociceptors can be sensitized by prostaglandins, bradykinin, and nerve growth factor. The threshold for firing drops, so a stimulus that was not painful becomes painful. That is not the same as tissue damage increasing. The signal is amplified by the state of the system.
+
+The tender-point notice is similar. A package with repeated unresolved reviews has not necessarily become more dangerous. The review process has accumulated unresolved state, and the notice raises the priority. The reviewer should look once. The notice does not claim that the package is broken.
+
+Sensitization is the reason the notice is time-based. A single unresolved review is not a tender point. Repeated unresolved reviews over months are. The threshold is the accumulated state, not one event. The notice is a prompt to break the loop, not a claim about the package's intent.
+
+Sources:
 - [Detection and Evidence - Nociception](https://docs.trustsight.org/explanation/detection-and-evidence/)
+
+Further reading: [Nociception](https://en.wikipedia.org/wiki/Nociception), [Alarmin](https://en.wikipedia.org/wiki/Alarmin), and [Sickness behavior](https://en.wikipedia.org/wiki/Sickness_behavior).
 
 ---
 
 ## 17. Interoception: the system knows its own condition
 
-TrustSight reports its own analysis state instead of leaving users to infer it from silence.
+Interoception is the nervous system's sense of the body's internal state: heartbeat, breathing, hunger, temperature, and the vague sense that something is off. It is not introspection. It is a continuous readout of the conditions that keep the organism alive. The vagus nerve carries a large part of that traffic, and the immune system can change the signal through cytokines and inflammation.
 
-`self_state` can communicate:
+TrustSight reports its own analysis state instead of leaving users to infer it from silence. `self_state` can communicate:
 
 - cold or warm mode;
 - observation counts;
@@ -440,33 +560,57 @@ TrustSight reports its own analysis state instead of leaving users to infer it f
 
 That keeps a cold database, stale channel, unavailable subsystem, or unexercised analysis lane from looking like a healthy, fully informed system.
 
-An instrument that cannot feel its own state confuses blindness with safety. The report has to say not just what it sees, but whether its sensors and memory are available.
+The interoception analogy is about the difference between "no finding" and "no signal." A report with no findings can mean the package is clean, or it can mean the ruleset is stale, the seed is missing, the channel is down, or the analyzer could not read the evidence. `self_state` makes that difference visible.
+
+Allostasis is the related idea that an organism does not hold a fixed internal set point. It changes its own parameters to meet a demand. TrustSight does something similar when it reports cold or warm mode, campaign state, and channel ages. The state is not a constant. It is a posture.
+
+The vagus nerve is one of the main routes for immune-to-brain signaling. Cytokines can act on the vagus, and the brain can send signals back through the autonomic nervous system. The result is a loop, not a one-way report. Interoception is the brain's model of the body's state, and the model can be wrong.
+
+`self_state` is TrustSight's model of its own analysis state. It can be wrong in the same way. A channel can look available while returning stale data. A database can look warm while missing a table. The report has to be checked against the actual evidence, not trusted because it is a report.
+
+The limit is that a report field is not a feeling. An instrument that reports its own condition can still be wrong about the condition. `self_state` is a claim about the analysis environment, and it has to be checked like any other claim.
 
 Sources:
 - [Detection and Evidence - Interoception](https://docs.trustsight.org/explanation/detection-and-evidence/)
 - [Report Schema](https://docs.trustsight.org/reference/report-schema/)
 - [Evidence and Confidence](https://docs.trustsight.org/security-design/evidence-and-confidence/)
 
+Further reading: [Interoception](https://en.wikipedia.org/wiki/Interoception), [Allostasis](https://en.wikipedia.org/wiki/Allostasis), [Homeostasis](https://en.wikipedia.org/wiki/Homeostasis), and [Immune system](https://en.wikipedia.org/wiki/Immune_system).
+
 ---
 
 ## 18. Gain control: an immune-inspired mechanism TrustSight rejected
 
-TrustSight considered adapting thresholds to recent signal levels. It rejected that because the same diff could then score differently depending on where the observation epoch sat.
+Gain control is a feedback idea. A system measures the output, compares it with a target, and adjusts the amplification. Biological reflexes use it. Homeostasis uses it. Control theory uses it everywhere. The goal is to keep a signal in a useful range as the input changes.
 
-That would break deterministic reproducibility and cold-replay consistency.
+TrustSight considered adapting thresholds to recent signal levels. It rejected that because the same diff could then score differently depending on where the observation epoch sat. That would break deterministic reproducibility and cold-replay consistency.
 
 Instead, thresholds are re-derived at release time from a pinned corpus, committed to configuration, and covered by the configuration fingerprint.
 
 TrustSight does not adopt every biological mechanism. It borrows the useful ideas and rejects adaptations that would undermine its security invariants.
 
+The gain control analogy is useful because it explains why the rejection is not a failure of imagination. A biological system can adapt continuously because it has no requirement to replay the same input and get the same output. An audit system does. A score that depends on the recent alert volume is not reproducible, and a non-reproducible score is hard to defend in a report.
+
+Gain is the amount of amplification a signal receives. A reflex can increase gain when the input is weak and decrease it when the input is strong. Homeostasis uses negative feedback to keep a variable near a set point. The system is always adjusting, and the adjustment is part of the response.
+
+The problem with runtime gain control is memory. A system that adjusts to recent signal levels has to remember those levels, and the same input produces a different output depending on what came before. That is acceptable in a reflex and unacceptable in an audit that has to replay.
+
+TrustSight's thresholds are fixed at release time instead. The adjustment happens in the corpus, the calibration, and the configuration, not in the running score. That is a deliberate trade: less biological, more reproducible.
+
+The limit is that this is control theory, not immunology. The section is here because the project considered an immune-like adaptive mechanism and rejected it. That rejection is part of the design lineage.
+
 Source:
 - [Detection and Evidence - Rejected: Gain Control](https://docs.trustsight.org/explanation/detection-and-evidence/)
+
+Further reading: [Homeostasis](https://en.wikipedia.org/wiki/Homeostasis), [Negative feedback](https://en.wikipedia.org/wiki/Negative_feedback), and [Allostasis](https://en.wikipedia.org/wiki/Allostasis).
 
 ---
 
 ## 19. IOC Federation: shared knowledge of known pathogens
 
-The novelty seed, local history, corpus baseline, and IOC federation are different kinds of knowledge.
+Passive immunity is what an organism receives ready-made. Maternal antibodies cross the placenta, and antibody preparations can be given after exposure. The recipient does not make the antibody. The protection is immediate and temporary.
+
+IOC federation is the software version. Independent curators publish signed indicator sets. TrustSight verifies the signatures, keeps provenance and attribution, applies confidence tiers, and preserves expiry. The indicator is ready-made specificity, and the local system does not have to rediscover it.
 
 IOC federation supplies concrete known-bad indicators such as:
 
@@ -477,20 +621,30 @@ IOC federation supplies concrete known-bad indicators such as:
 - PKGBUILD patterns;
 - upstream repository observations.
 
-Independent curators can publish signed indicator sets. TrustSight verifies the signatures, keeps provenance and attribution, applies confidence tiers, and preserves expiry.
+The difference from the seed matters. The seed is historical familiarity, not known-bad. The IOC is a claim that a specific indicator is malicious or suspicious. The seed says "this source existed before." The IOC says "this source is associated with a threat."
 
-IOC matches are reported outside the ordinary heuristic score, at their own alert priority. An expired indicator stays visibly expired instead of disappearing.
+IOC matches are reported outside the ordinary heuristic score, at their own alert priority. An expired indicator remains visibly expired instead of disappearing. That is the passive-immunity fade. The protection is temporary, and the report says so.
 
-The system can recognize a known threat from shared, attributed intelligence instead of rediscovering it from local behavior.
+The limit is the same as passive immunity. The recipient depends on the donor. A stale indicator, a low-confidence curator, or a compromised signing key can all produce a bad match. The provenance and confidence fields are not decoration. They are how the recipient decides whether to trust the donation.
 
-Source:
+Indicators also have a specificity problem. A domain indicator can match a shared host that many benign packages use. A hash indicator can match a file that appears in several packages. A PKGBUILD pattern can match a common idiom. The confidence tier and the context fields are what keep an exact match from becoming an automatic verdict.
+
+The confidence tier is not a score. It is a label that tells the reader how much weight the curator put on the indicator. A high-confidence hash is a different claim from a low-confidence pattern. The reader can see the difference without opening the curator's notes.
+
+The report keeps the IOC match outside the ordinary heuristic score for that reason. An exact indicator is a different kind of claim from a heuristic finding. It says "this value is on a list," not "this package behaves like a threat." The two claims can both be true, but they need different handling.
+
+Sources:
 - [IOC Federation](https://docs.trustsight.org/reference/ioc/)
 - [Indicator Rules](https://docs.trustsight.org/rules/indicator/)
 - [Threat Intelligence](https://docs.trustsight.org/explanation/threat-intelligence/)
 
+Further reading: [Passive immunity](https://en.wikipedia.org/wiki/Passive_immunity), [Neutralization](https://en.wikipedia.org/wiki/Neutralization_(immunology)), [Antibody](https://en.wikipedia.org/wiki/Antibody), and [Immunological memory](https://en.wikipedia.org/wiki/Immunological_memory).
+
 ---
 
 ## 20. The Watcher: continuous systemic surveillance
+
+Immunosurveillance is the continuous search for abnormal cells. Sentinel cells in the tissue sample their surroundings and carry information to lymphoid organs. The lymphatic system moves immune cells and antigen through the body. The response is distributed, not controlled from one place.
 
 The watcher moves TrustSight beyond one package at a time. It watches AUR changes, analyzes changed packages, keeps historical state, joins cross-package observations, and reports new clusters.
 
@@ -507,19 +661,29 @@ It supports:
 
 A daily heartbeat separates "nothing new was found" from "the watcher is dead." A failed delivery is kept and retried instead of silently lost.
 
-The watcher is continuous surveillance of the ecosystem, not a wait for one user to ask about one package.
+The sentinel-cell analogy is better than a central-brain analogy. A sentinel cell does not know the whole organism. It samples a local area and reports. The watcher samples the AUR change stream and reports clusters. The public feed is the shared lymphoid tissue where those reports become searchable.
+
+The limit is that the watcher does not eliminate. Immunosurveillance can lead to killing by cytotoxic cells. The watcher leads to a report. The human or the maintainer decides what happens next. That is the boundary the page keeps returning to.
+
+The watcher's cycle is the unit of work. A cycle observes changes, analyzes what changed, updates state, joins observations, and reports clusters. A bounded cycle can be resumed if it stops. A heartbeat says whether the cycle is alive. An outbox keeps a failed delivery from disappearing. Those are operational details, but they are what make continuous surveillance different from a one-shot scan.
+
+The sentinel analogy also explains why the watcher is not omniscient. A sentinel cell samples a local area. The watcher samples the change stream it can see. A package that never changes, a channel that is down, or a delivery that fails is outside the sample. `self_state` and the heartbeat are how the watcher says so.
+
+The outbox is the part that makes delivery reliable. An alert that cannot be delivered is kept and retried instead of dropped. The watcher can be behind, and the record can still be complete. That is closer to a lymph node holding antigen than to a fire-and-forget notification.
 
 Sources:
 - [Watching the AUR Continuously](https://docs.trustsight.org/workflows/watching-the-aur-continuously/)
 - [State and Lifecycles](https://docs.trustsight.org/explanation/state-and-lifecycles/)
 
+Further reading: [Immune surveillance](https://en.wikipedia.org/wiki/Immune_surveillance), [Sentinel cell](https://en.wikipedia.org/wiki/Sentinel_cell), [Lymphatic system](https://en.wikipedia.org/wiki/Lymphatic_system), and [Immunoediting](https://en.wikipedia.org/wiki/Immunoediting).
+
 ---
 
 ## 21. The shared immune network: [The Watcher](https://watcher.trustsight.org/)
 
-The shared feed at [watcher.trustsight.org](https://watcher.trustsight.org/) receives signed watcher-cycle reports and stores searchable alerts.
+Secondary lymphoid organs are where local encounters become shared memory. A lymph node collects antigen and immune cells from a region, supports the activation of B and T cells, and sends the response back out. A germinal center inside the node is where B cells mutate and compete for affinity. The organ is not a central brain. It is a meeting point.
 
-The feed repository documents:
+The shared feed at [watcher.trustsight.org](https://watcher.trustsight.org/) receives signed watcher-cycle reports and stores searchable alerts. The feed repository documents:
 
 - Ed25519 verification of the raw incoming alert document;
 - public-key publication for later verification;
@@ -530,6 +694,14 @@ The feed repository documents:
 
 Observations from a deployed watcher become reusable threat intelligence for people and systems beyond the original machine.
 
+The lymphoid organ analogy is better than a herd-immunity analogy. A lymph node does not make the whole body immune. It is a place where local information is concentrated and shared. The feed does the same for watcher observations. It is a shared memory organ, not a guarantee of protection.
+
+The germinal center is the part of the lymph node where B cells mutate and compete. It is a specialization inside the organ, not the whole organ. The feed has its own specializations: the indexes, the checkpoints, the API routes, and the verification material. Each one makes a different kind of recall possible.
+
+The signed daily Merkle checkpoints are the feed's equivalent of a verifiable record. They let a later reader check that the alert history was not rewritten. The immune system does not have a Merkle tree, but it does have memory that is shaped by repeated exposure. The analogy is about shared memory, not cryptography.
+
+The API routes are the feed's recall surface. A reader can ask for an alert, a campaign, a package history, a rule trigger, an IOC, a source file, a diff, or a verification record. The germinal center does not expose an API, but it does make different kinds of recall possible from the same shared tissue.
+
 It is a shared threat-surveillance network rather than a literal distributed immune system, but the architectural analogy holds.
 
 Sources:
@@ -537,13 +709,15 @@ Sources:
 - [trustsight-feed repository](https://github.com/emiliano-go/trustsight-feed)
 - [Continuous Watching Documentation](https://docs.trustsight.org/workflows/watching-the-aur-continuously/)
 
+Further reading: [Lymphatic system](https://en.wikipedia.org/wiki/Lymphatic_system), [Germinal center](https://en.wikipedia.org/wiki/Germinal_center), and [Immunological memory](https://en.wikipedia.org/wiki/Immunological_memory).
+
 ---
 
 ## 22. Self-protection: the immune apparatus must not be infected
 
-TrustSight reads hostile package-controlled text and metadata, so the analysis engine is an attack surface.
+The immune system has to protect itself while it fights. Immune privilege limits inflammation in sensitive tissues. Barriers keep pathogens out. Apoptosis removes damaged cells without spilling their contents. Autophagy clears intracellular debris. Phagocytes engulf and digest what is left.
 
-Its safeguards:
+TrustSight reads hostile package-controlled text and metadata, so the analysis engine is an attack surface. Its safeguards:
 
 - never executing a PKGBUILD;
 - never fetching an arbitrary URL declared by a package in the default analysis path;
@@ -558,6 +732,16 @@ The optional upstream-scan lane is a deliberate exception with strict controls: 
 
 The design adds upstream and artifact inspection through explicit lanes instead of executing arbitrary package code to get more visibility.
 
+The immune-privilege analogy is useful because it explains why the analyzer cannot inspect everything. The eye does not allow unrestricted inflammation, and TrustSight does not allow unrestricted execution. The boundary is not a failure. It is a condition of safe operation.
+
+The limit is that sandboxing is not a cell. A jailed parser does not heal. It fails closed. That is the point.
+
+Apoptosis and autophagy are the cleanup side. Apoptosis removes a damaged cell without spilling its contents. Autophagy digests intracellular material and can capture pathogens. Phagocytosis clears the debris. The three together keep the immune response from becoming a source of damage.
+
+TrustSight's cleanup is less biological. A bounded parser, a read-only worker, a coverage gap, and a refusal are the equivalents. They do not heal the package. They keep the analyzer from being damaged by it. The design is closer to fail-closed containment than to cellular repair.
+
+The fail-closed choice is the key. When the sandbox guarantee cannot be established, TrustSight refuses rather than analyzing without it. When part of the evidence cannot be read, the report says so rather than returning a clean result. The immune system does the same when it walls off a site it cannot clear.
+
 Sources:
 - [Static Analysis and Resolution](https://docs.trustsight.org/explanation/static-analysis-and-resolution/)
 - [Security Model](https://docs.trustsight.org/security-design/security-model/)
@@ -565,17 +749,29 @@ Sources:
 - [Upstream Manifests](https://docs.trustsight.org/rules/upstream-manifests/)
 - [Artifact Rules](https://docs.trustsight.org/rules/artifact/)
 
+Further reading: [Immune privilege](https://en.wikipedia.org/wiki/Immune_privilege), [Autophagy](https://en.wikipedia.org/wiki/Autophagy), [Apoptosis](https://en.wikipedia.org/wiki/Apoptosis), [Phagocytosis](https://en.wikipedia.org/wiki/Phagocytosis), and [Tight junction](https://en.wikipedia.org/wiki/Tight_junction).
+
 ---
 
 ## 23. Homeostasis: false-positive control and calibration
 
-A defense system that attacks everything unfamiliar, or floods the screen, is not healthy.
+Homeostasis is the maintenance of a stable internal state through feedback. The immune system uses it constantly. Inflammation has to resolve. Regulatory T cells suppress overreaction. Checkpoints put brakes on activation. When the feedback fails, the response damages the host.
 
-TrustSight uses several checks. Novelty gains weight only after enough observations. First contacts and campaign-neighborhood touches stay weight zero. Uncalibrated rules stay in anergy. Suppressions are reported with reasons and expiry. Positive-looking practices do not subtract evidence. A false-positive fix must keep a true-positive twin. Changes are tested against a locked benign corpus and labeled malicious fixtures. Incomplete analysis is named as a boundary.
+A defense system that attacks everything unfamiliar, or floods the screen, is not healthy. TrustSight uses several checks. Novelty gains weight only after enough observations. First contacts and campaign-neighborhood touches stay weight zero. Uncalibrated rules stay in anergy. Suppressions are reported with reasons and expiry. Positive-looking practices do not subtract evidence. A false-positive fix must keep a true-positive twin. Changes are tested against a locked benign corpus and labeled malicious fixtures. Incomplete analysis is named as a boundary.
 
 At the last published count, the benchmark has 8,393 benign diffs and 213 self-authored labeled malicious fixtures. These are internal regression numbers, not independent estimates of real-world efficacy.
 
 Homeostasis is the balance between responsiveness, tolerance, and restraint. The system defends the ecosystem without treating every unfamiliarity as disease.
+
+The feedback analogy is useful because it explains why calibration is continuous. A threshold that works on one corpus can fail on another. The corpus and the fire rates are the feedback signal. The release process is the adjustment.
+
+The limit is that TrustSight has no metabolism. It does not return to a physiological set point. It returns to a tested configuration. The analogy explains the goal, not the mechanism.
+
+The calibration corpus is the feedback signal. A change that raises the benign p95 or lowers the true-positive rate is a deviation from the target. The release process adjusts the threshold or the rule. That is a slow loop compared with a biological reflex, but it is a loop.
+
+The true-positive twin is the part that keeps the loop honest. A false-positive fix that removes the malicious case is not a fix. It is a trade that hides one failure behind another. The twin keeps both cases in the test set.
+
+The benchmark is the long feedback loop. A rule change is measured against a locked benign corpus and a set of labeled malicious fixtures. The numbers are not an independent estimate of real-world efficacy, and the page should not present them as one. They are a regression signal, which is what a homeostatic loop needs.
 
 Sources:
 - [Benchmarks and Methodology](https://docs.trustsight.org/reports/benchmarks-and-methodology/)
@@ -583,9 +779,13 @@ Sources:
 - [Tuning False Positives](https://docs.trustsight.org/workflows/tuning-false-positives/)
 - [What a Result Claims](https://docs.trustsight.org/security-design/what-a-result-claims/)
 
+Further reading: [Homeostasis](https://en.wikipedia.org/wiki/Homeostasis), [Negative feedback](https://en.wikipedia.org/wiki/Negative_feedback), [Inflammation](https://en.wikipedia.org/wiki/Inflammation), [Regulatory T cell](https://en.wikipedia.org/wiki/Regulatory_T_cell), and [Immune checkpoint](https://en.wikipedia.org/wiki/Immune_checkpoint).
+
 ---
 
 ## 24. The biological foundations and their architectural translations
+
+The table is the compressed version of the page. It is useful for finding a concept quickly, and it is not a substitute for the sections that explain the limits.
 
 | Biological principle or concept | TrustSight architectural translation | Relationship to biology |
 |---|---|---|
@@ -598,7 +798,6 @@ Sources:
 | Clonal recognition | G-series campaign correlation | Explicitly documented |
 | Cytokine signaling | G006 neighborhood elevation | Explicitly documented |
 | Bystander activation | G016 account blast radius | Interpretive analogy; context only, never a compromise claim |
-| Apoptosis / anoikis | Sandbox worker teardown and restart budget | Engineering analogue; staged death, corpse record and anchorage loss, not a rule claim |
 | Trained immunity | G007 and campaign priming | Explicitly documented |
 | Opsonization / complement | Weight-zero tags and `tag_panel` | Explicitly documented |
 | Sickness behavior | W013 and campaign-wide posture | Explicitly documented |
@@ -618,6 +817,18 @@ Sources:
 | Self-protection | Sandboxing and bounded analysis | Strong systems analogy |
 | Homeostasis | Calibration and false-positive control | Synthesis of several mechanisms |
 
+Three rows deserve a note. Vaccine is the loosest label in the table; priming is the better word. Shared immunity is a systems analogy, not a claim that the feed makes the AUR immune. Self-protection is a design boundary, not a literal immune privilege.
+
+The table also shows the difference between a documented borrowing and a structural one. Missing-self, danger, trained immunity, opsonization, anergy, and homeostasis are named in the docs. Crossfire, complement, and passive immunity are structural mappings added later. The table keeps both visible instead of flattening them into one kind of claim.
+
+A useful way to read the table is to ask what would falsify the row. For missing-self, the falsifier is a package that loses a trust surface for a benign reason and produces no other signal. For trained immunity, it is a G007 record that persists past its TTL or changes the score. For opsonization, it is a tag that becomes a verdict without a rule. The falsifier keeps the analogy honest.
+
+The table is also a reminder that the strongest rows are not the most biological. The strongest rows are the ones where the mechanism and the biology share a structure: a loss signal, a bounded memory, a mark that is not a verdict. The weakest rows are the ones where the biology is doing rhetorical work.
+
+Sources:
+- [Detection and Evidence - Immune-Inspired Design](https://docs.trustsight.org/explanation/detection-and-evidence/)
+- [Rule Series](https://docs.trustsight.org/rules/series/)
+
 ---
 
 ## 25. What the analogy does not claim
@@ -633,11 +844,21 @@ The boundaries are part of the design:
 
 A healthy immune system knows what it can see, what it cannot see, and when to abstain.
 
+The page also does not claim that the AUR is a literal organism, that users are cells, or that the watcher is a central brain. The metaphor is about sensing, memory, correlation, and restraint. It is not a theory of the AUR's politics, economics, or governance.
+
+The strongest boundary is enforcement. TrustSight does not block, quarantine, or remove. A maintainer can remove a package from the AUR. A user can remove it from a machine. The software produces the signal, and people act. The immune system analogy is useful only while that division stays visible.
+
+The second boundary is certainty. The page can explain why a rule exists and what it detects. It cannot turn a heuristic into a proof. A finding is evidence, and evidence has a scope. The scope is the report.
+
+The third boundary is the metaphor itself. The AUR is not a body, and TrustSight is not an immune system. It is a tool that borrows useful ideas from one. The borrowing is worth keeping because it changes how the tool is built. It is not worth defending as literal biology.
+
+The fourth boundary is the reader's response. A finding is not an instruction to remove a package. It is a reason to look. The page can explain why the tool exists and what it detects. It cannot make the decision for the person reading the report.
+
 Source: [Security Model](https://docs.trustsight.org/security-design/security-model/), [What a Result Claims](https://docs.trustsight.org/security-design/what-a-result-claims/), and [Limitations and Uncertainty](https://docs.trustsight.org/explanation/limitations-and-uncertainty/).
 
----
+Further reading: [Immune tolerance](https://en.wikipedia.org/wiki/Immune_tolerance), [Immune privilege](https://en.wikipedia.org/wiki/Immune_privilege), and [Janeway's Immunobiology](https://www.ncbi.nlm.nih.gov/books/NBK10767/).
 
-The first half of this page covers the concepts the docs already name. The rest of the immune system matters too, including the parts the code never mentions. I use three labels below. Documented means the docs name the concept and tie it to a mechanism. Structural means the mechanism and the biology solve the same problem, even if the docs never use the word. Interpretive means the analogy helps explain the design but is not a justification for it.
+---
 
 ## 26. Which immune system?
 
@@ -740,7 +961,7 @@ Trust root replacement is X013. A fetch is redirected or the trust anchor is rep
 
 X019 is not evasion. It sends or packages host material. It belongs in the payload and exfiltration story, not in the immune-evasion map. X031 reads non-code text during the build. The cross-context activation analogy is interesting but thin, so it stays at the edge.
 
-The important design point is that payload and crossfire findings can both fire on the same diff and are scored independently. The payload rule catches what resolved. The crossfire rule catches the attempt to keep it from resolving. Evasion and alarm become the same event instead of evasion and silence.
+The design consequence is that payload and crossfire findings can both fire on the same diff and are scored independently. The payload rule catches what resolved. The crossfire rule catches the attempt to keep it from resolving. Evasion and alarm become the same event instead of evasion and silence.
 
 This is also why crossfire shrinks as the tokenizer improves. Every construct the analyzer learns to resolve removes one reason for a crossfire finding. That is the intended direction. The family is a function of refusal, and a refusal that becomes a resolution is progress, not a lost detection.
 
@@ -748,7 +969,7 @@ Further reading: [Pattern recognition receptor](https://en.wikipedia.org/wiki/Pa
 
 ## 28. Complement and composition
 
-Complement is a cascade of plasma proteins. One event activates the next, the signal amplifies, and the end result can be opsonization, inflammation, or a membrane attack complex. The point is not any single protein. The point is that the steps are connected, and the connection changes the outcome.
+Complement is a cascade of plasma proteins. One event activates the next, the signal amplifies, and the end result can be opsonization, inflammation, or a membrane attack complex. No single protein carries the cascade; the connection does.
 
 H027, H043, and H098 are composition rules. They do not detect one more payload. They detect that several findings are related.
 
@@ -762,7 +983,7 @@ H102 is the maintainer change plus signing-key change. The old keyring said who 
 
 C021 removes a `checkdepends` entry while the build, prepare, or check function changes. The test suite that would have caught the payload is gone. The immune analogue is a checkpoint being removed. That is a structural analogy, not a complement one, and it belongs with the regulation section as much as here.
 
-The composition rules are deliberately restrained. H027 and H043 carry no weight because the members already scored on their own; adding a composition score would double count. H098 carries weight because the individual naming signals are weak and the combination is materially stronger. That design choice is more important than the biology. A complement cascade amplifies. A composition rule has to decide whether amplification is double counting, and TrustSight answers that per rule.
+The composition rules are deliberately restrained. H027 and H043 carry no weight because the members already scored on their own; adding a composition score would double count. H098 carries weight because the individual naming signals are weak and the combination is materially stronger. That design choice matters more than the biology. A complement cascade amplifies. A composition rule has to decide whether amplification is double counting, and TrustSight answers that per rule.
 
 | Rule | What it composes | Immune analogue | Limit |
 |---|---|---|---|
@@ -875,7 +1096,7 @@ The analogy breaks if it is stretched. Ring vaccination is a public-health strat
 
 The ring also has a boundary problem. A ring that is too wide becomes a permanent alert on the whole ecosystem. A ring that is too narrow misses the next contact. G006 uses the campaign's scope and the observation clock to draw the boundary, and it stays weight zero so the ring does not become an accusation. That is the software version of a public-health ring: identify the contacts, raise their readiness, and stop when the window closes.
 
-The difference from quarantine is important. Quarantine restricts movement. G006 adds context. A package inside the ring is not blocked, removed, or scored as malicious. A reviewer sees that it touches an alerted neighborhood and decides what to do. The immune system recruits cells to a site; it does not arrest every cell in the tissue.
+The difference from quarantine matters. Quarantine restricts movement. G006 adds context. A package inside the ring is not blocked, removed, or scored as malicious. A reviewer sees that it touches an alerted neighborhood and decides what to do. The immune system recruits cells to a site; it does not arrest every cell in the tissue.
 
 Further reading: [Ring vaccination](https://en.wikipedia.org/wiki/Ring_vaccination), [Chemokine](https://en.wikipedia.org/wiki/Chemokine), and [Cytokine](https://en.wikipedia.org/wiki/Cytokine).
 
@@ -957,7 +1178,7 @@ Further reading: [Virus latency](https://en.wikipedia.org/wiki/Virus_latency), [
 
 The immune system has failure modes that are as instructive as its successes. Cytokine storm is an uncontrolled release of pro-inflammatory cytokines. Autoimmunity is an attack on self. Immunodeficiency is a missing or weakened response. Each has a software analogue, and each analogy has a limit.
 
-Cytokine storm maps to alert overload. TrustSight caps terminal findings, caps watcher notifications per cycle, and reports the cap through W010. The full findings stay in the JSON record. The point is to keep the response readable, not to hide the evidence.
+Cytokine storm maps to alert overload. TrustSight caps terminal findings, caps watcher notifications per cycle, and reports the cap through W010. The full findings stay in the JSON record. The goal is to keep the response readable, not to hide the evidence.
 
 Autoimmunity maps to the M-series. The detection system can contradict itself, fire on its own expectations, or keep re-arming a campaign. M001 to M006 check the health of the detection process, not just the package. This is the closest thing to self-tolerance in the design.
 
@@ -1035,6 +1256,47 @@ The core definitions below are from Wikipedia, with Janeway's Immunobiology for 
 - [Immunodeficiency](https://en.wikipedia.org/wiki/Immunodeficiency)
 - [Cytokine storm](https://en.wikipedia.org/wiki/Cytokine_storm)
 - [Autoimmunity](https://en.wikipedia.org/wiki/Autoimmunity)
+- [Vaccine](https://en.wikipedia.org/wiki/Vaccine)
+- [Immunization](https://en.wikipedia.org/wiki/Immunization)
+- [Adjuvant](https://en.wikipedia.org/wiki/Adjuvant)
+- [Antigen](https://en.wikipedia.org/wiki/Antigen)
+- [Macrophage](https://en.wikipedia.org/wiki/Macrophage)
+- [Dendritic cell](https://en.wikipedia.org/wiki/Dendritic_cell)
+- [Mast cell](https://en.wikipedia.org/wiki/Mast_cell)
+- [MHC class I](https://en.wikipedia.org/wiki/MHC_class_I)
+- [Killer-cell immunoglobulin-like receptor](https://en.wikipedia.org/wiki/Killer-cell_immunoglobulin-like_receptor)
+- [Danger model](https://en.wikipedia.org/wiki/Danger_model)
+- [Alarmin](https://en.wikipedia.org/wiki/Alarmin)
+- [Germinal center](https://en.wikipedia.org/wiki/Germinal_center)
+- [Affinity maturation](https://en.wikipedia.org/wiki/Affinity_maturation)
+- [Memory B cell](https://en.wikipedia.org/wiki/Memory_B_cell)
+- [Plasma cell](https://en.wikipedia.org/wiki/Plasma_cell)
+- [Cytokine](https://en.wikipedia.org/wiki/Cytokine)
+- [Chemokine](https://en.wikipedia.org/wiki/Chemokine)
+- [Cytokine release syndrome](https://en.wikipedia.org/wiki/Cytokine_release_syndrome)
+- [Phagocytosis](https://en.wikipedia.org/wiki/Phagocytosis)
+- [Antibody](https://en.wikipedia.org/wiki/Antibody)
+- [Sickness behavior](https://en.wikipedia.org/wiki/Sickness_behavior)
+- [Fever](https://en.wikipedia.org/wiki/Fever)
+- [Acute-phase protein](https://en.wikipedia.org/wiki/Acute-phase_protein)
+- [Refractory period](https://en.wikipedia.org/wiki/Refractory_period)
+- [Desensitization](https://en.wikipedia.org/wiki/Desensitization_(medicine))
+- [Tachyphylaxis](https://en.wikipedia.org/wiki/Tachyphylaxis)
+- [Superantigen](https://en.wikipedia.org/wiki/Superantigen)
+- [Chronic inflammation](https://en.wikipedia.org/wiki/Chronic_inflammation)
+- [Inflammation](https://en.wikipedia.org/wiki/Inflammation)
+- [Central tolerance](https://en.wikipedia.org/wiki/Central_tolerance)
+- [Peripheral tolerance](https://en.wikipedia.org/wiki/Peripheral_tolerance)
+- [Nociception](https://en.wikipedia.org/wiki/Nociception)
+- [Interoception](https://en.wikipedia.org/wiki/Interoception)
+- [Allostasis](https://en.wikipedia.org/wiki/Allostasis)
+- [Sentinel cell](https://en.wikipedia.org/wiki/Sentinel_cell)
+- [Lymphatic system](https://en.wikipedia.org/wiki/Lymphatic_system)
+- [Autophagy](https://en.wikipedia.org/wiki/Autophagy)
+- [Apoptosis](https://en.wikipedia.org/wiki/Apoptosis)
+- [Homeostasis](https://en.wikipedia.org/wiki/Homeostasis)
+- [Immune checkpoint](https://en.wikipedia.org/wiki/Immune_checkpoint)
+- [T cell](https://en.wikipedia.org/wiki/T_cell)
 - [Janeway's Immunobiology, NCBI Bookshelf](https://www.ncbi.nlm.nih.gov/books/NBK10767/)
 - [Bystander activation review, PMC11635090](https://pmc.ncbi.nlm.nih.gov/articles/PMC11635090/)
 

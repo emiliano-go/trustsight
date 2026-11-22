@@ -58,9 +58,13 @@ X019_RE = re.compile(
     # A query name or ICMP payload the recipe computes.
     # Command position, not anywhere: `host` is also an English word, and
     # `echo "Host: $(uname -rn)"` is a build script printing a banner.
-    r"(?:\A\s*|[;&|(]\s*|&&\s*)(?:dig|drill|kdig|host|nslookup)\s"
+    r"(?:\A\s*|[;&|(]\s*|&&\s*)"
+    r"(?:command\s+|/(?:usr/)?bin/)?"
+    r"(?:dig|drill|kdig|host|nslookup)\s"
     r"[^\n;&|]*\$[({]"
-    r"|(?:\A\s*|[;&|(]\s*|&&\s*)ping6?\s[^\n;&|]*\s-p\s*[\"']?\$[({]"
+    r"|(?:\A\s*|[;&|(]\s*|&&\s*)"
+    r"(?:command\s+|/(?:usr/)?bin/)?"
+    r"ping6?\s[^\n;&|]*\s-p\s*[\"']?\$[({]"
     # Host material written into the package.
     r"|(?:\A\s*|[;&|(]\s*|&&\s*)(?:env|printenv|set|hostname|id|uname)\b"
     r"[^\n;&|]*>\s*[\"']?[^\"'\s;&|]*\$\{?pkgdir\}?"

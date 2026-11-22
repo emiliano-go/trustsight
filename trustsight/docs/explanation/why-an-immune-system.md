@@ -257,17 +257,9 @@ Source:
 
 ### Bystander activation: G016 account blast radius
 
-A second, weaker field effect appears one level up: when one package on an
-account fires a specific payload rule or a FATAL finding, other packages that
-the same account had processed in that cycle are **bystanders**. The biology
-is bystander activation: antigen-nonspecific cells can be activated by
-cytokines during an ongoing response, without direct recognition of the
-antigen.
+A second, weaker field effect appears one level up: when one package on an account fires a specific payload rule or a FATAL finding, other packages that the same account had processed in that cycle are **bystanders**. The biology is bystander activation: antigen-nonspecific cells can be activated by cytokines during an ongoing response, without direct recognition of the antigen.
 
-G016 reports that shared-account context. It does not say the account is
-compromised and it does not score the siblings. Unregulated bystander
-activation can itself cause immune pathology, which is why G016 is weight zero
-and anergic rather than a promotion path into the package score.
+G016 reports that shared-account context. It does not say the account is compromised and it does not score the siblings. Unregulated bystander activation can itself cause immune pathology, which is why G016 is weight zero and anergic rather than a promotion path into the package score.
 
 Source: [Mechanisms governing bystander activation of T cells](https://pmc.ncbi.nlm.nih.gov/articles/PMC11635090/)
 
@@ -710,6 +702,7 @@ Source: [Security Model](https://docs.trustsight.org/security-design/security-mo
 
 ---
 
+---
 
 ## Documentation index
 

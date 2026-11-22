@@ -317,6 +317,7 @@
     "measured": 175,
     "zero_fire": 87
   },
+  "measured_at": "2026-11-02",
   "rules": {
     "A001": {
       "benign_sources": [],

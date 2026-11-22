@@ -150,6 +150,7 @@ def build_ledger(
     dispositions: dict[str, dict] | None = None,
     corpus_sha256: str = "",
     version: str = "",
+    measured_at: str = "",
 ) -> dict:
     """Return the committed ledger document.
 
@@ -232,6 +233,7 @@ def build_ledger(
         counts[row["state"]] += 1
     return {
         "version": version or "1",
+        "measured_at": measured_at,
         "corpus_content_sha256": corpus_sha256,
         "catalog_size": len(all_ids),
         "counts": dict(sorted(counts.items())),

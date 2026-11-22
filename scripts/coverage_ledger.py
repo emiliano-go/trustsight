@@ -200,6 +200,10 @@ def main() -> int:
                         help="compare the already-built --out ledger with this "
                              "committed ledger, without rescanning")
     parser.add_argument("--jobs", type=int, default=cg.default_jobs())
+    parser.add_argument(
+        "--measured-at", default=None,
+        help=("ISO date this replay measured the ledger. Defaults to the "
+              "baseline's generated date so the committed fixture is stable."))
     parser.add_argument("--no-history", action="store_true")
     parser.add_argument("--no-manifest", action="store_true")
     parser.add_argument("--no-artifact", action="store_true")
@@ -290,12 +294,14 @@ def main() -> int:
               file=sys.stderr)
 
     digest = ""
+    measured_at = args.measured_at or ""
     if (FIXTURES / "baseline.json").exists():
-        digest = json.loads((FIXTURES / "baseline.json").read_text()).get(
-            "corpus_content_sha256", "")
+        baseline = json.loads((FIXTURES / "baseline.json").read_text())
+        digest = baseline.get("corpus_content_sha256", "")
+        measured_at = measured_at or str(baseline.get("generated") or "")
     ledger = build_ledger(
         observations, expected=expected, dispositions=dispositions,
-        corpus_sha256=digest, version="2")
+        corpus_sha256=digest, version="2", measured_at=measured_at)
     write_ledger(args.out, ledger)
 
     print(f"coverage ledger: {args.out}")

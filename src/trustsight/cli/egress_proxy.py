@@ -24,7 +24,7 @@ def register_commands(app: typer.Typer):
 
 @egress_proxy_app.callback(invoke_without_command=True)
 def egress_proxy_cmd(
-    listen: str = typer.Option("0.0.0.0:3128", "--listen"),
+    listen: str = typer.Option("127.0.0.1:3128", "--listen"),
     audit_log: str | None = typer.Option(
         None, "--audit-log", help="Append one JSON record per CONNECT."),
     auth_token: str | None = typer.Option(

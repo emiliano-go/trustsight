@@ -193,6 +193,11 @@ The fennekuiper signature: a throwaway account sweeping up orphans in its first 
 
 The dormant-target clause is the FP killer. A legitimate new maintainer adopts a package or two they care about (active packages). Nobody's first act is sweeping up 13 orphans including a high-value one. The conjunction of first-seen, many targets, and dormant targets is near-zero FP.
 
+The claim is per account, not per burst: an account whose earliest observed event
+predates the burst it is being judged on is no longer first-seen, so a repeat
+sweep inside the same rolling window is reported as a coordinated adoption
+(G003) rather than as a new account.
+
 ### G009: Watchlisted Subject {#g009}
 
 - **Target:** programmatic (cycle records)

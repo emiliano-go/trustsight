@@ -376,6 +376,37 @@ def test_g008_requires_first_seen_account(monkeypatch):
     assert first_seen_adoption_burst(records, None) == []
 
 
+def test_g008_silent_on_a_repeat_burst_by_the_same_account(monkeypatch):
+    """A second sweep by an account already seen is not "first-seen".
+
+    fbf-prog64 adopted 21 orphaned packages on 16/11 and six more on 22/11.
+    Both bursts fell inside the seven-day window, so the rolling-window
+    reading called the second one a first-seen account too.  The claim only
+    holds for the burst that carries the account's earliest event; G003
+    reports the repeat.
+    """
+    import time
+    from trustsight.analysis.correlation import first_seen_adoption_burst
+
+    now = time.time()
+    dormant_cutoff = now - 180 * 86400
+    first_seen = time.strftime("%Y-%m-%d %H:%M:%S",
+                               time.gmtime(now - 6 * 86400))
+    observed = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(now - 3600))
+    records = [
+        {"package": f"pkg{i}", "maintainer": "fbf-prog64",
+         "adoption": True, "adoption_predicates": ["H086"],
+         "adoption_observed_at": observed,
+         "last_modified": int(dormant_cutoff - 86400)}
+        for i in range(6)
+    ]
+    monkeypatch.setattr(
+        "trustsight.sandbox.store_client.maintainer_first_seen",
+        lambda m: first_seen,
+    )
+    assert first_seen_adoption_burst(records, None) == []
+
+
 def test_g008_requires_dormant_targets(monkeypatch):
     import time
     from trustsight.analysis.correlation import first_seen_adoption_burst

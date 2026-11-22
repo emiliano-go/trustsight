@@ -31,6 +31,7 @@ def test_destructive_exit_trap_is_reported():
 
 def test_orphaning_and_signal_suppression_are_reported():
     assert "orphan" in _shapes("nohup ./evil &")
+    assert "orphan" in _shapes("( ./evil & )")
     assert "ignore-termination" in _shapes("trap '' TERM HUP")
 
 

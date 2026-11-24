@@ -706,6 +706,60 @@ def test_is_established_package_fallback_ignores_short_names(db, monkeypatch):
     assert is_established_package("somehelper") is True
 
 
+# --- official_membership ---
+
+def test_official_membership_is_unknown_without_a_repository_answer(db, monkeypatch):
+    """An empty official set means "cannot tell", not "not in a repository".
+
+    The identity decision downstream depends on the difference: a False
+    answer lets a virtual Provides alias resolve, and an unknown answer must
+    not, or a container without pacman invents AUR packages for dependencies
+    that ``core`` and ``extra`` already satisfy.
+    """
+    from trustsight.db import official_membership, official_membership_known
+    monkeypatch.setattr(
+        "trustsight.db.official_package_names", lambda: frozenset())
+    assert official_membership_known() is False
+    assert official_membership("libnotify") is None
+
+
+def test_official_membership_answers_when_the_list_is_known(db, monkeypatch):
+    from trustsight.db import official_membership, official_membership_known
+    monkeypatch.setattr(
+        "trustsight.db.official_package_names",
+        lambda: frozenset({"libnotify", "zlib"}))
+    assert official_membership_known() is True
+    assert official_membership("libnotify") is True
+    assert official_membership("libnotify-git") is False
+    assert official_membership("") is None
+
+
+def test_the_official_list_fills_in_for_a_missing_pacman(db, monkeypatch, tmp_path):
+    """The watcher image is python:3.12-slim and has no pacman.  An operator
+    supplies ``official-packages.txt`` (the config dir, or the path in
+    TRUSTSIGHT_OFFICIAL_PACKAGES) so identity resolution stays exact there
+    instead of falling back to a guess."""
+    import trustsight.db._dependencies as depmod
+
+    listing = tmp_path / "official-packages.txt"
+    listing.write_text(
+        "# pacman -Slq\n"
+        "core/zlib 1:1.3\n"
+        "extra/libnotify\n"
+        "\n"
+        "gcc-libs\n",
+        "utf-8",
+    )
+    monkeypatch.setenv("TRUSTSIGHT_OFFICIAL_PACKAGES", str(listing))
+    monkeypatch.setattr(depmod, "_read_pacman_names", lambda: frozenset())
+    monkeypatch.setattr(depmod, "_official_names", None)
+
+    names = depmod.official_package_names()
+    assert names == frozenset({"zlib", "libnotify", "gcc-libs"})
+    assert depmod.official_membership("libnotify") is True
+    assert depmod.official_membership("libnotify-git") is False
+
+
 # --- schema migration ---
 
 def test_forget_package_deletes_everything(db):

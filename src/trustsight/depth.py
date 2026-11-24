@@ -437,15 +437,23 @@ def _analyse_one(
     )
 
 
-def _is_official_package(name: str) -> bool:
-    """Official-repository membership, with the same fallback as the rules.
+def _is_official_package(name: str) -> Optional[bool]:
+    """Official-repository membership, or None when this host cannot tell.
+
+    Deliberately *not* ``is_established_package``: that helper falls back to
+    how often a name has been observed as a dependency, which is a reasonable
+    impersonation signal and a bad identity signal.  A container image has no
+    pacman, so the fallback cannot certify ordinary names such as
+    ``libnotify`` or ``zip``; reading that as "not in a repository" is what
+    resolved them to ``libnotify-git`` and ``zip-natspec`` and produced
+    ``deps_not_scanned`` on packages whose dependencies are all official.
 
     Imported lazily so ``depth`` stays importable in the corpus/replay paths
     that have no database.
     """
-    from .db import is_established_package
+    from .db import official_membership
 
-    return is_established_package(name)
+    return official_membership(name)
 
 
 class SnapshotMetadata:
@@ -473,15 +481,17 @@ class SnapshotMetadata:
             if len(names) == 1
         }
 
-    def _is_official_name(self, name: str) -> bool:
-        """Whether *name* belongs to an official repository.
+    def _is_official_name(self, name: str) -> Optional[bool]:
+        """Whether *name* belongs to an official repository, or None if unknown.
 
         Kept lazy: a snapshot is built in contexts that have no package
-        database, and the fallback observation count is the best answer
-        those contexts have.
+        database.  ``None`` propagates rather than collapsing to False,
+        because the caller has to tell "not in a repository" (aliasing is
+        safe) from "nothing here can answer" (aliasing invents a package).
         """
         if name not in self._official_cache:
-            self._official_cache[name] = bool(self._is_official(name))
+            answer = self._is_official(name)
+            self._official_cache[name] = None if answer is None else bool(answer)
         return self._official_cache[name]
 
     @property
@@ -501,10 +511,21 @@ class SnapshotMetadata:
         makes every official dependency look like an AUR package, and the
         resulting analysis failures leave a ``deps_not_scanned`` gap on
         ordinary packages.
+
+        An *unknown* answer does not alias either.  Guessing there reports a
+        dependency the build never installs, and that dependency can never be
+        vetted - the corpus prefill works from declared names, so a name that
+        only exists as an alias is never fetched.  Skipping is the bounded
+        answer; ``official-packages.txt`` (see
+        :func:`trustsight.db.official_list_path`) is how an operator restores
+        exact resolution where pacman is absent.
         """
         if name in self._packages:
             return name
-        if self._is_official_name(name):
+        official = self._is_official_name(name)
+        if official:
+            return name
+        if official is None:
             return name
         return self._aliases.get(name, name)
 

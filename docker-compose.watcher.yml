@@ -76,6 +76,13 @@ services:
       - ./run/trustsight-db:/run/trustsight-db
       # Read-only source: the entrypoint copies it into the writable tmpfs
       # config dir, so an RCE cannot persist by editing config/rules.
+      #
+      # Put `official-packages.txt` here (`pacman -Slq > official-packages.txt`
+      # on any Arch host) when this container has no network path to pacman
+      # data.  The image has no pacman, so without it the dependency walk
+      # cannot tell an official package name from an unknown one and declines
+      # to resolve virtual Provides aliases - the safe default, and a list
+      # restores exact resolution.
       - ./trustsight-config:/config-src:ro
       # The fetcher owns the provider token and the HTTP/TLS path; the
       # watcher only has this socket.

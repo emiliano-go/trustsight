@@ -1,15 +1,17 @@
 """Extracted from db.py: _dependencies."""
 
+import os
 import threading
 import sqlite3
 import subprocess
+from pathlib import Path
 from typing import Optional
 from ..subproc import minimal_env
 from ._connection import get_connection
 from ._metadata import seed_observation_count
 from ._packages import count_observations
 
-__all__ = ['_ESTABLISHED_MIN_NAME_LENGTH', '_ESTABLISHED_OBSERVATIONS', '_official_names', '_official_names_lock', 'dependency_observation_count', 'dependency_observation_counts', 'dependency_table_populated', 'effective_observation_count', 'is_established_package', 'is_known_aur_package', 'official_package_names', 'record_dependency_names', 'top_dependency_names', 'top_dependency_pairs']
+__all__ = ['_ESTABLISHED_MIN_NAME_LENGTH', '_ESTABLISHED_OBSERVATIONS', '_OFFICIAL_PACKAGES_FILE', '_OFFICIAL_PACKAGES_ENV', '_official_names', '_official_names_lock', 'dependency_observation_count', 'dependency_observation_counts', 'dependency_table_populated', 'effective_observation_count', 'is_established_package', 'is_known_aur_package', 'official_list_path', 'official_membership', 'official_membership_known', 'official_package_names', 'record_dependency_names', 'top_dependency_names', 'top_dependency_pairs']
 
 def is_known_aur_package(name: str) -> bool:
     """True when the watcher has a package row for *name*.
@@ -118,30 +120,130 @@ _official_names: Optional[frozenset] = None
 
 _official_names_lock = threading.Lock()
 
+#: Environment variable naming an official-package list to read when pacman
+#: cannot answer.  The watcher image is ``python:3.12-slim`` and has no pacman,
+#: so this file is how a container gets an exact answer instead of a guess.
+_OFFICIAL_PACKAGES_ENV = "TRUSTSIGHT_OFFICIAL_PACKAGES"
+
+#: Filename, inside the config directory, of the fallback official-package
+#: list.  ``pacman -Slq > official-packages.txt`` is the expected producer.
+_OFFICIAL_PACKAGES_FILE = "official-packages.txt"
+
+
+def official_list_path() -> Optional[Path]:
+    """Where the fallback official-package list would live.
+
+    ``TRUSTSIGHT_OFFICIAL_PACKAGES`` wins so a container can mount the list
+    from anywhere; otherwise the configured config directory holds it, which
+    the watcher compose file mounts at ``/config-src`` and copies into the
+    writable config dir at startup.
+    """
+    override = os.environ.get(_OFFICIAL_PACKAGES_ENV, "").strip()
+    if override:
+        return Path(override)
+    try:
+        from ..config import CONFIG_DIR
+
+        return Path(CONFIG_DIR) / _OFFICIAL_PACKAGES_FILE
+    except Exception:  # noqa: BLE001 - a missing config module is not fatal
+        return None
+
+
+def _read_pacman_names() -> frozenset:
+    """The official names pacman knows, or an empty set when it cannot answer."""
+    try:
+        result = subprocess.run(
+            ["pacman", "-Slq"], capture_output=True, text=True,
+            check=False, timeout=30, env=minimal_env(),
+        )
+    except (OSError, subprocess.SubprocessError):
+        return frozenset()
+    return frozenset(
+        line.strip().lower()
+        for line in result.stdout.splitlines() if line.strip()
+    )
+
+
+def _read_official_file(path: Optional[Path]) -> frozenset:
+    """Names from an operator-supplied official-package list.
+
+    One name per line.  Blank lines and ``#`` comments are ignored, a
+    ``repo/name`` prefix is dropped, and anything after the name (a version,
+    the shape ``pacman -Sl`` prints) is discarded, so both ``pacman -Slq``
+    and ``pacman -Sl`` output can feed it unchanged.
+    """
+    if path is None:
+        return frozenset()
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return frozenset()
+    names: set[str] = set()
+    for line in text.splitlines():
+        entry = line.strip()
+        if not entry or entry.startswith("#"):
+            continue
+        name = entry.split()[0].rsplit("/", 1)[-1].strip().lower()
+        if name:
+            names.add(name)
+    return frozenset(names)
+
+
 def official_package_names() -> frozenset:
     """Package names in the configured official repositories.
 
     Read once per process via pacman, the same way ``discovery.py`` already
-    queries it.  An empty set is returned when pacman is unavailable or its
-    databases have never been synced, and callers fall back to observation
-    counts rather than failing.
+    queries it, and fall back to the list ``official_list_path`` names when
+    pacman is unavailable or its databases have never been synced - a
+    container image has neither.  An empty set means *unknown*: callers that
+    cannot proceed on "unknown" must ask :func:`official_membership` rather
+    than read a missing name as "not in a repository".
     """
     global _official_names
     if _official_names is None:
         with _official_names_lock:
             if _official_names is None:
-                try:
-                    result = subprocess.run(
-                        ["pacman", "-Slq"], capture_output=True, text=True,
-                        check=False, timeout=30, env=minimal_env(),
-                    )
-                    _official_names = frozenset(
-                        line.strip().lower()
-                        for line in result.stdout.splitlines() if line.strip()
-                    )
-                except (OSError, subprocess.SubprocessError):
-                    _official_names = frozenset()
+                names = _read_pacman_names()
+                if not names:
+                    names = _read_official_file(official_list_path())
+                _official_names = names
     return _official_names
+
+
+def official_membership_known() -> bool:
+    """Whether an official-repository answer exists at all.
+
+    False means the machine has neither pacman nor an official-package list.
+    Callers deciding *identity* (not just "is this name familiar") must not
+    read a False :func:`is_established_package` as "this name is not in a
+    repository" while this is False: the count fallback cannot certify
+    ordinary names such as ``libnotify`` or ``zip``, and treating them as
+    unknown-to-the-repos is what turns them into AUR ``-git`` providers.
+    """
+    # Resolve through the package namespace so a test embedding this module
+    # patches one seam, the same one ``is_established_package`` uses.
+    from . import official_package_names as names
+
+    return bool(names())
+
+
+def official_membership(name: str) -> Optional[bool]:
+    """Whether *name* is in an official repository, or None when unknown.
+
+    The tri-state is the point.  ``False`` is an exact "not in a repository",
+    which lets a caller resolve a virtual ``Provides`` alias; ``None`` is
+    "this machine cannot tell", and guessing there invents AUR packages for
+    dependencies makepkg would install from ``core`` or ``extra``.
+    """
+    if not name:
+        return None
+    from . import official_package_names as names
+
+    official = names()
+    if not official:
+        return None
+    return name in official
+
 
 def is_established_package(name: str) -> bool:
     """True when *name* is a package worth impersonating.

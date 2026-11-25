@@ -710,7 +710,7 @@ def claims_pipe_to_shell(body: str) -> bool:
 # ---------------------------------------------------------------------------
 
 _DLAGENTS_VAR_RE = re.compile(
-    r"^\s*(?:export\s+|declare\s+-x\s+)?DLAGENTS\s*\+?=",
+    r"^\s*(?:export\s+|declare\s+-x\s+)?DLAGENTS(?:\[[^\]]{0,20}\])?\s*\+?=",
     re.IGNORECASE,
 )
 _DLAGENT_SCHEME_RE = re.compile(r"['\"]?([A-Za-z][A-Za-z0-9+.-]{0,31})::")

@@ -7,7 +7,7 @@ from functools import lru_cache
 import shlex
 from .._heredoc import parse_opener
 from ..line_lex import QuoteState
-from ._common import _ARRAY_ASSIGNMENT_RE, _ARRAY_ELEMENT_RE, _ASSIGNMENT_RE, _MAX_ARRAY_ENTRIES, _MAX_LINE_LEN, _MAX_TABLE_BYTES, _MAX_VALUE_LEN, _VAR_REF_RE, _declaration_options, _join_logical, _split_top_level
+from ._common import _PRINTF_V_RE, _READ_HERESTRING_RE, _printf_v_value, _ARRAY_ASSIGNMENT_RE, _ARRAY_ELEMENT_RE, _ASSIGNMENT_RE, _MAX_ARRAY_ENTRIES, _MAX_LINE_LEN, _MAX_TABLE_BYTES, _MAX_VALUE_LEN, _VAR_REF_RE, _declaration_options, _join_logical, _split_top_level
 from ._expansion import resolve_expansions
 from ._quotes import reconstruct_literals, reconstruct_literals_stateful
 
@@ -514,6 +514,35 @@ def _variable_table_with_spans(
             else:
                 array_table.pop(name, None)
                 array_spans.pop(name, None)
+                reportable.setdefault(name, i)
+            i += 1
+            continue
+        printf_match = _PRINTF_V_RE.match(line)
+        if printf_match:
+            name = printf_match.group("name")
+            value = _printf_v_value(printf_match.group("args"))
+            if value is not None and "$(" not in value and "`" not in value:
+                var_table[name] = value
+                scalar_lines[name] = i
+                ever_kept.add(name)
+            else:
+                var_table.pop(name, None)
+                scalar_lines.pop(name, None)
+                reportable.setdefault(name, i)
+            i += 1
+            continue
+        read_match = _READ_HERESTRING_RE.match(line)
+        if read_match:
+            name = read_match.group("name")
+            value = _strip_outer_quotes(
+                _strip_scalar_comment(read_match.group("value").strip()))
+            if "$(" not in value and "`" not in value:
+                var_table[name] = value
+                scalar_lines[name] = i
+                ever_kept.add(name)
+            else:
+                var_table.pop(name, None)
+                scalar_lines.pop(name, None)
                 reportable.setdefault(name, i)
             i += 1
             continue

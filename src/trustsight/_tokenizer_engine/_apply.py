@@ -4,6 +4,9 @@ import re
 from ._aliases import _alias_table, _expand_aliases
 from ._common import (
     _ASSIGNMENT_RE,
+    _PRINTF_V_RE,
+    _READ_HERESTRING_RE,
+    _printf_v_value,
     _MAX_LINE_LEN,
     _VAR_REF_RE,
     _is_diff_header,
@@ -121,6 +124,7 @@ def _resolve_side_lines(diff_text: str, marker: str) -> list[str]:
         )
         r = strip_leading_bom(r)
         r = collapse_traversal(_expand_aliases(r, alias_table))
+        r = _normalise_builtin_assignment(marker + r)[1:]
         if len(r) > _MAX_LINE_LEN:
             r = line[1:] if line[:1] in ("+", "-") else line
         resolved_lines.append(marker + r)
@@ -216,6 +220,7 @@ def tokenize_and_resolve_indexed(
             continue
         candidate_indices.append(raw_index)
         expanded = collapse_traversal(_expand_aliases(r, alias_table))
+        expanded = _normalise_builtin_assignment(expanded)
         if len(expanded) > _MAX_LINE_LEN:
             # A6: an expansion past the line bound is left unresolved, never
             # truncated.
@@ -228,6 +233,27 @@ def tokenize_and_resolve_indexed(
         if not ok or _VAR_REF_RE.search(expanded):
             unresolved_out.append(line)
     return resolved, unresolved_out, candidate_indices
+
+def _normalise_builtin_assignment(line: str) -> str:
+    """Render a static ``printf -v``/``read`` assignment as ``name=value``.
+
+    The shell stores the same value; rules that inspect an assignment line
+    otherwise see only a printf command and miss the name being written.
+    """
+    prefix = line[:1] if line[:1] in ("+", "-", " ") else ""
+    body = line[len(prefix):]
+    match = _PRINTF_V_RE.match(body)
+    if match:
+        value = _printf_v_value(match.group("args"))
+        if value is not None and "$(" not in value and "`" not in value:
+            return f"{prefix}{match.group('name')}={value}"
+    match = _READ_HERESTRING_RE.match(body)
+    if match:
+        value = match.group("value").strip().strip("\"'")
+        if "$(" not in value and "`" not in value:
+            return f"{prefix}{match.group('name')}={value}"
+    return line
+
 
 def tokenize_and_resolve(diff_text: str) -> tuple[list[str], list[str]]:
     """Tokenize a diff and resolve variable references in added lines."""

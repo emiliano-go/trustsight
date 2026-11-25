@@ -187,7 +187,7 @@ _REGISTRY_OVERRIDE_RE = re.compile(
 )
 
 _SERVICE_ENABLE_RE = re.compile(
-    r"\bsystemctl\s+(?:--user\s+)?enable\b"
+    r"\bsystemctl\s+(?:--\S+\s+)*(?:start\b|enable\b)"
     r"|\bloginctl\s+enable-linger\b"
     # A relative path is not a command: `rm /etc/sudoers.d/x-crontab`
     # matched the bare word and read as scheduling work.
@@ -420,7 +420,7 @@ _ENV_SUBVERSION_MED_RE = re.compile(
 # systemd's, shipped since v256. A recipe reaching for any of them is
 # reaching for root, and naming only the first meant the rule tested which
 # tool the writer preferred rather than what it does.
-_PRIVILEGE_TOOL = r"sudo|doas|pkexec|run0"
+_PRIVILEGE_TOOL = r"sudo|doas|pkexec|run0|su"
 
 _SUDO_CMD_START_RE = re.compile(
     r"(?:\A|[;&|]|\$\()\s*(?:" + _PRIVILEGE_TOOL + r")(?=[\s)&|`;]|$)",
@@ -834,8 +834,18 @@ def _build_findings(diff_text, config, add, current_text=None, ctx=None) -> None
     high_found = False
     med_found = False
     for i, line in enumerate(lines):
-        if not line.startswith("+") or not scopes.within(i, _CRITICAL_FUNCTIONS):
+        if not line.startswith("+"):
             continue
+        # A PKGBUILD is sourced as a script; a top-level assignment runs
+        # before any function and is the same subversion as one inside it.
+        if not (scopes.within(i, _CRITICAL_FUNCTIONS)
+                or scopes.direct(i) is None):
+            continue
+        path = ctx.line_files.get(i)
+        if path:
+            from ..file_kinds import is_shell_file
+            if not is_shell_file(path):
+                continue
         body = _strip_comment(line)
         if _ENV_SUBVERSION_HIGH_RE.search(body):
             # A loader path extended from the staged tree (or /usr, /opt) is

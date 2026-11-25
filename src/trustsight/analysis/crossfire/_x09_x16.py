@@ -30,6 +30,9 @@ X010_RE = re.compile(
     re.IGNORECASE,
 )
 
+X018_ASSEMBLED_RE = re.compile(
+    r"\b(?:os\.)?system\s*\(\s*[A-Za-z_]\w*\s*\)", re.IGNORECASE)
+
 X018_RE = re.compile(
     r"\b(?:python[23]?|perl|ruby|node|deno|bun|php|lua)\s+(?:-\S++\s++)*?-[ceEr]\b"
     r"[^\n]{0,400}?(?:"
@@ -47,7 +50,7 @@ X018_RE = re.compile(
     # Ruby writes `exec "bash", "x"` with no parentheses at all, so the
     # call is recognised by the name followed by *either* a paren or
     # whitespace.
-    r"|(?:exec|system|spawn|popen|execv?p?e?|posix_spawn|Process\.\w+"
+    r"|(?:[A-Z_]{2,}|exec|system|spawn|popen|execv?p?e?|posix_spawn|Process\.\w+"
     r"|subprocess\.\w+|os\.exec\w*|open[23]|IPC::Open[23])\s*[\s(][^\n]{0,120}?"
     r"\$\{?(?:srcdir|startdir|PWD|BUILDDIR)\}?/"
     r")",
@@ -68,6 +71,7 @@ X019_RE = re.compile(
     # Host material written into the package.
     r"|(?:\A\s*|[;&|(]\s*|&&\s*)(?:env|printenv|set|hostname|id|uname)\b"
     r"[^\n;&|]*>\s*[\"']?[^\"'\s;&|]*\$\{?pkgdir\}?"
+    r"|tee\s+[\"']?[^\"'\s;&|]*\$\{?pkgdir\}?"
     r"|(?:/etc/(?:machine-id|hostname|shadow|hosts)"
     r"|\$\{?HOME\}?/\.(?:ssh|aws|gnupg|docker|netrc)"
     r"|~/\.(?:ssh|aws|gnupg|docker|netrc)"
@@ -113,11 +117,11 @@ X011_WORD_RE = re.compile(
     # Anchored because the caller matches a command *tail*: without `\A` a
     # `.search` on a hostile one-word line retried the path prefix at every
     # position (the audit caught it).
-    r"\A\\?"
+    r"\A\\?[\"']?"
     # A vendored toolchain runs the manager through a path: `v/bin/pip` and
     # `./tools/node/bin/npm` are the same command to the shell as `pip` and
     # `npm`, and both resolve from the registry.
-    r"(?:/?(?:[\w.$~{}-]+/)+)?"
+    r"(?:/?(?:[\w.$~{}]+/)+)?"
     # `python3 -m pip install` and `node --require ... npm` reach the same
     # manager through the interpreter that ships it.
     r"(?:(?:python[23]?|py|node|ruby|perl)\s+-\S+\s+)?"
@@ -134,7 +138,7 @@ X012_RE = re.compile(
     # `PATH="$srcdir:$PATH"` prepends the build directory itself, with no
     # path component after it, and requiring a `/` meant the plainest
     # spelling of the plainest case matched nothing.
-    r"\$\{?(?:srcdir|startdir|pkgdir)\}?(?:[/:\"']|\s|$)",
+    r"\$\{?(?:srcdir|startdir|pkgdir|PWD)\}?(?:[/:\"']|\s|$)",
     re.IGNORECASE,
 )
 
@@ -377,7 +381,7 @@ X015_RE = re.compile(
     # it is a no-op the builder cannot even perform.
     # `enable --now` starts the unit; excluding `enable` outright let the
     # one spelling that both installs and runs it through.
-    r"|systemctl\s+(?:--user\s+)?(?:start\b|enable\s+[^\n;&|]*--now\b))"
+    r"|systemctl\s+(?:--\S+\s+)*start\b|systemctl\s+(?=[^\n;&|]*--now\b)(?:--\S+\s+)*enable\b)"
     r"|\bcrontab\s+-\b|\bcrontab\s+[^\n;&|]*\|"
     r"|(?<![\w-])RUN\+?=\s*[\"']",
     re.IGNORECASE,

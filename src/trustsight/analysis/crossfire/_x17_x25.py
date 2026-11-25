@@ -16,7 +16,10 @@ from .._path_trust import (
 __all__ = ['_x024_is_benign_path_suffix', '_x024_is_trusted_path_append', 'X017_RE', 'X021_RE', 'X024_RE', '_BUILD_MANIFEST_RE', '_CONTENT_WRITE_VERB_RE', '_FUNC_CONTINUATION_BODY_RE', '_FUNC_CONTINUATION_RE', '_HEREDOC_OPEN_RE', '_INDIRECT_VALUE_RE', '_MANIFEST_ARG_RE', '_MANIFEST_COMMAND_RE', '_SENSITIVE_VAR_RE', '_X017_FIND_RE', '_X017_SCRIPT_DANGER_RE', '_X021_RUN_POSITIONAL_RE', '_X021_SET_GLOB_RE', '_X022_CONFIG_FLAG_RE', '_X022_PAYLOAD_RE', '_X022_WRITE_RE', '_X024_VALUE_VAR_RE', '_multiline_function_shadow_lines', '_normalise_dest', '_redirect_target', '_x017_find_runs_a_script', '_x024_is_passthrough', '_x024_is_test_pythonpath', '_x024_is_trusted_build_value', '_x024_is_flag_filter', '_x024_is_trusted_loader_append', '_x024_is_git_provenance']
 
 _X017_FIND_RE = re.compile(
+    r"(?:"
     r"\bfind\b[^\n;&|]{0,200}?-(?:exec|ok)(?:dir)?\s+"
+    r"|\bxargs\b[^\n;&|]{0,200}?(?:^|\s)(?:/\S*/)?(?:bash|sh)\s+-c\b"
+    r")"
     r"(?:" + _EXEC_WRAPPER + r")?(?:/(?:usr/)?bin/)?"
     r"(?P<x017executor>" + SCRIPT_EXECUTOR + r")\b",
     re.IGNORECASE,
@@ -30,7 +33,8 @@ _X017_SCRIPT_DANGER_RE = re.compile(
 )
 
 X017_RE = re.compile(
-    r"--checkpoint-action\s*=\s*[\"']?exec"
+    r"xargs\b[^\n;&|]*\b(?:sh|bash)\s+-c\b"
+    r"|--checkpoint-action\s*=\s*[\"']?exec"
     r"|--to-command\s*="
     r"|(?:\A\s*|[;&|(]\s*|&&\s*)enable\s+(?:-\w+\s+)*-f\b"
     r"|(?:\A\s*|[;&|(]\s*|&&\s*)hash\s+(?:-\w+\s+)*-p\b",
@@ -89,6 +93,7 @@ X021_RE = re.compile(
     r"|\$\{?[1-9]\}?"               # $1  ${1}
     r"|\$\{\w+\[[^\]]*\]\}"        # ${A[0]}  ${A[@]}
     r"|[\w./-]*\*[\w./-]*"          # *.sh  build/*.sh
+    r"|\$\([^)]*\)"                 # $(...) running a discovered file
     r")",
     re.IGNORECASE,
 )
@@ -442,7 +447,7 @@ def _x024_is_passthrough(body: str, match: re.Match) -> bool:
         or var.upper().startswith(source.upper() + "_")
 
 _FUNC_CONTINUATION_RE = re.compile(
-    r"^\s*(\w+)\s*\(\s*\)",
+    r"^\s*(?:function\s+)?(\w+)\s*(?:\(\s*\))?",
     re.IGNORECASE,
 )
 

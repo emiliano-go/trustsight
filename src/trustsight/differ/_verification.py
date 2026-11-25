@@ -13,7 +13,7 @@ _GPG_VERIFY_RE = re.compile(
 )
 
 _VALIDPGPKEYS_WITH_CONTENT_RE = re.compile(
-    r"validpgpkeys\s*=\s*\(\s*['\"]?[A-Fa-f0-9]{16,}",
+    r"validpgpkeys\s*=\s*\(\s*(?:['\"]?[A-Fa-f0-9]{16,}|\$\{?\w+)",
 )
 
 def _has_checksum_in_post_diff(diff_text: str) -> bool:

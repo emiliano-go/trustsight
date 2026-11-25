@@ -465,6 +465,37 @@ def _url_host(url: str) -> str:
         return ""
     return canonical_host(url.split("://", 1)[1].split("/", 1)[0])
 
+_CREDENTIAL_QUERY_KEYS = {
+    "token", "key", "secret", "password", "passwd", "sig", "signature",
+    "access_token", "x-amz-credential", "x-amz-signature", "apikey",
+    "api_key", "auth",
+}
+
+
+def _credential_urls(urls) -> list[str]:
+    """URLs carrying credentials in userinfo or a known query key."""
+    out = []
+    for url in urls:
+        if "://" not in url:
+            continue
+        if "@" in url.split("://", 1)[1].split("/", 1)[0]:
+            out.append(url)
+            continue
+        try:
+            from urllib.parse import parse_qsl, urlsplit
+
+            keys = {
+                str(key).lower()
+                for key, _value in parse_qsl(
+                    urlsplit(url).query, keep_blank_values=True)
+            }
+        except (TypeError, ValueError):
+            keys = set()
+        if keys & _CREDENTIAL_QUERY_KEYS:
+            out.append(url)
+    return out
+
+
 def _userinfo_urls(urls) -> list[str]:
     """URLs carrying userinfo before the host (credentials in a source)."""
     return [url for url in urls if "://" in url
@@ -490,9 +521,9 @@ def addendum4_findings(diff_text, scope_doc, pre, post, source_changes,
 
     # G1 (C020): credentials embedded in a gained source URL.  The value
     # itself is never printed - evidence shows the host only.
-    if _userinfo_urls(source_changes.added_urls):
+    if _credential_urls(source_changes.added_urls):
         hosts = []
-        for url in _userinfo_urls(source_changes.added_urls):
+        for url in _credential_urls(source_changes.added_urls):
             host = _url_host(url)
             if host and host not in hosts:
                 hosts.append(host)

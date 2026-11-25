@@ -250,7 +250,7 @@ def _target_in_build_tree(target: str, lines: list[str], index: int) -> bool:
 
 _PACMAN_HOOK_RE = re.compile(r"^/?usr/share/libalpm/hooks(?:/|$)")
 
-_HOME_PREFIX_RE = re.compile(r"^(?:\$?\{?HOME\}?|~)(?:/|$)")
+_HOME_PREFIX_RE = re.compile(r"^(?:\$?\{?HOME\}?|~|/home/[A-Za-z0-9._-]+|/root)(?:/|$)")
 
 _RC_BASENAME_RE = re.compile(
     r"^(?:\.bashrc|\.bash_profile|\.bash_login|\.zshrc|\.zshenv|\.profile|"
@@ -311,7 +311,7 @@ _RUNTIME_WRITABLE_RE = re.compile(
     r"^\"?/(?:tmp|var/tmp|dev/shm|run|var/run)(?:/|$)"
     r"|^\$?\{?HOME\}?"
     r"|^~"
-    r"|^%h",
+    r"|^%(?:h|t|T|S|C|E)",
 )
 _ES_RE = re.compile(r"^\s*Exec(?:Start|StartPre|StartPost|StopPost|Stop)=\s*(\S+)")
 

@@ -464,7 +464,7 @@ _TAG_PATH_RE = re.compile(
 # treating them as one is what made a checksummed source report P005
 # "pinned to a full commit hash".
 _COMMIT_REF_RE = re.compile(
-    r"#(?:commit|revision)=(?:[0-9a-f]{7,40}|\$\{?[A-Za-z_]\w*\}?)",
+    r"#(?:commit|revision)=(?:[0-9a-f]{4,40}|\$\{?[A-Za-z_]\w*\}?)",
     re.IGNORECASE,
 )
 

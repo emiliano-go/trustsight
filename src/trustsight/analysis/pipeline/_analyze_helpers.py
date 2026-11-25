@@ -136,7 +136,8 @@ def _campaign_corroboration(
         except (ValueError, TypeError):
             host = None
         if host:
-            hosts.add(host)
+            from ..correlation import _endpoint_host
+            hosts.add(_endpoint_host(host))
         canonical = canonical_payload_url(str(url))
         if canonical:
             source_targets.add(canonical)
@@ -164,9 +165,12 @@ def _campaign_corroboration(
             return {str(value) for value in values if value}
 
         names = _set("package_names")
-        scoped_hosts = _set("hosts")
+        from ..correlation import _endpoint_host
+        scoped_hosts = {_endpoint_host(value) for value in _set("hosts")}
         scoped_signals = _set("signals")
-        scoped_urls = _set("urls")
+        scoped_urls = {
+            canonical_payload_url(value) for value in _set("urls")}
+        scoped_urls.discard("")
         if (pkg_name not in names
                 and not (hosts & scoped_hosts)
                 and not (fired & scoped_signals)

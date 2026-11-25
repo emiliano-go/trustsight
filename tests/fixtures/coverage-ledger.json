@@ -334,9 +334,9 @@
   "catalog_size": 326,
   "corpus_content_sha256": "a4cbea4ef14029c97d7746e2be080a2e5c931502429ee261d974810b35f5cafc",
   "counts": {
-    "adversarial_only": 18,
+    "adversarial_only": 17,
     "cold_only": 42,
-    "measured": 177,
+    "measured": 178,
     "zero_fire": 89
   },
   "measured_at": "2026-11-02",
@@ -3919,14 +3919,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 33,
+      "fires": 44,
       "id": "H025",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 33,
+          "fires": 43,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -3941,6 +3941,10 @@
             "vcs_git",
             "vcs_other"
           ]
+        },
+        "malicious": {
+          "fires": 1,
+          "strata": []
         }
       },
       "state": "measured",
@@ -4020,14 +4024,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 1061,
+      "fires": 1066,
       "id": "H027",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 1034,
+          "fires": 1038,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -4048,7 +4052,7 @@
           ]
         },
         "malicious": {
-          "fires": 27,
+          "fires": 28,
           "strata": []
         }
       },
@@ -4644,14 +4648,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 15,
+      "fires": 14,
       "id": "H043",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 7,
+          "fires": 6,
           "strata": [
             "bin_repack",
             "lang_deep",
@@ -6475,6 +6479,7 @@
       ],
       "benign_state": "fire",
       "benign_strata": [
+        "dependency_heavy",
         "dkms_kernel",
         "large_electron"
       ],
@@ -6482,15 +6487,16 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 2,
+      "fires": 3,
       "id": "H097",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 2,
+          "fires": 3,
           "strata": [
+            "dependency_heavy",
             "dkms_kernel",
             "large_electron"
           ]
@@ -6498,6 +6504,7 @@
       },
       "state": "measured",
       "strata": [
+        "dependency_heavy",
         "dkms_kernel",
         "large_electron"
       ],
@@ -6959,14 +6966,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 486,
+      "fires": 484,
       "id": "M002",
       "pseudo": false,
       "reason": "",
       "series": "M",
       "sources": {
         "cold": {
-          "fires": 483,
+          "fires": 481,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -7039,14 +7046,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 304,
+      "fires": 301,
       "id": "M003",
       "pseudo": false,
       "reason": "",
       "series": "M",
       "sources": {
         "cold": {
-          "fires": 272,
+          "fires": 269,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -7211,14 +7218,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 7228,
+      "fires": 7243,
       "id": "P001",
       "pseudo": true,
       "reason": "",
       "series": "P",
       "sources": {
         "cold": {
-          "fires": 7186,
+          "fires": 7201,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -7436,14 +7443,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 939,
+      "fires": 931,
       "id": "P006",
       "pseudo": true,
       "reason": "",
       "series": "P",
       "sources": {
         "cold": {
-          "fires": 938,
+          "fires": 930,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -10921,23 +10928,21 @@
       ],
       "benign_state": "fire",
       "benign_strata": [
-        "lang_deep",
         "maintainer_churn"
       ],
       "disposition": null,
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 4,
+      "fires": 3,
       "id": "X004",
       "pseudo": false,
       "reason": "",
       "series": "X",
       "sources": {
         "cold": {
-          "fires": 3,
+          "fires": 2,
           "strata": [
-            "lang_deep",
             "maintainer_churn"
           ]
         },
@@ -10948,7 +10953,6 @@
       },
       "state": "measured",
       "strata": [
-        "lang_deep",
         "maintainer_churn"
       ],
       "uid": "TS-0235"
@@ -11010,31 +11014,43 @@
       "uid": "TS-0237"
     },
     "X007": {
-      "benign_sources": [],
-      "benign_state": "malicious_only",
-      "benign_strata": [],
+      "benign_sources": [
+        "cold"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "vcs_git"
+      ],
       "disposition": {
         "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
         "phase": "4",
         "plan": "triage_benign_twin",
         "status": "deferred"
       },
-      "expected_met": false,
+      "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 8,
+      "fires": 9,
       "id": "X007",
       "pseudo": false,
       "reason": "",
       "series": "X",
       "sources": {
+        "cold": {
+          "fires": 1,
+          "strata": [
+            "vcs_git"
+          ]
+        },
         "malicious": {
           "fires": 8,
           "strata": []
         }
       },
       "state": "measured",
-      "strata": [],
+      "strata": [
+        "vcs_git"
+      ],
       "uid": "TS-0238"
     },
     "X008": {
@@ -11129,14 +11145,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 13,
+      "fires": 12,
       "id": "X011",
       "pseudo": false,
       "reason": "",
       "series": "X",
       "sources": {
         "cold": {
-          "fires": 10,
+          "fires": 9,
           "strata": [
             "autotools",
             "lang_deep",
@@ -11177,14 +11193,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 3,
+      "fires": 2,
       "id": "X012",
       "pseudo": false,
       "reason": "",
       "series": "X",
       "sources": {
         "cold": {
-          "fires": 3,
+          "fires": 2,
           "strata": [
             "multi_client_fetch",
             "persist_surface"
@@ -11409,31 +11425,44 @@
       ],
       "benign_state": "fire",
       "benign_strata": [
+        "appimage_repack",
         "dependency_heavy",
-        "multi_client_fetch"
+        "multi_client_fetch",
+        "source_patched",
+        "vcs_git"
       ],
       "disposition": null,
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 2,
+      "fires": 12,
       "id": "X021",
       "pseudo": false,
       "reason": "",
       "series": "X",
       "sources": {
         "cold": {
-          "fires": 2,
+          "fires": 11,
           "strata": [
+            "appimage_repack",
             "dependency_heavy",
-            "multi_client_fetch"
+            "multi_client_fetch",
+            "source_patched",
+            "vcs_git"
           ]
+        },
+        "malicious": {
+          "fires": 1,
+          "strata": []
         }
       },
       "state": "measured",
       "strata": [
+        "appimage_repack",
         "dependency_heavy",
-        "multi_client_fetch"
+        "multi_client_fetch",
+        "source_patched",
+        "vcs_git"
       ],
       "uid": "TS-0252"
     },
@@ -11510,14 +11539,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 10,
+      "fires": 9,
       "id": "X024",
       "pseudo": false,
       "reason": "",
       "series": "X",
       "sources": {
         "cold": {
-          "fires": 10,
+          "fires": 9,
           "strata": [
             "autotools",
             "large_electron",
@@ -11536,26 +11565,42 @@
       "uid": "TS-0255"
     },
     "X025": {
-      "benign_sources": [],
-      "benign_state": "adversarial_only",
-      "benign_strata": [],
+      "benign_sources": [
+        "cold"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "bin_repack",
+        "maintainer_churn"
+      ],
       "disposition": {
         "note": "Search the AUR for a legitimate use; otherwise mark attack_only.",
         "phase": "4",
         "plan": "triage_benign_twin",
         "status": "deferred"
       },
-      "expected_met": false,
+      "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 0,
+      "fires": 2,
       "id": "X025",
       "pseudo": false,
-      "reason": "adversarial-only detection; its benign floor is the refusal floor, and its fixtures are the labelled attack corpus",
+      "reason": "",
       "series": "X",
-      "sources": {},
-      "state": "adversarial_only",
-      "strata": [],
+      "sources": {
+        "cold": {
+          "fires": 2,
+          "strata": [
+            "bin_repack",
+            "maintainer_churn"
+          ]
+        }
+      },
+      "state": "measured",
+      "strata": [
+        "bin_repack",
+        "maintainer_churn"
+      ],
       "uid": "TS-0256"
     },
     "X026": {

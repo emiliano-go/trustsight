@@ -103,7 +103,7 @@
     },
     "G016": {
       "changelog": "account-blast-radius",
-      "promoted_in": "0.30.0",
+      "promoted_in": "Unreleased",
       "promotion": "run the weekly calibration, then promote only with a second signal",
       "signal": "shared-account bystander context after one specific payload or FATAL; needs a benign rate before it can score",
       "since": "0.30.0",
@@ -170,7 +170,7 @@
     },
     "S011": {
       "changelog": "apoptosis-completion",
-      "promoted_in": "0.30.0",
+      "promoted_in": "Unreleased",
       "promotion": "run the weekly calibration, then promote only with a malicious twin and a benign twin",
       "signal": "self-referential teardown, orphaning, destructive EXIT trap, exec replacement and corpse forgery; needs a benign rate before it can score",
       "since": "0.30.0",

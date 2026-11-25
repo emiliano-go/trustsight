@@ -80,7 +80,7 @@
     "A016": {
       "changelog": "upstream-scan-lane",
       "decided_in": "",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.31.0",
       "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
       "rule_id": "A016",
       "signal": "release-asset divergence; needs a corpus rate and a stable generated-file model",
@@ -201,7 +201,7 @@
     "H109": {
       "changelog": "secondary-source-execution",
       "decided_in": "",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.31.0",
       "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
       "rule_id": "H109",
       "signal": "secondary-source execution; needs a benign corpus rate before it can score",
@@ -2991,7 +2991,8 @@
       "sources": {},
       "state": "zero_fire",
       "strata": [],
-      "uid": "TS-0313"
+      "uid": "TS-0313",
+      "promoted_in": "0.31.0"
     },
     "H001": {
       "benign_sources": [
@@ -9212,7 +9213,8 @@
         "source_patched",
         "vcs_git"
       ],
-      "uid": "TS-0314"
+      "uid": "TS-0314",
+      "promoted_in": "0.31.0"
     },
     "SOURCE_BUCKET": {
       "benign_sources": [

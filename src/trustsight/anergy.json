@@ -62,7 +62,7 @@
     },
     "A016": {
       "changelog": "upstream-scan-lane",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.31.0",
       "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
       "signal": "release-asset divergence; needs a corpus rate and a stable generated-file model",
       "since": "Unreleased",
@@ -103,7 +103,7 @@
     },
     "G016": {
       "changelog": "account-blast-radius",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.31.0",
       "promotion": "run the weekly calibration, then promote only with a second signal",
       "signal": "shared-account bystander context after one specific payload or FATAL; needs a benign rate before it can score",
       "since": "0.30.0",
@@ -162,7 +162,7 @@
     },
     "H109": {
       "changelog": "secondary-source-execution",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.31.0",
       "promotion": "run the weekly calibration, then set an explicit weight after a true-positive twin and a quiet benign replay",
       "signal": "secondary-source execution; needs a benign corpus rate before it can score",
       "since": "Unreleased",
@@ -170,7 +170,7 @@
     },
     "S011": {
       "changelog": "apoptosis-completion",
-      "promoted_in": "Unreleased",
+      "promoted_in": "0.31.0",
       "promotion": "run the weekly calibration, then promote only with a malicious twin and a benign twin",
       "signal": "self-referential teardown, orphaning, destructive EXIT trap, exec replacement and corpse forgery; needs a benign rate before it can score",
       "since": "0.30.0",

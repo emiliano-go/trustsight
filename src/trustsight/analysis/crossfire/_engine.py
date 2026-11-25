@@ -456,7 +456,7 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
         # is `curl`), so R001 owns the pipeline and X002 claiming it too
         # would score one command twice.  A dynamic `${A[$i]}` or a nameref
         # does not resolve and is still yielded.
-        if False:
+        if re.search(r'[A-Za-z]"\$\{?\w+\}?"[A-Za-z]', body):
             record("X032", line_no, "spliced quoted variable", body.strip())
         if (index not in carried and index not in data_heredoc
                 and index not in array_data):
@@ -545,7 +545,8 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
         # package in the 3,739-diff benign corpus pipes anything at all
         # into a shell.
         if (sink
-                and _X016_KNOWN_EXECUTOR_RE.match(sink)
+                and (_X016_KNOWN_EXECUTOR_RE.match(sink)
+                     or sink.startswith("busybox "))
                 and not _X016_FETCH_RE.search(head)
                 and not _X009_CLIENT_RE.search(head)):
             record("X023", line_no, "command output executed as a script",
@@ -679,7 +680,7 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
                 and index not in data_heredoc
                 and not in_hook
                 and any(X011_WORD_RE.match(unquote_shell_words(tail))
-                        for _word, tail in _command_starts(body))
+                        for _word, tail in _command_starts(probe))
                 and (distro or not (X011_STANDDOWN_RE.search(probe) or local_target))):
             record("X011", line_no, "package manager runs fetched code",
                    body.strip())

@@ -479,6 +479,8 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
         # blanks a printer's quoted text; X005 must do the same (snac).
         x005_body = _blank_quoted(body) if _PRINTER_LINE_RE.match(body) else body
         alias = _home_alias_hit(x005_body)
+        if not alias and re.search(r"\$\{?\w+\}?/", body):
+            alias = _home_alias_hit(probe)
         if alias:
             record("X005", line_no, alias, body.strip())
 
@@ -523,6 +525,21 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
         # The sink is the one `_pipeline_sink` already computes for X016,
         # so both arms now ask about the *end* of the pipeline rather than
         # about the character after the first bar.
+        dynamic_client = False
+        _dm = re.search(r"\$\{?(\w+)\[[^\]]+\]", head)
+        if _dm:
+            _arr = re.search(
+                r"(?m)^\+?\s*" + re.escape(_dm.group(1)) + r"\s*=\s*\(([^)]*)\)",
+                current_text or diff_text or "")
+            if _arr:
+                _vals = [v.strip("\"' ") for v in _arr.group(1).split()]
+                dynamic_client = bool(_vals) and all(
+                    _X009_CLIENT_RE.search(v) for v in _vals)
+        if dynamic_client and _X016_KNOWN_EXECUTOR_RE.match(sink):
+            record("X009", line_no, "uncatalogued fetch to a shell", body.strip())
+        if (dynamic_client and sink
+                and re.search(r"(?:gcc|cc|clang)\b", sink)):
+            record("X016", line_no, f"fetch piped into {sink}", body.strip())
         if X009_RE.search(resolved_body) or (
                 sink and _X009_CLIENT_RE.search(head)
                 and _X016_KNOWN_EXECUTOR_RE.match(sink)):
@@ -546,7 +563,7 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
         # into a shell.
         if (sink
                 and (_X016_KNOWN_EXECUTOR_RE.match(sink)
-                     or sink.startswith("busybox "))
+                     or sink in {"busybox", "toybox"})
                 and not _X016_FETCH_RE.search(head)
                 and not _X009_CLIENT_RE.search(head)):
             record("X023", line_no, "command output executed as a script",

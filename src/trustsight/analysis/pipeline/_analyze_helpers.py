@@ -125,7 +125,7 @@ def _campaign_corroboration(
 
     from urllib.parse import urlsplit
 
-    from ..payload_signals import canonical_payload_url, payload_urls
+    from ..payload_signals import canonical_campaign_url, payload_urls
 
     hosts = set()
     source_targets = set()
@@ -138,7 +138,7 @@ def _campaign_corroboration(
         if host:
             from ..correlation import _endpoint_host
             hosts.add(_endpoint_host(host))
-        canonical = canonical_payload_url(str(url))
+        canonical = canonical_campaign_url(str(url))
         if canonical:
             source_targets.add(canonical)
 
@@ -169,7 +169,7 @@ def _campaign_corroboration(
         scoped_hosts = {_endpoint_host(value) for value in _set("hosts")}
         scoped_signals = _set("signals")
         scoped_urls = {
-            canonical_payload_url(value) for value in _set("urls")}
+            canonical_campaign_url(value) for value in _set("urls")}
         scoped_urls.discard("")
         if (pkg_name not in names
                 and not (hosts & scoped_hosts)

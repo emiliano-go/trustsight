@@ -206,7 +206,9 @@ def shared_gained_host(records, min_packages: int = 5,
             for record in members.values()
         }
         maintainers.discard("")
-        if (maintainers and len(maintainers) < min_maintainers
+        declared_base = all(
+            str(record.get("pkgbase", "") or "") for record in members.values())
+        if (declared_base and maintainers and len(maintainers) < min_maintainers
                 and _one_name_family(members)):
             continue
         try:
@@ -403,11 +405,12 @@ def coordinated_adoption(records, min_members: int = 3,
             # family by name, not a coordinated adoption.
             continue
         predecessor = [key for key in previous[maintainer] if key]
-        if len(predecessor) == len(members) and len(set(predecessor)) == 1:
-            # A shared predecessor stands down only when the names are one
-            # family or the predecessor is the same account: that is a
-            # rename.  A stranger using one predecessor for unrelated
-            # packages is the coordinated takeover, not a rename.
+        if (len(predecessor) == len(members)
+                and len(set(predecessor)) == 1
+                and all(member_repos)):
+            # A rename keeps the same provenance on every package.  A
+            # stranger adopting several unrelated packages from one previous
+            # maintainer has no repo data and is a takeover.
             continue
         dormant_count = sum(
             1 for lm in last_modified[maintainer] if lm < dormant_cutoff)
@@ -567,8 +570,13 @@ def first_seen_adoption_burst(records, config=None) -> list[dict]:
         # A DB read failure is "unknown", never "established": the guarded
         # helper returns None instead of aborting the cycle.
         first_seen_ts = _maintainer_first_seen_ts(maintainer)
-        if first_seen_ts is None or first_seen_ts < window_start:
+        if first_seen_ts is None:
             continue
+        if first_seen_ts < window_start:
+            # A dormant account waking up into a burst is the sleeper shape;
+            # a recent account's second burst is not first-seen.
+            if now - first_seen_ts < 90 * 86400:
+                continue
 
         # One package contributes once, however many transitions it has.
         packages: dict[str, float] = {}
@@ -771,7 +779,7 @@ def _shared_groups(records, field: str, normalize, min_packages: int,
         accounts = sorted(maintainers[key])
         if len(accounts) < min_maintainers:
             continue
-        if _one_project(members.values()) or _one_related_cluster(members):
+        if _one_project(members.values()):
             continue
         yield key, members, accounts
 
@@ -822,26 +830,48 @@ def shared_fetch_target(records, min_packages: int = 2,
     :mod:`trustsight.analysis.payload_signals`; a URL that cannot be parsed
     is dropped, never guessed at.
     """
-    from .payload_signals import canonical_payload_url
+    from .payload_signals import canonical_campaign_url, canonical_payload_url
 
     min_packages = max(1, _safe_int(min_packages, 2))
     min_maintainers = max(1, _safe_int(min_maintainers, 2))
 
-    def target(raw) -> str | None:
-        return canonical_payload_url(str(raw)) or None
-
+    groups: dict[str, dict[str, dict]] = defaultdict(dict)
+    accounts: dict[str, set[str]] = defaultdict(set)
+    display: dict[str, str] = {}
+    for record in records or ():
+        if not isinstance(record, dict):
+            continue
+        package = str(record.get("package", "") or "")
+        if not package:
+            continue
+        maintainer = _maintainer_key(record.get("maintainer"))
+        for raw in _seq(record.get("payload_urls")):
+            key = canonical_campaign_url(str(raw))
+            if not key:
+                continue
+            groups[key][package] = record
+            display.setdefault(key, canonical_payload_url(str(raw)) or key)
+            if maintainer:
+                accounts[key].add(maintainer)
     out: list[dict] = []
-    for url, members, accounts in _shared_groups(
-            records, "payload_urls", target, min_packages, min_maintainers):
+    for key, members in sorted(groups.items()):
+        if len(members) < min_packages:
+            continue
+        found = sorted(accounts[key])
+        if len(found) < min_maintainers:
+            continue
+        if _one_project(members.values()) or _one_related_cluster(members):
+            continue
+        url = display[key]
         out.append({
             "rule_id": "G013",
             "name": "Shared Fetch Target",
             "severity": "HIGH", "category": "correlation",
-            "match": (f"{len(members)} packages from {len(accounts)} "
+            "match": (f"{len(members)} packages from {len(found)} "
                       f"maintainer(s) fetch {url}"),
             "params": {"members": sorted(members), "url": url,
-                       "maintainers": accounts,
-                       "maintainer_count": len(accounts)},
+                       "maintainers": found,
+                       "maintainer_count": len(found)},
         })
     return out
 
@@ -887,7 +917,7 @@ def shared_adoption_window(records, min_packages: int = 3,
         return []
     if dormant_count < min_dormant:
         return []
-    if _one_project(members.values()) or _one_related_cluster(members):
+    if _one_project(members.values()):
         return []
     return [{
         "rule_id": "G014",
@@ -1119,7 +1149,8 @@ def package_creation_burst(records, config=None) -> list[dict]:
         package = str(record.get("package", "") or "")
         if not maintainer or not package:
             continue
-        if record.get("maintainer_established"):
+        if (record.get("maintainer_established")
+                and not record.get("placeholder")):
             continue
         by_maintainer[maintainer][package] = bool(record.get("placeholder"))
 

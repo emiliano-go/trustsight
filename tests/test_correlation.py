@@ -568,7 +568,7 @@ def test_shared_payload_signal_stands_down_for_one_project():
     assert shared_payload_signal(records) == []
 
 
-def test_shared_payload_signal_stands_down_for_a_naming_family():
+def test_shared_payload_signal_fires_across_a_naming_family():
     from trustsight.analysis.correlation import shared_payload_signal
 
     records = [
@@ -576,7 +576,7 @@ def test_shared_payload_signal_stands_down_for_a_naming_family():
         {"package": "appattic-bin", "maintainer": "b@x", "rules": ["R001"]},
         {"package": "appattic-qt", "maintainer": "c@x", "rules": ["R001"]},
     ]
-    assert shared_payload_signal(records) == []
+    assert [f["rule_id"] for f in shared_payload_signal(records)] == ["G012"]
 
 
 def test_shared_fetch_target_fires_across_maintainers():

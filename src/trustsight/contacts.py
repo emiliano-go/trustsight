@@ -183,6 +183,11 @@ def shared_first_seen_host(records, min_packages: int = 5,
             normalised = canonical_host(str(host)) if host else ""
             if not normalised:
                 continue
+            from urllib.parse import urlsplit
+            try:
+                normalised = (urlsplit("//" + normalised).hostname or normalised).lower()
+            except ValueError:
+                pass
             if fresh is not None and normalised not in fresh:
                 continue
             by_host[normalised][str(record.get("package", ""))] = record
@@ -195,7 +200,10 @@ def shared_first_seen_host(records, min_packages: int = 5,
             for record in members.values()
         }
         maintainers.discard("")
-        if maintainers and len(maintainers) < 2 and _one_name_family(members):
+        declared_base = all(
+            str(record.get("pkgbase", "") or "") for record in members.values())
+        if (declared_base and maintainers and len(maintainers) < 2
+                and _one_name_family(members)):
             continue
         try:
             bucket, _domain = classify_url(f"https://{host}")

@@ -6,52 +6,40 @@
 
 ### Added
 
-- **The seed uses authoritative AUR maintainer data.** The canonical builder
-  now reads the AUR metadata snapshot's `Maintainer` field and keeps a stale
-  PKGBUILD comment as a zero-count alias, so an established name is not
-  reported as first-seen because the recipe comment lags. Orphans contribute
-  no active maintainer. The v3 hashed format and privacy rules are unchanged;
-  co-maintainers remain out of scope because AUR does not expose them through
-  the RPC.
-- **H109 covers build helpers executed from a secondary source.** The rule
-  reports a script run from a declared source that is a different org from
-  the package's upstream and is a VCS clone or has no checksum. It ships
-  anergic at weight 0; the 2025 CHAOS RAT shape is its positive control.
-- **A016 compares a release asset with its tag tree.** The upstream lane can
-  now use the archive inventory to report a build input present only in the
-  asset, or a content mismatch. It ships anergic at weight 0 and ignores
-  generated autotools files.
-- **Archive parsing returns a bounded inventory.** `parse_upstream_archive`
-  records `(name, size, sha256)` for up to 4,096 members without retaining
-  or materialising content; going over the cap refuses the archive.
+- **S011 reports self-referential payload teardown.** It covers `$0`/`$BASH_SOURCE` deletion, payload erasure after execution, orphaning, destructive `EXIT` traps, `exec` replacement and empty-executable corpse forgery. Backgrounded subshells are treated as the same orphan shape as `nohup`, `setsid` and `disown`. It ships INFO at weight 0 and anergic; R099/R104 remain the broader trap rules.
+- **G016 reports account blast radius as bystander context.** A package that fires a curated payload rule or FATAL is joined to the other packages its account had processed in the same cycle. The finding is INFO, weight 0 and anergic; siblings are named but never scored, and the account is not called compromised.
+- **Sandbox workers have a staged teardown contract.** Workers now have one-shot effector teardown, a bounded corpse record, continuous anchor checks for uid, cwd, `no_new_privs` and network namespace, and a restart budget that shuts the pool down after three failed replacements in a minute.
+- **H109 covers build helpers executed from a secondary source.** The rule reports a script run from a declared source that is a different org from the package's upstream and is a VCS clone or has no checksum. It ships anergic at weight 0; the 2025 CHAOS RAT shape is its positive control.
+- **A016 compares a release asset with its tag tree.** The upstream lane can now use the archive inventory to report a build input present only in the asset, or a content mismatch. It ships anergic at weight 0 and ignores generated autotools files.
+- **Archive parsing returns a bounded inventory.** `parse_upstream_archive` records `(name, size, sha256)` for up to 4,096 members without retaining or materialising content; going over the cap refuses the archive.
+- **S009 and S010 cover privileged system mutation.** S009 reports privileged accounts, udev `RUN` rules and kernel-module loads in PKGBUILDs; S010 covers service-kill units and their paths.
+- **The rule lifespan gate fails stale live rules.** It reads the rule-health document from the offline lab and fails a live rule past its review horizon without a disposition. It proposes demotion and never edits the anergy ledger.
+- **The coverage ledger records when it was measured.** Readers can tell how fresh a ledger disposition is rather than assuming the current tree.
 
 ### Fixed
 
-- **The seed builder folds duplicate hashes before writing `maintainers.jsonl`.**
-  A handful of historical names with nested angle groups normalise twice to
-  the same hash. The duplicate rows violated the importer's concept of one
-  primary key and left the published maintainer count higher than the number
-  of unique identities. The builder now folds them and records the true
-  count.
+- **Bypass probes are closed across the structural, crossfire and correlation lanes.** This includes array slices and indirect checksum indices, `printf -v` and `read` assignments, command splicing, busybox and manager aliases, dynamic fetch arrays, encoded blobs, endpoint ports and IPv6 spellings, IDNA and dot-segment URL joins, maintainer aliases, adoption and creation-burst families, campaign-scope joins, eval-mediated execution, and the missed fetch clients (`aws s3`, `gsutil`, `b2`, `ssh`, `cvs`).
+- **X002 no longer scores array literals as split commands.** A word carrying list punctuation is data; `c"u"rl` and the ANSI-C spelling still match.
+- **U003 scores once per host, not once per manifest.** Example, integration, test, CI and documentation manifests no longer contribute, so a two-line monorepo bump cannot reach 100 from the same host repeated across files.
+- **The 2026-11-19 and 2026-11-20 MFP triages are cleared.** H032/H042 resolve a staged `test_home`; H101 stands down a `-git` package tracking its own VCS source; C033 stands down a wholesale file rewrite; H091 keeps an inline comment from truncating a checksum array; H089 closes a heredoc on a context line; C015 masks quoted prose; H069 is scoped to `build()`; and SOURCE_BUCKET knows the vendor hosts and explicit shared-store prefixes.
+- **Official dependencies no longer resolve to AUR `-git` providers.** Official membership is checked before the virtual `Provides` alias, so `libx11`, `libxext`, `libxi` and `hicolor-icon-theme` stop falling through to their `-git` variants.
+- **G008 claims first-seen adoption once per account.** A repeat sweep is G003's signal, not novelty.
+- **The egress proxy defaults to loopback.** The library and CLI no longer bind the CONNECT proxy to all interfaces; compose opts into a wildcard bind explicitly on its internal network.
+- **X019 resolves DNS exfiltration prefixes.** `command`/`builtin` and absolute-path forms of `dig` and `ping` now match like the other command-prefix fixes.
+- **The seed builder folds duplicate hashes before writing `maintainers.jsonl`.** Historical names with nested angle groups normalise twice to the same hash; the duplicate rows violated the importer's primary key and inflated the published maintainer count.
+- **The duplicate zip-member warning is silenced for the known benign shape.** Reported by nursoda.
 
 ### Changed
 
-- **The shipped `[seed] baseline_tag` advances to `baseline-2026-11-21`.**
-  The new seed records 195,023 source URLs, 224,423 dependency names and
-  43,815 unique hashed maintainers, including 23,252 zero-count aliases.
-  The previous seed missed 68% of the current metadata maintainer names.
+- **The shipped `[seed] baseline_tag` advances to `baseline-2026-11-21`.** The new seed records 195,023 source URLs, 224,423 dependency names and 43,815 unique hashed maintainers, including 23,252 zero-count aliases. The previous seed missed 68% of the current metadata maintainer names.
+- **The immune-system explanation is the brand spine.** The README and docs home now lead with "An immune system for the AUR", with the full mechanism map, biological sources and explicit limits wired into navigation.
+- **CI pins `astral-sh/setup-uv` to v10.4.0.**
+- **The harness pin tracks the 0.30.0 rule engine.**
 
 ## [0.30.0] - 2026-11-18
 
 ### Added
 
-- **S011 reports self-referential payload teardown.** It covers `$0`/`$BASH_SOURCE` deletion, payload erasure after execution, orphaning, destructive `EXIT` traps, `exec` replacement and empty-executable corpse forgery. It ships INFO at weight 0 and anergic; R099/R104 remain the broader trap rules.
-- **G016 reports account blast radius as bystander context.** A package that
-  fires a curated payload rule or FATAL is joined to the other packages its
-  account had processed in the same cycle. The finding is INFO, weight 0 and
-  anergic; siblings are named but never scored, and the account is not called
-  compromised. It is the bystander-activation counterpart to G006's cytokine
-  neighbourhood context.
 - **L9 artifact rules inspect shipped content and ELF metadata.** The artifact
   manifest may carry bounded content for `.hook`, `.rules` and `.install`
   files; A011 reports a broad hook trigger, A012 a fetch or user-path program,

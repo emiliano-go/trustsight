@@ -218,7 +218,7 @@ def shared_gained_host(records, min_packages: int = 5,
         maintainers.discard("")
         bases = {
             str(record.get("pkgbase", "") or "") for record in members.values()}
-        family_base = not bases - {""} or len(bases) == 1
+        family_base = len(bases) == 1 and "" not in bases
         if (family_base and maintainers and len(maintainers) < min_maintainers
                 and _one_name_family(members)):
             continue
@@ -994,7 +994,7 @@ def sleeper_adoption_campaign(records, history, config=None, pushes=None) -> lis
     min_dormant = max(0, _safe_int(g015.get("min_dormant", 2), 2))
     dormant_days = max(0, _safe_int(
         g015.get("dormant_days", 180), 180))
-    orphan_only = bool(g015.get("orphan_only", True))
+    orphan_only = bool(g015.get("orphan_only", False))
 
     now = time.time()
     dormant_cutoff = now - dormant_days * 86400
@@ -1177,8 +1177,7 @@ def package_creation_burst(records, config=None) -> list[dict]:
         package = str(record.get("package", "") or "")
         if not maintainer or not package:
             continue
-        if record.get("maintainer_established") and record.get("placeholder"):
-            continue
+
         by_maintainer[maintainer][package] = bool(record.get("placeholder"))
 
     out: list[dict] = []

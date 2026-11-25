@@ -451,8 +451,13 @@ def extract_source_array_urls(diff_text: str, side: str = "after") -> set[str]:
     in_array = False
     raw_lines = split_lines(diff_text)
     from ..expansion import resolve_text, variable_table
+    from .._tokenizer_engine._apply import _normalise_builtin_assignment
+    table_lines = [
+        _normalise_builtin_assignment(line) if line[:1] in "+- " else line
+        for line in raw_lines
+    ]
     table = variable_table(
-        raw_lines, frozenset({"+", " "} if side == "after" else {"-", " "}))
+        table_lines, frozenset({"+", " "} if side == "after" else {"-", " "}))
     for line in parse_diff_lines(raw_lines).lines:
         if line.raw.startswith(("+++", "---", "@@")):
             continue

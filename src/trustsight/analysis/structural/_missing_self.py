@@ -91,8 +91,8 @@ def vouch_surface_findings(diff_text: str, scope_pre, scope_post, add,
         post_arrays = scope_post.arrays or {}
     except AttributeError:
         return
-    before = set(_array_values(pre_arrays.get("validpgpkeys", ())))
-    after = set(_array_values(post_arrays.get("validpgpkeys", ())))
+    before = _vouch_keys(scope_pre, pre_arrays)
+    after = _vouch_keys(scope_post, post_arrays)
     if not before:
         return  # missing from birth is not decay
     lost = before - after
@@ -116,6 +116,30 @@ def vouch_surface_findings(diff_text: str, scope_pre, scope_post, add,
         line=find_line_in_diff(diff_text, r"validpgpkeys"),
         removed=len(lost), remaining=len(after),
     )
+
+
+def _vouch_keys(scope, arrays) -> set[str]:
+    """Valid PGP keys with array slices and scalar lengths resolved."""
+    values = _array_values(arrays.get("validpgpkeys", ()))
+    scalars = getattr(scope, "scalars", {}) or {}
+    out: set[str] = set()
+    for value in values:
+        text = str(value).strip("\"'")
+        match = re.fullmatch(r"\$\{(\w+)\[@\](?::0:(\$?\{?\w+\}?|\d+))?\}", text)
+        if not match:
+            out.add(text)
+            continue
+        entries = _array_values(arrays.get(match.group(1), ()))
+        count_raw = match.group(2)
+        if count_raw:
+            count_raw = count_raw.strip("${}")
+            try:
+                count = int(scalars.get(count_raw, count_raw))
+            except (TypeError, ValueError):
+                count = len(entries)
+            entries = entries[:max(0, count)]
+        out.update(entries)
+    return out
 
 
 def _url_of(entry: str) -> str | None:
@@ -142,7 +166,7 @@ def _source_arrays(scope) -> dict[str, tuple[str, ...]]:
     }
 
 
-def scheme_downgrade_findings(scope_pre, scope_post, add) -> None:
+def scheme_downgrade_findings(scope_pre, scope_post, add, diff_text="") -> None:
     """T005: the same source host downgraded TLS while the path also changed.
 
     H019 owns the exact ``https://x`` -> ``http://x`` swap.  This covers the
@@ -152,6 +176,27 @@ def scheme_downgrade_findings(scope_pre, scope_post, add) -> None:
     """
     pre = _source_arrays(scope_pre)
     post = _source_arrays(scope_post)
+    if diff_text:
+        from ...differ._sources import extract_source_array_urls
+        before_urls = extract_source_array_urls(diff_text, "before")
+        after_urls = extract_source_array_urls(diff_text, "after")
+        for before in sorted(before_urls):
+            if not before.startswith("https://"):
+                continue
+            after = before.replace("https://", "http://", 1)
+            for candidate in after_urls:
+                if candidate == after:
+                    continue
+                if not candidate.startswith("http://"):
+                    continue
+                try:
+                    if urlsplit(candidate).hostname == urlsplit(before).hostname:
+                        add("T005", "Scheme Downgrade", "MEDIUM", "temporal",
+                            f"source moved from https to http on {urlsplit(before).hostname}",
+                            host=urlsplit(before).hostname, before=before[:80], after=candidate[:80])
+                        return
+                except ValueError:
+                    continue
 
     def by_host(values: list[str], scheme: str) -> dict[str, list[str]]:
         """HTTPS/HTTP URLs grouped by canonical host, in array order.
@@ -354,5 +399,5 @@ def missing_self_findings(diff_text: str, diff_doc, scope_pre, scope_post,
                           add, config=None) -> None:
     """Run the pure-diff missing-self predicates in one deterministic order."""
     vouch_surface_findings(diff_text, scope_pre, scope_post, add, config)
-    scheme_downgrade_findings(scope_pre, scope_post, add)
+    scheme_downgrade_findings(scope_pre, scope_post, add, diff_text)
     comment_deletion_findings(diff_doc, add, config)

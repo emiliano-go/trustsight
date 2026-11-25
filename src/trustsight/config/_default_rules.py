@@ -784,6 +784,17 @@ domains = [
     # A project's own code-hosting CDN and a font author's site.
     "cnb.cool",
     "viznut.fi",
+    # Project-owned forges and vendor storage that the 2026-11-23 triage
+    # scored as unknown: hummingbird's Gitea, prism's forge and site,
+    # SwiftPoint's driver blob and the Flutter CEF builds nui-sftp mirrors.
+    # MEGA's object store is multi-tenant, so only the maintainer's bucket
+    # prefix is listed.
+    "git.mailliw.org",
+    "git.sovereign-society.org",
+    "getharness.app",
+    "swiftpointdrivers.blob.core.windows.net",
+    "cef-builds.spotifycdn.com",
+    "s3.g.s4.mega.io/jgemkib4a5fte35rktt5wxrwkw4ejk4ybemkf/",
     # Overte's own release bucket on DigitalOcean Spaces.  The parent
     # domain is a multi-tenant object store, so only this bucket is the
     # project's distribution surface (overte-appimage).

@@ -177,6 +177,7 @@ _EXECUTION_RE = re.compile(
     # capture that is not a declared basename, and not harmless at all for
     # a rule that reports the path to a reader.
     r"|\./(\S+)"
+    r"|eval\s+(?:bash|sh|zsh|dash|ksh|ash|mksh)\s+(\S+)"
     r")"
     # A build-tree path in command position runs without any verb at all:
     # `"$srcdir/s.sh"` is an execution and was read as nothing.  The quotes

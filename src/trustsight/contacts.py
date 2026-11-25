@@ -202,7 +202,7 @@ def shared_first_seen_host(records, min_packages: int = 5,
         maintainers.discard("")
         bases = {
             str(record.get("pkgbase", "") or "") for record in members.values()}
-        declared_base = not bases - {""} or len(bases) == 1
+        declared_base = len(bases) == 1 and "" not in bases
         if (declared_base and maintainers and len(maintainers) < 2
                 and _one_name_family(members)):
             continue

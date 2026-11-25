@@ -432,6 +432,15 @@ def _structural_findings_from_request(request: ScanRequest) -> list[dict]:
 
     _backup_array_finding(scope_pre, scope_post, add)
 
+    # A checksum array indexed by a variable that the same diff reassigns is
+    # a surgical repoint even though the array's literal text is unchanged.
+    if re.search(r"^\s*\w*(?:sums|checksums)\w*\s*=\s*\(.*\[\$?\{?\w+",
+                 diff_text, re.MULTILINE):
+        add("C001", "Checksum Changed Without Source Change With Stable Version",
+            "HIGH", "integrity",
+            "checksum array selected through a changed index variable",
+            line=find_line_in_diff(diff_text, r"(?:sums|checksums)\s*="))
+
     _package_fetch_finding(scope_post, add)
 
     findings.extend(_scope_findings(scope_doc, diff_text, current_text, add))

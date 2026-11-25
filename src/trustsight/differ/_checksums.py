@@ -211,7 +211,7 @@ def _resolve_checksum_text(diff_text: str, contents: str) -> str:
     readable = [
         line.content
         for line in parse_diff_lines(split_lines(diff_text)).lines
-        if line.side == "add" and not line.raw.startswith("+++")
+        if line.side != "remove" and not line.raw.startswith(("+++", "---", "@@"))
     ]
     try:
         table, _arrays = variable_table(readable)
@@ -229,17 +229,24 @@ def _resolve_checksum_text(diff_text: str, contents: str) -> str:
     from ..expansion import resolve_text
     out = resolve_text(contents, table)
     # Static array subscript: `${_sum[$_i]}` with a known scalar index.
+    import re as _re
+    arrays = dict(_arrays) if isinstance(_arrays, dict) else {}
+    for line in readable:
+        m = _re.match(r"\s*(\w+)=\((.*)\)\s*$", line)
+        if m:
+            values = _re.findall(r"'([^']*)'|\"([^\"]*)\"|(\S+)", m.group(2))
+            arrays[m.group(1)] = [a or b or c for a, b, c in values]
+
     def _index(match):
         name, idx = match.group(1), match.group(2)
-        values = _arrays.get(name) if isinstance(_arrays, dict) else None
+        values = arrays.get(name)
         if not values:
             return match.group(0)
         try:
             return values[int(table.get(idx, idx))]
         except (ValueError, IndexError, TypeError):
             return match.group(0)
-    import re as _re
-    out = _re.sub(r"\$\{?(\w+)\[\$\{?(\w+)\}?\]\}?", _index, out)
+    out = _re.sub(r"\$\{?(\w+)\[\$?\{?(\w+)\}?\]\}?", _index, out)
     return out
 
 def checksum_array_parity(diff_text: str) -> tuple[int, int, str] | None:

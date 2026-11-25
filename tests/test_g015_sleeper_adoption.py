@@ -118,9 +118,9 @@ def test_g015_orphan_only_can_be_relaxed():
     records, history = _shape()
     for row in history:
         row["previous_maintainer"] = "old"
-    assert sleeper_adoption_campaign(records, history) == []
-    cfg = {"thresholds": {"g015": {"orphan_only": False}}}
-    assert sleeper_adoption_campaign(records, history, cfg)[0]["rule_id"] == "G015"
+    assert sleeper_adoption_campaign(records, history)[0]["rule_id"] == "G015"
+    cfg = {"thresholds": {"g015": {"orphan_only": True}}}
+    assert sleeper_adoption_campaign(records, history, cfg) == []
 
 
 def test_g015_campaign_identity_names_the_accounts():

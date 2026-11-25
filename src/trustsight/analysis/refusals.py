@@ -281,6 +281,15 @@ def _recipe_post_doc(doc):
         "\n".join(line.content for line in post_lines), origins=origins)
 
 
+def _join_adjacent_encoded(text: str, floor: int) -> str:
+    """Literal values of long encoded assignments, joined."""
+    values = re.findall(
+        r"=\s*['\"]([A-Za-z0-9+/=]{%d,})['\"]" % max(128, floor // 2),
+        text,
+    )
+    return "".join(values[:2]) if len(values) > 1 else ""
+
+
 def refusal_findings(diff_text: str, config, add, current_text=None,
                      previous_diff: str = "", previous_commit: str = "",
                      current_commit: str = "") -> None:
@@ -425,6 +434,8 @@ def refusal_findings(diff_text: str, config, add, current_text=None,
             if line.side in ("add", "context") and not line.in_hunk
         )
         haystack = f"{scanned}\n{top_level}"
+        joined = _join_adjacent_encoded(haystack, floor)
+        haystack = f"{haystack}\n{joined}"
         for literal_class in _encoded_literal_classes(haystack, floor):
             add("X029", "Encoded Material At Rest", "MEDIUM", "evasion",
                 f"{literal_class} literal of at least {floor} encoded "

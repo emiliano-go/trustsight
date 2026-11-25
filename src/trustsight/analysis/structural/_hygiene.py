@@ -12,6 +12,7 @@ _SPLICE_RE = re.compile(
     r"[A-Za-z_][\w.+-]*(?:\"[A-Za-z0-9_]\"|'[A-Za-z0-9_]'|\"\"|'')+[\w.+-]*"
     r"|[A-Za-z_][\w.+-]*\$'(?:\\x[0-9A-Fa-f]{2}|\\[0-7]{1,3})+'[\w.+-]*"
     r"|\w*\$\{[^}\n]*\bIFS\b[^}\n]*\}\w*"
+    r"|[A-Za-z_][\w.+-]*[\"']\$\{?\w+\}?[\"'][\w.+-]*"
     r")"
 )
 
@@ -83,6 +84,8 @@ def _added_raw_lines(diff_text) -> list[str]:
 def _splicing_findings(diff_text, add) -> None:
     """X032: a command name built from spliced quotes or ANSI-C escapes."""
     seen: set[str] = set()
+    scalars = dict(re.findall(
+        r"(?m)^\+?\s*([A-Za-z_]\w*)=['\"]?([^'\"\s]+)", diff_text))
     for line in _added_raw_lines(diff_text):
         match = _SPLICE_RE.search(line)
         if not match:
@@ -91,7 +94,10 @@ def _splicing_findings(diff_text, add) -> None:
         # Only fire when the disguised word resolves to a command worth
         # disguising: an ordinary quoted word (`scan.""` in a docstring) is
         # not the signal this rule exists for.
-        if _desplice(shape) not in _DISGUISABLE_COMMANDS:
+        resolved = re.sub(
+            r"\$\{?(\w+)\}?",
+            lambda m: scalars.get(m.group(1), m.group(0)), shape)
+        if _desplice(resolved) not in _DISGUISABLE_COMMANDS:
             continue
         if shape in seen:
             continue

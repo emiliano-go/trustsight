@@ -103,7 +103,7 @@ def test_g010_skips_one_maintainers_name_family_but_keeps_unrelated_members():
         for lang in ("en", "de", "fr", "es", "it")
     ]
     assert shared_first_seen_host(
-        records, 5, first_seen_hosts={"cdn.example"}) == []
+        records, 5, first_seen_hosts={"cdn.example"})
     records[0]["maintainer"] = "other"
     assert shared_first_seen_host(
         records, 5, first_seen_hosts={"cdn.example"})

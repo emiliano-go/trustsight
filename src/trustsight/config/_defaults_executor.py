@@ -372,6 +372,11 @@ DEFAULT_RECON_COMMANDS = [
 DEFAULT_PARSE_TIME_FETCH = [
     COMMAND_POSITION + r"curl\b",
     COMMAND_POSITION + r"wget\b",
+    COMMAND_POSITION + r"aws\s+s3\s+(?:cp|sync|mv)\b",
+    COMMAND_POSITION + r"gsutil\b",
+    COMMAND_POSITION + r"b2\s+(?:download-file|download|sync)\b",
+    COMMAND_POSITION + r"ssh\b",
+    COMMAND_POSITION + r"cvs\s+(?:co|checkout|export)\b",
     COMMAND_POSITION + r"aria2c\b",
     COMMAND_POSITION + r"axel\b",
     COMMAND_POSITION + r"lynx\b",

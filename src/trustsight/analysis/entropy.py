@@ -137,6 +137,7 @@ def strip_checksum_arrays(text: str) -> str:
 def identifier_entropy(text: str) -> float:
     """Shannon entropy (bits/char) of the newly assigned identifier names."""
     names = _IDENT_RE.findall(text)
+    names += re.findall(r"\bread\s+(?:-\S+\s+)*([A-Za-z_][A-Za-z0-9_]{2,})\b", text)
     if not names:
         return 0.0
     joined = "".join(names)

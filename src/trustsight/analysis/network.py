@@ -178,6 +178,16 @@ def _pin_vars_by_side(diff_text: str) -> dict[str, dict[str, tuple[str, str]]]:
             sides["+" if line.side == "add" else "-"][match.group(1).lower()] = (
                 match.group(2).lower(), (match.group(3) or "").strip()
             )
+            continue
+        builtin = re.search(
+            r"(?:read\s+(?:-\S+\s+)*(\w+)\s*<<<\s*(\S+)|"
+            r"printf\s+-v\s+(\w+)\s+[^;]*?\s(\S+)\s*$)",
+            line.content)
+        if builtin:
+            name = builtin.group(1) or builtin.group(3)
+            value = builtin.group(2) or builtin.group(4)
+            sides["+" if line.side == "add" else "-"][name.lower()] = (
+                value.strip("\"'").lower(), "")
     return sides
 
 

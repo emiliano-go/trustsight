@@ -8,7 +8,7 @@ from ._common import _post_diff_lines, _pre_diff_lines
 __all__ = ['_GPG_VERIFY_RE', '_VALIDPGPKEYS_WITH_CONTENT_RE', '_has_checksum_in_post_diff', 'detect_gpg_verification_removed', 'detect_verification_evidence']
 
 _GPG_VERIFY_RE = re.compile(
-    r"(?:gpg|gpgv|openpgp)\s+(?:--verify|--decrypt|\-\-check-signatures)",
+    r"(?:gpg|gpgv|openpgp)\s+(?:--\S+\s+)*(?:--verify|--decrypt|\-\-check-signatures)",
     re.IGNORECASE,
 )
 

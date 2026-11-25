@@ -34,7 +34,7 @@ __all__ = [
 #: removed") are deliberately absent: they are common enough that joining on
 #: them would turn ordinary ecosystem churn into a campaign.
 SHARED_PAYLOAD_RULES = frozenset({
-    "R001", "R002", "R003", "R008",
+    "R001", "R002", "R003", "R008", "X011", "X017",
     "H017", "H035", "H041", "H075", "H090",
     "C016", "C032",
     "S001", "S002", "S003", "S004", "S005", "S006", "S007", "S008",
@@ -86,6 +86,40 @@ def _entry_texts(entry):
         yield from _strings(field)
 
 
+def _norm_host(host: str) -> str:
+    host = (host or "").lower().rstrip(".")
+    if ":" in host:
+        try:
+            import ipaddress
+            return f"[{ipaddress.ip_address(host).compressed}]"
+        except ValueError:
+            return f"[{host}]"
+    try:
+        return host.encode("idna").decode("ascii")
+    except UnicodeError:
+        return host
+
+
+def _norm_path(path: str) -> str:
+    """Remove RFC 3986 dot segments without collapsing double slashes."""
+    if not path:
+        return "/"
+    absolute = path.startswith("/")
+    out: list[str] = []
+    for segment in path.split("/"):
+        if segment in ("", "."):
+            continue
+        if segment == "..":
+            if out:
+                out.pop()
+            continue
+        out.append(segment)
+    value = "/" + "/".join(out)
+    if path.endswith("/") and not value.endswith("/"):
+        value += "/"
+    return value if absolute else value.lstrip("/")
+
+
 def canonical_payload_url(url: str) -> str:
     """A join key for *url*, or ``""`` when it is unusable.
 
@@ -98,17 +132,17 @@ def canonical_payload_url(url: str) -> str:
     try:
         parts = urlsplit(url)
         scheme = parts.scheme.lower()
-        host = (parts.hostname or "").lower().rstrip(".")
+        host = _norm_host(parts.hostname or "")
         port = parts.port
     except (ValueError, UnicodeError):
         return ""
     if scheme not in ("http", "https") or not host:
         return ""
-    host_key = f"[{host}]" if ":" in host else host
+    host_key = host
     default_port = 80 if scheme == "http" else 443
     netloc = (host_key if port in (None, default_port)
               else f"{host_key}:{port}")
-    return urlunsplit((scheme, netloc, parts.path or "/", "", ""))
+    return urlunsplit((scheme, netloc, _norm_path(parts.path or "/"), "", ""))
 
 
 def canonical_campaign_url(url: str) -> str:
@@ -117,13 +151,12 @@ def canonical_campaign_url(url: str) -> str:
         return ""
     try:
         parts = urlsplit(url)
-        host = (parts.hostname or "").lower().rstrip(".")
+        host = _norm_host(parts.hostname or "")
     except (ValueError, UnicodeError):
         return ""
     if not host:
         return ""
-    host_key = f"[{host}]" if ":" in host else host
-    return urlunsplit(("", host_key, parts.path or "/", "", ""))
+    return urlunsplit(("", host, _norm_path(parts.path or "/"), "", ""))
 
 
 def payload_urls(entries) -> list[str]:

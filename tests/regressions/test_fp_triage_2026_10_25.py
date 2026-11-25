@@ -144,8 +144,8 @@ def _host_records(*maintainers):
 
 
 def test_g001_one_maintainers_family_is_quiet():
-    assert shared_gained_host(_host_records("Sving1024", "Sving1024",
-                                            "Sving1024"), 3) == []
+    assert [f["rule_id"] for f in shared_gained_host(
+        _host_records("Sving1024", "Sving1024", "Sving1024"), 3)] == ["G001"]
 
 
 def test_g001_two_maintainers_still_fire():

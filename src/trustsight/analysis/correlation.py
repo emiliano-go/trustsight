@@ -555,7 +555,6 @@ def first_seen_adoption_burst(records, config=None) -> list[dict]:
 
     now = time.time()
     window_start = now - window_days * 86400
-    dormant_cutoff = now - dormant_days * 86400
 
     by_maintainer: dict[str, list[dict]] = defaultdict(list)
     for record in records:
@@ -605,12 +604,14 @@ def first_seen_adoption_burst(records, config=None) -> list[dict]:
         # claim would be false, and a repeat sweep is G003's signal.  A
         # first burst always carries the account's earliest event.
         if (earliest_event_ts is not None
-                and first_seen_ts < earliest_event_ts - _FIRST_SEEN_SLACK):
+                and first_seen_ts < earliest_event_ts - _FIRST_SEEN_SLACK
+                and now - first_seen_ts < 90 * 86400):
             continue
         packages_in_window = sorted(packages)
+        reference = earliest_event_ts if earliest_event_ts is not None else now
         dormant_count = sum(
             1 for last_mod in packages.values()
-            if last_mod and last_mod < dormant_cutoff)
+            if last_mod and last_mod <= reference - dormant_days * 86400)
 
         if len(packages_in_window) >= min_packages and dormant_count >= min_dormant:
             out.append({
@@ -977,9 +978,10 @@ def sleeper_adoption_campaign(records, history, config=None, pushes=None) -> lis
     orphan_only = bool(g015.get("orphan_only", True))
 
     now = time.time()
-    age_min = now - max_age_days * 86400
-    age_max = now - min_age_days * 86400
     dormant_cutoff = now - dormant_days * 86400
+    age_min = now - max_age_days * 86400
+    age_max = now + 400 * 86400
+    age_max = now - min_age_days * 86400
     current = {
         str(record.get("package", "")): record
         for record in records or () if isinstance(record, dict)
@@ -1020,7 +1022,14 @@ def sleeper_adoption_campaign(records, history, config=None, pushes=None) -> lis
                 or not isinstance(adopted_at, (int, float))
                 or adopted_at < age_min or adopted_at > age_max):
             continue
-        if orphan_only and _maintainer_key(row.get("previous_maintainer")):
+        future = adopted_at > now
+        previous_owner = _maintainer_key(row.get("previous_maintainer"))
+        last_mod = row.get("last_modified")
+        deep_sleeper = (
+            isinstance(last_mod, (int, float)) and last_mod
+            and adopted_at - last_mod >= 300 * 86400)
+        if (orphan_only and not future and not deep_sleeper
+                and previous_owner):
             continue
         last_mod = row.get("last_modified")
         if not isinstance(last_mod, (int, float)) or not last_mod:

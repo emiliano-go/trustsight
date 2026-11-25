@@ -226,13 +226,20 @@ def _resolve_checksum_text(diff_text: str, contents: str) -> str:
         from ..coverage import note_stage_failure
         note_stage_failure("checksum-resolution")
         return contents
-    out = contents
-    for name, value in table.items():
-        if not isinstance(value, str):
-            continue
-        for spelling in (f"${{{name}}}", f"${name}"):
-            if spelling in out:
-                out = out.replace(spelling, value)
+    from ..expansion import resolve_text
+    out = resolve_text(contents, table)
+    # Static array subscript: `${_sum[$_i]}` with a known scalar index.
+    def _index(match):
+        name, idx = match.group(1), match.group(2)
+        values = _arrays.get(name) if isinstance(_arrays, dict) else None
+        if not values:
+            return match.group(0)
+        try:
+            return values[int(table.get(idx, idx))]
+        except (ValueError, IndexError, TypeError):
+            return match.group(0)
+    import re as _re
+    out = _re.sub(r"\$\{?(\w+)\[\$\{?(\w+)\}?\]\}?", _index, out)
     return out
 
 def checksum_array_parity(diff_text: str) -> tuple[int, int, str] | None:

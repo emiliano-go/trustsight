@@ -751,9 +751,9 @@ def test_package_creation_burst_needs_the_package_floor():
     assert package_creation_burst(_g011_records(packages=4)) == []
 
 
-def test_package_creation_burst_ignores_established_accounts():
+def test_package_creation_burst_includes_established_accounts():
     assert package_creation_burst(
-        _g011_records(packages=5, established=True)) == []
+        _g011_records(packages=5, established=True))[0]["rule_id"] == "G011"
 
 
 def test_package_creation_burst_ignores_a_variant_family():

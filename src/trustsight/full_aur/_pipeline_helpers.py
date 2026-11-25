@@ -558,7 +558,8 @@ def _neighborhood_elevation(records: list[dict]) -> list[dict]:
         campaign_id = campaign["campaign_id"]
         members_of[campaign_id] = {
             str(n) for n in scope.get("package_names", ()) or ()}
-        from ..analysis.correlation import _endpoint_host
+        from ..analysis.correlation import _endpoint_host, _maintainer_key
+        from ..analysis.payload_signals import canonical_campaign_url
         for host in scope.get("hosts", ()) or ():
             host_to_campaign.setdefault(_endpoint_host(host), campaign_id)
         for target in scope.get("targets", ()) or ():
@@ -566,9 +567,9 @@ def _neighborhood_elevation(records: list[dict]) -> list[dict]:
         for signal in scope.get("signals", ()) or ():
             signal_to_campaign.setdefault(str(signal), campaign_id)
         for url in scope.get("urls", ()) or ():
-            url_to_campaign.setdefault(str(url), campaign_id)
+            url_to_campaign.setdefault(canonical_campaign_url(str(url)), campaign_id)
         for account in scope.get("maintainers", ()) or ():
-            maintainer_to_campaign.setdefault(str(account), campaign_id)
+            maintainer_to_campaign.setdefault(_maintainer_key(account), campaign_id)
 
     by_campaign: dict[str, set[str]] = {}
     reasons: dict[str, set[str]] = {}
@@ -585,7 +586,8 @@ def _neighborhood_elevation(records: list[dict]) -> list[dict]:
         gained = record.get("hosts_gained") or ()
         if isinstance(gained, str):
             gained = [gained]
-        from ..analysis.correlation import _endpoint_host
+        from ..analysis.correlation import _endpoint_host, _maintainer_key
+        from ..analysis.payload_signals import canonical_campaign_url
         for host in gained:
             _elevate(host_to_campaign.get(_endpoint_host(host)), package,
                      f"gained host {host}")
@@ -605,9 +607,9 @@ def _neighborhood_elevation(records: list[dict]) -> list[dict]:
             urls = [urls]
         for url in (urls if isinstance(
                 urls, (list, tuple, set, frozenset)) else ()):
-            _elevate(url_to_campaign.get(str(url)), package,
+            _elevate(url_to_campaign.get(canonical_campaign_url(str(url))), package,
                      f"fetches campaign target {url}")
-        maintainer = str(record.get("maintainer", "") or "").strip().lower()
+        maintainer = _maintainer_key(record.get("maintainer"))
         if maintainer:
             _elevate(maintainer_to_campaign.get(maintainer), package,
                      f"account {maintainer} is in the campaign")

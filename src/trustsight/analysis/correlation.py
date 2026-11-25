@@ -99,8 +99,18 @@ def _endpoint_host(value) -> str:
     host = canonical_host(str(value or ""))
     if host.startswith("["):
         close = host.find("]")
-        return host[: close + 1] if close != -1 else host
-    return host.rsplit(":", 1)[0] if ":" in host else host
+        raw = host[1:close] if close != -1 else host[1:]
+        try:
+            import ipaddress
+            return f"[{ipaddress.ip_address(raw).compressed}]"
+        except ValueError:
+            return host[: close + 1] if close != -1 else host
+    if ":" in host:
+        host = host.rsplit(":", 1)[0]
+    try:
+        return host.encode("idna").decode("ascii").lower()
+    except UnicodeError:
+        return host.lower()
 
 
 def _seq(value) -> list[str]:
@@ -206,9 +216,10 @@ def shared_gained_host(records, min_packages: int = 5,
             for record in members.values()
         }
         maintainers.discard("")
-        declared_base = all(
-            str(record.get("pkgbase", "") or "") for record in members.values())
-        if (declared_base and maintainers and len(maintainers) < min_maintainers
+        bases = {
+            str(record.get("pkgbase", "") or "") for record in members.values()}
+        family_base = not bases - {""} or len(bases) == 1
+        if (family_base and maintainers and len(maintainers) < min_maintainers
                 and _one_name_family(members)):
             continue
         try:
@@ -296,6 +307,15 @@ def _one_project(member_records) -> bool:
     bases = {str(r.get("pkgbase") or "") for r in records}
     bases.discard("")
     return len(bases) == 1 and all(r.get("pkgbase") for r in records)
+
+
+def _one_variant_family(members) -> bool:
+    """True when every member is a base name or its ``-suffix`` variant."""
+    names = sorted(str(name) for name in members)
+    if not names:
+        return False
+    base = names[0]
+    return all(name == base or name.startswith(base + "-") for name in names)
 
 
 def _one_related_cluster(members) -> bool:
@@ -399,10 +419,9 @@ def coordinated_adoption(records, min_members: int = 3,
                 # Every member sources from the same repo: H052's family, not
                 # a coordinated adoption.
                 continue
-        if _one_related_cluster(members):
-            # Every member is a naming variant of one project (the
-            # appattic/appattic-bin/appattic-qt release shape): H052's
-            # family by name, not a coordinated adoption.
+        if _one_variant_family(members):
+            # Only a base name plus variant suffixes is one project.  A bare
+            # shared token (vim/vimium/vimpc) is not proof of a family.
             continue
         predecessor = [key for key in previous[maintainer] if key]
         if (len(predecessor) == len(members)
@@ -1158,8 +1177,7 @@ def package_creation_burst(records, config=None) -> list[dict]:
         package = str(record.get("package", "") or "")
         if not maintainer or not package:
             continue
-        if (record.get("maintainer_established")
-                and not record.get("placeholder")):
+        if record.get("maintainer_established") and record.get("placeholder"):
             continue
         by_maintainer[maintainer][package] = bool(record.get("placeholder"))
 

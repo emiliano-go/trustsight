@@ -83,6 +83,29 @@ def test_an_official_name_is_not_resolved_to_an_aur_provider():
     assert result.reports == []
 
 
+def test_an_unanswered_official_check_does_not_invent_an_aur_dependency():
+    """A host that cannot name the official repositories must not guess.
+
+    The watcher image has no pacman, so the membership answer is "unknown".
+    Resolving a dependency through a unique Provides alias there reported
+    ``libnotify-git`` (and ``nss-hg``, ``sqlite-fossil``, ...) for packages
+    whose recipes name official dependencies only, and each of those aliases
+    was then marked not vetted because the corpus prefill works from declared
+    names and never fetches an alias.  Unknown is not False: leave the name
+    alone and let the walk skip it.
+    """
+    metadata = SnapshotMetadata({
+        "app": {"Depends": ["libnotify", "virtual"]},
+        "libnotify-git": {"Provides": ["libnotify=0.8"]},
+        "provider": {"Provides": ["virtual=1.0"]},
+    }, is_official=lambda _name: None)
+    assert metadata.aur_name("libnotify") == "libnotify"
+    assert metadata.aur_name("virtual") == "virtual"
+    result = walk_dependencies(
+        "app", depth=1, metadata=metadata, analyse=lambda name: FakeFact())
+    assert result.reports == []
+
+
 def _walk(root, depth, edges, aur=None, analyse=None):
     seen_names = []
 

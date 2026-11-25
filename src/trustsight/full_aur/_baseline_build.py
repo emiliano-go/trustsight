@@ -635,8 +635,15 @@ def _prefill_missing_dependencies(
     # otherwise stay unread indefinitely.  Baseline those dependencies here,
     # before the roots, with depth 0 so this cannot recurse.  Anything in the
     # current delta is excluded: its own turn as a root must record the diff.
+    # The walk reads dependency *identities*, so this pass resolves each
+    # declared name the same way before deciding whether it needs baselining:
+    # a dependency met only through a unique Provides alias is otherwise
+    # skipped here and reported unreadable by the walk.
+    from ..depth import SnapshotMetadata
+
+    resolve = SnapshotMetadata(new_meta).aur_name
     missing_deps, prefill_capped = _missing_direct_dependencies(
-        new_meta, pending, set(to_process), MAX_DEPTH_NODES)
+        new_meta, pending, set(to_process), MAX_DEPTH_NODES, resolve=resolve)
     if missing_deps:
         _log(
             f"Prefilling {len(missing_deps)} missing AUR "

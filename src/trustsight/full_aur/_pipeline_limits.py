@@ -138,6 +138,7 @@ def _missing_direct_dependencies(
     pending: list[str],
     to_process: set[str],
     cap: int,
+    resolve=None,
 ) -> tuple[list[str], bool]:
     """Dependencies to baseline before this cycle's roots are analysed.
 
@@ -149,9 +150,18 @@ def _missing_direct_dependencies(
     as the cap is reached so a hostile metadata entry cannot make this pass
     query the database for an unbounded dependency list.
 
+    *resolve* maps a declared name to the identity the walk will analyse -
+    ``SnapshotMetadata.aur_name`` in production.  Without it a dependency
+    declared as a virtual ``Provides`` alias (``foo`` satisfied by AUR
+    ``foo-git``) is skipped here for not being a metadata entry, and the walk
+    then reports it not vetted for a reason this pass could have fixed before
+    the root ran.
+
     Returns ``(missing, capped)``.
     """
+    resolve = resolve or (lambda value: value)
     seen: set[str] = set()
+    wanted: set[str] = set()
     missing: list[str] = []
     for parent in pending:
         entry = new_meta.get(parent) or {}
@@ -163,13 +173,17 @@ def _missing_direct_dependencies(
                 seen.add(dep)
                 if len(seen) > _MAX_PREFILL_CANDIDATES:
                     return missing, True
-                if dep not in new_meta or dep in to_process:
+                target = resolve(dep)
+                if target not in new_meta or target in to_process:
                     continue
-                if not _needs_dependency_prefill(dep):
+                if target in wanted:
+                    continue
+                wanted.add(target)
+                if not _needs_dependency_prefill(target):
                     continue
                 if len(missing) >= cap:
                     return missing, True
-                missing.append(dep)
+                missing.append(target)
     return missing, False
 
 

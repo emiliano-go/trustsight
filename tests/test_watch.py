@@ -302,6 +302,27 @@ def test_dependency_prefill_is_capped(fake_aur):
     assert capped is True
 
 
+def test_prefill_resolves_a_virtual_provide_to_the_package_the_walk_reads(fake_aur):
+    """The walk analyses ``foo-git``; prefilling ``foo`` would leave it unread.
+
+    The prefill decides from declared names and the walk decides from
+    resolved identities.  When those disagree, the dependency is guaranteed
+    to come back not vetted even though this pass had the chance to baseline
+    it, so resolve through the same provider before deciding.
+    """
+    from trustsight.full_aur.pipeline import _missing_direct_dependencies
+
+    meta = {
+        "root": {"Depends": ["virtual"]},
+        "actual-git": {"Provides": ["virtual=1.0"]},
+    }
+    missing, capped = _missing_direct_dependencies(
+        meta, ["root"], {"root"}, 10,
+        resolve=lambda name: "actual-git" if name == "virtual" else name)
+    assert missing == ["actual-git"]
+    assert capped is False
+
+
 def test_a_dependency_fetch_failure_still_reports_the_gap(fake_aur, monkeypatch):
     """Prefill is best-effort: a mirror failure must stay visible."""
     import json

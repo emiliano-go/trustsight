@@ -591,6 +591,7 @@ changes behaviour is a config key or a command flag.
 | `TRUSTSIGHT_FORCE_RICH` | Any non-empty value | The same as `FORCE_COLOR`, for callers that already use `FORCE_COLOR` for something else. |
 | `TRUSTSIGHT_DOC_CACHE` | A directory path | Overrides where the parsed-document cache stores its JSON entries. Default: `$XDG_CACHE_HOME/trustsight/documents`. |
 | `TRUSTSIGHT_CONFIG_DIR` | A directory path | Overrides the config directory (`~/.config/trustsight`). The watcher container points this at its tmpfs copy so the read-only source can stay immutable. |
+| `TRUSTSIGHT_CONFIG_CACHE` | `0`, `false`, `no`, `off` disables it; unset or anything else keeps it on | Turns off the process-lifetime cache of the parsed configuration tables. Every scan otherwise reads and merges `config.toml`, `rules.toml` and `thresholds.toml` once and reuses them; a caller that rewrites a config file from outside the package should call `trustsight.config.invalidate_config()` instead of relying on this. |
 | `TRUSTSIGHT_CONFIG_SRC` | A directory path | Read-only config source the watcher entrypoint copies into `TRUSTSIGHT_CONFIG_DIR` before starting. Unset means no copy. |
 | `TRUSTSIGHT_UPSTREAM_FETCHER_SOCKET` | A Unix socket path | Overrides `[upstream_scan] fetcher_socket` for the separate fetcher. The compose file points the watcher at the shared `trustsight-run` socket. |
 | `TRUSTSIGHT_UPSTREAM_PROXY` | An `http://host:port` URL | Overrides `[upstream_scan] proxy` for the separate fetcher. |

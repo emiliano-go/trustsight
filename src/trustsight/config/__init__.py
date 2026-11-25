@@ -167,6 +167,84 @@ def ensure_default_configs():
 
 _toml_cache: dict[str, tuple[tuple, dict]] = {}
 
+#: Set ``TRUSTSIGHT_CONFIG_CACHE=0`` to bypass the memoised tables below.
+#: It exists for A/B measurement and as an emergency rollback; the
+#: configuration path must always be able to run without the cache.
+def config_cache_enabled() -> bool:
+    raw = os.environ.get("TRUSTSIGHT_CONFIG_CACHE")
+    return raw is None or raw.strip().lower() not in ("0", "false", "no", "off")
+
+
+#: Bumped by every writer in this package.  Part of the cache key so an
+#: in-place rewrite that leaves the directory mtime alone still invalidates.
+_config_generation = 0
+
+#: name -> ((directory, generation, file stamps), value)
+_config_cache: dict[str, tuple[tuple[object, int, int], object]] = {}
+
+
+def invalidate_config() -> None:
+    """Drop every memoised configuration table.
+
+    Writers in this package call it after they rewrite a file; a test or an
+    embedding application does the same after editing one from outside.
+    """
+    global _config_generation
+    _config_generation += 1
+    _config_cache.clear()
+
+
+def _config_stamp() -> tuple[object, int, tuple[tuple[str, int, int], ...]]:
+    """The cache key: directory, generation, and every file's stamp.
+
+    One ``scandir`` (a single syscall plus the directory's own entries) is
+    what a hit costs, and it notices an edit however it was made: an atomic
+    replace, a truncating rewrite by the CLI, or an operator's editor.  That
+    matters more than the hundred microseconds it saves to skip it, because
+    the alternative is a cache that only invalidates for writers that
+    remember to say so.
+
+    The directory is in the key so a process that switches ``CONFIG_DIR``
+    (the harness, or a test) never reads another install's tables.
+    """
+    entries: list[tuple[str, int, int]] = []
+    try:
+        with os.scandir(CONFIG_DIR) as it:
+            for entry in it:
+                try:
+                    st = entry.stat()
+                except OSError:
+                    continue
+                entries.append((entry.name, st.st_mtime_ns, st.st_size))
+    except OSError:
+        pass
+    entries.sort()
+    return CONFIG_DIR, _config_generation, tuple(entries)
+
+
+def _cached_config(name: str, build):
+    """Build one configuration table once per config-directory snapshot.
+
+    The analysis path asks the loaders below for the same tables several
+    times per diff: twenty ``load_config`` calls, eight ``load_thresholds``
+    and four ``load_rules`` on a single scan.  Every one of them re-parsed,
+    re-merged and deep-copied a file that cannot have changed, which was
+    about a third of a scan's wall clock.
+
+    The returned object is shared.  Callers must treat it as read-only, and
+    the two accessors that hand out mutable rule tables copy each dict.
+    """
+    if not config_cache_enabled():
+        return build()
+    stamp = _config_stamp()
+    hit = _config_cache.get(name)
+    if hit is not None and hit[0] == stamp:
+        return hit[1]
+    value = build()
+    _config_cache[name] = (stamp, value)
+    return value
+
+
 def load_toml(name: str, copy_result: bool = True) -> dict:
     """Load and parse a TOML file from the config directory.
 
@@ -274,6 +352,7 @@ def set_config(key: str, value: str):
             text += f'\n{key_name} = {_toml_value(value)}\n'
 
     path.write_text(text)
+    invalidate_config()
 
 def _env_bool(name: str) -> bool | None:
     """Read an explicit boolean env override, or ``None`` when absent."""
@@ -296,12 +375,16 @@ def load_config() -> dict:
     container enables it explicitly through the environment rather than
     shipping a config file; the two flags are the only settings a deployment
     must change, and both remain opt-in.
+
+    The parsed table is memoised; the copy is not.  Callers own the dict they
+    get back and some of them edit it (``config["baselines"]["ioc"] = ...``),
+    so the cached table must never be the one handed out.  The copy is still
+    an order of magnitude cheaper than re-reading and re-parsing the file.
     """
-    config = load_toml("config.toml")
+    config = copy.deepcopy(
+        _cached_config("config", lambda: load_toml("config.toml")))
     section = config.get("upstream_scan")
-    if not isinstance(section, dict):
-        section = {}
-        config["upstream_scan"] = section
+    section = dict(section) if isinstance(section, dict) else {}
     for env_name, key in (
         ("TRUSTSIGHT_UPSTREAM_SCAN_ENABLED", "enabled"),
         ("TRUSTSIGHT_UPSTREAM_SCAN_ARCHIVE_FETCH", "archive_fetch"),
@@ -309,6 +392,7 @@ def load_config() -> dict:
         value = _env_bool(env_name)
         if value is not None:
             section[key] = value
+    config["upstream_scan"] = section
     return config
 
 _shipped_rules_cache: list[dict] | None = None
@@ -374,7 +458,14 @@ def load_rules() -> list[dict]:
     which since the R/H split is every ``R`` id and no other: an ``H`` rule
     is a heuristic emitted from an analysis module, has no TOML definition,
     and intentionally keeps its own configuration paths.
+
+    The merged list is memoised; each call still returns its own rule dicts
+    because ``apply_rules`` writes the generated patterns into them.
     """
+    return [dict(rule) for rule in _cached_config("rules", _build_rules)]
+
+
+def _build_rules() -> list[dict]:
     data = load_toml("rules.toml")
     rules, restored = enforce_fatal_rules(data.get("rules", []))
     # ``rules.toml`` is written once and only ever gains rules, so a
@@ -428,7 +519,25 @@ def load_structural_rules(on_skip=None) -> list[dict]:
     dropped.  An analysis passes a callback that marks the run degraded,
     so an operator's broken rule shrinks the detection surface loudly
     instead of silently.
+
+    The validated table is memoised, so the skip callback is replayed from
+    the cached labels on every call: a degraded run still reports its own
+    skips.  Each call returns its own rule dicts.
     """
+    rules, skipped = _cached_config("structural_rules", _structural_bundle)
+    if on_skip is not None:
+        for label in skipped:
+            on_skip(label)
+    return [dict(rule) for rule in rules]
+
+
+def _structural_bundle() -> tuple[list[dict], tuple[str, ...]]:
+    skipped: list[str] = []
+    rules = _build_structural_rules(skipped.append)
+    return [dict(rule) for rule in rules], tuple(skipped)
+
+
+def _build_structural_rules(on_skip) -> list[dict]:
     raw = load_toml("rules.toml").get("structural", [])
     controls = load_config().get("rules", {})
     rules: list[dict] = []
@@ -520,4 +629,4 @@ from ._paths import (  # noqa: E402,F401
     write_default_file,
 )
 
-__all__ = ['ANY_EXECUTOR', 'CACHE_DIR', 'CATALOGUED_FETCH_ALTERNATIVES', 'CONFIG_DIR', 'DATA_DIR', 'DECOMPRESSOR', 'DEFAULT_ANTI_ANALYSIS_PROBES', 'DEFAULT_BASELINE_TAG', 'DEFAULT_CONFIG', 'DEFAULT_CONFUSABLE_CHARS', 'DEFAULT_CONFUSABLE_DOMAINS', 'DEFAULT_COVERT_EGRESS_CLIENTS', 'DEFAULT_COVERT_EGRESS_ENDPOINTS', 'DEFAULT_DOMAINS', 'DEFAULT_ECOSYSTEM_PREFIXES', 'DEFAULT_FOREIGN_PKG_MANAGERS', 'DEFAULT_FREE_HOSTING_DOMAINS', 'DEFAULT_FREE_REGISTRAR_TLDS', 'DEFAULT_H029_MIN_OBSERVATIONS', 'DEFAULT_H029_PLAIN_MIN_OBSERVATIONS', 'DEFAULT_HOSTS', 'DEFAULT_IOCS', 'DEFAULT_IOC_TAG', 'DEFAULT_KNOWN_SUFFIXES', 'DEFAULT_MANIFEST_FILENAMES', 'DEFAULT_NAMING', 'DEFAULT_NETWORK_TOOLS', 'DEFAULT_NOVELTY_WEIGHTS', 'DEFAULT_OBFUSCATION_INDICATORS', 'DEFAULT_PARSE_TIME_FETCH', 'DEFAULT_PASTE_HOSTS', 'DEFAULT_PATTERNS', 'DEFAULT_RECON_COMMANDS', 'DEFAULT_RELEASE_CHANNEL', 'DEFAULT_RELEASE_KEY', 'DEFAULT_RULES', 'DEFAULT_SECURITY_RELEVANT_FLAGS', 'DEFAULT_SECURITY_RELEVANT_LIBRARIES', 'DEFAULT_SOURCE_DIVERGENCE_ALLOW', 'DEFAULT_SOURCE_SCHEMES', 'DEFAULT_STANDARD_PORTS', 'DEFAULT_THRESHOLDS', 'DEFAULT_UPLOAD_FLAGS', 'DEFAULT_VARIANT_SUFFIXES', 'DEFAULT_WATCHLIST_TAG', 'EXEC_WRAPPER', 'GETENT_ENUMERATION_FRAGMENT', 'INT_WEIGHT_GROUPS', 'KNOWN_BOOL_KEYS', 'LEGACY_DEFAULT_REVIEW_LIMIT', 'LEGACY_IOCS_STUBS', 'LEGACY_FOREIGN_PKG_MANAGER_LISTS', 'LEGACY_NETWORK_TOOL_LISTS', 'LEGACY_NETWORK_TOOLS', 'LEGACY_RULE_PATTERNS', 'NETWORK_CLIENT', 'NETWORK_CLIENT_ALTERNATIVES', 'OTHER_FETCH_CLIENT', 'PACKAGE_MANAGER_INSTALL', 'PAYLOAD_PRODUCER', 'Path', 'SCRIPT_EXECUTOR', 'SHELL_EXECUTOR', 'SHIPPED_RULESET_VERSION', 'STRUCTURAL_MATCHES', 'STRUCTURAL_SEVERITY_CEILING', 'STRUCTURED_EXTRACTOR', '_LEGACY_REVIEW_LIMIT_RE', '_RULESET_VERSION_RE', '_SEMANTIC_FIELDS', '_STRUCTURAL_CLAMPED', '_SUBCOMMAND_OPTS', '_free_hosting_pattern', '_free_registrar_tld_pattern', '_log', '_refresh_legacy_iocs', '_refresh_legacy_recon_commands', '_refresh_legacy_review_limit', '_replace_rule_block', '_review_policy_material', '_rule_blocks', '_shipped_rule_fields', '_shipped_rules_cache', '_standard_port_pattern', '_toml_cache', '_toml_escape_str', '_toml_str_list', '_toml_value', 'clamp_structural_severity', 'config_fingerprint', 'configured_baseline_tag', 'configured_release_channel', 'configured_release_key', 'configured_ioc_tag', 'configured_watchlist_tag', 'copy', 'drifted_shipped_rules', 'enforce_fatal_rules', 'ensure_default_configs', 'ensure_dirs', 'load_config', 'load_domains', 'load_hosts', 'load_ioc_sources', 'load_iocs', 'load_naming', 'load_patterns', 'load_rules', 'load_structural_rules', 'load_thresholds', 'load_toml', 'local_ruleset_version', 'logging', 'missing_shipped_rules', 'os', 'outdated_shipped_rules', 're', 'ruleset_age_drift', 'set_config', 'shipped_fatal_rule_ids', 'shipped_rules', 'sync_rules', 'tomllib', 'write_default_file']
+__all__ = ['ANY_EXECUTOR', 'CACHE_DIR', 'CATALOGUED_FETCH_ALTERNATIVES', 'CONFIG_DIR', 'DATA_DIR', 'DECOMPRESSOR', 'DEFAULT_ANTI_ANALYSIS_PROBES', 'DEFAULT_BASELINE_TAG', 'DEFAULT_CONFIG', 'DEFAULT_CONFUSABLE_CHARS', 'DEFAULT_CONFUSABLE_DOMAINS', 'DEFAULT_COVERT_EGRESS_CLIENTS', 'DEFAULT_COVERT_EGRESS_ENDPOINTS', 'DEFAULT_DOMAINS', 'DEFAULT_ECOSYSTEM_PREFIXES', 'DEFAULT_FOREIGN_PKG_MANAGERS', 'DEFAULT_FREE_HOSTING_DOMAINS', 'DEFAULT_FREE_REGISTRAR_TLDS', 'DEFAULT_H029_MIN_OBSERVATIONS', 'DEFAULT_H029_PLAIN_MIN_OBSERVATIONS', 'DEFAULT_HOSTS', 'DEFAULT_IOCS', 'DEFAULT_IOC_TAG', 'DEFAULT_KNOWN_SUFFIXES', 'DEFAULT_MANIFEST_FILENAMES', 'DEFAULT_NAMING', 'DEFAULT_NETWORK_TOOLS', 'DEFAULT_NOVELTY_WEIGHTS', 'DEFAULT_OBFUSCATION_INDICATORS', 'DEFAULT_PARSE_TIME_FETCH', 'DEFAULT_PASTE_HOSTS', 'DEFAULT_PATTERNS', 'DEFAULT_RECON_COMMANDS', 'DEFAULT_RELEASE_CHANNEL', 'DEFAULT_RELEASE_KEY', 'DEFAULT_RULES', 'DEFAULT_SECURITY_RELEVANT_FLAGS', 'DEFAULT_SECURITY_RELEVANT_LIBRARIES', 'DEFAULT_SOURCE_DIVERGENCE_ALLOW', 'DEFAULT_SOURCE_SCHEMES', 'DEFAULT_STANDARD_PORTS', 'DEFAULT_THRESHOLDS', 'DEFAULT_UPLOAD_FLAGS', 'DEFAULT_VARIANT_SUFFIXES', 'DEFAULT_WATCHLIST_TAG', 'EXEC_WRAPPER', 'GETENT_ENUMERATION_FRAGMENT', 'INT_WEIGHT_GROUPS', 'KNOWN_BOOL_KEYS', 'LEGACY_DEFAULT_REVIEW_LIMIT', 'LEGACY_IOCS_STUBS', 'LEGACY_FOREIGN_PKG_MANAGER_LISTS', 'LEGACY_NETWORK_TOOL_LISTS', 'LEGACY_NETWORK_TOOLS', 'LEGACY_RULE_PATTERNS', 'NETWORK_CLIENT', 'NETWORK_CLIENT_ALTERNATIVES', 'OTHER_FETCH_CLIENT', 'PACKAGE_MANAGER_INSTALL', 'PAYLOAD_PRODUCER', 'Path', 'SCRIPT_EXECUTOR', 'SHELL_EXECUTOR', 'SHIPPED_RULESET_VERSION', 'STRUCTURAL_MATCHES', 'STRUCTURAL_SEVERITY_CEILING', 'STRUCTURED_EXTRACTOR', '_LEGACY_REVIEW_LIMIT_RE', '_RULESET_VERSION_RE', '_SEMANTIC_FIELDS', '_STRUCTURAL_CLAMPED', '_SUBCOMMAND_OPTS', '_build_rules', '_build_structural_rules', '_cached_config', '_config_cache', '_config_generation', '_config_stamp', '_free_hosting_pattern', '_free_registrar_tld_pattern', '_log', '_refresh_legacy_iocs', '_refresh_legacy_recon_commands', '_refresh_legacy_review_limit', '_replace_rule_block', '_review_policy_material', '_rule_blocks', '_shipped_rule_fields', '_shipped_rules_cache', '_standard_port_pattern', '_structural_bundle', '_toml_cache', '_toml_escape_str', '_toml_str_list', '_toml_value', 'clamp_structural_severity', 'config_cache_enabled', 'config_fingerprint', 'configured_baseline_tag', 'configured_release_channel', 'configured_release_key', 'configured_ioc_tag', 'configured_watchlist_tag', 'copy', 'drifted_shipped_rules', 'enforce_fatal_rules', 'ensure_default_configs', 'ensure_dirs', 'invalidate_config', 'load_config', 'load_domains', 'load_hosts', 'load_ioc_sources', 'load_iocs', 'load_naming', 'load_patterns', 'load_rules', 'load_structural_rules', 'load_thresholds', 'load_toml', 'local_ruleset_version', 'logging', 'missing_shipped_rules', 'os', 'outdated_shipped_rules', 're', 'ruleset_age_drift', 'set_config', 'shipped_fatal_rule_ids', 'shipped_rules', 'sync_rules', 'tomllib', 'write_default_file']

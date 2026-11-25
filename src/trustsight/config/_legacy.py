@@ -27,13 +27,19 @@ def _toml_cache():
     return sys.modules[__package__]._toml_cache
 
 
+def _drop(name: str) -> None:
+    """Forget one parsed table and every table derived from the files."""
+    sys.modules[__package__]._toml_cache.pop(name, None)
+    sys.modules[__package__].invalidate_config()
+
+
 def _refresh_legacy_iocs() -> bool:
     """Replace an untouched pre-H056 iocs.toml.  True when rewritten."""
     path = _config_dir() / "iocs.toml"
     try:
         if path.read_text() in LEGACY_IOCS_STUBS:
             path.write_text(DEFAULT_IOCS)
-            _toml_cache().pop("iocs.toml", None)
+            _drop("iocs.toml")
             return True
     except OSError:
         pass
@@ -67,7 +73,7 @@ def _refresh_legacy_review_limit() -> bool:
     if not changed:
         return False
     path.write_text("".join(out), encoding="utf-8")
-    _toml_cache().pop("config.toml", None)
+    _drop("config.toml")
     _log.info("repaired the legacy default_review_limit to 0 (read everything)")
     return True
 
@@ -93,7 +99,7 @@ def _refresh_legacy_recon_commands() -> bool:
     if text.count(old_line) != 1:
         return False
     path.write_text(text.replace(old_line, new_line, 1), encoding="utf-8")
-    _toml_cache().pop("patterns.toml", None)
+    _drop("patterns.toml")
     _log.info("repaired the legacy H040 getent fragment in patterns.toml")
     return True
 
@@ -127,7 +133,7 @@ def _refresh_legacy_network_tools() -> bool:
     if old_block not in text:
         return False
     path.write_text(text.replace(old_block, new_block, 1), encoding="utf-8")
-    _toml_cache().pop("patterns.toml", None)
+    _drop("patterns.toml")
     _log.info("repaired the legacy D003 network_tools list in patterns.toml")
     return True
 
@@ -162,7 +168,7 @@ def _refresh_legacy_foreign_pkg_managers() -> bool:
     if old_block not in text:
         return False
     path.write_text(text.replace(old_block, new_block, 1), encoding="utf-8")
-    _toml_cache().pop("patterns.toml", None)
+    _drop("patterns.toml")
     _log.info("repaired the legacy H035 foreign_pkg_managers list in patterns.toml")
     return True
 
@@ -186,6 +192,6 @@ def _refresh_legacy_anti_analysis_probes() -> bool:
     if text.count(old_line) != 1:
         return False
     path.write_text(text.replace(old_line, new_line, 1), encoding="utf-8")
-    _toml_cache().pop("patterns.toml", None)
+    _drop("patterns.toml")
     _log.info("repaired the legacy H067 systemd-detect-virt probe in patterns.toml")
     return True

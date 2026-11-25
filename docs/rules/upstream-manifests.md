@@ -128,6 +128,12 @@ view, so host-novelty tiers, source buckets and the G-series treat a
 manifest-introduced host exactly like a declared one. The claim is precise:
 "the build will now fetch from a host the recipe did not declare."
 
+The claim is per host, not per file: a monorepo can declare the same new
+host in a dozen manifests, and that is one fact about the build. Manifests
+under an example, integration, test, CI or documentation tree describe
+someone else's project rather than the surface this package installs, so
+they do not contribute.
+
 ### U004: Registry Redirect {#u004}
 
 - **Target:** committed manifest files

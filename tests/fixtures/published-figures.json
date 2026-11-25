@@ -99,8 +99,8 @@
     "source_urls": 195023
   },
   "tests": {
-    "count": 9738,
-    "files": 300
+    "count": 9748,
+    "files": 301
   },
   "benign_zero_rate_pct": 76.0,
   "benign_above_threshold_pct": 6.7,

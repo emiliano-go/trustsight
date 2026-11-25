@@ -126,6 +126,14 @@ def _integrity_pairs(delta, add) -> None:
             file=manifest.path, peers=", ".join(peers))
 
 
+#: Manifests under these trees belong to examples, tests or CI, not to the
+#: package's own dependency surface.
+_NON_DEPENDENCY_PATH_RE = re.compile(
+    r"(?:^|/)(?:examples?|integrations?|samples?|tests?|docs?|benchmarks?)/"
+    r"|^\.github/"
+    r"|(?:^|/)(?:uv\.lock|poetry\.lock|package-lock\.json)$")
+
+
 def upstream_manifest_findings(
     diff_text: str,
     tree_manifest,
@@ -140,6 +148,13 @@ def upstream_manifest_findings(
         jump = float(thresholds.get("u005", {}).get("jump_factor", 3.0) or 3.0)
     except (TypeError, ValueError):
         jump = 3.0
+
+    # A manifest under an example, integration, test or CI tree describes
+    # someone else's project, not the surface this package installs: a
+    # monorepo's v1.1.0 -> v1.2.0 bump rewrote seven of them and each one
+    # scored U003.  Hosts are also deduplicated: one new host is one fact
+    # about the package, however many of its files declare it.
+    emitted_hosts: set[str] = set()
 
     for manifest in delta.manifests:
         path = manifest.path
@@ -167,13 +182,16 @@ def upstream_manifest_findings(
                 file=path, added=_names(manifest.added),
                 removed=_names(manifest.removed))
 
-        if manifest.remote_added:
-            add("U003", "New Remote Source In Manifest", "MEDIUM",
-                "dependency-manifest",
-                f"{path} now fetches from new host(s): "
-                f"{_names(manifest.remote_added)}",
-                file=path, hosts=_names(manifest.remote_added),
-                added=_names(manifest.added))
+        if manifest.remote_added and not _NON_DEPENDENCY_PATH_RE.search(path):
+            fresh = tuple(sorted(set(manifest.remote_added) - emitted_hosts))
+            if fresh:
+                emitted_hosts.update(fresh)
+                add("U003", "New Remote Source In Manifest", "MEDIUM",
+                    "dependency-manifest",
+                    f"{path} now fetches from new host(s): "
+                    f"{_names(fresh)}",
+                    file=path, hosts=_names(fresh),
+                    added=_names(manifest.added))
 
         for change in manifest.origin_changes:
             add("U011", "Upstream Origin Changed", "MEDIUM",

@@ -127,8 +127,13 @@ X002_SHAPES = (
     # characters, so `c"uuu...45 of them...u"rl` was the same evasion with
     # padding. The class excludes both quotes, so `*+` cannot swallow the
     # closing one.
+    #
+    # A quoted run inside an array literal is data: the tokenizer splits
+    # `["addr2line","adler2"]` into words, and one of them,
+    # `addr2line","adler2`, satisfies the shape below even though no shell
+    # would ever run it.  List punctuation in the word is the give-away.
     ("partial-quote", re.compile(
-        r"^[A-Za-z0-9_./-]*+[\"'][^\"']*+[\"'][A-Za-z0-9_./-]")),
+        r"^(?!.*[,\[\]])[A-Za-z0-9_./-]*+[\"'][^\"']*+[\"'][A-Za-z0-9_./-]")),
     # $'\x63\x75\x72\x6c' - an ANSI-C string as the command.
     ("ansi-c", re.compile(r"^\$'")),
     # cur{l,} - brace expansion assembling the name. Not `${...}`, which the

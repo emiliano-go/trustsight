@@ -449,7 +449,11 @@ def extract_source_array_urls(diff_text: str, side: str = "after") -> set[str]:
     skip_side = "remove" if side == "after" else "add"
     urls: set[str] = set()
     in_array = False
-    for line in parse_diff_lines(split_lines(diff_text)).lines:
+    raw_lines = split_lines(diff_text)
+    from ..expansion import resolve_text, variable_table
+    table = variable_table(
+        raw_lines, frozenset({"+", " "} if side == "after" else {"-", " "}))
+    for line in parse_diff_lines(raw_lines).lines:
         if line.raw.startswith(("+++", "---", "@@")):
             continue
         if line.side == skip_side or line.raw.startswith(skip):
@@ -462,6 +466,7 @@ def extract_source_array_urls(diff_text: str, side: str = "after") -> set[str]:
             if not _SOURCE_ARRAY_START_RE.match(body):
                 continue
             in_array = True
+        body = resolve_text(body, table)
         for candidate in re.findall(r"https?://[^\s'\"\)]+", body):
             urls.add(_clean_url(candidate))
         if ")" in body:

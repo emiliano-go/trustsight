@@ -232,6 +232,22 @@ def _structural_findings_from_request(request: ScanRequest) -> list[dict]:
     verified_upstream_hashes = request.verified_upstream_hashes
     source_buckets = source_buckets or {}
     tree_manifest = normalise_tree_manifest(tree_manifest)
+    if current_text:
+        # Typed metadata sees what the shell will see: scalar and array
+        # references resolved once, line count unchanged.
+        from ...tokenizer import resolve_added_lines
+        lines = current_text.split("\n")
+        if lines and lines[-1] == "":
+            lines.pop()
+        synthetic = (
+            "--- a/PKGBUILD\n+++ b/PKGBUILD\n"
+            f"@@ -1,{len(lines)} +1,{len(lines)} @@\n"
+            + "".join("+" + line + "\n" for line in lines)
+        )
+        resolved = resolve_added_lines(synthetic)
+        current_text = "\n".join(
+            line[1:] if line.startswith("+") else line
+            for line in resolved[3:])
     findings: list[dict] = []
     # Every code-emitted finding names its location as a 1-based index into
     # the diff stream (`find_line_in_diff`, `_epoch_findings`, the IOC

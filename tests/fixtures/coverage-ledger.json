@@ -3573,14 +3573,14 @@
       "expected_strata_met": [
         "multi_client_fetch"
       ],
-      "fires": 16,
+      "fires": 14,
       "id": "H016",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 15,
+          "fires": 13,
           "strata": [
             "data_fonts",
             "dkms_kernel",
@@ -3683,27 +3683,30 @@
       ],
       "benign_state": "fire",
       "benign_strata": [
+        "lang_ecosystem",
         "source_patched"
       ],
       "disposition": null,
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 1,
+      "fires": 2,
       "id": "H019",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 1,
+          "fires": 2,
           "strata": [
+            "lang_ecosystem",
             "source_patched"
           ]
         }
       },
       "state": "measured",
       "strata": [
+        "lang_ecosystem",
         "source_patched"
       ],
       "uid": "TS-0075"
@@ -4024,14 +4027,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 1066,
+      "fires": 1067,
       "id": "H027",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 1038,
+          "fires": 1039,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -6966,14 +6969,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 484,
+      "fires": 486,
       "id": "M002",
       "pseudo": false,
       "reason": "",
       "series": "M",
       "sources": {
         "cold": {
-          "fires": 481,
+          "fires": 483,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -7046,14 +7049,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 301,
+      "fires": 300,
       "id": "M003",
       "pseudo": false,
       "reason": "",
       "series": "M",
       "sources": {
         "cold": {
-          "fires": 269,
+          "fires": 268,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -11030,7 +11033,7 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 9,
+      "fires": 11,
       "id": "X007",
       "pseudo": false,
       "reason": "",
@@ -11043,7 +11046,7 @@
           ]
         },
         "malicious": {
-          "fires": 8,
+          "fires": 10,
           "strata": []
         }
       },
@@ -11145,7 +11148,7 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 12,
+      "fires": 14,
       "id": "X011",
       "pseudo": false,
       "reason": "",
@@ -11164,7 +11167,7 @@
           ]
         },
         "malicious": {
-          "fires": 3,
+          "fires": 5,
           "strata": []
         }
       },

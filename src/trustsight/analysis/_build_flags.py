@@ -55,7 +55,8 @@ def _build_flag_findings(diff_text, config, add) -> None:
         if not match:
             continue
         variable, operator, value = match.group(1), match.group(2), match.group(3)
-        if _HARDENING_OFF_RE.search(value):
+        flat_value = value.replace('"', "").replace("'", "")
+        if _HARDENING_OFF_RE.search(flat_value):
             add("H079", "Build Flags Weakened", "HIGH", "integrity",
                 f"{variable} disables a hardening default: {value.strip()[:70]}",
                 line=i + 1, variable=variable, value=value.strip()[:70],

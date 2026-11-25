@@ -82,8 +82,25 @@ def _maintainer_key(value) -> str:
     chokepoint (:func:`trustsight.db._hash_maintainer_value`); the G rules
     must group on the same key, or a case/whitespace variant splits one
     account into two clusters (or evades one rule while tripping another).
+    Format characters are removed too: a zero-width space is not a different
+    account, and grouping on it split one takeover into two below-threshold
+    groups.
     """
-    return str(value or "").strip().lower()
+    import unicodedata
+
+    text = str(value or "").strip().lower()
+    return "".join(ch for ch in text if unicodedata.category(ch) != "Cf")
+
+
+def _endpoint_host(value) -> str:
+    """A host for cross-package joins: no port, no case, no trailing dot."""
+    from ..buckets import canonical_host
+
+    host = canonical_host(str(value or ""))
+    if host.startswith("["):
+        close = host.find("]")
+        return host[: close + 1] if close != -1 else host
+    return host.rsplit(":", 1)[0] if ":" in host else host
 
 
 def _seq(value) -> list[str]:
@@ -170,12 +187,12 @@ def shared_gained_host(records, min_packages: int = 5,
     packages meeting at a host.  Single-account sweeps are covered by H026/
     H058/G003; the cross-account join is what G001 adds.
     """
-    from ..buckets import canonical_host, classify_url
+    from ..buckets import classify_url
 
     by_host: dict[str, dict[str, dict]] = defaultdict(dict)
     for record in records:
         for host in record.get("hosts_gained", ()) or ():
-            normalised = canonical_host(str(host)) if host else ""
+            normalised = _endpoint_host(host) if host else ""
             if normalised:
                 by_host[normalised][str(record.get("package", ""))] = record
     out = []
@@ -241,6 +258,8 @@ def shared_added_literal(records, min_packages: int = 2,
             if parsed is None:
                 continue
             token, length = parsed
+            if len(token) >= 16 and all(c in "0123456789abcdefABCDEF" for c in token):
+                token = token.lower()
             if length >= min_length:
                 by_literal[token][str(record.get("package", ""))] = record
                 lengths[token] = max(lengths.get(token, 0), length)
@@ -385,13 +404,10 @@ def coordinated_adoption(records, min_members: int = 3,
             continue
         predecessor = [key for key in previous[maintainer] if key]
         if len(predecessor) == len(members) and len(set(predecessor)) == 1:
-            # Every adopted package came from the same recorded account in
-            # the same cycle: that is one handle renamed across its own
-            # packages (Deltacat -> 0xD3LT4C4T over aura-emerge, lmv and
-            # rowed), not a stranger adopting unrelated ones.  A takeover of
-            # several packages keeps their distinct predecessors, so only
-            # the rename shape stands down; H044/H026 still report the
-            # transition per package either way.
+            # A shared predecessor stands down only when the names are one
+            # family or the predecessor is the same account: that is a
+            # rename.  A stranger using one predecessor for unrelated
+            # packages is the coordinated takeover, not a rename.
             continue
         dormant_count = sum(
             1 for lm in last_modified[maintainer] if lm < dormant_cutoff)
@@ -434,7 +450,8 @@ def shared_upstream_dependency(records, min_packages: int = 2) -> list[dict]:
             else:
                 name, host = str(entry), ""
             if name:
-                by_dep[(name, host)][str(record.get("package", ""))] = record
+                key = (name, _endpoint_host(host) if host else "")
+                by_dep[key][str(record.get("package", ""))] = record
     out = []
     for (name, host), members in sorted(by_dep.items()):
         # `sonora` and `sonora-bin` are two commits of one project: the
@@ -694,7 +711,7 @@ def account_blast_radius(records, min_siblings: int = 2) -> list[dict]:
         fatal = False
         for package, record in packages.items():
             rules = set(_seq(record.get("rules")))
-            specific = rules & SHARED_PAYLOAD_RULES
+            specific = rules & (SHARED_PAYLOAD_RULES | {"X011"})
             if specific:
                 trigger_packages.append(package)
                 trigger_rules.update(specific)

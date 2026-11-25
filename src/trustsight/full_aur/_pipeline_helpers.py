@@ -558,8 +558,9 @@ def _neighborhood_elevation(records: list[dict]) -> list[dict]:
         campaign_id = campaign["campaign_id"]
         members_of[campaign_id] = {
             str(n) for n in scope.get("package_names", ()) or ()}
+        from ..analysis.correlation import _endpoint_host
         for host in scope.get("hosts", ()) or ():
-            host_to_campaign.setdefault(str(host), campaign_id)
+            host_to_campaign.setdefault(_endpoint_host(host), campaign_id)
         for target in scope.get("targets", ()) or ():
             target_to_campaign.setdefault(str(target), campaign_id)
         for signal in scope.get("signals", ()) or ():
@@ -584,8 +585,9 @@ def _neighborhood_elevation(records: list[dict]) -> list[dict]:
         gained = record.get("hosts_gained") or ()
         if isinstance(gained, str):
             gained = [gained]
+        from ..analysis.correlation import _endpoint_host
         for host in gained:
-            _elevate(host_to_campaign.get(str(host)), package,
+            _elevate(host_to_campaign.get(_endpoint_host(host)), package,
                      f"gained host {host}")
         target = str(record.get("impersonated_target", "") or "")
         if target:

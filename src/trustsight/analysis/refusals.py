@@ -132,7 +132,7 @@ _DECODER_RE = re.compile(
 # A self-read piped into an executor. The middle segment
 #: allows further pipes, so `grep … PKGBUILD | cut … | bash` is the shape.
 _SELF_READ_RE = re.compile(
-    r"\b(?:cat|grep|cut|awk|sed|base64|strings|tail|head|sort|tr)\b"
+    r"\b(?:cat|grep|cut|awk|sed|base64|strings|tail|head|sort|tr|dd|od|xxd)\b"
     r"[^;&\n]*?(?:PKGBUILD|\$?\{?(?:srcdir|startdir)\}?/PKGBUILD)"
     r"[^;&\n]*?\|[^;&\n]*?(?:bash|sh|zsh|eval)\b",
     re.IGNORECASE,
@@ -364,6 +364,14 @@ def refusal_findings(diff_text: str, config, add, current_text=None,
     for fn in _EXECUTABLE_FUNCTIONS:
         body = post.functions.get(fn, "")
         if not body:
+            continue
+        from ..tokenizer import split_lines as _split_lines
+        if any(len(re.findall(r"\$'[^']*'", line)) >= 2
+               for line in _split_lines(body)):
+            add("X030", "ANSI-C Quoted Content In Commands", "HIGH",
+                "evasion",
+                f"{fn}() assembles a command from adjacent ANSI-C tokens",
+                line=None, function=fn)
             continue
         for literal in _ansi_c_command_literals(body):
             hexes = _HEX_ESCAPE_RE.findall(literal)

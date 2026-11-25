@@ -81,7 +81,7 @@ def _installed_executables(diff_text: str, current_text=None) -> set[tuple[str, 
 _PATH_ASSIGN_RE = re.compile(r"(?<!:)\bPATH\s*=\s*([^;\n]+)", re.IGNORECASE)
 
 _PATH_BUILD_DIR_RE = re.compile(
-    r"\$\{?(?:srcdir|pkgdir|startdir|BUILDDIR)\}?/([^:\s]+)",
+    r"\$\{?(?:srcdir|pkgdir|startdir|BUILDDIR|PWD)\}?/([^:\s]+)",
     re.IGNORECASE,
 )
 

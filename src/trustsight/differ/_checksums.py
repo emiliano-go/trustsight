@@ -527,7 +527,7 @@ def detect_checksum_changes(diff_text: str) -> str:
     return "checksum_added_or_changed" if seen else "unchanged"
 
 _CHECKSUM_LINE_RE = re.compile(
-    r"(?:" + _CHECKSUM_VARS + r")\s*=",
+    r"(?:" + _CHECKSUM_VARS + r")\s*\+?=",
     re.IGNORECASE,
 )
 
@@ -551,5 +551,5 @@ def detect_checksum_removed(diff_text: str) -> bool:
     return removed and not added
 
 _CHECKSUM_ARRAY_RE = re.compile(
-    r"(?:" + _CHECKSUM_VARS + r")\s*=\s*(?:\(|['\"]?[A-Fa-f0-9])",
+    r"(?:" + _CHECKSUM_VARS + r")\s*\+?=\s*(?:\(|['\"]?[A-Fa-f0-9])",
 )

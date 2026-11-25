@@ -23,7 +23,7 @@ X001_RE = re.compile(
     # quadratic. The lookahead runs once, and the span to the pipe is
     # possessive.
     r"(?:printf|echo\s+-e|/bin/echo\s+-e)"
-    r"(?=[^\n|;&]*(?:\\x[0-9a-fA-F]{2}|\\[0-7]{3}))"
+    r"(?=[^\n|;&]*(?:\\x[0-9a-fA-F]{2}|\\[0-7]{3}|%b))"
     r"[^\n|;&]*+(?<!\\\\)\|\s*(?:" + _SHELL + r")|"
     # A hex dump reversed and piped into a shell.
     r"\b(?:xxd\s+-r|od\b(?=[^\n|;&]*\s-A)|hexdump)\b[^\n|;&]*+(?<!\\\\)\|\s*(?:" + _SHELL + r")|"

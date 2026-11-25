@@ -7,7 +7,7 @@ from ._build_constants import *  # noqa: F401,F403
 # ---------------------------------------------------------------------------
 
 _FUNCTION_DEF_RE = re.compile(
-    r"^\s*(?:function\s+)?(\w+)\s*\(\s*\)\s*\{"
+    r"^\s*(?:function\s+)?(\w+)\s*(?:\(\s*\))?\s*\{"
 )
 _FUNCTION_ASSIGN_RE = re.compile(
     r"^\s*(\w+)\s*=\s*\("

@@ -24,6 +24,7 @@ __all__ = [
     "MAX_PAYLOAD_URLS",
     "MAX_PAYLOAD_URL_LENGTH",
     "SHARED_PAYLOAD_RULES",
+    "canonical_campaign_url",
     "canonical_payload_url",
     "payload_urls",
 ]
@@ -108,6 +109,21 @@ def canonical_payload_url(url: str) -> str:
     netloc = (host_key if port in (None, default_port)
               else f"{host_key}:{port}")
     return urlunsplit((scheme, netloc, parts.path or "/", "", ""))
+
+
+def canonical_campaign_url(url: str) -> str:
+    """A campaign endpoint: scheme and non-default port do not split it."""
+    if not url or len(url) > MAX_PAYLOAD_URL_LENGTH:
+        return ""
+    try:
+        parts = urlsplit(url)
+        host = (parts.hostname or "").lower().rstrip(".")
+    except (ValueError, UnicodeError):
+        return ""
+    if not host:
+        return ""
+    host_key = f"[{host}]" if ":" in host else host
+    return urlunsplit(("", host_key, parts.path or "/", "", ""))
 
 
 def payload_urls(entries) -> list[str]:

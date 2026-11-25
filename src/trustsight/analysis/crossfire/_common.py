@@ -175,7 +175,7 @@ def _home_alias_hit(body: str):
         return shape
     return None
 
-_DECEPTIVE_SPACE_RE = re.compile(r"[^\S \t\n\r]")
+_DECEPTIVE_SPACE_RE = re.compile(r"[^\S \t\n\r]|\u180e")
 
 _WORD_VAR_RE = re.compile(r"\$(\{)?([A-Za-z_][A-Za-z0-9_]*)(?(1)\})")
 

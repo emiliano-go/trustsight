@@ -261,6 +261,49 @@ _ARRAY_ELEMENT_RE = re.compile(
     r"(?P<op>\+?=)\s*(?P<value>.*)"
 )
 
+# `printf -v name` and `read name <<< value` are assignments too.  They are
+# common obfuscation spellings: the shell stores the same value a literal
+# `name=value` would, but a reader that only knows `name=` sees a command.
+_PRINTF_V_RE = re.compile(
+    r"^\s*printf\s+-v\s+(?P<name>\w+)\s+(?P<args>.*)"
+)
+
+_READ_HERESTRING_RE = re.compile(
+    r"^\s*read\s+(?:-[A-Za-z]+\s+)*(?P<name>\w+)\s*<<<\s*(?P<value>.*)"
+)
+
+
+def _printf_v_value(raw: str) -> str | None:
+    """Return the literal value of ``printf -v name ...``, or None.
+
+    Only a static format and static arguments fold.  A command substitution
+    or an escape-decodable ``%b`` is left to the resolver's unresolved path.
+    """
+    import shlex
+
+    try:
+        parts = shlex.split(raw, posix=True)
+    except ValueError:
+        return None
+    if not parts:
+        return None
+    fmt = parts[0]
+    args = parts[1:]
+    if "$(" in fmt or "`" in fmt:
+        return None
+    if "%" not in fmt:
+        return fmt
+    if fmt == "%s":
+        return args[0] if args else ""
+    if fmt == "%b":
+        return None
+    # A compound format is still literal when it has no conversions, but
+    # guessing at %d/%02d would be a wrong value rather than a smaller one.
+    if "%" in fmt.replace("%%", ""):
+        return None
+    return fmt
+
+
 
 def _declaration_options(match: re.Match) -> str:
     return match.group("opts") or ""

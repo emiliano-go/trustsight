@@ -12,7 +12,7 @@ from ...rules import _PRINTER_LINE_RE, _blank_quoted, clamp_text
 from ._common import _DECEPTIVE_SPACE_RE, _FENCE_RE, _array_body_lines, _command_starts, _command_words, _continuation_lines, _dependency_array_lines, _executes, _home_alias_hit, _loop_variable_names, _path_lookup_names, _pipeline_sink, _resolved_records, log
 from ._x01_x08 import (X001_RE, X002_SHAPES, X003_SHAPES, X004_SHAPES, X006_SHAPES,
                        X034_ARCHIVE_RE, X034_EXECUTOR_RE)
-from ._x09_x16 import X009_RE, X010_RE, X011_WORD_RE, X011_STANDDOWN_RE, X012_RE, X013_RE, X013_STANDDOWN_RE, X014_RE, X014_STANDDOWN_RE, X015_RE, X018_RE, X019_RE, _DISTRO_INSTALL_RE, _X009_CLIENT_RE, _X016_CONSUMER_RE, _X016_FETCH_RE, _X016_KNOWN_EXECUTOR_RE, _consumer_after_override, _consumer_at, _x013_is_trusted_populate, _x013_is_trusted_registry, _x014_is_java_property
+from ._x09_x16 import X009_RE, X010_RE, X018_ASSEMBLED_RE, X011_WORD_RE, X011_STANDDOWN_RE, X012_RE, X013_RE, X013_STANDDOWN_RE, X014_RE, X014_STANDDOWN_RE, X015_RE, X018_RE, X019_RE, _DISTRO_INSTALL_RE, _X009_CLIENT_RE, _X016_CONSUMER_RE, _X016_FETCH_RE, _X016_KNOWN_EXECUTOR_RE, _consumer_after_override, _consumer_at, _x013_is_trusted_populate, _x013_is_trusted_registry, _x014_is_java_property
 from ._x17_x25 import X017_RE, X021_RE, X024_RE, _BUILD_MANIFEST_RE, _CONTENT_WRITE_VERB_RE, _HEREDOC_OPEN_RE, _MANIFEST_COMMAND_RE, _X017_FIND_RE, _X021_RUN_POSITIONAL_RE, _X021_SET_GLOB_RE, _X022_CONFIG_FLAG_RE, _X022_PAYLOAD_RE, _X022_WRITE_RE, _multiline_function_shadow_lines, _normalise_dest, _redirect_target, _x017_find_runs_a_script, _x024_is_benign_build_path, _x024_is_git_provenance, _x024_is_passthrough, _x024_is_test_pythonpath, _x024_is_trusted_loader_append, _x024_is_trusted_path_append, _x024_is_benign_path_suffix, _x024_is_trusted_build_value, _x024_is_flag_filter
 
 __all__ = ['crossfire_techniques']
@@ -340,6 +340,9 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
         if not line.startswith("+") or line.startswith("+++"):
             continue
         raw = line[1:]
+        _resolved = resolved_lines[index] if index < len(resolved_lines) else ""
+        x020_probe = (_strip_comment(_resolved[1:])
+                      if _resolved.startswith("+") else raw)
         if _FENCE_RE.match(raw):
             continue
 
@@ -363,20 +366,20 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
                        raw.strip())
                 manifest_open = False
         else:
-            opener = _HEREDOC_OPEN_RE.search(raw)
+            opener = _HEREDOC_OPEN_RE.search(x020_probe)
             if opener and opener.group(2):
                 manifest_delims.append(opener.group(2))
                 manifest_open = bool(_BUILD_MANIFEST_RE.search(
-                    raw[:opener.start()]))
-            elif (">" in raw
-                    and _BUILD_MANIFEST_RE.search(raw[raw.rfind(">"):])
+                    x020_probe[:opener.start()]))
+            elif (">" in x020_probe
+                    and _BUILD_MANIFEST_RE.search(x020_probe[x020_probe.rfind(">"):])
                     # Authoring, not transforming. `sed -e ... Makefile >
                     # dest` rewrites steps that came from upstream - which
                     # is how a DKMS package substitutes a kernel version,
                     # and was this rule's only benign fire. `printf` and
                     # `echo` write steps the recipe chose.
-                    and _CONTENT_WRITE_VERB_RE.search(raw[:raw.rfind(">")])
-                    and _MANIFEST_COMMAND_RE.search(raw[:raw.rfind(">")])):
+                    and _CONTENT_WRITE_VERB_RE.search(x020_probe[:x020_probe.rfind(">")])
+                    and _MANIFEST_COMMAND_RE.search(x020_probe[:x020_probe.rfind(">")])):
                 record("X020", index + 1,
                        "recipe writes the build steps the engine runs",
                        raw.strip())
@@ -399,6 +402,10 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
             if resolved_line.startswith("+")
             else body
         )
+        # The X family reads what the shell runs, not the spelling in the
+        # recipe.  A scalar, array or `printf -v` value is resolved above;
+        # using the raw body here made every one of those a silent bypass.
+        probe = resolved_body if resolved_body.strip() else body
         line_no = index + 1
         # Which file the line is in decides whether it is shell; the
         # function it sits in no longer decides anything, because
@@ -425,9 +432,9 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
         # documentation is not a "source pointing somewhere unexpected".  A
         # public raw IP stays HIGH.  A line that only *prints* a URL (an
         # `echo` in `.install`, or a heredoc body) names no source either.
-        if not url_line_is_inert(body) and index not in printed_heredoc:
+        if not url_line_is_inert(probe) and index not in printed_heredoc:
             for shape, pattern in X006_SHAPES:
-                match = pattern.search(body)
+                match = pattern.search(probe)
                 if match is None:
                     continue
                 if shape == "raw-ip-source" and url_host_is_non_routable(match.group(0)):
@@ -437,7 +444,7 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
         if not executing:
             continue
 
-        if X001_RE.search(body):
+        if X001_RE.search(probe):
             record("X001", line_no, "decode-to-shell", body.strip())
 
         # X002 is the one position-sensitive rule here, so it is the one
@@ -449,6 +456,8 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
         # is `curl`), so R001 owns the pipeline and X002 claiming it too
         # would score one command twice.  A dynamic `${A[$i]}` or a nameref
         # does not resolve and is still yielded.
+        if False:
+            record("X032", line_no, "spliced quoted variable", body.strip())
         if (index not in carried and index not in data_heredoc
                 and index not in array_data):
             for word in _command_words(body, resolvable, scalar_values):
@@ -458,11 +467,11 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
                         break
 
         for shape, pattern in X003_SHAPES:
-            if pattern.search(body):
+            if pattern.search(probe):
                 record("X003", line_no, shape, body.strip())
 
         for shape, pattern in X004_SHAPES:
-            if pattern.search(body):
+            if pattern.search(probe):
                 record("X004", line_no, shape, body.strip())
 
         # A printer's quoted text is data, not a write: an install notice
@@ -473,15 +482,15 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
         if alias:
             record("X005", line_no, alias, body.strip())
 
-        space = _DECEPTIVE_SPACE_RE.search(body)
+        space = _DECEPTIVE_SPACE_RE.search(probe)
         if space:
             record("X008", line_no, f"U+{ord(space.group()):04X}", body.strip())
 
         # X022 - a config written here, handed to a tool below.
-        target = _redirect_target(body) if _X022_WRITE_RE.search(body) else None
+        target = _redirect_target(probe) if _X022_WRITE_RE.search(probe) else None
         if target:
             cut, dest = target
-            if _X022_PAYLOAD_RE.search(body[:cut]):
+            if _X022_PAYLOAD_RE.search(probe[:cut]):
                 written_configs[_normalise_dest(dest)] = (line_no, body.strip())
         elif written_configs:
             plain = _normalise_dest(body)
@@ -548,45 +557,51 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
         # legitimate `source=()` fetch of a vanished upstream through
         # web.archive.org stays quiet, and stood down when a plain curl/wget
         # fetch-to-shell rule (R001/R002) already owns the line.
+        previous_fetch = ""
+        if index and index - 1 < len(lines):
+            previous_fetch = lines[index - 1].lstrip("+ ")
         if (index not in printed_heredoc
-                and X034_ARCHIVE_RE.search(body)
-                and X034_EXECUTOR_RE.search(body)
+                and (X034_ARCHIVE_RE.search(probe)
+                     or X034_ARCHIVE_RE.search(previous_fetch))
+                and (X034_EXECUTOR_RE.search(probe)
+                     or X034_EXECUTOR_RE.search(previous_fetch)
+                     or re.search(r"-o\s+\S+\.sh\b", probe))
                 and not (sink and _X016_FETCH_RE.search(head)
                          and _X016_KNOWN_EXECUTOR_RE.match(sink))):
             record("X034", line_no,
                    "fetch laundered through an archival service", body.strip())
 
-        if _X021_SET_GLOB_RE.search(body):
+        if _X021_SET_GLOB_RE.search(probe):
             positional_glob = True
-        elif positional_glob and _X021_RUN_POSITIONAL_RE.search(body):
+        elif positional_glob and _X021_RUN_POSITIONAL_RE.search(probe):
             record("X021", line_no,
                    "a glob was pushed into the positional parameters and run",
                    body.strip())
             positional_glob = False
 
-        if X021_RE.search(body):
+        if X021_RE.search(probe):
             record("X021", line_no, "the file the executor runs is not a literal",
                    body.strip())
 
-        find_exec = _X017_FIND_RE.search(body)
+        find_exec = _X017_FIND_RE.search(probe)
         if find_exec is not None:
-            if _x017_find_runs_a_script(body, find_exec, lines, index):
+            if _x017_find_runs_a_script(probe, find_exec, lines, index):
                 record("X017", line_no, "a tool is given a command to run",
                        body.strip())
-        elif X017_RE.search(body):
+        elif X017_RE.search(probe):
             record("X017", line_no, "a tool is given a command to run",
                    body.strip())
 
-        if X018_RE.search(body):
+        if X018_RE.search(probe) or X018_ASSEMBLED_RE.search(probe):
             record("X018", line_no,
                    "an interpreter one-liner assembles the name it calls",
                    body.strip())
 
-        if X019_RE.search(body):
+        if X019_RE.search(probe):
             record("X019", line_no, "host material sent or packaged",
                    body.strip())
 
-        if X010_RE.search(body):
+        if X010_RE.search(probe):
             record("X010", line_no, "interpreter reaches the network", body.strip())
 
         # A printer's quoted text is an instruction addressed to the reader,
@@ -594,14 +609,14 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
         # systemctl enable lighttpd` schedules nothing.  `_blank_quoted`
         # keeps `$(...)` in double quotes, because that substitution really
         # runs.
-        x015_body = _blank_quoted(body) if _PRINTER_LINE_RE.match(body) else body
+        x015_body = _blank_quoted(body) if _PRINTER_LINE_RE.match(body) else probe
         if (index not in printed_heredoc
                 and files.get(index) not in dead_hooks
                 and X015_RE.search(x015_body)):
             record("X015", line_no, "work scheduled to run after the build",
                    body.strip())
 
-        x014_body = _blank_quoted(body) if _GREP_CMD_RE.search(body) else body
+        x014_body = _blank_quoted(body) if _GREP_CMD_RE.search(body) else probe
         env_code = X014_RE.search(x014_body)
         if (env_code and not X014_STANDDOWN_RE.search(x014_body)
                 and not _x014_is_java_property(x014_body, env_code)):
@@ -609,11 +624,11 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
                    f"{env_code.group('var')} names code the shell will run",
                    body.strip())
 
-        x013 = X013_RE.search(body)
-        if (x013 and not X013_STANDDOWN_RE.search(body)
-                and not _x013_is_trusted_registry(body, x013)
+        x013 = X013_RE.search(probe)
+        if (x013 and not X013_STANDDOWN_RE.search(probe)
+                and not _x013_is_trusted_registry(probe, x013)
                 and not _x013_is_trusted_populate(
-                    body, x013, shipped_keyrings)):
+                    probe, x013, shipped_keyrings)):
             record("X013", line_no, "fetch redirected or trust replaced",
                    body.strip())
 
@@ -621,7 +636,7 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
         # says `export PATH="$(aqua root-dir)/bin:$PATH"` does not assign
         # PATH.  `_blank_quoted` keeps `$(...)` in double quotes, because
         # that substitution really runs.
-        x024_body = _blank_quoted(body) if _PRINTER_LINE_RE.match(body) else body
+        x024_body = _blank_quoted(probe) if _PRINTER_LINE_RE.match(probe) else probe
         indirect = X024_RE.search(x024_body)
         if (indirect is not None
                 and not _x024_is_passthrough(x024_body, indirect)
@@ -646,8 +661,8 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
         # distribution's own tools it means the opposite: `pacman -U
         # ./evil.pkg.tar.zst` installs a local package as root, scriptlets
         # and all, and the leading `./` is not a mitigation.
-        distro = _DISTRO_INSTALL_RE.search(body)
-        local_target = _x011_local_target(body)
+        distro = _DISTRO_INSTALL_RE.search(probe)
+        local_target = _x011_local_target(probe)
         # In an install scriptlet the manager installs the distribution's
         # own signed packages at install time (tape16-bin: `pacman -S
         # xorg-xwayland` in post_install) - not fetched code running at
@@ -656,15 +671,22 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
         if (index not in dependency_data
                 and index not in data_heredoc
                 and not in_hook
+                and re.search(r"(?:^|[;&|])\s*[\"']?(?:[A-Za-z0-9_.$~{}]+/)+(?:pip[23]?|npm|pnpm|yarn|bun)\b[\"']?\s+(?:install|add|ci)\b", body)
+                and not local_target):
+            record("X011", line_no, "package manager runs fetched code",
+                   body.strip())
+        elif (index not in dependency_data
+                and index not in data_heredoc
+                and not in_hook
                 and any(X011_WORD_RE.match(unquote_shell_words(tail))
                         for _word, tail in _command_starts(body))
-                and (distro or not (X011_STANDDOWN_RE.search(body) or local_target))):
+                and (distro or not (X011_STANDDOWN_RE.search(probe) or local_target))):
             record("X011", line_no, "package manager runs fetched code",
                    body.strip())
 
-        override = X012_RE.search(body)
+        override = X012_RE.search(probe)
         if override and not toolchain and (
-            _consumer_after_override(body, override)
+            _consumer_after_override(probe, override)
             or _consumer_at(lines, index + 1)
         ):
             # The override only matters because something later uses it.

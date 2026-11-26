@@ -5,7 +5,7 @@ import json
 import re
 import tomllib
 
-from . import _log
+from . import _cached_config, _log
 from ._default_rules import DEFAULT_DOMAINS
 from ._defaults_executor import (
     DEFAULT_FREE_HOSTING_DOMAINS,
@@ -166,15 +166,30 @@ def load_domains() -> dict:
     return merged
 
 def load_patterns() -> dict:
-    """Load pattern tables from patterns.toml (H035/H036/D003)."""
+    """Load pattern tables from patterns.toml (H035/H036/D003).
+
+    Memoised, and shared: the tables are read, never written.
+    """
+    return _cached_config("patterns", _build_patterns)
+
+
+def _build_patterns() -> dict:
     return load_toml("patterns.toml", copy_result=False)
 
 def load_naming() -> dict:
     """Load naming tables from naming.toml (D002/D004/H029)."""
+    return _cached_config("naming", _build_naming)
+
+
+def _build_naming() -> dict:
     return load_toml("naming.toml", copy_result=False)
 
 def load_hosts() -> dict:
     """Load host tables from hosts.toml (R047/R048/H041)."""
+    return _cached_config("hosts", _build_hosts)
+
+
+def _build_hosts() -> dict:
     return load_toml("hosts.toml", copy_result=False)
 
 def _merge_thresholds(default: dict, user: dict) -> dict:
@@ -197,7 +212,16 @@ def _merge_thresholds(default: dict, user: dict) -> dict:
 
 
 def load_thresholds() -> dict:
-    """Load thresholds from thresholds.toml, filled from the shipped table."""
+    """Load thresholds from thresholds.toml, filled from the shipped table.
+
+    Memoised.  Rebuilding it meant re-parsing the shipped ``DEFAULT_THRESHOLDS``
+    TOML and re-merging it on every call, eight times per scan; the result is
+    shared and read-only.
+    """
+    return _cached_config("thresholds", _build_thresholds)
+
+
+def _build_thresholds() -> dict:
     import tomllib
 
     from ._default_config import DEFAULT_THRESHOLDS
@@ -207,6 +231,10 @@ def load_thresholds() -> dict:
 
 def load_iocs() -> dict:
     """Load the versioned indicator list from iocs.toml (H056)."""
+    return _cached_config("iocs", _build_iocs)
+
+
+def _build_iocs() -> dict:
     return load_toml("iocs.toml", copy_result=False)
 
 def load_ioc_sources() -> list[str]:

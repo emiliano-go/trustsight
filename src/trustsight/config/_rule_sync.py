@@ -297,4 +297,7 @@ def sync_rules(update_outdated: bool = False) -> tuple[list[str], list[str]]:
 
     if added or updated or marker_changed:
         path.write_text(text)
+        from . import invalidate_config
+
+        invalidate_config()
     return added, updated

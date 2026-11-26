@@ -31,3 +31,6 @@ def write_default_file(path: Path, content: str):
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(content)
+        from . import invalidate_config
+
+        invalidate_config()

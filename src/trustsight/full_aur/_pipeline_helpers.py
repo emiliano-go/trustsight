@@ -61,7 +61,8 @@ _FLAGGED_REPORT_LIMIT = 10
 # H061 hubs at once.  Passing them to record_alerts made a routine sweep read
 # as "226 campaign cluster(s) ... 226 new alert(s)".
 _NON_ALERTING_CLUSTER_RULES = frozenset({
-    "H057", "H060", "H061", "G006", "G010", "G016"})
+    "H044", "H045", "H057", "H058", "H059", "H060", "H061",
+    "H073", "H074", "G006", "G010", "G016"})
 
 #: Burst/share clusters that fire on legitimate variant families as readily
 #: as on a typosquat campaign.  They score and alert only when one of their

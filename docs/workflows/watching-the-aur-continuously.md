@@ -187,10 +187,14 @@ no watcher state is healthy and a stale or repeatedly failing watcher is not.
 
 Alerts are written to a durable outbox before any POST. If ntfy or the feed is
 down, the document stays queued and is retried with capped exponential backoff
-on later cycles; an alert that cannot be delivered within 24 hours is parked
-and `health` reports it. This is at-least-once delivery: ntfy may show a
-duplicate after a crash between the POST and the delivery mark, while the feed
-dedupes on the persisted `webhook-id`.
+on later cycles. A retry is signed again at send time under the persisted
+`webhook-id`, so an outage longer than the feed's freshness window cannot make
+the queue head permanently undeliverable. An alert that still cannot be
+delivered within 30 days - the age the feed will accept - is parked; `health`
+reports it and the watcher pushes one low-priority "alert delivery parked"
+heartbeat a day while any remain. This is at-least-once delivery: ntfy may show
+a duplicate after a crash between the POST and the delivery mark, while the
+feed dedupes on the persisted `webhook-id`.
 
 `SIGTERM` stops the loop between packages, saves the resume state and
 checkpoints the WAL. Only one watcher may own a data directory; a second

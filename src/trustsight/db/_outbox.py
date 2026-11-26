@@ -20,10 +20,19 @@ from ._lifecycles import (
 
 #: Attempts before a document is parked.  A parked document is visible in
 #: ``full-aur health`` and the logs; it is never silently discarded.
-MAX_ATTEMPTS = 10
+#:
+#: Retry spacing caps at six hours, so this bound is only reachable after about
+#: twenty-eight days - the age bound below fires first.  It stays as a hard stop
+#: against a clock or backoff fault that would otherwise retry forever.
+MAX_ATTEMPTS = 140
 
 #: Documents older than this are parked even if attempts remain.
-MAX_AGE = timedelta(hours=24)
+#:
+#: Matches the receiver's acceptance window (thirty days).  Parking sooner
+#: loses documents the feed would still take: on 24/11/26 an hour of rejected
+#: deliveries was enough to abandon fifteen documents that were still valid,
+#: and they needed a manual re-enqueue to recover.
+MAX_AGE = timedelta(days=30)
 
 #: Retry spacing: 30s, 1m, 2m, ... capped at six hours.
 _BACKOFF_BASE_SECONDS = 30
@@ -179,6 +188,26 @@ def mark_alert_attempt(
         )
         conn.commit()
     return park
+
+
+def prune_parked_alerts(now: datetime | None = None) -> int:
+    """Delete parked rows the receiver would no longer accept.
+
+    Parking is terminal and the receiver rejects a document older than
+    ``MAX_AGE``, so once that age passes the row can never be delivered, even
+    by hand.  Without this the payloads of abandoned documents accumulate
+    forever in a database that is already measured in gigabytes.
+    """
+    moment = now or _now()
+    cutoff = _stamp(moment - MAX_AGE)
+    with get_connection() as conn:
+        cur = conn.execute(
+            "DELETE FROM alert_outbox WHERE parked_at IS NOT NULL "
+            "AND created_at < ?",
+            (cutoff,),
+        )
+        conn.commit()
+        return int(cur.rowcount or 0)
 
 
 def alert_outbox_stats(now: datetime | None = None) -> dict:

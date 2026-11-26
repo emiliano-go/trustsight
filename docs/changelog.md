@@ -6,6 +6,21 @@
 
 ### Added
 
+- **The A series has an artifact acceptance corpus.** `tests/fixtures/l9-corpus/` holds a positive and a near-miss negative per artifact rule across the manifest, upstream and release lanes, 26 real benign controls produced from built packages, and a real `makepkg` artifact with the manifest extracted from it. `scripts/artifact_manifest.py` is the reference producer, and `gate_l9_corpus` runs the corpus in the calibration gate set.
+- **The batch L9 lane takes an operator handoff.** `trustsight full-aur verify --manifest-dir DIR` reads one `<package>.json` per package, holding either the manifest array or `{manifest, declared}`. Only the read-role worker parses those bytes; the parent never does.
+
+### Fixed
+
+- **A001 and A005 read the recorded mode.** A manifest that carries the real mode (`0o4755`, `0o666`) no longer needs duplicated setuid/world-writable booleans, and a directory's execute bits are not an "unusual executable".
+- **A003 resolves sonames through `provides` and the closure.** The linked-library comparison accepts a soname named by a declared `provides` entry or by the dependency closure's `libs`, instead of comparing a soname to a package name. On the 26 benign controls it falls from 327 findings to 3, all genuinely undeclared optional links.
+- **The batch lane cannot read outside its manifest directory.** Package names are validated before a path is built, the resolved file must stay inside `--manifest-dir`, and a symlink or FIFO there is not a manifest.
+- **The producer is bounded.** It streams the archive digest, caps `.PKGINFO`/`.INSTALL` reads, refuses a decompressed archive past its byte budget, and drops member paths that escape the package root.
+- **The coverage ledger counts the real benign controls.** The A rules are now measured against the 26 benign manifests rather than their own crafted positives: A003 and A005 keep a measured benign floor, and A002/A007/A008 report `cold_only` instead of pretending a positive fixture is benign coverage.
+
+## [0.31.1] - 2026-11-26
+
+### Added
+
 - **Anergic findings have a separate observation stream.** Every scan reports its report-only findings with the rule id, weight and anergic marker, so calibration can read a denominator that is not limited to alerted packages. The watcher feed exposes them through `show anergic`, both in the feed and on package report pages.
 
 ### Fixed

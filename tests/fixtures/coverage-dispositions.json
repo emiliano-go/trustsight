@@ -5,6 +5,12 @@
     "plan": "not_measurable",
     "status": "deferred"
   },
+  "A002": {
+    "note": "Add a benign package that ships a unit its recipe does not list, then replay it.",
+    "phase": "1",
+    "plan": "add_artifact_or_manifest",
+    "status": "deferred"
+  },
   "A004": {
     "note": "Fire-based ledger cannot record an abstention; needs a reachability signal.",
     "phase": "3",
@@ -15,6 +21,18 @@
     "note": "Fire-based ledger cannot record an abstention; needs a reachability signal.",
     "phase": "3",
     "plan": "not_measurable",
+    "status": "deferred"
+  },
+  "A007": {
+    "note": "Add a benign package that ships a polkit action or kernel module and declares it.",
+    "phase": "1",
+    "plan": "add_artifact_or_manifest",
+    "status": "deferred"
+  },
+  "A008": {
+    "note": "Add a benign package that ships an eBPF object (for example the bcc tools), then replay it.",
+    "phase": "1",
+    "plan": "add_artifact_or_manifest",
     "status": "deferred"
   },
   "A009": {

@@ -1,0 +1,417 @@
+{
+  "benign/7zip.json": {
+    "allow": [],
+    "kind": "benign",
+    "lane": "manifest",
+    "note": "Official build, 17 entries; only the known census rules fire."
+  },
+  "benign/bash.json": {
+    "allow": [],
+    "kind": "benign",
+    "lane": "manifest",
+    "note": "Official build, 267 entries; only the known census rules fire."
+  },
+  "benign/coreutils.json": {
+    "allow": [],
+    "kind": "benign",
+    "lane": "manifest",
+    "note": "Official build, 398 entries; only the known census rules fire."
+  },
+  "benign/curl.json": {
+    "allow": [],
+    "kind": "benign",
+    "lane": "manifest",
+    "note": "Official build, 567 entries; only the known census rules fire."
+  },
+  "benign/file.json": {
+    "allow": [],
+    "kind": "benign",
+    "lane": "manifest",
+    "note": "Official build, 23 entries; only the known census rules fire."
+  },
+  "benign/git.json": {
+    "allow": [
+      "A003",
+      "A005"
+    ],
+    "kind": "benign",
+    "lane": "manifest",
+    "note": "Official build, 600 entries; only the known census rules fire."
+  },
+  "benign/gzip.json": {
+    "allow": [],
+    "kind": "benign",
+    "lane": "manifest",
+    "note": "Official build, 31 entries; only the known census rules fire."
+  },
+  "benign/jq.json": {
+    "allow": [],
+    "kind": "benign",
+    "lane": "manifest",
+    "note": "Official build, 23 entries; only the known census rules fire."
+  },
+  "benign/less.json": {
+    "allow": [],
+    "kind": "benign",
+    "lane": "manifest",
+    "note": "Official build, 16 entries; only the known census rules fire."
+  },
+  "benign/libjpeg-turbo.json": {
+    "allow": [],
+    "kind": "benign",
+    "lane": "manifest",
+    "note": "Official build, 52 entries; only the known census rules fire."
+  },
+  "benign/libpng.json": {
+    "allow": [],
+    "kind": "benign",
+    "lane": "manifest",
+    "note": "Official build, 26 entries; only the known census rules fire."
+  },
+  "benign/man-db.json": {
+    "allow": [],
+    "kind": "benign",
+    "lane": "manifest",
+    "note": "Official build, 533 entries; only the known census rules fire."
+  },
+  "benign/nano.json": {
+    "allow": [],
+    "kind": "benign",
+    "lane": "manifest",
+    "note": "Official build, 188 entries; only the known census rules fire."
+  },
+  "benign/noto-fonts.json": {
+    "allow": [],
+    "kind": "benign",
+    "lane": "manifest",
+    "note": "Official build, 635 entries; only the known census rules fire."
+  },
+  "benign/python-pip.json": {
+    "allow": [],
+    "kind": "benign",
+    "lane": "manifest",
+    "note": "Official build, 1466 entries; only the known census rules fire."
+  },
+  "benign/python-setuptools.json": {
+    "allow": [],
+    "kind": "benign",
+    "lane": "manifest",
+    "note": "Official build, 466 entries; only the known census rules fire."
+  },
+  "benign/python.json": {
+    "allow": [
+      "A003"
+    ],
+    "kind": "benign",
+    "lane": "manifest",
+    "note": "Official build, 3185 entries; only the known census rules fire."
+  },
+  "benign/rsync.json": {
+    "allow": [
+      "A003"
+    ],
+    "kind": "benign",
+    "lane": "manifest",
+    "note": "Official build, 49 entries; only the known census rules fire."
+  },
+  "benign/tar.json": {
+    "allow": [],
+    "kind": "benign",
+    "lane": "manifest",
+    "note": "Official build, 135 entries; only the known census rules fire."
+  },
+  "benign/tmux.json": {
+    "allow": [],
+    "kind": "benign",
+    "lane": "manifest",
+    "note": "Official build, 10 entries; only the known census rules fire."
+  },
+  "benign/vim.json": {
+    "allow": [],
+    "kind": "benign",
+    "lane": "manifest",
+    "note": "Official build, 161 entries; only the known census rules fire."
+  },
+  "benign/wget.json": {
+    "allow": [],
+    "kind": "benign",
+    "lane": "manifest",
+    "note": "Official build, 176 entries; only the known census rules fire."
+  },
+  "benign/which.json": {
+    "allow": [],
+    "kind": "benign",
+    "lane": "manifest",
+    "note": "Official build, 9 entries; only the known census rules fire."
+  },
+  "benign/xz.json": {
+    "allow": [],
+    "kind": "benign",
+    "lane": "manifest",
+    "note": "Official build, 308 entries; only the known census rules fire."
+  },
+  "benign/zsh.json": {
+    "allow": [
+      "A005"
+    ],
+    "kind": "benign",
+    "lane": "manifest",
+    "note": "Official build, 1215 entries; only the known census rules fire."
+  },
+  "benign/zstd.json": {
+    "allow": [],
+    "kind": "benign",
+    "lane": "manifest",
+    "note": "Official build, 32 entries; only the known census rules fire."
+  },
+  "built/l9-clinic/manifest.json": {
+    "expect": [
+      "A001",
+      "A002",
+      "A005",
+      "A007",
+      "A008",
+      "A011",
+      "A013"
+    ],
+    "kind": "positive",
+    "lane": "manifest",
+    "note": "Real makepkg build: setuid mode, undeclared unit, world-writable file, sudoers, .bpf.o, broad hook, udev RUN+=."
+  },
+  "rule-fixtures/a001-negative.json": {
+    "expect": [],
+    "kind": "negative",
+    "lane": "manifest",
+    "note": "Same file with the setuid bit absent."
+  },
+  "rule-fixtures/a001-positive.json": {
+    "expect": [
+      "A001"
+    ],
+    "kind": "positive",
+    "lane": "manifest",
+    "note": "Setuid bit recorded in the mode, the documented contract."
+  },
+  "rule-fixtures/a002-negative.json": {
+    "expect": [],
+    "kind": "negative",
+    "lane": "manifest",
+    "note": "The same unit, declared."
+  },
+  "rule-fixtures/a002-positive.json": {
+    "expect": [
+      "A002"
+    ],
+    "kind": "positive",
+    "lane": "manifest",
+    "note": "A shipped unit the declared surface does not name."
+  },
+  "rule-fixtures/a003-negative.json": {
+    "expect": [],
+    "kind": "negative",
+    "lane": "manifest",
+    "note": "The same link, with the provider named in depends."
+  },
+  "rule-fixtures/a003-positive.json": {
+    "expect": [
+      "A003"
+    ],
+    "kind": "positive",
+    "lane": "manifest",
+    "note": "A linked library whose stem is not in depends."
+  },
+  "rule-fixtures/a003-provides-negative.json": {
+    "expect": [],
+    "kind": "negative",
+    "lane": "manifest",
+    "note": "The linked soname is supplied by a declared provides entry."
+  },
+  "rule-fixtures/a004-negative.json": {
+    "expect": [],
+    "kind": "negative",
+    "lane": "manifest",
+    "note": "The built .INSTALL matches the declaration."
+  },
+  "rule-fixtures/a004-positive.json": {
+    "expect": [
+      "A004"
+    ],
+    "kind": "positive",
+    "lane": "manifest",
+    "note": "The built .INSTALL differs from the recipe's install= file."
+  },
+  "rule-fixtures/a005-negative.json": {
+    "expect": [],
+    "kind": "negative",
+    "lane": "manifest",
+    "note": "The same file with no world-write bit."
+  },
+  "rule-fixtures/a005-positive.json": {
+    "expect": [
+      "A005"
+    ],
+    "kind": "positive",
+    "lane": "manifest",
+    "note": "A world-writable shipped file, recorded only in the mode."
+  },
+  "rule-fixtures/a006-negative.json": {
+    "expect": [],
+    "kind": "negative",
+    "lane": "manifest",
+    "note": "The same binary with no capabilities."
+  },
+  "rule-fixtures/a006-positive.json": {
+    "expect": [
+      "A006"
+    ],
+    "kind": "positive",
+    "lane": "manifest",
+    "note": "A file capability recorded on the shipped binary."
+  },
+  "rule-fixtures/a007-negative.json": {
+    "expect": [],
+    "kind": "negative",
+    "lane": "manifest",
+    "note": "An ordinary /etc configuration file."
+  },
+  "rule-fixtures/a007-positive.json": {
+    "expect": [
+      "A007"
+    ],
+    "kind": "positive",
+    "lane": "manifest",
+    "note": "A sudoers drop-in inside the package."
+  },
+  "rule-fixtures/a008-negative.json": {
+    "expect": [],
+    "kind": "negative",
+    "lane": "manifest",
+    "note": "An ordinary object file with the same name stem."
+  },
+  "rule-fixtures/a008-positive.json": {
+    "expect": [
+      "A008"
+    ],
+    "kind": "positive",
+    "lane": "manifest",
+    "note": "An eBPF object shipped in the package."
+  },
+  "rule-fixtures/a009-negative.json": {
+    "expect": [],
+    "kind": "negative",
+    "lane": "upstream",
+    "note": "A source file, not an ELF."
+  },
+  "rule-fixtures/a009-positive.json": {
+    "expect": [
+      "A009"
+    ],
+    "kind": "positive",
+    "lane": "upstream",
+    "note": "An ELF binary inside a declared source archive."
+  },
+  "rule-fixtures/a010-negative.json": {
+    "expect": [],
+    "kind": "negative",
+    "lane": "upstream",
+    "note": "The same entry without the setuid bit."
+  },
+  "rule-fixtures/a010-positive.json": {
+    "expect": [
+      "A010"
+    ],
+    "kind": "positive",
+    "lane": "upstream",
+    "note": "A setuid entry inside a declared source archive."
+  },
+  "rule-fixtures/a011-negative.json": {
+    "expect": [],
+    "kind": "negative",
+    "lane": "manifest",
+    "note": "A hook scoped to one operation."
+  },
+  "rule-fixtures/a011-positive.json": {
+    "expect": [
+      "A011"
+    ],
+    "kind": "positive",
+    "lane": "manifest",
+    "note": "A hook whose trigger covers every transaction."
+  },
+  "rule-fixtures/a012-negative.json": {
+    "expect": [],
+    "kind": "negative",
+    "lane": "manifest",
+    "note": "A shipped hook that runs a system helper."
+  },
+  "rule-fixtures/a012-positive.json": {
+    "expect": [
+      "A012"
+    ],
+    "kind": "positive",
+    "lane": "manifest",
+    "note": "A shipped hook that fetches."
+  },
+  "rule-fixtures/a013-negative.json": {
+    "expect": [],
+    "kind": "negative",
+    "lane": "manifest",
+    "note": "A udev rule that only creates a symlink."
+  },
+  "rule-fixtures/a013-positive.json": {
+    "expect": [
+      "A013"
+    ],
+    "kind": "positive",
+    "lane": "manifest",
+    "note": "A udev rule that runs a program."
+  },
+  "rule-fixtures/a014-negative.json": {
+    "expect": [
+      "A009"
+    ],
+    "kind": "negative",
+    "lane": "upstream",
+    "note": "The same ELF with an $ORIGIN-relative runpath."
+  },
+  "rule-fixtures/a014-positive.json": {
+    "expect": [
+      "A009",
+      "A014"
+    ],
+    "kind": "positive",
+    "lane": "upstream",
+    "note": "An ELF with a /tmp runpath (A009 co-fires: it is an ELF)."
+  },
+  "rule-fixtures/a015-negative.json": {
+    "expect": [
+      "A009"
+    ],
+    "kind": "negative",
+    "lane": "upstream",
+    "note": "The same ELF, not packed."
+  },
+  "rule-fixtures/a015-positive.json": {
+    "expect": [
+      "A009",
+      "A015"
+    ],
+    "kind": "positive",
+    "lane": "upstream",
+    "note": "A packed ELF (A009 co-fires: it is an ELF)."
+  },
+  "rule-fixtures/a016-negative.json": {
+    "expect": [],
+    "kind": "negative",
+    "lane": "release",
+    "note": "The asset differs only by a generated file."
+  },
+  "rule-fixtures/a016-positive.json": {
+    "expect": [
+      "A016"
+    ],
+    "kind": "positive",
+    "lane": "release",
+    "note": "The release asset carries a build input the tag tree lacks."
+  }
+}

@@ -17,8 +17,8 @@ claim of complete coverage.
 | A006 | File Capabilities In Artifact | artifact |  | artifact |  | HIGH | 25 | CWE-250 |  |
 | A007 | Privileged Surface In Artifact | artifact |  | artifact |  | MEDIUM | 15 | CWE-506 |  |
 | A008 | eBPF Artifact In Package | artifact |  | artifact |  | HIGH | 25 | CWE-506 |  |
-| A009 | Executable Binary In Source Archive | artifact |  | artifact |  | HIGH | 25 | CWE-506 |  |
-| A010 | Setuid File In Source Archive | artifact |  | artifact |  | HIGH | 25 | CWE-250 |  |
+| A009 | Executable Binary In Source Archive | artifact |  | artifact |  | HIGH | 0 | CWE-506 | calibration |
+| A010 | Setuid File In Source Archive | artifact |  | artifact |  | HIGH | 0 | CWE-250 | calibration |
 | A011 | Hook Runs On Every Transaction | artifact |  | artifact |  | MEDIUM | 0 (anergic) | CWE-506 | calibration |
 | A012 | Shipped Hook Or Udev Fetches Or Runs A User Path | artifact |  | artifact |  | HIGH | 0 (anergic) | CWE-506 | calibration |
 | A013 | Udev Rule Runs A Program | artifact |  | artifact |  | MEDIUM | 0 (anergic) | CWE-506 | calibration |
@@ -82,7 +82,7 @@ claim of complete coverage.
 | G012 | Shared Payload Signal | correlation |  | correlation | L8 | HIGH | 25 | CWE-506 |  |
 | G013 | Shared Fetch Target | correlation |  | correlation | L8 | HIGH | 25 | CWE-506 |  |
 | G014 | Shared Adoption Window | correlation |  | correlation | L8 | HIGH | 25 | CWE-506 |  |
-| G015 | Sleeper Adoption Campaign | correlation |  | correlation | L8 | MEDIUM | 15 | CWE-506 |  |
+| G015 | Sleeper Adoption Campaign | correlation |  | correlation | L8 | MEDIUM | 0 | CWE-506 | calibration |
 | G016 | Account Blast Radius | correlation |  | correlation | L8 | INFO | 0 (anergic) | CWE-506 | calibration |
 | H001 | Checksum Disabled | integrity |  | integrity | L5 | HIGH | 25 | CWE-354 |  |
 | H002 | Checksum Emptied | integrity |  | integrity | L5 | HIGH | 25 | CWE-354 |  |
@@ -92,11 +92,11 @@ claim of complete coverage.
 | H006 | New Make/Opt/Check Dependency |  |  | naming-and-dependency | L5 | None | 0 | CWE-427 |  |
 | H007 | Symlink Redirect |  |  | staging-and-recon | L5 | None | 0 | CWE-506 |  |
 | H008 | Suspicious Environment Variable |  |  | integrity | L5 | None | 0 | CWE-354 |  |
-| H009 | Network connection attempt |  |  | fetch-and-execution | L5 | None | 0 | CWE-94 |  |
-| H010 | Suspicious file write |  |  | staging-and-recon | L5 | None | 0 | CWE-506 |  |
-| H011 | Sensitive binary execution |  |  | fetch-and-execution | L5 | None | 0 | CWE-94 |  |
-| H012 | Strace detection attempt (TracerPid check) |  |  | deception | L5 | None | 0 | CWE-506 |  |
-| H013 | Strace log truncated (possible flood evasion) |  |  | deception | L5 | None | 0 | CWE-506 |  |
+| H009 | Network connection attempt |  |  | fetch-and-execution | L5 | None | 0 | CWE-94 | calibration |
+| H010 | Suspicious file write |  |  | staging-and-recon | L5 | None | 0 | CWE-506 | calibration |
+| H011 | Sensitive binary execution |  |  | fetch-and-execution | L5 | None | 0 | CWE-94 | calibration |
+| H012 | Strace detection attempt (TracerPid check) |  |  | deception | L5 | None | 0 | CWE-506 | calibration |
+| H013 | Strace log truncated (possible flood evasion) |  |  | deception | L5 | None | 0 | CWE-506 | calibration |
 | H014 | Eval or Exec Usage |  |  | obfuscation | L5 | None | 0 | CWE-506 |  |
 | H015 | Critical Build Function Modified | build |  | fetch-and-execution | L5 | INFO | 0 | CWE-94 |  |
 | H016 | Hidden Network Fetch In Build | network |  | fetch-and-execution | L5 | HIGH | 25 | CWE-94 |  |
@@ -254,11 +254,11 @@ claim of complete coverage.
 | T005 | Scheme Downgrade | temporal |  | temporal | L1 | MEDIUM | 15 | CWE-506 |  |
 | T006 | Metadata-Git Divergence | temporal |  | temporal | L6 | MEDIUM | 15 | CWE-506 |  |
 | T007 | Packager Not In History | temporal |  | temporal | L6 | INFO | 0 | CWE-506 |  |
-| T008 | Delayed Payload Adoption | temporal |  | temporal | L6 | INFO | 0 | CWE-506 |  |
-| T009 | High-Value Dormant Takeover | temporal |  | temporal | L6 | INFO | 0 | CWE-506 |  |
-| T010 | Dependency Redirection | dependency |  | naming-and-dependency | L6 | INFO | 0 | CWE-427 |  |
-| T011 | Package Reappearance | temporal |  | temporal | L6 | INFO | 0 | CWE-506 |  |
-| T012 | Trust Erosion Sequence | temporal |  | temporal | L6 | INFO | 0 | CWE-506 |  |
+| T008 | Delayed Payload Adoption | temporal |  | temporal | L6 | INFO | 0 | CWE-506 | calibration |
+| T009 | High-Value Dormant Takeover | temporal |  | temporal | L6 | INFO | 0 | CWE-506 | calibration |
+| T010 | Dependency Redirection | dependency |  | naming-and-dependency | L6 | INFO | 0 | CWE-427 | calibration |
+| T011 | Package Reappearance | temporal |  | temporal | L6 | INFO | 0 | CWE-506 | calibration |
+| T012 | Trust Erosion Sequence | temporal |  | temporal | L6 | INFO | 0 | CWE-506 | calibration |
 | U001 | Manifest Added Or Removed | dependency-manifest |  | upstream-manifests | L3 | INFO | 0 | CWE-494 |  |
 | U002 | Upstream Dependency Delta | dependency-manifest |  | upstream-manifests | L3 | INFO | 0 | CWE-494 |  |
 | U003 | New Remote Source In Manifest | dependency-manifest |  | upstream-manifests | L3 | MEDIUM | 15 | CWE-494 |  |
@@ -271,9 +271,9 @@ claim of complete coverage.
 | U010 | Unauditable Upstream | source |  | upstream-release | L3 | MEDIUM | 15 | CWE-494 |  |
 | U011 | Upstream Origin Changed | dependency-manifest |  | upstream-manifests | L3 | MEDIUM | 15 | CWE-494 |  |
 | U012 | Lockfile Integrity Weakened | dependency-manifest |  | upstream-manifests | L3 | INFO | 0 | CWE-494 |  |
-| U013 | CI Exfil Shape (Local) | upstream-ci |  | upstream-release | L3 | MEDIUM | 15 | CWE-494 |  |
-| U014 | Git-History Credential Sweep (Local) | upstream-ci |  | upstream-release | L3 | MEDIUM | 15 | CWE-494 |  |
-| U015 | Federated Upstream Manifest Delta | dependency-manifest |  | upstream-manifests | L3 | INFO | 0 | CWE-494 |  |
+| U013 | CI Exfil Shape (Local) | upstream-ci |  | upstream-release | L3 | MEDIUM | 0 | CWE-494 | calibration |
+| U014 | Git-History Credential Sweep (Local) | upstream-ci |  | upstream-release | L3 | MEDIUM | 0 | CWE-494 | calibration |
+| U015 | Federated Upstream Manifest Delta | dependency-manifest |  | upstream-manifests | L3 | INFO | 0 | CWE-494 | calibration |
 | W001 | Executes Code This Analysis Did Not Read |  |  | unverifiable | L2 | None | 0 | CWE-693 | boundary |
 | W002 | Build Resolves Dependencies From A Registry |  | registry | unverifiable | L2 | None | 0 | CWE-693 | boundary |
 | W003 | Applies A Patch This Analysis Did Not Read |  |  | unverifiable | L2 | None | 0 | CWE-693 | boundary |

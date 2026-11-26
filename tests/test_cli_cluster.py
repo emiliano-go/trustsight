@@ -389,6 +389,66 @@ def test_full_aur_verify_reports_l9_unavailable_by_default():
     assert body["results"][0]["status"] == "l9_unavailable"
 
 
+def test_full_aur_verify_hands_operator_manifests_to_the_lane(
+        tmp_path, monkeypatch):
+    """--manifest-dir is the batch lane's whole handoff, named <package>.json."""
+    (tmp_path / "demo.json").write_text('{"manifest": []}')
+    seen = {}
+
+    def fake_verify(self, name, **kwargs):
+        seen[name] = kwargs.get("manifest_text")
+        return {"package": name, "status": "l9_analyzed", "findings": []}
+
+    monkeypatch.setattr("trustsight.api.TrustSight.verify_build", fake_verify)
+    result = CliRunner().invoke(
+        app, ["full-aur", "verify", "--package", "demo",
+              "--manifest-dir", str(tmp_path), "--json"])
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.stdout)["results"][0]["status"] == "l9_analyzed"
+    assert seen["demo"] == '{"manifest": []}'
+
+
+def test_full_aur_verify_rejects_a_missing_manifest_dir(tmp_path):
+    result = CliRunner().invoke(
+        app, ["full-aur", "verify", "--package", "demo",
+              "--manifest-dir", str(tmp_path / "missing")])
+    assert result.exit_code != 0
+
+
+def test_full_aur_verify_validates_the_name_before_reading(tmp_path):
+    """A path-shaped name must fail as a name, before any file is opened."""
+    (tmp_path / "escape.json").write_bytes(b"\xff\xfe")
+    manifests = tmp_path / "m"
+    manifests.mkdir()
+    result = CliRunner().invoke(
+        app, ["full-aur", "verify", "--package", "../escape",
+              "--manifest-dir", str(manifests)])
+    assert result.exit_code != 0
+    assert "package name" in str(result.exception)
+    assert "could not be read" not in str(result.exception)
+
+
+def test_full_aur_verify_ignores_a_symlink_outside_the_directory(
+        tmp_path, monkeypatch):
+    outside = tmp_path / "outside.json"
+    outside.write_text('{"manifest": []}')
+    manifests = tmp_path / "m"
+    manifests.mkdir()
+    (manifests / "demo.json").symlink_to(outside)
+    seen = {}
+
+    def fake_verify(self, name, **kwargs):
+        seen[name] = kwargs.get("manifest_text")
+        return {"package": name, "status": "l9_unavailable", "findings": []}
+
+    monkeypatch.setattr("trustsight.api.TrustSight.verify_build", fake_verify)
+    result = CliRunner().invoke(
+        app, ["full-aur", "verify", "--package", "demo",
+              "--manifest-dir", str(manifests), "--json"])
+    assert result.exit_code == 0, result.output
+    assert seen["demo"] is None
+
+
 def test_full_aur_watch_invokes_the_loop(monkeypatch):
     # `full-aur` refuses to start when TRUSTSIGHT_OFFLINE is set, which the
     # suite sets for every test. What is asserted here is the argument

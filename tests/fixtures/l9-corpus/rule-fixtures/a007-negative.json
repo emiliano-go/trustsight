@@ -1,0 +1,9 @@
+{
+  "declared": {},
+  "manifest": [
+    {
+      "mode": 420,
+      "path": "/etc/l9.conf"
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+pkgname=l9-clinic
+pkgver=1.0
+pkgrel=1
+pkgdesc="L9 lane acceptance fixture: real artifact, every artifact shape"
+arch=('any')
+url="https://example.invalid/l9-clinic"
+license=('MIT')
+options=('!strip')
+package() {
+  install -Dm4755 /dev/null "$pkgdir/usr/bin/l9-suid"
+  install -Dm644 /dev/null "$pkgdir/usr/lib/systemd/system/l9-clinic.service"
+  install -Dm666 /dev/null "$pkgdir/etc/skel/l9-world-writable"
+  install -Dm644 /dev/null "$pkgdir/usr/share/libalpm/hooks/00-l9-clinic.hook"
+  printf '[Trigger]\nOperation = *\nExec = /usr/bin/true\n' > "$pkgdir/usr/share/libalpm/hooks/00-l9-clinic.hook"
+  install -Dm644 /dev/null "$pkgdir/usr/lib/udev/rules.d/99-l9-clinic.rules"
+  printf 'ACTION=="add", RUN+="/usr/bin/true"\n' > "$pkgdir/usr/lib/udev/rules.d/99-l9-clinic.rules"
+  install -Dm644 /dev/null "$pkgdir/usr/lib/l9/tracker.bpf.o"
+  install -Dm440 /dev/null "$pkgdir/etc/sudoers.d/99-l9-clinic"
+  install -Dm755 /dev/null "$pkgdir/opt/l9-clinic/helper"
+}

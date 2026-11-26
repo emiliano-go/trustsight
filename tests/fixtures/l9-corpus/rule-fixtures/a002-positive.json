@@ -1,0 +1,11 @@
+{
+  "declared": {
+    "units": []
+  },
+  "manifest": [
+    {
+      "mode": 420,
+      "path": "/usr/lib/systemd/system/l9.service"
+    }
+  ]
+}

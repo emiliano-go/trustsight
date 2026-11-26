@@ -1,0 +1,9 @@
+{
+  "declared": {},
+  "manifest": [
+    {
+      "mode": 420,
+      "path": "/etc/skel/l9-note"
+    }
+  ]
+}

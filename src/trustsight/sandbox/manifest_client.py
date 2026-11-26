@@ -332,6 +332,8 @@ def _normalise_declared(declared) -> tuple[dict, bool]:
     text_total = 0
     for key, maximum in (
             ("depends", MAX_DECLARED_DEPENDS),
+            ("provides", MAX_DECLARED_DEPENDS),
+            ("libs", MAX_DECLARED_DEPENDS),
             ("units", MAX_DECLARED_UNITS)):
         values = declared.get(key)
         if isinstance(values, str):

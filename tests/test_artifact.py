@@ -13,6 +13,13 @@ def test_a001_fires_for_an_unjustified_setuid_file():
     assert "A001" not in _ids(manifest, {"mode_intent": "documented setuid"})
 
 
+def test_a001_derives_the_bit_from_the_recorded_mode():
+    """The manifest contract records modes; the flag is an override."""
+    assert "A001" in _ids([{"path": "/usr/bin/suidtool", "mode": 0o4755}])
+    assert "A001" in _ids([{"path": "/usr/bin/sgidtool", "mode": 0o2755}])
+    assert "A001" not in _ids([{"path": "/usr/bin/plain", "mode": 0o755}])
+
+
 def test_a002_fires_for_an_undeclared_unit():
     manifest = [{"path": "/usr/lib/systemd/system/evil.service"}]
     assert "A002" in _ids(manifest)
@@ -25,6 +32,27 @@ def test_a002_fires_for_an_undeclared_unit():
 def test_a003_fires_for_a_library_outside_depends():
     manifest = [{"path": "/usr/bin/app", "links": ["libz.so.1", "libevil.so.2"]}]
     assert "A003" in _ids(manifest, {"depends": ["zlib"]})
+
+
+def test_a003_accepts_a_soname_named_in_provides():
+    manifest = [{"path": "/usr/bin/app",
+                 "elf": {"needed": ["libz.so.1"]}}]
+    declared = {"depends": ["glibc"], "provides": ["libz.so=1-64"]}
+    assert "A003" not in _ids(manifest, declared)
+
+
+def test_a003_still_fires_when_neither_depends_nor_provides_covers_it():
+    manifest = [{"path": "/usr/bin/app",
+                 "elf": {"needed": ["libevil.so.2"]}}]
+    declared = {"depends": ["glibc"], "provides": ["libz.so=1-64"]}
+    assert "A003" in _ids(manifest, declared)
+
+
+def test_a003_accepts_the_closure_library_list():
+    manifest = [{"path": "/usr/bin/app",
+                 "elf": {"needed": ["libc.so.6", "libz.so.1"]}}]
+    declared = {"depends": ["glibc"], "libs": ["libc.so.6", "libz.so.1"]}
+    assert "A003" not in _ids(manifest, declared)
 
 
 def test_a004_fires_when_the_built_install_differs():
@@ -42,6 +70,13 @@ def test_a005_fires_for_world_writable_and_unusual_exec():
     ]
     ids = _ids(manifest)
     assert "A005" in ids
+
+
+def test_a005_derives_world_writable_from_the_recorded_mode():
+    assert "A005" in _ids([{"path": "/etc/skel/note", "mode": 0o666}])
+    # A world-writable directory is a mount/permission choice, not a file.
+    assert "A005" not in _ids([{"path": "/var/tmp/pkg/", "mode": 0o777}])
+    assert "A005" not in _ids([{"path": "/etc/skel/note", "mode": 0o644}])
 
 
 def test_executable_in_a_usual_path_is_not_a005():

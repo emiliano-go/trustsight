@@ -1,0 +1,11 @@
+{
+  "artifacts": [
+    {
+      "elf": true,
+      "elf_info": {
+        "packed": false
+      },
+      "path": "vendor/l9-tool"
+    }
+  ]
+}

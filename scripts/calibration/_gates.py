@@ -12,7 +12,7 @@ from scripts.calibration._core import CLASS_C_RULES, CLASS_D_RULES, FIXTURES, Ga
 from scripts.calibration._ledger import (DISPOSITION_PLANS, DISPOSITION_STATUSES,
                                          unmet_expectations)
 
-__all__ = ['gate_benign_fire_rates', 'gate_cluster_rate_below_members', 'gate_coverage_expectations', 'gate_d_series_warm', 'gate_h035_position', 'gate_homograph_single_script', 'gate_ioc_exact_match', 'gate_known_gaps_unchanged', 'gate_malicious_recall', 'gate_manifest_benign_corpus', 'gate_meta_escalation_below_cap', 'gate_published_figures', 'gate_s_series_fixture_pairs', 'gate_s_series_last_fired_coverage', 'gate_score_not_size', 'gate_separation', 'gate_stateful_rules_stay_out', 'gate_weight_zero_annotations', 'gate_x_series_rate_stability']
+__all__ = ['gate_benign_fire_rates', 'gate_cluster_rate_below_members', 'gate_coverage_expectations', 'gate_d_series_warm', 'gate_h035_position', 'gate_homograph_single_script', 'gate_ioc_exact_match', 'gate_known_gaps_unchanged', 'gate_l9_corpus', 'gate_malicious_recall', 'gate_manifest_benign_corpus', 'gate_meta_escalation_below_cap', 'gate_published_figures', 'gate_s_series_fixture_pairs', 'gate_s_series_last_fired_coverage', 'gate_score_not_size', 'gate_separation', 'gate_stateful_rules_stay_out', 'gate_weight_zero_annotations', 'gate_x_series_rate_stability']
 
 def gate_benign_fire_rates(benign: list[dict]) -> Gate:
     """`benign_fire_rate(rule) < 0.30` for every *scoring* rule.
@@ -575,6 +575,66 @@ def gate_artifact_corpus() -> Gate:
     if not fired:
         problems.append("corpus exercises no A rule (vacuous)")
     return Gate(name, not problems, sorted(fired), "A001-A008",
+                "; ".join(problems))
+
+
+def gate_l9_corpus() -> Gate:
+    """Every A rule has a positive and a near miss, and the pairs still bite.
+
+    The diff corpus cannot reach an artifact rule, so this is the only gate
+    that exercises A001-A016 at all.  It runs the committed acceptance corpus
+    through the same pure entry points the lanes use: the manifest inspector,
+    the upstream projection emitter and the release-asset comparison.
+    """
+    from trustsight.analysis.artifact import inspect_manifest
+    from trustsight.analysis.release_asset import compare_release_asset
+    from trustsight.upstream_collect import _artifact_findings
+
+    name = "l9 corpus: A rules have positive/negative pairs"
+    root = FIXTURES / "l9-corpus"
+    expected_path = root / "expected.json"
+    if not expected_path.exists():
+        return Gate(name, False, 0, 0, "l9 corpus missing")
+    expected = json.loads(expected_path.read_text())
+    problems: list[str] = []
+    positives: set[str] = set()
+    negatives: set[str] = set()
+    for relative, record in sorted(expected.items()):
+        body = json.loads((root / relative).read_text())
+        lane = record.get("lane")
+        if lane == "manifest":
+            fired = {f["rule_id"] for f in inspect_manifest(
+                body.get("manifest") or [], body.get("declared") or {})}
+        elif lane == "upstream":
+            fired = {f["rule_id"] for f in _artifact_findings(
+                body.get("artifacts") or [])}
+        elif lane == "release":
+            finding = compare_release_asset(
+                body.get("asset") or [], body.get("tag") or [])
+            fired = {finding["rule_id"]} if finding else set()
+        else:
+            problems.append(f"{relative}: unknown lane {lane!r}")
+            continue
+        if record.get("kind") == "benign":
+            extra = sorted(fired - set(record.get("allow") or []))
+            if extra:
+                problems.append(f"{relative}: benign control fired {extra}")
+            continue
+        if fired != set(record.get("expect") or []):
+            problems.append(
+                f"{relative}: fired {sorted(fired)}, "
+                f"expected {record.get('expect')}")
+        if record.get("kind") == "positive":
+            positives |= set(record.get("expect") or [])
+        elif record.get("kind") == "negative":
+            negatives.add(Path(relative).name.split("-", 1)[0].upper())
+    for number in range(1, 17):
+        rule_id = f"A{number:03d}"
+        if rule_id not in positives:
+            problems.append(f"{rule_id}: no positive fixture")
+        if rule_id not in negatives:
+            problems.append(f"{rule_id}: no negative fixture")
+    return Gate(name, not problems, len(expected), "A001-A016",
                 "; ".join(problems))
 
 def gate_x_series_rate_stability(benign: list[dict]) -> Gate:

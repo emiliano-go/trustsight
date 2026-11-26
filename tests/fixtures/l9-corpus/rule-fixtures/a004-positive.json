@@ -1,0 +1,7 @@
+{
+  "declared": {
+    "built_install_text": "post_install() { exec bash; }",
+    "install_text": "post_install() { :; }"
+  },
+  "manifest": []
+}

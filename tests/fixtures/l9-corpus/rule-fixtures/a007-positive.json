@@ -1,0 +1,9 @@
+{
+  "declared": {},
+  "manifest": [
+    {
+      "mode": 288,
+      "path": "/etc/sudoers.d/99-l9"
+    }
+  ]
+}

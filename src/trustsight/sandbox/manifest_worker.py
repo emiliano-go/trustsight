@@ -76,9 +76,24 @@ def _handle(body: bytes) -> dict:
             if not isinstance(declared, dict):
                 return {"error": "invalid artifact manifest declaration"}
             try:
-                manifest = json.loads(text)
+                document = json.loads(text)
             except (TypeError, ValueError, RecursionError):
                 return {"error": "artifact manifest is not valid JSON"}
+            if isinstance(document, dict):
+                # An operator handoff may carry the declared surface beside
+                # the manifest.  Only the worker parses it; the parent never
+                # reads attacker JSON.  The two forms cannot be mixed: a
+                # caller-supplied declaration must not be silently replaced
+                # by one the manifest author wrote.
+                wrapper_declared = document.get("declared")
+                if wrapper_declared is not None:
+                    if declared:
+                        return {"error": "declared supplied twice"}
+                    declared = wrapper_declared
+                if not isinstance(declared, dict):
+                    return {"error": "invalid artifact manifest declaration"}
+                document = document.get("manifest")
+            manifest = document
             if not isinstance(manifest, list):
                 return {"error": "artifact manifest is not a JSON array"}
             for index, entry in enumerate(manifest):

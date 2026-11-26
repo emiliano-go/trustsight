@@ -1,0 +1,10 @@
+{
+  "declared": {},
+  "manifest": [
+    {
+      "caps": "cap_net_raw+ep",
+      "mode": 493,
+      "path": "/usr/bin/l9-cap"
+    }
+  ]
+}

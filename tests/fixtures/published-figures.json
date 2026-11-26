@@ -100,7 +100,7 @@
   },
   "tests": {
     "count": 9909,
-    "files": 303
+    "files": 304
   },
   "benign_zero_rate_pct": 76.0,
   "benign_above_threshold_pct": 6.7,

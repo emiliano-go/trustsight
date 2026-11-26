@@ -368,7 +368,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a benign package that ships a unit its recipe does not list, then replay it.",
+        "phase": "1",
+        "plan": "add_artifact_or_manifest",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -494,7 +499,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a benign package that ships a polkit action or kernel module and declares it.",
+        "phase": "1",
+        "plan": "add_artifact_or_manifest",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
@@ -512,7 +522,12 @@
       "benign_sources": [],
       "benign_state": "cold_only",
       "benign_strata": [],
-      "disposition": null,
+      "disposition": {
+        "note": "Add a benign package that ships an eBPF object (for example the bcc tools), then replay it.",
+        "phase": "1",
+        "plan": "add_artifact_or_manifest",
+        "status": "deferred"
+      },
       "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],

@@ -685,10 +685,15 @@ def _scan_records(detail: dict, statuses: dict[str, str]) -> list[dict]:
                 if not rule_id or rule_id in seen:
                     continue
                 seen.add(rule_id)
-                rules.append({
+                row = {
                     "id": rule_id,
                     "severity": str(finding.get("severity", "")),
-                })
+                }
+                if (finding.get("anergic")
+                        or (finding.get("evidence") or {}).get("anergic")):
+                    row["weight"] = 0
+                    row["anergic"] = True
+                rules.append(row)
             record.update({
                 "score": int(data.get("score", 0) or 0),
                 "risk": str(data.get("risk", "") or ""),

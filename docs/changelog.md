@@ -2,6 +2,16 @@
 
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **Anergic findings have a separate observation stream.** Every scan reports its report-only findings with the rule id, weight and anergic marker, so calibration can read a denominator that is not limited to alerted packages. The watcher feed exposes them through `show anergic`, both in the feed and on package report pages.
+
+### Fixed
+
+- **A016 is wired into the upstream lane.** The release-asset comparison now fetches the matching forge tag archive, compares both bounded inventories and reports a build input missing from the tag or a differing file. The archive root is stripped before comparison, and a tag read that fails is a named boundary, not a clean result.
+
 ## [0.31.0] - 2026-11-25
 
 ### Added
@@ -6003,8 +6013,8 @@ separate reconciliation.
 - LLM verdict integration
 - Basic CLI (review, inspect, history, config)
 [0.30.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.30.0
-[0.31.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.31.0
 [Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.31.0...HEAD
+[0.31.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.31.0
 [0.29.2]: https://github.com/emiliano-go/trustsight/releases/tag/v0.29.2
 [0.29.1]: https://github.com/emiliano-go/trustsight/releases/tag/v0.29.1
 [0.29.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.29.0

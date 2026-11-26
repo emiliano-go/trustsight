@@ -1,0 +1,19 @@
+{
+  "declared": {
+    "depends": [
+      "glibc",
+      "libl9evil"
+    ]
+  },
+  "manifest": [
+    {
+      "elf": {
+        "needed": [
+          "libl9evil.so.2"
+        ]
+      },
+      "mode": 493,
+      "path": "/usr/bin/l9-app"
+    }
+  ]
+}

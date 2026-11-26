@@ -1,0 +1,9 @@
+{
+  "declared": {},
+  "manifest": [
+    {
+      "mode": 420,
+      "path": "/usr/lib/l9/tracker.bpf.o"
+    }
+  ]
+}

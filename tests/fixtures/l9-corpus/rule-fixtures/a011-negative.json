@@ -1,0 +1,10 @@
+{
+  "declared": {},
+  "manifest": [
+    {
+      "content": "[Trigger]\nOperation = Install\nExec = /usr/bin/true\n",
+      "mode": 420,
+      "path": "/usr/share/libalpm/hooks/00-l9.hook"
+    }
+  ]
+}

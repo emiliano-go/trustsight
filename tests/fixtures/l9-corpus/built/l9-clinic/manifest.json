@@ -1,0 +1,127 @@
+{
+  "declared": {
+    "depends": [],
+    "provides": [],
+    "units": []
+  },
+  "manifest": [
+    {
+      "mode": 493,
+      "path": "/etc/"
+    },
+    {
+      "mode": 493,
+      "path": "/etc/skel/"
+    },
+    {
+      "mode": 438,
+      "path": "/etc/skel/l9-world-writable"
+    },
+    {
+      "mode": 493,
+      "path": "/etc/sudoers.d/"
+    },
+    {
+      "mode": 288,
+      "path": "/etc/sudoers.d/99-l9-clinic"
+    },
+    {
+      "mode": 493,
+      "path": "/opt/"
+    },
+    {
+      "mode": 493,
+      "path": "/opt/l9-clinic/"
+    },
+    {
+      "mode": 493,
+      "path": "/opt/l9-clinic/helper"
+    },
+    {
+      "mode": 493,
+      "path": "/usr/"
+    },
+    {
+      "mode": 493,
+      "path": "/usr/bin/"
+    },
+    {
+      "mode": 2541,
+      "path": "/usr/bin/l9-suid"
+    },
+    {
+      "mode": 493,
+      "path": "/usr/lib/"
+    },
+    {
+      "mode": 493,
+      "path": "/usr/lib/l9/"
+    },
+    {
+      "bpf": true,
+      "mode": 420,
+      "path": "/usr/lib/l9/tracker.bpf.o"
+    },
+    {
+      "mode": 493,
+      "path": "/usr/lib/systemd/"
+    },
+    {
+      "mode": 493,
+      "path": "/usr/lib/systemd/system/"
+    },
+    {
+      "mode": 420,
+      "path": "/usr/lib/systemd/system/l9-clinic.service"
+    },
+    {
+      "mode": 493,
+      "path": "/usr/lib/udev/"
+    },
+    {
+      "mode": 493,
+      "path": "/usr/lib/udev/rules.d/"
+    },
+    {
+      "content": "ACTION==\"add\", RUN+=\"/usr/bin/true\"\n",
+      "mode": 420,
+      "path": "/usr/lib/udev/rules.d/99-l9-clinic.rules"
+    },
+    {
+      "mode": 493,
+      "path": "/usr/share/"
+    },
+    {
+      "mode": 493,
+      "path": "/usr/share/libalpm/"
+    },
+    {
+      "mode": 493,
+      "path": "/usr/share/libalpm/hooks/"
+    },
+    {
+      "content": "[Trigger]\nOperation = *\nExec = /usr/bin/true\n",
+      "mode": 420,
+      "path": "/usr/share/libalpm/hooks/00-l9-clinic.hook"
+    },
+    {
+      "mode": 493,
+      "path": "/usr/src/"
+    },
+    {
+      "mode": 493,
+      "path": "/usr/src/debug/"
+    },
+    {
+      "mode": 493,
+      "path": "/usr/src/debug/l9-clinic/"
+    }
+  ],
+  "package": "l9-clinic-1.0-1-any",
+  "provenance": {
+    "archive": "l9-clinic-1.0-1-any.pkg.tar.zst",
+    "entries": 27,
+    "producer": "scripts/artifact_manifest.py",
+    "recipe": "PKGBUILD"
+  }
+}

@@ -321,7 +321,13 @@ def inspect_manifest_bounded(manifest, declared=None) -> dict:
         path_total += path_bytes
 
         mode = entry.get("mode")
-        setuid = bool(entry.get("setuid")) or bool(entry.get("setgid"))
+        mode_bits = (mode if isinstance(mode, int)
+                     and not isinstance(mode, bool) else 0)
+        # A producer that records the real mode (the documented manifest
+        # contract) must not have to duplicate the derivable bits.  The
+        # explicit booleans stay as an override for lanes that carry them.
+        setuid = (bool(entry.get("setuid")) or bool(entry.get("setgid"))
+                  or bool(mode_bits & 0o6000))
         if setuid and not justified_setuid:
             out.append({
                 "rule_id": "A001", "name": "Setuid File In Artifact",
@@ -508,15 +514,20 @@ def inspect_manifest_bounded(manifest, declared=None) -> dict:
                         "match": f"{path} runs a program from a udev rule",
                         "file": path,
                     })
-        if entry.get("world_writable"):
+        world_writable = entry.get("world_writable")
+        if not isinstance(world_writable, bool):
+            # A directory's "other write" bit is a mount/permission choice,
+            # not a shipped world-writable file.
+            world_writable = bool(mode_bits & 0o002) and not path.endswith("/")
+        if world_writable:
             out.append({
                 "rule_id": "A005", "name": "Unusual Artifact Mode",
                 "severity": "INFO", "category": "artifact",
                 "match": f"{path} is world-writable",
                 "file": path,
             })
-        elif (isinstance(mode, int) and not isinstance(mode, bool)
-                and mode & 0o111 and not path.startswith("/usr/bin/")
+        elif (mode_bits & 0o111 and not path.endswith("/")
+                and not path.startswith("/usr/bin/")
                 and _unusual_exec(path)):
             out.append({
                 "rule_id": "A005", "name": "Unusual Artifact Mode",

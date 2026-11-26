@@ -1,0 +1,10 @@
+{
+  "artifacts": [
+    {
+      "elf": false,
+      "mode": 2541,
+      "path": "vendor/l9-suid",
+      "setuid": true
+    }
+  ]
+}

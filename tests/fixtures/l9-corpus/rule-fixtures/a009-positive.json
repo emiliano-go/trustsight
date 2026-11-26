@@ -1,0 +1,8 @@
+{
+  "artifacts": [
+    {
+      "elf": true,
+      "path": "vendor/l9-tool"
+    }
+  ]
+}

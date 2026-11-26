@@ -1,0 +1,9 @@
+{
+  "declared": {},
+  "manifest": [
+    {
+      "mode": 493,
+      "path": "/usr/bin/l9-suid"
+    }
+  ]
+}

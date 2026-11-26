@@ -1,0 +1,8 @@
+{
+  "artifacts": [
+    {
+      "elf": false,
+      "path": "src/main.c"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "artifacts": [
+    {
+      "elf": true,
+      "elf_info": {
+        "runpath": [
+          "$ORIGIN/../lib"
+        ]
+      },
+      "path": "vendor/l9-tool"
+    }
+  ]
+}

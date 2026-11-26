@@ -513,7 +513,6 @@ own project's names from firing a scope-expansion rule.
 | Key | Rule | Default | Meaning |
 |-----|------|---------|---------|
 | `cofire_pairs` | M004 | `[]` | Expected co-fire pairs (`[precursor, expected]`). A construct whose rule fired while its usual partner did not is reported to the `cofire_health` tool-health channel, never scored. Empty until a pair is measured. |
-| `c001.require_capability_signal` | C001 | `true` | A version move only downgrades the checksum-tamper signal to C002 when the diff adds no new fetch or script execution in a critical function. One flip restores the historical behaviour. |
 | `h036.obfuscation_density` | H036 | `3` | Distinct obfuscation indicators on one line before it is reported. |
 | `h043.attack_chain_stages` | H043 | `3` | Distinct kill-chain stages that must co-occur. |
 | `h045.min_packages` / `h045.window_days` | H045 | `10` / `7` | Cluster size and window for mass adoption. |

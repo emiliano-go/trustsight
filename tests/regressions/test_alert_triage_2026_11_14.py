@@ -197,11 +197,13 @@ def test_c001_version_bump_that_compiles_the_declared_c_file_is_not_a_capability
     assert "C001" not in _ids(_bump(extra))
 
 
-def test_c001_still_fires_when_the_bump_adds_a_script_execution():
+def test_c036_scores_when_the_bump_adds_a_script_execution():
     extra = ("+build() {\n"
              "+  ./tools/stage.sh\n"
              "+}\n")
-    assert "C001" in _ids(_bump(extra))
+    ids = _ids(_bump(extra))
+    assert "C036" in ids
+    assert "C001" not in ids
 
 
 # --- C022: removing a redundant stronger digest is not a downgrade ---------
@@ -311,7 +313,7 @@ def test_d005_declared_replacement_conflict_is_not_a_shadow(monkeypatch):
     assert "D005" not in ids
 
 
-def test_h064_conflict_alone_is_unscored(monkeypatch):
+def test_h064_does_not_read_a_conflict_as_a_provides_claim(monkeypatch):
     _patch_established(monkeypatch, {"acestream-engine"})
     with shipped_config():
         fact = scan_diff(
@@ -319,9 +321,7 @@ def test_h064_conflict_alone_is_unscored(monkeypatch):
             rules=load_rules(), config=load_config(),
             package_name="outpace-bin",
         )
-    entry = next(e for e in fact.score_breakdown if e.rule_id == "H064")
-    assert entry.severity == "INFO"
-    assert entry.weight == 0
+    assert "H064" not in {e.rule_id for e in fact.score_breakdown}
 
 
 def test_h064_provides_claim_on_the_same_name_still_scores(monkeypatch):

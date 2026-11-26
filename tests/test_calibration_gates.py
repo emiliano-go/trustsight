@@ -133,7 +133,7 @@ def test_the_runner_reports_a_gate_per_plan_line(results):
     """The script's own contract: every gate is named and exits nonzero."""
     benign, malicious = results
     all_gates = gates._evaluate(benign, malicious)
-    assert len(all_gates) == 17
+    assert len(all_gates) == 18
     assert all(g.name for g in all_gates)
 
 

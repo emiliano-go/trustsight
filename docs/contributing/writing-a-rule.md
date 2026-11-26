@@ -9,7 +9,7 @@ The normative standards for a rule change are in [Standards](../standards.md); t
 | R-series  | R001-R003, R007-R008, R010-R013, R017, R039-R059, R078, R091, R099, R104, R144, R152 | `rules.toml` | Yes | Regex-detectable patterns   |
 | H-series  | H001-H103   | `analysis/*.py`  | No                | Heuristics: code-emitted detection |
 | D-series  | D001-D005   | `analysis/*.py`  | No                | Dependency-graph rules      |
-| C-series  | C001-C035   | `analysis/*.py`  | No                | Structural / multi-condition |
+| C-series  | C001-C036   | `analysis/*.py`  | No                | Structural / multi-condition |
 | S-series  | S001-S011   | `analysis/sabotage.py` | No          | Sabotage: payloads aimed at the machine |
 | X-series  | X001-X034   | `analysis/crossfire.py` | No         | Crossfire: the evasion technique itself |
 | P-series  | P001-P009 (P004 skipped) | `scoring.py` | No          | Declared practice, reported at weight 0 |

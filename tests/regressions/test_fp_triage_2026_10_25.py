@@ -207,8 +207,7 @@ def test_zenworks_conflict_is_unscored_and_does_not_compose(monkeypatch):
     by_id = {entry.rule_id: entry for entry in entries}
     assert "D004" not in by_id
     assert "H098" not in by_id
-    assert by_id["H064"].severity == "INFO"
-    assert by_id["H064"].weight == 0
+    assert "H064" not in by_id
 
 
 def test_zenworks_provides_claim_still_composes(monkeypatch):

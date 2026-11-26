@@ -80,7 +80,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 ## C-series: **Check** Structural Invariants {#c-series}
 
-**Count:** 34 rules (C001-C035)
+**Count:** 34 rules (C001-C036)
 
 **Mechanism:** Deterministic structural checks across the PKGBUILD. C-series rules enforce invariants that cannot be expressed as a single regex match: two conditions must hold simultaneously, or a relationship between fields must be consistent. Unlike H-series (which reasons about behavioral suspicion), C-series checks are purely mechanical: if condition A and condition B co-occur, the invariant is violated.
 

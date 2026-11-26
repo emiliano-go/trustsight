@@ -331,12 +331,12 @@
       "weight": 0
     }
   },
-  "catalog_size": 326,
+  "catalog_size": 327,
   "corpus_content_sha256": "a4cbea4ef14029c97d7746e2be080a2e5c931502429ee261d974810b35f5cafc",
   "counts": {
     "adversarial_only": 17,
     "cold_only": 45,
-    "measured": 175,
+    "measured": 176,
     "zero_fire": 89
   },
   "measured_at": "2026-11-02",
@@ -736,7 +736,6 @@
         "bin_repack",
         "data_fonts",
         "dkms_kernel",
-        "maintainer_churn",
         "multi_client_fetch",
         "persist_surface",
         "signed_sources",
@@ -747,21 +746,20 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 16,
+      "fires": 14,
       "id": "C001",
       "pseudo": false,
       "reason": "",
       "series": "C",
       "sources": {
         "cold": {
-          "fires": 16,
+          "fires": 14,
           "strata": [
             "appimage_repack",
             "autotools",
             "bin_repack",
             "data_fonts",
             "dkms_kernel",
-            "maintainer_churn",
             "multi_client_fetch",
             "persist_surface",
             "signed_sources",
@@ -777,7 +775,6 @@
         "bin_repack",
         "data_fonts",
         "dkms_kernel",
-        "maintainer_churn",
         "multi_client_fetch",
         "persist_surface",
         "signed_sources",
@@ -2137,6 +2134,40 @@
       "state": "zero_fire",
       "strata": [],
       "uid": "TS-0308"
+    },
+    "C036": {
+      "benign_sources": [
+        "cold"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "maintainer_churn",
+        "persist_surface"
+      ],
+      "disposition": null,
+      "expected_met": true,
+      "expected_strata": [],
+      "expected_strata_met": [],
+      "fires": 2,
+      "id": "C036",
+      "pseudo": false,
+      "reason": "",
+      "series": "C",
+      "sources": {
+        "cold": {
+          "fires": 2,
+          "strata": [
+            "maintainer_churn",
+            "persist_surface"
+          ]
+        }
+      },
+      "state": "measured",
+      "strata": [
+        "maintainer_churn",
+        "persist_surface"
+      ],
+      "uid": "TS-0315"
     },
     "COVERAGE": {
       "benign_sources": [
@@ -6942,14 +6973,14 @@
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 486,
+      "fires": 487,
       "id": "M002",
       "pseudo": false,
       "reason": "",
       "series": "M",
       "sources": {
         "cold": {
-          "fires": 483,
+          "fires": 484,
           "strata": [
             "appimage_repack",
             "autotools",

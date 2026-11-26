@@ -21,7 +21,7 @@ Pattern-matched from the PKGBUILD diff. Direct, observable facts about what the 
 
 - R-series regex rules and H-series heuristics, plus C/D/S/X rules where the signal requires structural, dependency, sabotage, or anti-evasion context.
 - H001/H002 checksum integrity rules (hard-coded, not TOML).
-- C001-C035 structural anomaly rules (checksum/source integrity heuristics).
+- C001-C036 structural anomaly rules (checksum/source integrity heuristics).
 - D001-D005 dependency-graph rules.
 
 ### Availability
@@ -202,7 +202,7 @@ always shown. See the [unverifiable rules reference](../rules/unverifiable.md).
 
 | Tier | Rule sources | What they measure |
 |------|-------------|-------------------|
-| A (Structural) | R001-R059, R078, R091, R099, R104, R144, R152, H001-H103, S001-S011, X001-X034, C001-C035, D001-D005 | Direct pattern matching against PKGBUILD commands and structure |
+| A (Structural) | R001-R059, R078, R091, R099, R104, R144, R152, H001-H103, S001-S011, X001-X034, C001-C036, D001-D005 | Direct pattern matching against PKGBUILD commands and structure |
 | B (Priors/Context) | Source bucket classification | Domain reputation of new URLs (not a rule, but a scoring input) |
 | C (History/Novelty) | URL and maintainer novelty | First-seen signals from the local database |
 | D (Verification) | Checksum, PGP, GPG presence | Declared integrity metadata, reported at weight 0 |

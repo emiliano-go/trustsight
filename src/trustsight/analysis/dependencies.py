@@ -118,14 +118,10 @@ def _scope_expansion_findings(diff_text, package_name, config, add,
     added_deps = _added_deps(
         diff_text, package_name, delta, current_text=current_text
     )
-    # `conflicts` belongs beside the other two.  All three insert this
-    # package in front of a name the ecosystem relies on: `provides` and
-    # `replaces` claim to *be* it, and `conflicts` makes pacman refuse to
-    # install it alongside - which removes the real package just as
-    # effectively while raising nothing at all.  The asymmetry was visible
-    # in the numbers: `replaces=('firefox')` scored HIGH and
-    # `conflicts=('firefox')` scored zero.
-    for field in ("provides", "replaces", "conflicts"):
+    # A `conflicts` entry refuses co-installation; it does not claim to be
+    # the target.  Treating it as a provides/replaces claim put H064 on
+    # every drop-in replacement that declares the package it replaces.
+    for field in ("provides", "replaces"):
         for name in sorted(added_deps.get(field, ())):
             if is_related_package(name, package_name):
                 continue
@@ -133,27 +129,14 @@ def _scope_expansion_findings(diff_text, package_name, config, add,
             widely = _is_widely_provided(name, config)
             if not (established or widely):
                 continue
-            # `provides`/`replaces` *claim* the name, so official-repo
-            # membership alone is enough for HIGH.  `conflicts` only refuses
-            # co-installation: it never claims to be the target.  Scoring it
-            # as scope expansion put a HIGH on every drop-in replacement that
-            # declares the package it replaces (outpace vs acestream-engine);
-            # the refusal is a note, and a *claim* on the same name is still
-            # caught above at HIGH.  A conflict alone never composes into
-            # H098, because D004 stays provides/replaces.
-            if field == "conflicts":
-                severity = "INFO"
-                kind = "widely depended on" if widely else "established"
-            else:
-                severity = "HIGH" if established else "MEDIUM"
-                kind = "established" if established else "widely depended on"
+            severity = "HIGH" if established else "MEDIUM"
+            kind = "established" if established else "widely depended on"
             add("H064", "Provides/Replaces Scope Expansion", severity,
                 "dependency",
                 f"{field} claims '{name}', {kind} but unrelated "
                 f"to '{package_name}'",
                 field=field, dep_name=name, kind=kind,
-                package_name=package_name,
-                weight_override=0 if field == "conflicts" else None)
+                package_name=package_name)
             return
 
 

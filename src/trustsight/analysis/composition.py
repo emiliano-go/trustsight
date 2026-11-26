@@ -119,6 +119,7 @@ _STAGE_OF = {
     "R144": "persistence", "H089": "persistence", "R054": "persistence",
     "H091": "integrity_removed",
     "C035": "takeover",
+    "C036": "foreign_fetch",
     "X001": "obfuscation", "X002": "obfuscation", "X003": "obfuscation",
     "X005": "obfuscation", "X008": "obfuscation", "X018": "obfuscation",
     "X004": "anti_analysis",

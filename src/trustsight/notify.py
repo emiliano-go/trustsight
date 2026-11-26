@@ -849,9 +849,10 @@ def _sign_feed_local(
 ) -> dict:
     """The signature headers for *body* (material ``id.timestamp.body``).
 
-    The id and timestamp can be supplied so a queued retry re-uses the exact
-    identity the feed already saw; otherwise the feed would treat the retry as
-    a new document.
+    A queued retry supplies the id so the feed keeps treating the document as
+    the one it already saw and deduplicates it.  It does not supply the
+    timestamp: the receiver refuses a stale signature, so a retry has to be
+    signed at send time with the current clock.
     """
     from cryptography.hazmat.primitives.serialization import load_der_private_key
 
@@ -1005,6 +1006,13 @@ def flush_outbox(url: str | None = None, now=None) -> bool:
     feed = feed_url()
     key_id, key = _feed_key()
     delivered = False
+    parked = 0
+    try:
+        from .db import prune_parked_alerts
+
+        prune_parked_alerts(now=now)
+    except Exception:  # noqa: BLE001 - housekeeping never blocks delivery
+        pass
     try:
         rows = pending_alert_payloads(now=now)
     except Exception:  # noqa: BLE001
@@ -1013,8 +1021,12 @@ def flush_outbox(url: str | None = None, now=None) -> bool:
         payload = row.get("payload") or {}
         ntfy_ok, feed_ok, ntfy_configured, feed_configured = _deliver_sinks(
             payload, effective, feed=feed, key_id=key_id, key=key,
+            # Keep the identity the feed deduplicates on, but sign now: a
+            # retry that reuses the stored timestamp is refused as stale the
+            # moment an outage outlasts the receiver's window, and then every
+            # document behind it waits forever.
             webhook_id=row.get("webhook_id") or None,
-            timestamp=row.get("webhook_timestamp") or None,
+            timestamp=None,
             skip_ntfy=bool(row.get("ntfy_delivered") or row.get("feed_only")),
             skip_feed=bool(row.get("feed_delivered")),
         )
@@ -1025,9 +1037,66 @@ def flush_outbox(url: str | None = None, now=None) -> bool:
         if ((ntfy_configured and ntfy_ok)
                 or (feed_configured and feed_ok)):
             delivered = True
-        else:
-            mark_alert_attempt(row["id"], "alert delivery failed")
+        elif mark_alert_attempt(row["id"], "alert delivery failed"):
+            parked += 1
+    # Checked every flush, not only when this pass parked something: rows left
+    # behind by an older build, or a queue that parked before this code ran,
+    # must still be reported once a day.
+    announce_parked_alerts(parked, effective)
     return delivered
+
+
+#: A parking event is terminal and rare, so one push a day is enough; without
+#: the throttle a stuck queue would page on every cycle.
+_PARKED_ALERT_INTERVAL_SECONDS = 24 * 60 * 60
+_PARKED_ALERT_KEY = "outbox_parked_alert_at"
+
+
+def announce_parked_alerts(parked_now: int, url: str | None = None) -> bool:
+    """Push once when documents are abandoned for good.
+
+    Parking is terminal - the document is never retried - and while
+    ``full-aur health`` reports the count, nothing was watching it.  On
+    24/11/26 fifteen documents sat parked for a day and the only symptom was a
+    feed that stopped moving.  The push is a heartbeat document, so it names
+    itself as the watcher's own health rather than an alert about a package.
+    """
+    from .db import alert_outbox_stats, get_metadata, set_metadata
+
+    now = time.time()
+    try:
+        counted = alert_outbox_stats()
+    except Exception:  # noqa: BLE001 - a missing DB must not break delivery
+        counted = {"pending": 0, "parked": 0}
+    parked = int(counted.get("parked", 0))
+    if parked <= 0:
+        return False
+    try:
+        last = float(get_metadata(_PARKED_ALERT_KEY) or 0)
+    except Exception:  # noqa: BLE001
+        last = 0.0
+    if now - last < _PARKED_ALERT_INTERVAL_SECONDS:
+        return False
+    payload = {
+        "event": "trustsight.heartbeat",
+        "tool": "trustsight",
+        "tool_version": _tool_version(),
+        "title": "TrustSight: alert delivery parked",
+        "priority": "low",
+        "status": "degraded",
+        "outbox": {
+            "parked_now": int(parked_now),
+            "parked": parked,
+            "pending": int(counted.get("pending", 0)),
+        },
+    }
+    sent = _deliver(payload, url if url is not None else notify_url())
+    if sent:
+        try:
+            set_metadata(_PARKED_ALERT_KEY, str(int(now)))
+        except Exception:  # noqa: BLE001
+            pass
+    return sent
 
 
 def notify_watch_failure(state: dict, url: str | None = None) -> bool:

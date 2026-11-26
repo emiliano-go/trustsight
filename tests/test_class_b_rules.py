@@ -195,34 +195,22 @@ def test_h064_existing_provides_unchanged_is_quiet(establish):
     assert "H064" not in ids(d, package_name="bar")
 
 
-def test_h064_conflicts_is_unscored_info_not_high(establish, observe):
-    """A conflict with an established package is a scope note, not a hijack."""
+def test_h064_conflicts_is_not_a_scope_claim(establish, observe):
+    """A conflict with an established package is not a provides claim."""
     establish(True)
     observe(0)
-    finding = next(
-        f for f in structural("+conflicts=('icedtea-web')\n")
-        if f["rule_id"] == "H064"
-    )
-    assert finding["severity"] == "INFO"
-    assert finding["weight_override"] == 0
-    assert finding["params"]["field"] == "conflicts"
+    assert "H064" not in {
+        f["rule_id"] for f in structural("+conflicts=('icedtea-web')\n")
+    }
 
 
-def test_h064_a_widely_depended_conflict_is_unscored(establish, observe):
-    """A conflict refuses co-installation; it does not claim the name.
-
-    Scoring it HIGH put a 25 on every drop-in replacement that conflicts
-    the package it replaces.  A provides/replaces claim on the same name
-    still scores (the next test).
-    """
+def test_h064_a_widely_depended_conflict_is_not_a_scope_claim(establish, observe):
+    """A conflict refuses co-installation; it does not claim the name."""
     establish(False)
     observe(30)
-    finding = next(
-        f for f in structural("+conflicts=('glibc')\n")
-        if f["rule_id"] == "H064"
-    )
-    assert finding["severity"] == "INFO"
-    assert finding["weight_override"] == 0
+    assert "H064" not in {
+        f["rule_id"] for f in structural("+conflicts=('glibc')\n")
+    }
 
 
 def test_h064_provides_of_an_established_package_stays_high(establish, observe):

@@ -185,7 +185,7 @@ def test_x033_still_fires_on_an_undeclared_variable_target():
 
 # --- C001: the true-positive twin of the dependency-data stand-down -------
 
-def test_c001_still_fires_when_a_version_bump_adds_a_script_execution():
+def test_c036_scores_when_a_version_bump_adds_a_script_execution():
     diff = (
         "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,6 +1,7 @@\n"
         " pkgname=p\n-pkgver=1\n+pkgver=2\n pkgrel=1\n"
@@ -195,4 +195,6 @@ def test_c001_still_fires_when_a_version_bump_adds_a_script_execution():
         "+  ./tools/stage.sh\n"
         " }\n"
     )
-    assert "C001" in _ids(diff)
+    ids = _ids(diff)
+    assert "C036" in ids
+    assert "C001" not in ids

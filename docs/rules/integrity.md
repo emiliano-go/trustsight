@@ -69,6 +69,7 @@ The rules that make up this category are listed below, each with the series that
 | [C027](#c027) | Declared Install Script Is Absent | INFO |
 | [C033](#c033) | Context Bleed | MEDIUM |
 | [C035](#c035) | Owned Namespace Occupied | HIGH |
+| [C036](#c036) | Version Bump Used As Cover For New Capability | - |
 | [H001](#h001) | Checksum Disabled | HIGH |
 | [H002](#h002) | Checksum Emptied | HIGH |
 | [H005](#h005) | validpgpkeys Added | - |
@@ -135,8 +136,8 @@ a top-level flag-set replacement is [H079](#h079).
 
 - **Severity:** HIGH (weight 25); INFO (weight 0) when a signed upstream_hash entry corroborates the triple
 
-- **Condition:** `sha256sums` value changed (added or modified) and **no** source URLs were added or removed, and either `pkgver`, `pkgrel` and `epoch` did not change, **or** the same diff adds a new code capability in a critical function: a network fetch, or an execution of a script-like file that is not a declared source or a benign build artifact.
-- **Description:** A checksum changed with no corresponding version or source change is anomalous. It suggests the tarball content changed without an upstream version bump, which is a red flag for supply-chain compromise. A version move alone no longer stands the signal down when the bump is used as cover: a routine bump that also starts downloading or running something keeps the HIGH finding. Gated by `[thresholds] c001.require_capability_signal` (default true); set it false to restore the historical "every bump is C002" rule.
+- **Condition:** `sha256sums` value changed (added or modified), **no** source URLs were added or removed, and `pkgver`, `pkgrel` and `epoch` did not change.
+- **Description:** A checksum changed with no corresponding version or source change is anomalous. It suggests the tarball content changed without an upstream version bump, which is a red flag for supply-chain compromise. A version bump is C002 even when it also adds a fetch or a script execution; C001 never fires across a version move.
 
 ### C002: Checksum Updated With Version Bump {#c002}
 
@@ -910,6 +911,11 @@ stays (or grows), which is the reviewer-loses-context signal it exists for.
 The operator owns the host and path prefix, not the whole forge. A package
 that declares the same host under another owner is reported at weight 0
 (anergic) until calibrated.
+
+### C036: Version Bump Used As Cover For New Capability {#c036}
+
+- **Condition:** `sha256sums` changed, `pkgver`/`pkgrel`/`epoch` moved, and the same diff adds a network fetch or a script execution in a critical function.
+- **Description:** A routine version bump refreshes checksums without adding a capability. A bump that also starts downloading or running a new file is the checksum-refresh shape used as cover, so it is reported at MEDIUM and scored. C001 owns the stable-version shape and C002 owns the ordinary bump.
 
 ## Interpretation
 

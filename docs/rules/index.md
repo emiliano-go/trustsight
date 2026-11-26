@@ -36,7 +36,7 @@ context and its rule definitions.
 | [Deception and Anti-Analysis](deception.md) | `deception` | 6 | The recipe targets whoever reviews it rather than the shell that runs it, or checks whether it is being watched. |
 | [Install and Persistence](install-and-persist.md) | `install-and-persist` | 23 | Something survives the build: a root-time hook, a unit, a privileged bit, a file in the user's profile. |
 | [Staging and Reconnaissance](staging-and-recon.md) | `staging-and-recon` | 10 | The build steps outside its staging roots, hides a drop, or profiles the host it is running on. |
-| [Integrity and Verification](integrity.md) | `integrity` | 48 | A verification the recipe used to carry is weakened, removed, or cannot cover what it claims to. |
+| [Integrity and Verification](integrity.md) | `integrity` | 49 | A verification the recipe used to carry is weakened, removed, or cannot cover what it claims to. |
 | [Naming and Dependencies](naming-and-dependency.md) | `naming-and-dependency` | 14 | A name is claimed or a dependency set changes in a way that redirects what gets installed. |
 | [Maintainer and Metadata](maintainer-and-metadata.md) | `maintainer-and-metadata` | 16 | Who owns the package, or a long-stable declared property, changed. |
 | [Temporal Context](temporal.md) | `temporal` | 14 | How recently the package or this revision appeared, independent of any diff content. |
@@ -68,7 +68,7 @@ generated from it.
 <!-- generated: series-counts -->
 | Series | Mechanism | Rules |
 |--------|-----------|-------|
-| `C` | Integrity-change | 35 |
+| `C` | Integrity-change | 36 |
 | `R` | Regex | 37 |
 | `H` | Heuristic | 109 |
 | `D` | Dependency | 5 |
@@ -83,7 +83,7 @@ generated from it.
 | `A` | Artifact | 16 |
 | `I` | Indicator | 0 |
 | `U` | Upstream | 15 |
-The catalog lists 314 rule IDs across 15 series; 283 of them contribute to the heuristic score.
+The catalog lists 315 rule IDs across 15 series; 284 of them contribute to the heuristic score.
 <!-- /generated: series-counts -->
 
 `P` and `I` carry no catalog IDs in this build: declared-practice findings

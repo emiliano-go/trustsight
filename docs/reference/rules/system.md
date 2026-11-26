@@ -227,6 +227,10 @@ See [C034: Metadata Inconsistency](../../rules/maintainer-and-metadata.md#c034).
 
 See [C035: Owned Namespace Occupied](../../rules/integrity.md#c035).
 
+### C036 {#c036}
+
+See [C036: Version Bump Used As Cover For New Capability](../../rules/integrity.md#c036).
+
 ### D001 {#d001}
 
 See [D001: Novel Dependency Added](../../rules/naming-and-dependency.md#d001).

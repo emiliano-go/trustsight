@@ -35,6 +35,7 @@ TEMPLATES: dict[str, str] = {
     "H003": "http:// source added without checksum backing: {http_sources}",
     "C001": "checksum changed without corresponding source change",
     "C002": "checksum updated alongside version bump",
+    "C036": "version bump used as cover for a new capability: {match}",
     "C003": "source URLs changed without version bump",
     "C004": "checksum array deleted while source URLs remain the same",
     "C005": "binary artifact from {bucket} source: {url}",

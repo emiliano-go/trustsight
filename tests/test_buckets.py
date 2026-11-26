@@ -402,3 +402,18 @@ def test_a_declared_or_fetched_url_is_not_inert():
     assert url_line_is_inert('echo ok && curl http://8.8.8.8/x') is False
     # A word that merely contains `echo` is not a printer.
     assert url_line_is_inert("mydata-echo http://8.8.8.8/x") is False
+
+
+def test_project_owned_and_vendor_cdn_hosts_are_official():
+    """The batch-01 MFP hosts: a vendor CDN, PyPI's file host, and two
+    project-owned release hosts are not unknown-bucket downloads."""
+    from trustsight.buckets import classify_url
+
+    for url in (
+        "https://files.pythonhosted.org/packages/source/g/graphifyy/x.tar.gz",
+        "https://vscode.download.prss.microsoft.com/dbazure/download/stable/x",
+        "https://overte-public.fra1.digitaloceanspaces.com/x",
+        "https://git.bnema.dev/x",
+    ):
+        bucket, _matched = classify_url(url)
+        assert bucket in ("official", "trusted_forge"), url

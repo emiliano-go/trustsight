@@ -6,7 +6,7 @@ tftp/openssl/npx), an exotic or stdin-fed execution sink, a glued output
 flag, a fetch-spec-in-file, a rename of a fetched or declared file, a
 cross-function chain, a loop-variable sink, or a version bump used as
 cover for a new capability.  Each must now score above the flag threshold
-with H082 (or C001 for the version-bump case) firing.
+with H082 (or scored C036 for the version-bump case) firing.
 """
 
 from trustsight.analysis.build import fetch_addresses
@@ -224,13 +224,14 @@ def _bump_diff(removed: str, added: str) -> str:
     )
 
 
-def test_a_bump_with_a_new_capability_keeps_c001_high():
+def test_a_bump_with_a_new_capability_is_c036_scored():
     fired = _fired(_bump_diff(
         'pkgver=1.0\nsha256sums=("aaaa")\nbuild() {\n  make\n}',
         'pkgver=1.1\nsha256sums=("bbbb")\nbuild() {\n'
         '  curl -fsSL "$(cat u)" -o f\n  make\n}',
     ))
-    assert "C001" in fired
+    assert "C036" in fired
+    assert "C001" not in fired
 
 
 def test_a_plain_bump_stays_c002():
@@ -238,24 +239,6 @@ def test_a_plain_bump_stays_c002():
         'pkgver=1.0\nsha256sums=("aaaa")\nbuild() {\n  make\n}',
         'pkgver=1.1\nsha256sums=("bbbb")\nbuild() {\n  make\n}',
     ))
-    ids = {e.rule_id for e in fact.score_breakdown}
-    assert "C002" in ids and "C001" not in ids
-
-
-def test_the_c001_gate_is_configurable():
-    from trustsight.config import load_config
-
-    config = dict(load_config())
-    config["thresholds"] = {
-        **config.get("thresholds", {}),
-        "c001": {"require_capability_signal": False},
-    }
-    text = _bump_diff(
-        'pkgver=1.0\nsha256sums=("aaaa")\nbuild() {\n  make\n}',
-        'pkgver=1.1\nsha256sums=("bbbb")\nbuild() {\n'
-        '  curl -fsSL "$(cat u)" -o f\n  make\n}',
-    )
-    fact = scan_diff(text, config=config, package_name="harness-pkg")
     ids = {e.rule_id for e in fact.score_breakdown}
     assert "C002" in ids and "C001" not in ids
 

@@ -80,7 +80,7 @@ def test_a_heredoc_piped_to_a_shell_is_code():
     assert 2 in _heredoc_body_indices(written)
 
 
-def test_conflicts_claims_an_established_package_like_replaces_does(monkeypatch):
+def test_conflicts_do_not_claim_an_established_package(monkeypatch):
     """All three insert this package in front of a name the ecosystem
     relies on: `provides` and `replaces` claim to *be* it, `conflicts`
     makes pacman refuse to install it alongside - which removes the real
@@ -107,7 +107,7 @@ def test_conflicts_claims_an_established_package_like_replaces_does(monkeypatch)
                 f"+{field}=('firefox')\n+build() {{\n+  true\n+}}\n")
         return {e.rule_id for e in scan_diff(diff, package_name="p").score_breakdown}
 
-    assert "H064" in fired("conflicts")
+    assert "H064" not in fired("conflicts")
     assert "H064" in fired("replaces")
     # A package's own variant is packaging, not a hijack.
     own = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,4 +1,8 @@\n"

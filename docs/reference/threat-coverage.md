@@ -60,6 +60,7 @@ claim of complete coverage.
 | C033 | Context Bleed | integrity |  | integrity | L1 | MEDIUM | 15 | CWE-354 |  |
 | C034 | Metadata Inconsistency | maintainer-and-metadata |  | maintainer-and-metadata | L1 | INFO | 0 | CWE-290 |  |
 | C035 | Owned Namespace Occupied | integrity | takeover | integrity | L1 | HIGH | 0 (anergic) | CWE-354 | calibration |
+| C036 | Version Bump Used As Cover For New Capability |  | foreign_fetch | integrity | L1 | None | 0 | CWE-345 |  |
 | D001 | Novel Dependency Added | dependency |  | naming-and-dependency | L6 | MEDIUM | 15 | CWE-427 |  |
 | D002 | Typosquatted Dependency | dependency |  | naming-and-dependency | L6 | HIGH | 25 | CWE-427 |  |
 | D003 | New Network-Using Makedepends | dependency |  | naming-and-dependency | L6 | MEDIUM | 15 | CWE-427 |  |

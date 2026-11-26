@@ -2,6 +2,13 @@
 
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- **C001 no longer fires across a version bump.** A bump that also adds a fetch or a script execution is C036 at MEDIUM; C001 stays on the stable-version shape its name describes.
+- **H064 no longer reads a `conflicts` entry as a `provides`/`replaces` claim.** A conflict refuses co-installation without claiming the name, so it does not name scope expansion.
+
 ## [0.31.1] - 2026-11-26
 
 ### Added

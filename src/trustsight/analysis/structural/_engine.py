@@ -461,16 +461,12 @@ def _structural_findings_from_request(request: ScanRequest) -> list[dict]:
     _build_hygiene_findings(diff_text, add, current_text)
 
     if cs_behavior == "checksum_added_or_changed" and not added and not removed:
-        # F8: a version move only stands the tamper signal down when the
-        # diff adds no new code capability.  A bump that also starts
-        # downloading or running something is the checksum-refresh shape
-        # used as cover.  Gated by `[thresholds] c001.require_capability_signal`
-        # (default true) because it touches the most common operation there
-        # is; one config flip reverts to the old C002-for-every-bump rule.
-        gate = ((config or {}).get("thresholds", {})
-                .get("c001", {}).get("require_capability_signal", True))
+        # C001's own clause is "without source change with a stable
+        # version".  A bump never belongs to it, even when the bump also
+        # adds a capability: that shape is C002's, at a severity that
+        # reflects the new fetch or execution.
         capability = None
-        if version_moved and gate:
+        if version_moved:
             capability = capability_in_diff(diff_text, current_text)
         # F9 (nuvio-desktop): at a standing version, the HIGH claim is the
         # *surgical* shape - checksum arrays are the only substantive change
@@ -503,14 +499,14 @@ def _structural_findings_from_request(request: ScanRequest) -> list[dict]:
                 "sha256sums changed at an unchanged version amid other "
                 "recipe changes (not the surgical swap shape)",
                 line=find_line_in_diff(diff_text, r"""sha256sums\s*=\s*\('"""))
-        elif not version_moved or capability:
-            match = (
-                "sha256sums changed but source URLs and pkgver/pkgrel/epoch "
-                "unchanged"
-                if not version_moved
-                else "checksum updated with a version bump that also adds "
-                     f"{capability}"
-            )
+        elif version_moved and capability:
+            add("C036", "Version Bump Used As Cover For New Capability", "MEDIUM",
+                "integrity",
+                "checksum updated with a version bump that also adds "
+                f"{capability}",
+                weight_override=15,
+                line=find_line_in_diff(diff_text, r"""sha256sums\s*=\s*\('"""))
+        elif not version_moved:
             # A signed upstream_hash baseline that names this exact
             # url|version|sha256 triple is the vendor's own statement of the
             # artifact, so the checksum change is corroborated rather than
@@ -519,7 +515,9 @@ def _structural_findings_from_request(request: ScanRequest) -> list[dict]:
             corroborated = _upstream_hash_corroborated(
                 current_text, verified_upstream_hashes)
             add("C001", "Checksum Changed Without Source Change With Stable Version",
-                "INFO" if corroborated else "HIGH", "integrity", match,
+                "INFO" if corroborated else "HIGH", "integrity",
+                "sha256sums changed but source URLs and pkgver/pkgrel/epoch "
+                "unchanged",
                 weight_override=0 if corroborated else None,
                 line=find_line_in_diff(diff_text, r"""sha256sums\s*=\s*\('"""))
         else:
@@ -881,4 +879,3 @@ def _dispatch_families(diff_text, config, add, ctx, urlctx, package_name,
     # predates this diff is still a fact about the package being reviewed.
     _ioc_findings(diff_text, package_name, config or {}, add,
                   current_text=current_text)
-

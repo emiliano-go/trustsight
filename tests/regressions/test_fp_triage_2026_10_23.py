@@ -255,7 +255,7 @@ def test_c001_ignores_a_system_electron_launcher_on_a_bump():
     assert "C001" not in _ids(diff)
 
 
-def test_c001_still_fires_when_the_bump_adds_a_script_execution():
+def test_c036_scores_when_the_bump_adds_a_script_execution():
     a, b = "a" * 64, "b" * 64
     diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,4 +1,8 @@\n"
             " pkgname=p\n"
@@ -265,7 +265,9 @@ def test_c001_still_fires_when_the_bump_adds_a_script_execution():
             "+build() {\n"
             "+  ./tools/stage.sh\n"
             "+}\n")
-    assert "C001" in _ids(diff)
+    ids = _ids(diff)
+    assert "C036" in ids
+    assert "C001" not in ids
 
 
 # --- Bucket allowlist: vendor CDNs are official project hosts --------------

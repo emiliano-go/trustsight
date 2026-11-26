@@ -206,20 +206,20 @@ build-time fetch capability.
 - **Severity:** HIGH (weight 25) for an established package, MEDIUM (weight 15) for a widely-provided one; INFO (weight 0) for a conflict with an established-only package
 - **Category:** `dependency`
 
-- **Condition:** A newly claimed `provides` or `replaces` names an established package (official repo or fallback observations) or a widely-provided one (observation count at or above `[h064] widely_provided_observations`, default 25). A newly added `conflicts` entry is reported at weight 0.
+- **Condition:** A newly claimed `provides` or `replaces` names an established package (official repo or fallback observations) or a widely-provided one (observation count at or above `[h064] widely_provided_observations`, default 25).
 
 Claiming another project's name redirects installs of that name to this
 package. A `conflicts` entry only refuses co-installation and never claims to
-be the target, so it is INFO at weight 0 whatever the target's popularity;
+be the target, so it is not a scope expansion and is not reported here;
 a drop-in replacement that conflicts the package it replaces must not read as
-a name grab. A `provides`/`replaces` claim on the same name still scores. Relatedness
+a name grab. Relatedness
 suppresses the obvious false positive: variant, companion and sibling stems of
 the package's own name never fire. Cold start cannot fire either branch, since
 neither corpus nor pacman data exists to establish what is established. H064
 always runs; D004 owns the `provides`/`replaces` claim and may double-report
 when it is enabled (it is, by default).
 
-Fire rate: 2 on the v1 corpus (0.05 %), both established-name claims: `jpegli-git` conflicts `libjxl` and `llama.cpp-cuda-git` provides `ggml`.
+Fire rate: 1 on the v1 corpus (0.03 %), an established-name claim: `llama.cpp-cuda-git` provides `ggml`.
 
 **Known false positive: kernel module aliases.** A `linux*` split provides
 module names many packages depend on - `KSMBD-MODULE`, `LINUX-HEADERS`, or
@@ -290,7 +290,7 @@ A placeholder reserves a name in the AUR while installing nothing - it builds, r
 
 - **Condition:** A ``pkgname`` output is exactly an established package, a ``provides`` or ``replaces`` entry names an established package unrelated to this one, or a ``conflicts`` entry does. A ``conflicts`` entry whose name the recipe also ``provides``/``replaces`` is a declared replacement, not a shadow, and is skipped.
 
-H064 and D004 own the *added* ``provides``/``replaces``/``conflicts``. This rule owns the claim the recipe carries now: a split output whose name pacman already resolves elsewhere, a reservation or rename that predates the diff, or a conflict whose target became an official package after the recipe declared it. The variant carve-out is the ordinary pattern - ``foo-git`` providing or conflicting ``foo`` is suppressed - and a soname (``libfoo.so``) is not a package claim, so the finding names a name claim that stands alone. "Established" is official-repo membership, falling back to the dependency observation proxy exactly as H064 does, and cold start fires nothing. Weight 0 until the benign corpus calibrates it; the recipe's current text is read on the fresh path, the incremental path and ``trustsight lint``.
+H064 and D004 own the *added* ``provides``/``replaces``. This rule owns the claim the recipe carries now: a split output whose name pacman already resolves elsewhere, a reservation or rename that predates the diff, or a conflict whose target became an official package after the recipe declared it. The variant carve-out is the ordinary pattern - ``foo-git`` providing or conflicting ``foo`` is suppressed - and a soname (``libfoo.so``) is not a package claim, so the finding names a name claim that stands alone. "Established" is official-repo membership, falling back to the dependency observation proxy exactly as H064 does, and cold start fires nothing. Weight 0 until the benign corpus calibrates it; the recipe's current text is read on the fresh path, the incremental path and ``trustsight lint``.
 
 ### H106: Registry Or Index Override {#h106}
 

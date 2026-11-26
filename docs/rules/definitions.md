@@ -60,6 +60,7 @@ exactly one category page; this catalog only points at it.
 | [C033](integrity.md#c033) | Context Bleed | Integrity-change | MEDIUM | [Integrity and Verification](integrity.md) |
 | [C034](maintainer-and-metadata.md#c034) | Metadata Inconsistency | Integrity-change | INFO | [Maintainer and Metadata](maintainer-and-metadata.md) |
 | [C035](integrity.md#c035) | Owned Namespace Occupied | Integrity-change | HIGH | [Integrity and Verification](integrity.md) |
+| [C036](integrity.md#c036) | Version Bump Used As Cover For New Capability | Integrity-change | - | [Integrity and Verification](integrity.md) |
 | [D001](naming-and-dependency.md#d001) | Novel Dependency Added | Dependency | MEDIUM | [Naming and Dependencies](naming-and-dependency.md) |
 | [D002](naming-and-dependency.md#d002) | Typosquatted Dependency | Dependency | HIGH | [Naming and Dependencies](naming-and-dependency.md) |
 | [D003](naming-and-dependency.md#d003) | New Network-Using Makedepends | Dependency | MEDIUM | [Naming and Dependencies](naming-and-dependency.md) |

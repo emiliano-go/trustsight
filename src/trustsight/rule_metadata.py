@@ -116,6 +116,7 @@ CATEGORY_REMEDIATION: dict[str, str] = {
 #: Per-rule precision where the category default is too broad.
 RULE_CWE: dict[str, str] = {
     "C001": "CWE-354",
+    "C036": "CWE-345",
     "C022": "CWE-328",
     "H001": "CWE-354",
     "H002": "CWE-354",

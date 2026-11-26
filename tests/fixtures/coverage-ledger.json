@@ -135,7 +135,7 @@
     "G016": {
       "changelog": "account-blast-radius",
       "decided_in": "",
-      "promoted_in": "0.30.0",
+      "promoted_in": "0.31.0",
       "promotion": "run the weekly calibration, then promote only with a second signal",
       "rule_id": "G016",
       "signal": "shared-account bystander context after one specific payload or FATAL; needs a benign rate before it can score",
@@ -212,7 +212,7 @@
     "S011": {
       "changelog": "apoptosis-completion",
       "decided_in": "",
-      "promoted_in": "0.30.0",
+      "promoted_in": "0.31.0",
       "promotion": "run the weekly calibration, then promote only with a malicious twin and a benign twin",
       "rule_id": "S011",
       "signal": "self-referential teardown, orphaning, destructive EXIT trap, exec replacement and corpse forgery; needs a benign rate before it can score",
@@ -335,8 +335,8 @@
   "corpus_content_sha256": "a4cbea4ef14029c97d7746e2be080a2e5c931502429ee261d974810b35f5cafc",
   "counts": {
     "adversarial_only": 17,
-    "cold_only": 42,
-    "measured": 178,
+    "cold_only": 45,
+    "measured": 175,
     "zero_fire": 89
   },
   "measured_at": "2026-11-02",
@@ -365,34 +365,21 @@
       "uid": "TS-0001"
     },
     "A002": {
-      "benign_sources": [
-        "artifact"
-      ],
-      "benign_state": "fire",
-      "benign_strata": [
-        "persist_surface"
-      ],
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
       "disposition": null,
-      "expected_met": true,
+      "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 1,
+      "fires": 0,
       "id": "A002",
       "pseudo": false,
-      "reason": "",
+      "reason": "needs observation history or warm state; measured by the history/warm replay when available",
       "series": "A",
-      "sources": {
-        "artifact": {
-          "fires": 1,
-          "strata": [
-            "persist_surface"
-          ]
-        }
-      },
-      "state": "measured",
-      "strata": [
-        "persist_surface"
-      ],
+      "sources": {},
+      "state": "cold_only",
+      "strata": [],
       "uid": "TS-0002"
     },
     "A003": {
@@ -401,28 +388,28 @@
       ],
       "benign_state": "fire",
       "benign_strata": [
-        "multi_client_fetch"
+        "artifact-benign"
       ],
       "disposition": null,
       "expected_met": true,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 1,
+      "fires": 3,
       "id": "A003",
       "pseudo": false,
       "reason": "",
       "series": "A",
       "sources": {
         "artifact": {
-          "fires": 1,
+          "fires": 3,
           "strata": [
-            "multi_client_fetch"
+            "artifact-benign"
           ]
         }
       },
       "state": "measured",
       "strata": [
-        "multi_client_fetch"
+        "artifact-benign"
       ],
       "uid": "TS-0003"
     },
@@ -455,8 +442,7 @@
       ],
       "benign_state": "fire",
       "benign_strata": [
-        "appimage_repack",
-        "signed_sources"
+        "artifact-benign"
       ],
       "disposition": null,
       "expected_met": true,
@@ -471,15 +457,13 @@
         "artifact": {
           "fires": 2,
           "strata": [
-            "appimage_repack",
-            "signed_sources"
+            "artifact-benign"
           ]
         }
       },
       "state": "measured",
       "strata": [
-        "appimage_repack",
-        "signed_sources"
+        "artifact-benign"
       ],
       "uid": "TS-0005"
     },
@@ -507,65 +491,39 @@
       "uid": "TS-0006"
     },
     "A007": {
-      "benign_sources": [
-        "artifact"
-      ],
-      "benign_state": "fire",
-      "benign_strata": [
-        "dependency_heavy"
-      ],
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
       "disposition": null,
-      "expected_met": true,
+      "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 1,
+      "fires": 0,
       "id": "A007",
       "pseudo": false,
-      "reason": "",
+      "reason": "needs observation history or warm state; measured by the history/warm replay when available",
       "series": "A",
-      "sources": {
-        "artifact": {
-          "fires": 1,
-          "strata": [
-            "dependency_heavy"
-          ]
-        }
-      },
-      "state": "measured",
-      "strata": [
-        "dependency_heavy"
-      ],
+      "sources": {},
+      "state": "cold_only",
+      "strata": [],
       "uid": "TS-0007"
     },
     "A008": {
-      "benign_sources": [
-        "artifact"
-      ],
-      "benign_state": "fire",
-      "benign_strata": [
-        "lang_deep"
-      ],
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
       "disposition": null,
-      "expected_met": true,
+      "expected_met": false,
       "expected_strata": [],
       "expected_strata_met": [],
-      "fires": 1,
+      "fires": 0,
       "id": "A008",
       "pseudo": false,
-      "reason": "",
+      "reason": "needs observation history or warm state; measured by the history/warm replay when available",
       "series": "A",
-      "sources": {
-        "artifact": {
-          "fires": 1,
-          "strata": [
-            "lang_deep"
-          ]
-        }
-      },
-      "state": "measured",
-      "strata": [
-        "lang_deep"
-      ],
+      "sources": {},
+      "state": "cold_only",
+      "strata": [],
       "uid": "TS-0008"
     },
     "A009": {
@@ -2991,8 +2949,7 @@
       "sources": {},
       "state": "zero_fire",
       "strata": [],
-      "uid": "TS-0313",
-      "promoted_in": "0.31.0"
+      "uid": "TS-0313"
     },
     "H001": {
       "benign_sources": [
@@ -9213,8 +9170,7 @@
         "source_patched",
         "vcs_git"
       ],
-      "uid": "TS-0314",
-      "promoted_in": "0.31.0"
+      "uid": "TS-0314"
     },
     "SOURCE_BUCKET": {
       "benign_sources": [

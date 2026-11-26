@@ -15,6 +15,7 @@
 - **A003 resolves sonames through `provides` and the closure.** The linked-library comparison accepts a soname named by a declared `provides` entry or by the dependency closure's `libs`, instead of comparing a soname to a package name. On the 26 benign controls it falls from 327 findings to 3, all genuinely undeclared optional links.
 - **The batch lane cannot read outside its manifest directory.** Package names are validated before a path is built, the resolved file must stay inside `--manifest-dir`, and a symlink or FIFO there is not a manifest.
 - **The producer is bounded.** It streams the archive digest, caps `.PKGINFO`/`.INSTALL` reads, refuses a decompressed archive past its byte budget, and drops member paths that escape the package root.
+- **The coverage ledger counts the real benign controls.** The A rules are now measured against the 26 benign manifests rather than their own crafted positives: A003 and A005 keep a measured benign floor, and A002/A007/A008 report `cold_only` instead of pretending a positive fixture is benign coverage.
 
 ## [0.31.1] - 2026-11-26
 

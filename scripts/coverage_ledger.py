@@ -126,7 +126,12 @@ def _scan_manifest_corpus() -> list[dict]:
 
 
 def _scan_artifact_corpus(directory: Path) -> list[dict]:
-    """Load committed artifact manifests and run the A-series inspector."""
+    """Load committed benign manifests and run the A-series inspector.
+
+    Only the benign controls count as coverage.  The crafted positive
+    fixtures live in ``l9-corpus/rule-fixtures`` and are excluded on purpose:
+    a rule firing on its own positive proves reachability, not a benign floor.
+    """
     if not directory.exists():
         return []
     from trustsight.analysis.artifact import inspect_manifest
@@ -139,7 +144,7 @@ def _scan_artifact_corpus(directory: Path) -> list[dict]:
         findings = inspect_manifest(doc.get("manifest") or [], doc.get("declared") or {})
         rows.append({
             "name": path.stem,
-            "stratum": doc.get("stratum", "artifact"),
+            "stratum": doc.get("stratum", "artifact-benign"),
             "fired": sorted({f["rule_id"] for f in findings}),
         })
     return rows
@@ -187,7 +192,7 @@ def main() -> int:
     parser.add_argument("--manifest", type=Path, default=FIXTURES / "corpus.lock")
     parser.add_argument("--strata", type=Path, default=ROOT / "scripts" / "strata.toml")
     parser.add_argument("--artifact-dir", type=Path,
-                        default=FIXTURES / "artifact-corpus")
+                        default=FIXTURES / "l9-corpus" / "benign")
     parser.add_argument("--out", type=Path,
                         default=FIXTURES / "coverage-ledger.json")
     parser.add_argument("--dispositions", type=Path,

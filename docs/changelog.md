@@ -2,17 +2,7 @@
 
 # Changelog
 
-## [Unreleased]
-
-### Fixed
-
-- **Cluster context no longer alerts on every member.** Ownership transitions, adoption bursts, maintainer-baseline deviations and new packset families still describe the corpus, but a member is only announced when it has its own scored finding.
-- **C001 stands down when a VCS checksum moves from SKIP to a real digest.** Populating the hash is a verification improvement, not a surgical swap.
-
-- **C001 no longer fires across a version bump.** A bump that also adds a fetch or a script execution is C036 at MEDIUM; C001 stays on the stable-version shape its name describes.
-- **H064 no longer reads a `conflicts` entry as a `provides`/`replaces` claim.** A conflict refuses co-installation without claiming the name, so it does not name scope expansion.
-
-## [0.31.1] - 2026-11-26
+## [0.32.0] - 2026-11-26
 
 ### Added
 
@@ -26,6 +16,12 @@
 - **The batch lane cannot read outside its manifest directory.** Package names are validated before a path is built, the resolved file must stay inside `--manifest-dir`, and a symlink or FIFO there is not a manifest.
 - **The producer is bounded.** It streams the archive digest, caps `.PKGINFO`/`.INSTALL` reads, refuses a decompressed archive past its byte budget, and drops member paths that escape the package root.
 - **The coverage ledger counts the real benign controls.** The A rules are now measured against the 26 benign manifests rather than their own crafted positives: A003 and A005 keep a measured benign floor, and A002/A007/A008 report `cold_only` instead of pretending a positive fixture is benign coverage.
+
+- **Cluster context no longer alerts on every member.** Ownership transitions, adoption bursts, maintainer-baseline deviations and new packset families still describe the corpus, but a member is only announced when it has its own scored finding.
+- **C001 stands down when a VCS checksum moves from SKIP to a real digest.** Populating the hash is a verification improvement, not a surgical swap.
+
+- **C001 no longer fires across a version bump.** A bump that also adds a fetch or a script execution is C036 at MEDIUM; C001 stays on the stable-version shape its name describes.
+- **H064 no longer reads a `conflicts` entry as a `provides`/`replaces` claim.** A conflict refuses co-installation without claiming the name, so it does not name scope expansion.
 
 ## [0.31.1] - 2026-11-26
 
@@ -6039,7 +6035,8 @@ separate reconciliation.
 - Basic CLI (review, inspect, history, config)
 [0.30.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.30.0
 [0.31.1]: https://github.com/emiliano-go/trustsight/releases/tag/v0.31.1
-[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.31.1...HEAD
+[0.32.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.32.0
+[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.32.0...HEAD
 [0.31.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.31.0
 [0.29.2]: https://github.com/emiliano-go/trustsight/releases/tag/v0.29.2
 [0.29.1]: https://github.com/emiliano-go/trustsight/releases/tag/v0.29.1

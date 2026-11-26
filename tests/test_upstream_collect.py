@@ -53,7 +53,9 @@ def test_enabled_lane_fetches_verifies_and_extracts():
 
     texts, notes, findings, verified = collect_upstream_manifest_texts(
         RECIPE, config=CONFIG, fetcher=fetcher, extractor=_extractor)
-    assert texts == [("upstream/pkg/Cargo.toml", "[package]\nname='x'\n")]
+    # The archive's root directory is dropped: it carries the upstream commit
+    # hash, and keeping it renamed every manifest on every version bump.
+    assert texts == [("upstream/Cargo.toml", "[package]\nname='x'\n")]
     assert notes == []
     assert calls and calls[0][1] == "github.com/owner/repo"
 
@@ -181,7 +183,9 @@ def test_a_configured_fetcher_socket_keeps_the_token_out_of_the_watcher(monkeypa
     texts, notes, _findings, _verified = collect_upstream_manifest_texts(
         RECIPE, config=config, extractor=_extractor)
     assert calls == ["/run/upstream.sock"]
-    assert texts == [("upstream/pkg/Cargo.toml", "[package]\nname='x'\n")]
+    # The archive's root directory is dropped: it carries the upstream commit
+    # hash, and keeping it renamed every manifest on every version bump.
+    assert texts == [("upstream/Cargo.toml", "[package]\nname='x'\n")]
     assert notes == []
 
 
@@ -352,3 +356,36 @@ def test_elf_metadata_becomes_report_only_a014_a015():
     ids = {f["rule_id"] for f in findings}
     assert {"A014", "A015"} <= ids
     assert all(f.get("weight_override") == 0 for f in findings)
+
+
+def test_the_archive_root_does_not_rename_manifests():
+    """A tarball extracts under a versioned directory, so keeping that
+    directory in the path renamed every manifest whenever the upstream commit
+    changed.  The whole tree then read as removed and re-added, and U001/U002
+    fired once per file - one analysis carried 128 U001 rows."""
+    from trustsight.upstream_collect import _stable_manifest_paths
+
+    old = _stable_manifest_paths([
+        ("xserver-bf0f5b7322cda2d74717050a7d66383fe55c8934/Xext/meson.build", "a"),
+        ("xserver-bf0f5b7322cda2d74717050a7d66383fe55c8934/meson.build", "b"),
+    ])
+    new = _stable_manifest_paths([
+        ("xserver-8d3b628c4ce5839e72a23589996a5ec61eb43504/Xext/meson.build", "a"),
+        ("xserver-8d3b628c4ce5839e72a23589996a5ec61eb43504/meson.build", "b"),
+    ])
+    assert [path for path, _text in old] == [path for path, _text in new]
+    assert [path for path, _text in new] == ["Xext/meson.build", "meson.build"]
+
+
+def test_manifest_paths_are_left_alone_when_the_root_is_not_shared():
+    from trustsight.upstream_collect import _stable_manifest_paths
+
+    # Two archives, or members at the top level: no single root to drop, so
+    # the paths stay as the tarball wrote them.
+    assert _stable_manifest_paths(
+        [("a/Cargo.toml", "x"), ("b/package.json", "y")]
+    ) == [("a/Cargo.toml", "x"), ("b/package.json", "y")]
+    assert _stable_manifest_paths(
+        [("Cargo.toml", "x"), ("pkg/package.json", "y")]
+    ) == [("Cargo.toml", "x"), ("pkg/package.json", "y")]
+    assert _stable_manifest_paths([]) == []

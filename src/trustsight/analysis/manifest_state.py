@@ -14,7 +14,12 @@ from ..changes import FileDelta, ManifestDelta, manifest_delta_from_docs
 from .manifests import Dep, ManifestDoc, parse_manifest
 from .upstream_release import is_ci_workflow_path
 
-_STATE_VERSION = 1
+#: Version 2 dropped the archive's versioned root directory from upstream
+#: manifest paths.  A state written by version 1 keys every manifest under
+#: ``upstream/<archive>-<hash>/...``, so reading it as a delta would fire
+#: U001/U002 for the whole tree once more; an unreadable state is a baseline
+#: (see :func:`manifest_state_delta`), which is exactly the transition wanted.
+_STATE_VERSION = 2
 
 
 def build_manifest_state(manifest_texts, tree_manifest) -> str | None:

@@ -22,10 +22,17 @@ inside the declared source archive. The optional `[upstream_scan]` lane (off by
 default, server-side) closes that gap: for an allowlisted forge source with a
 strong checksum it fetches the archive through `upstream_fetch.py`, verifies
 the checksum, extracts the manifests in the sandboxed read-role worker, and
-feeds them into this same state/delta path as `upstream/<path>`. The first
-observation is a baseline, not an "added" delta. With the lane disabled - the
-default - these rules see only what the AUR repository commits, and
+feeds them into this same state/delta path as `upstream/<path>`. The archive's
+versioned root directory is dropped from that path: it carries the upstream
+commit, and keeping it made every manifest read as removed and re-added
+whenever the package moved to a new commit. The first observation is a
+baseline, not an "added" delta. With the lane disabled - the default - these
+rules see only what the AUR repository commits, and
 [W011](unverifiable.md#w011) names that limit.
+
+One rule lists at most 25 findings for a single package; a tree with more
+manifests reports the remainder as one counted finding, so a large source
+archive cannot turn one update into hundreds of rows.
 
 Adding a dependency is ordinary packaging, so most of the series is a
 weight-0 ledger. Only **fetch-surface extension** (a new remote source),

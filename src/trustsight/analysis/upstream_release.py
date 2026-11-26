@@ -22,6 +22,7 @@ from __future__ import annotations
 import re
 
 from ..buckets import canonical_host, host_is_non_routable
+from .bounded_findings import bounded_add as _bounded_add
 from .structural._provenance import (
     _declared_upstream_url,
     _forge_owner_repo,
@@ -272,6 +273,7 @@ def upstream_release_findings(
         max_u010 = 5
 
     head = _head_upstream_text(diff_text, current_text)
+    add, flush = _bounded_add(add)
     pkgver_bumped = bool(
         delta is not None and getattr(delta.version, "pkgver_changed", False))
 
@@ -362,3 +364,4 @@ def upstream_release_findings(
                 f"the upstream_repo federation channel holds no data for "
                 f"{repo}; U007/U008 could not be checked",
                 line=None, upstream_repo=repo)
+    flush()

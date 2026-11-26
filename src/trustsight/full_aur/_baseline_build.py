@@ -251,6 +251,12 @@ def _run_baseline_build(
             return (None, None, None, False, None, None, None, True)
         return fetch_pkgbuild_with_tree(_pkg_or_base(meta))
 
+    # The manifest delta a notification should carry, kept per package: the
+    # deltas are computed while analysing and the detail record is written by
+    # _store afterwards, so this is the seam between them.
+    manifests_by_name: dict[str, list[dict]] = {}
+    manifests_truncated_by_name: dict[str, bool] = {}
+
     def _analyse_and_store(name, fetched, analyse_depth):
         """Analyse one fetched package and persist its result.
 
@@ -415,6 +421,9 @@ def _run_baseline_build(
             # corpus as if it had been vetted; the cycle continues.
             log.warning("tokenizer unavailable for %s: %s; not vetted", name, exc)
             return "not_vetted", None
+        manifests_by_name[name] = _manifests_summary(manifest_deltas)
+        manifests_truncated_by_name[name] = (
+            len(list(manifest_deltas or ())) > MAX_NOTIFY_MANIFESTS)
         return "ok", fact
 
     def _store(name, fetched) -> str:
@@ -520,6 +529,11 @@ def _run_baseline_build(
             "dependency_changes": getattr(fact, "dependency_changes", {}),
             "payload_urls": payload_targets,
             "findings": findings,
+            # A manifest changed inside the source archive is invisible in the
+            # recipe diff; carry its dependency delta so the feed can show it
+            # in its own view instead of leaving the reader with a rule id.
+            "manifests": manifests_by_name.get(name, []),
+            "manifests_truncated": manifests_truncated_by_name.get(name, False),
             # H058 stands down only when every member of a maintainer's batch
             # is a routine version/checksum bump.  Computed here, where both
             # recipe texts are in hand.
@@ -668,6 +682,37 @@ def _prefill_missing_dependencies(
             "candidates); more may remain for a later cycle"
         )
 
+
+
+#: Manifests one notification describes, and dependency names per side.  A
+#: source tree can carry hundreds of manifests and the notification is bounded:
+#: the feed shows the first slice and the counts, never the whole tree.
+MAX_NOTIFY_MANIFESTS = 20
+MAX_NOTIFY_MANIFEST_NAMES = 12
+
+
+def _manifests_summary(deltas) -> list[dict]:
+    """The manifest deltas a reader can act on, bounded for the payload.
+
+    The alert already carries the recipe diff, which never contains a manifest
+    that lives inside the declared source archive.  This is the one place the
+    feed can learn that ``Cargo.toml`` in the archive gained a dependency,
+    so it travels with the alert instead of being re-derived by the receiver.
+    """
+    out = []
+    for delta in list(deltas or ())[:MAX_NOTIFY_MANIFESTS]:
+        added = [str(name) for name in getattr(delta, "added", ()) or ()]
+        removed = [str(name) for name in getattr(delta, "removed", ()) or ()]
+        out.append({
+            "path": str(getattr(delta, "path", "") or ""),
+            "format": str(getattr(delta, "format", "") or ""),
+            "status": str(getattr(delta, "status", "") or ""),
+            "added": sorted(added)[:MAX_NOTIFY_MANIFEST_NAMES],
+            "removed": sorted(removed)[:MAX_NOTIFY_MANIFEST_NAMES],
+            "added_total": len(added),
+            "removed_total": len(removed),
+        })
+    return out
 
 
 def _scan_records(detail: dict, statuses: dict[str, str]) -> list[dict]:

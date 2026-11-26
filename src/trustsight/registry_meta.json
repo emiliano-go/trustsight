@@ -950,7 +950,7 @@
     "name": "Dependency-Set Expansion",
     "severity": "MEDIUM",
     "severity_text": "MEDIUM (weight 15) - corpus rate 0.13 % (published dependency seed)",
-    "target": "programmatic (delta over dependency arrays \u00d7 per-dep novelty)",
+    "target": "programmatic (delta over dependency arrays × per-dep novelty)",
     "uid": "TS-0086"
   },
   "h031": {
@@ -2350,20 +2350,20 @@
   },
   "u011": {
     "canonical": true,
-    "capability": null,
+    "capability": "dependency-manifest",
     "name": "Upstream Origin Changed",
-    "severity": null,
-    "severity_text": null,
-    "target": null,
+    "severity": "MEDIUM",
+    "severity_text": "MEDIUM (weight 15)",
+    "target": "committed manifest files",
     "uid": "TS-0278"
   },
   "u012": {
     "canonical": true,
-    "capability": null,
+    "capability": "dependency-manifest",
     "name": "Lockfile Integrity Weakened",
-    "severity": null,
-    "severity_text": null,
-    "target": null,
+    "severity": "INFO",
+    "severity_text": "INFO (weight 0)",
+    "target": "committed manifest files",
     "uid": "TS-0279"
   },
   "u013": {

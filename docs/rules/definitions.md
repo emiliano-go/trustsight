@@ -269,8 +269,8 @@ exactly one category page; this catalog only points at it.
 | [U008](upstream-release.md#u008) | Git-History Credential Sweep | Upstream | MEDIUM | [Upstream Release Integrity](upstream-release.md) |
 | [U009](upstream-release.md#u009) | New CI Surface Committed | Upstream | LOW | [Upstream Release Integrity](upstream-release.md) |
 | [U010](upstream-release.md#u010) | Unauditable Upstream | Upstream | MEDIUM | [Upstream Release Integrity](upstream-release.md) |
-| [U011](upstream-manifests.md#u011) | Upstream Origin Changed | Upstream | - | [Upstream Manifests](upstream-manifests.md) |
-| [U012](upstream-manifests.md#u012) | Lockfile Integrity Weakened | Upstream | - | [Upstream Manifests](upstream-manifests.md) |
+| [U011](upstream-manifests.md#u011) | Upstream Origin Changed | Upstream | MEDIUM | [Upstream Manifests](upstream-manifests.md) |
+| [U012](upstream-manifests.md#u012) | Lockfile Integrity Weakened | Upstream | INFO | [Upstream Manifests](upstream-manifests.md) |
 | [U013](upstream-release.md#u013) | CI Exfil Shape (Local) | Upstream | MEDIUM | [Upstream Release Integrity](upstream-release.md) |
 | [U014](upstream-release.md#u014) | Git-History Credential Sweep (Local) | Upstream | MEDIUM | [Upstream Release Integrity](upstream-release.md) |
 | [U015](upstream-manifests.md#u015) | Federated Upstream Manifest Delta | Upstream | INFO | [Upstream Manifests](upstream-manifests.md) |

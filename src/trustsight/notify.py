@@ -171,6 +171,14 @@ def _detail_fields(detail: dict | None, *, include_diff: bool = False) -> dict:
                 fields[key] = value
         if detail.get("diff_truncated") is True:
             fields["diff_truncated"] = True
+        # Manifest deltas, including the ones read from inside the declared
+        # source archive: the recipe diff cannot show those, so the feed gets
+        # the bounded summary alongside it.
+        manifests = detail.get("manifests")
+        if manifests:
+            fields["manifests"] = manifests
+        if detail.get("manifests_truncated") is True:
+            fields["manifests_truncated"] = True
     return fields
 
 

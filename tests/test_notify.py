@@ -889,3 +889,37 @@ def test_scan_payload_empty_cycle_is_not_published():
     from trustsight.notify import scan_payloads
 
     assert scan_payloads(CycleResult()) == []
+
+
+def test_an_alert_carries_the_bounded_manifest_delta():
+    """A manifest inside the source archive never appears in the recipe diff,
+    so the notification has to carry its dependency delta itself."""
+    from types import SimpleNamespace
+
+    from trustsight.full_aur._baseline_build import (
+        MAX_NOTIFY_MANIFESTS,
+        MAX_NOTIFY_MANIFEST_NAMES,
+        _manifests_summary,
+    )
+
+    deltas = [
+        SimpleNamespace(
+            path=f"upstream/pkg{i}/Cargo.toml", format="cargo",
+            status="modified",
+            added={f"dep-{n}" for n in range(MAX_NOTIFY_MANIFEST_NAMES + 3)},
+            removed={"old-dep"},
+        )
+        for i in range(MAX_NOTIFY_MANIFESTS + 4)
+    ]
+    summary = _manifests_summary(deltas)
+    assert len(summary) == MAX_NOTIFY_MANIFESTS
+    assert len(summary[0]["added"]) == MAX_NOTIFY_MANIFEST_NAMES
+    assert summary[0]["added_total"] == MAX_NOTIFY_MANIFEST_NAMES + 3
+    assert summary[0]["removed"] == ["old-dep"]
+
+    cycle = CycleResult(new_alerts=[("pkg", "U001")], over_threshold=[("pkg", 50)])
+    cycle.detail = {"pkg": {"manifests": summary, "manifests_truncated": True}}
+    payload = alert_payload(cycle)
+    entry = payload["over_threshold"][0]
+    assert entry["manifests"][0]["path"].startswith("upstream/")
+    assert entry["manifests_truncated"] is True

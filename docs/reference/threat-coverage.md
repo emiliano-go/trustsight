@@ -269,8 +269,8 @@ claim of complete coverage.
 | U008 | Git-History Credential Sweep | upstream-ci |  | upstream-release | L7 | MEDIUM | 15 | CWE-522 |  |
 | U009 | New CI Surface Committed | upstream-ci |  | upstream-release | L1 | LOW | 5 | CWE-494 |  |
 | U010 | Unauditable Upstream | source |  | upstream-release | L3 | MEDIUM | 15 | CWE-494 |  |
-| U011 | Upstream Origin Changed |  |  | upstream-manifests | L3 | None | 0 | CWE-494 |  |
-| U012 | Lockfile Integrity Weakened |  |  | upstream-manifests | L3 | None | 0 | CWE-494 |  |
+| U011 | Upstream Origin Changed | dependency-manifest |  | upstream-manifests | L3 | MEDIUM | 15 | CWE-494 |  |
+| U012 | Lockfile Integrity Weakened | dependency-manifest |  | upstream-manifests | L3 | INFO | 0 | CWE-494 |  |
 | U013 | CI Exfil Shape (Local) | upstream-ci |  | upstream-release | L3 | MEDIUM | 0 | CWE-494 | calibration |
 | U014 | Git-History Credential Sweep (Local) | upstream-ci |  | upstream-release | L3 | MEDIUM | 0 | CWE-494 | calibration |
 | U015 | Federated Upstream Manifest Delta | dependency-manifest |  | upstream-manifests | L3 | INFO | 0 | CWE-494 | calibration |

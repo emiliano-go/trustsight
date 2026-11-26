@@ -31,6 +31,7 @@ from .upstream_scan import (
     verify_archive_checksum,
 )
 from .analysis.artifact import unsafe_runpath
+from .analysis.release_asset import compare_release_asset
 from .analysis.upstream_release import (
     declared_upstream_repo,
     is_ci_workflow_path,
@@ -254,6 +255,39 @@ def _stable_manifest_paths(items) -> list[tuple[str, str]]:
             for part, (_path, text) in zip(parts, entries)]
 
 
+def _tag_from_url(url: str) -> str:
+    """The declared tag in a VCS URL fragment, when present."""
+    _, _, fragment = str(url or "").partition("#")
+    for part in fragment.split("&"):
+        key, _, value = part.partition("=")
+        if key == "tag" and value:
+            return value
+    return ""
+
+
+def _tag_archive_url(target, tag: str) -> str:
+    """A forge tag archive URL for the release-asset comparison."""
+    if not tag or not target:
+        return ""
+    from urllib.parse import quote
+
+    tag = quote(str(tag), safe="")
+    host = target.host
+    if host == "github.com":
+        return (f"https://github.com/{target.owner}/{target.repo}"
+                f"/archive/refs/tags/{tag}.tar.gz")
+    if host == "gitlab.com":
+        return (f"https://gitlab.com/{target.owner}/{target.repo}/-/archive/"
+                f"{tag}/{target.repo}-{tag}.tar.gz")
+    if host == "codeberg.org":
+        return (f"https://codeberg.org/{target.owner}/{target.repo}"
+                f"/archive/{tag}.tar.gz")
+    if host == "bitbucket.org":
+        return (f"https://bitbucket.org/{target.owner}/{target.repo}"
+                f"/get/{tag}.tar.gz")
+    return ""
+
+
 def collect_upstream_manifest_texts(
     recipe_text: str,
     *,
@@ -419,6 +453,43 @@ def collect_upstream_manifest_texts(
                for a in parsed.get("artifacts") or ()):
             notes.append("upstream_scan_partial")
         findings.extend(_artifact_findings(parsed.get("artifacts") or ()))
+        tag = _tag_from_url(url) or version
+        tag_url = _tag_archive_url(target, tag)
+        if (tag_url and tag_url != url and parsed.get("inventory")
+                and not parsed.get("inventory_truncated")
+                and budget.allow_archive()):
+            remaining = deadline_at - time.monotonic()
+            try:
+                tag_target = parse_forge_target(tag_url, allowed_hosts=allowed)
+                if remaining <= 0:
+                    notes.append("upstream_scan_deadline")
+                elif fetcher is not None:
+                    tag_data = fetcher(tag_url, tag_target)
+                elif socket_path:
+                    tag_data = fetch_from_socket(
+                        socket_path, url=tag_url, expected="", algorithm="",
+                        min_bits=0, max_bytes=_MAX_ARCHIVE_BYTES,
+                        deadline_seconds=min(remaining, _HARD_DEADLINE_SECONDS))
+                else:
+                    token = _token_for(tag_target.host)
+                    tag_data = fetch_bytes(
+                        tag_url, allowed_hosts=allowed, token=token,
+                        max_bytes=_MAX_ARCHIVE_BYTES,
+                        deadline_seconds=remaining)
+                if budget.allow_bytes(len(tag_data)):
+                    tag_parsed = (extractor or manifest_client.parse_upstream_archive)(
+                        tag_target.slug, tag_data)
+                    finding = compare_release_asset(
+                        parsed.get("inventory") or (),
+                        tag_parsed.get("inventory") or ())
+                    if finding:
+                        findings.append(finding)
+                else:
+                    notes.append("upstream_scan_budget")
+            except (UpstreamFetchError, UpstreamScanError, CredentialError):
+                notes.append("upstream_scan_tag_refused")
+            except Exception:  # noqa: BLE001 - tag comparison is a boundary
+                notes.append("upstream_scan_tag_refused")
         for path, text in _stable_manifest_paths(
                 parsed.get("manifest_texts") or ()):
             if is_ci_workflow_path(path):

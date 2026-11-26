@@ -49,15 +49,21 @@ def _is_build_input(name: str) -> bool:
 
 
 def _inventory_map(inventory) -> dict[str, str]:
-    out: dict[str, str] = {}
+    entries: list[tuple[str, str]] = []
     for entry in inventory or ():
         if not isinstance(entry, (tuple, list)) or len(entry) < 3:
             continue
         name, _size, digest = entry[0], entry[1], entry[2]
         normalised = _normalise(name)
         if normalised:
-            out[normalised] = str(digest)
-    return out
+            entries.append((normalised, str(digest)))
+    if not entries:
+        return {}
+    roots = {name.split("/", 1)[0] for name, _ in entries if "/" in name}
+    if len(roots) == 1 and all("/" in name for name, _ in entries):
+        root = roots.pop() + "/"
+        entries = [(name[len(root):], digest) for name, digest in entries]
+    return dict(entries)
 
 
 def compare_release_asset(

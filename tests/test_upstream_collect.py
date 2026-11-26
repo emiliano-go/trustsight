@@ -389,3 +389,38 @@ def test_manifest_paths_are_left_alone_when_the_root_is_not_shared():
         [("Cargo.toml", "x"), ("pkg/package.json", "y")]
     ) == [("Cargo.toml", "x"), ("pkg/package.json", "y")]
     assert _stable_manifest_paths([]) == []
+
+
+def test_a016_compares_a_release_asset_with_its_tag_archive():
+    recipe = (
+        "pkgname=demo\n"
+        "pkgver=1.0\n"
+        'url=https://github.com/owner/repo\n'
+        'source=("https://github.com/owner/repo/releases/download/v1.0/repo-1.0.tar.gz")\n'
+        f"sha256sums=('{SHA256}')\n"
+    )
+    calls = []
+
+    def fetcher(url, target):
+        calls.append(url)
+        return DATA
+
+    def extractor(_slug, _data):
+        if len(calls) == 1:
+            return {
+                "manifest_texts": [],
+                "inventory": [("repo-1.0/Makefile.am", 1, "a"),
+                              ("repo-1.0/m4/evil.m4", 1, "b")],
+                "complete": True, "refused": False, "malformed": False,
+            }
+        return {
+            "manifest_texts": [],
+            "inventory": [("repo-1.0/Makefile.am", 1, "a")],
+            "complete": True, "refused": False, "malformed": False,
+        }
+
+    _texts, notes, findings, _verified = collect_upstream_manifest_texts(
+        recipe, config=CONFIG, fetcher=fetcher, extractor=extractor)
+    assert "upstream_scan_tag_refused" not in notes
+    assert any(f.get("rule_id") == "A016" for f in findings)
+    assert len(calls) == 2

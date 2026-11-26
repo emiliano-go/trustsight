@@ -69,7 +69,7 @@ The rules that make up this category are listed below, each with the series that
 | [C027](#c027) | Declared Install Script Is Absent | INFO |
 | [C033](#c033) | Context Bleed | MEDIUM |
 | [C035](#c035) | Owned Namespace Occupied | HIGH |
-| [C036](#c036) | Version Bump Used As Cover For New Capability | - |
+| [C036](#c036) | Version Bump Used As Cover For New Capability | MEDIUM |
 | [H001](#h001) | Checksum Disabled | HIGH |
 | [H002](#h002) | Checksum Emptied | HIGH |
 | [H005](#h005) | validpgpkeys Added | - |
@@ -913,6 +913,9 @@ that declares the same host under another owner is reported at weight 0
 (anergic) until calibrated.
 
 ### C036: Version Bump Used As Cover For New Capability {#c036}
+
+- **Severity:** MEDIUM
+- **Category:** `integrity`
 
 - **Condition:** `sha256sums` changed, `pkgver`/`pkgrel`/`epoch` moved, and the same diff adds a network fetch or a script execution in a critical function.
 - **Description:** A routine version bump refreshes checksums without adding a capability. A bump that also starts downloading or running a new file is the checksum-refresh shape used as cover, so it is reported at MEDIUM and scored. C001 owns the stable-version shape and C002 owns the ordinary bump.

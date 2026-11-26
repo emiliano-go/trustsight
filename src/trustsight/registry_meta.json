@@ -462,9 +462,9 @@
     "uid": "TS-0315",
     "name": "Version Bump Used As Cover For New Capability",
     "canonical": true,
-    "severity_text": null,
-    "severity": null,
-    "capability": null,
+    "severity_text": "MEDIUM",
+    "severity": "MEDIUM",
+    "capability": "integrity",
     "target": null
   },
   "d001": {

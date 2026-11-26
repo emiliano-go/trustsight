@@ -186,6 +186,21 @@ def test_the_worker_rejects_a_non_array_artifact_manifest():
     assert "error" in response
 
 
+def test_the_worker_reads_the_operator_wrapper():
+    """A handoff may carry the declared surface beside the manifest."""
+    import json
+
+    body = json.dumps({
+        "path": "__artifact_manifest__",
+        "text": json.dumps({
+            "manifest": [{"path": "/usr/bin/x", "setuid": True}],
+            "declared": {"mode_intent": "documented setuid"},
+        }),
+    }).encode()
+    response = manifest_worker._handle(body)
+    assert response["result"]["findings"] == []
+
+
 def test_the_worker_rejects_a_pathless_artifact_record():
     import json
 

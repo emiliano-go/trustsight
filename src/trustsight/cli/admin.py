@@ -911,14 +911,15 @@ def _register_full_aur(app: typer.Typer) -> None:
         manifest_dir: Path | None = typer.Option(
             None, "--manifest-dir",
             help="Directory of <package>.json artifact manifests produced by "
-                 "an external build; without one every package reports "
-                 "l9_unavailable."),
+                 "an external build (a JSON array, or {manifest, declared}); "
+                 "without one every package reports l9_unavailable."),
         json_output: bool = typer.Option(False, "--json", help="Output JSON"),
     ):
         """Batch L9 verification for corpus operators.
 
         TrustSight does not build packages: the manifests in ``--manifest-dir``
-        are the whole handoff, named ``<package>.json``.  The static core never
+        are the whole handoff, named ``<package>.json`` (a JSON array, or an
+        object carrying ``manifest`` and ``declared``).  The static core never
         runs package code.  With the lane disabled, a missing manifest, or no
         sandbox container, every package reports ``l9_unavailable`` - a
         weight-0 boundary, never a verdict.

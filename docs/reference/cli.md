@@ -873,7 +873,7 @@ trustsight full-aur verify [--package NAME ...] [--limit N]
                            [--manifest-dir DIR] [--json]
 ```
 
-The batch L9 lane for corpus operators: it runs the optional artifact inspection over the corpus (or the named packages). TrustSight does not build packages, so the manifests are the whole handoff: `--manifest-dir` holds one `<package>.json` per package, produced by an external build. Without it, with `[verify] enabled = false` (the default), or without a read-role sandbox, every package reports `l9_unavailable`, a weight-0 boundary rather than a verdict.
+The batch L9 lane for corpus operators: it runs the optional artifact inspection over the corpus (or the named packages). TrustSight does not build packages, so the manifests are the whole handoff: `--manifest-dir` holds one `<package>.json` per package, produced by an external build, holding either the manifest array or an object with `manifest` and `declared`. Only the read-role worker parses those bytes; the parent never does. Without a directory, with `[verify] enabled = false` (the default), or without a read-role sandbox, every package reports `l9_unavailable`, a weight-0 boundary rather than a verdict.
 
 ### What one cycle does
 

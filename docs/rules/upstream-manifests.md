@@ -89,8 +89,8 @@ The rules that make up this category are listed below, each with the series that
 | [U004](#u004) | Registry Redirect | MEDIUM |
 | [U005](#u005) | Dependency Surface Jump | INFO |
 | [U006](#u006) | Manifest Changed Without Its Lockfile | INFO |
-| [U011](#u011) | Upstream Origin Changed | - |
-| [U012](#u012) | Lockfile Integrity Weakened | - |
+| [U011](#u011) | Upstream Origin Changed | MEDIUM |
+| [U012](#u012) | Lockfile Integrity Weakened | INFO |
 | [U015](#u015) | Federated Upstream Manifest Delta | INFO |
 <!-- /generated: page-index -->
 
@@ -190,6 +190,10 @@ promoted.
 
 ### U011: Upstream Origin Changed {#u011}
 
+- **Target:** committed manifest files
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `dependency-manifest`
+
 - **Condition:** A dependency present in both the old and new manifest changes origin (source kind or registry/host) while at least one side names one.
 
 The declared origin moved under a dependency that already existed: a
@@ -199,6 +203,10 @@ different place, which is the manifest-level counterpart of a source host
 move. A dependency that merely appears or disappears is owned by U001/U002.
 
 ### U012: Lockfile Integrity Weakened {#u012}
+
+- **Target:** committed manifest files
+- **Severity:** INFO (weight 0)
+- **Category:** `dependency-manifest`
 
 - **Condition:** A dependency in a committed lockfile loses its integrity value, or its integrity algorithm is downgraded (e.g. `sha512` to `sha256`), or the lockfile itself is removed.
 

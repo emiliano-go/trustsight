@@ -100,3 +100,41 @@ def test_first_upstream_workflows_are_a_baseline_and_later_additions_fire():
     assert manifests == ()
     assert [w.path for w in workflows] == [
         "upstream/.github/workflows/release.yml"]
+
+
+def test_a_state_from_the_old_path_scheme_is_a_baseline():
+    """Version 1 keyed manifests under the archive's versioned directory.  A
+    delta against it would re-report the whole tree, so it must read as a
+    baseline: one quiet cycle, then stable keys."""
+    import json
+
+    from trustsight.analysis.manifest_state import _STATE_VERSION
+
+    assert _STATE_VERSION == 2
+    legacy = json.dumps({
+        "version": 1,
+        "documents": [{
+            "path": "upstream/xserver-8d3b628/Xext/meson.build",
+            "format": "meson", "dependencies": [], "integrity": [],
+            "redirects": [], "unresolved": [],
+        }],
+        "workflows": [], "upstream_workflows": [], "upstream": True,
+    })
+    current = build_manifest_state(
+        [("upstream/Xext/meson.build", "[project]\n")], [])
+    manifests, workflows = manifest_state_delta(legacy, current)
+    assert manifests == ()
+    assert workflows == ()
+
+
+def test_normalized_paths_survive_an_upstream_commit_change():
+    """The same tree under two different archive roots is one state, not an
+    add/remove of every manifest."""
+    old = build_manifest_state(
+        [("upstream/Xext/meson.build", "[project]\n"),
+         ("upstream/meson.build", "[project]\n")], [])
+    new = build_manifest_state(
+        [("upstream/Xext/meson.build", "[project]\n"),
+         ("upstream/meson.build", "[project]\n")], [])
+    manifests, _workflows = manifest_state_delta(old, new)
+    assert manifests == ()

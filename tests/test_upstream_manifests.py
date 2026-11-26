@@ -682,3 +682,68 @@ def test_snapshot_refuses_an_oversize_manifest_and_flags_incomplete(monkeypatch)
     assert not complete
     assert texts == []
     assert dict(heads)["demo/Cargo.toml"]
+
+
+def test_one_rule_cannot_flood_a_package():
+    """A monorepo can ship dozens of manifests; the rule lists a bounded
+    number and states the rest, instead of emitting one row per file."""
+    from trustsight.analysis.bounded_findings import (
+        MAX_LISTED_PER_RULE,
+        bounded_add,
+    )
+
+    out = []
+
+    def add(rule_id, name, severity, category, match, **extra):
+        out.append({"rule_id": rule_id, "match": match, **extra})
+
+    emit, flush = bounded_add(add)
+    for i in range(MAX_LISTED_PER_RULE + 5):
+        emit("U001", "Manifest Added Or Removed", "INFO",
+             "dependency-manifest", f"manifest added: upstream/m{i}/Cargo.toml",
+             file=f"upstream/m{i}/Cargo.toml")
+        # An exact repeat is the same fact and must not be counted twice.
+        emit("U001", "Manifest Added Or Removed", "INFO",
+             "dependency-manifest", f"manifest added: upstream/m{i}/Cargo.toml",
+             file=f"upstream/m{i}/Cargo.toml")
+    flush()
+
+    listed = [f for f in out if not f.get("suppressed")]
+    summary = [f for f in out if f.get("suppressed")]
+    assert len(listed) == MAX_LISTED_PER_RULE
+    assert len(summary) == 1
+    assert summary[0]["suppressed"] == 5
+    # The count reports; it never scores on top of the rows it summarises.
+    assert summary[0]["weight_override"] == 0
+
+
+def test_a_bulk_manifest_addition_is_bounded_on_the_report():
+    from trustsight.analysis.manifest_state import (
+        build_manifest_state,
+        manifest_state_delta,
+    )
+    from trustsight.analysis.bounded_findings import MAX_LISTED_PER_RULE
+    from trustsight.analysis.upstream_manifests import upstream_manifest_findings
+
+    old = build_manifest_state([("upstream/keep/Cargo.toml", '[package]\nname="x"\n')], [])
+    new = build_manifest_state(
+        [("upstream/keep/Cargo.toml", '[package]\nname="x"\n')]
+        + [(f"upstream/m{i}/Cargo.toml", '[package]\nname="x"\n') for i in range(60)],
+        [],
+    )
+    manifests, _workflows = manifest_state_delta(old, new)
+
+    class Delta:
+        pass
+
+    delta = Delta()
+    delta.manifests = manifests
+    out = []
+    upstream_manifest_findings("", [], delta, lambda *a, **k: out.append(
+        {"rule_id": a[0], "match": a[4], **k}), {}, "pkg")
+
+    u001 = [f for f in out if f["rule_id"] == "U001"]
+    listed = [f for f in u001 if not f.get("suppressed")]
+    summary = [f for f in u001 if f.get("suppressed")]
+    assert len(listed) == MAX_LISTED_PER_RULE
+    assert summary and summary[0]["suppressed"] == 60 - MAX_LISTED_PER_RULE

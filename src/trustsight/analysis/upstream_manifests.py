@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 
+from .bounded_findings import bounded_add as _bounded_add
 from .manifests import manifest_format
 
 #: Ecosystem keyword -> format family, for the boundary cross-reference.
@@ -143,6 +144,7 @@ def upstream_manifest_findings(
     package_name: str = "",
 ) -> None:
     """Emit U001-U005 (and the W009 refusal boundary) for one analysis."""
+    add, flush = _bounded_add(add)
     thresholds = (config or {}).get("thresholds", {}) if isinstance(config, dict) else {}
     try:
         jump = float(thresholds.get("u005", {}).get("jump_factor", 3.0) or 3.0)
@@ -228,3 +230,4 @@ def upstream_manifest_findings(
                 file=path, manifest=path, reason=reason)
 
     _integrity_pairs(delta, add)
+    flush()

@@ -229,6 +229,31 @@ def _token_for(host: str):
     return resolve_token(provider)
 
 
+def _stable_manifest_paths(items) -> list[tuple[str, str]]:
+    """Drop the archive's single top-level directory from every manifest path.
+
+    A source tarball extracts under a versioned directory - ``xserver-8d3b628.../``
+    - so keeping it in the path renames every manifest whenever the upstream
+    commit changes.  The whole tree then reads as removed and re-added, and
+    U001/U002 fire once per file: one analysis carried 128 U001 rows for a
+    single package update.  The directory is an artifact of how the tarball
+    was packaged, not part of the manifest's identity.
+
+    A tarball without a single shared root, or one whose members sit at the
+    top level, keeps its paths as they are.
+    """
+    entries = [(str(path), text) for path, text in (items or ())]
+    if not entries:
+        return []
+    parts = [path.split("/") for path, _text in entries]
+    if not all(len(part) > 1 for part in parts):
+        return entries
+    if len({part[0] for part in parts}) != 1:
+        return entries
+    return [("/".join(part[1:]), text)
+            for part, (_path, text) in zip(parts, entries)]
+
+
 def collect_upstream_manifest_texts(
     recipe_text: str,
     *,
@@ -394,7 +419,8 @@ def collect_upstream_manifest_texts(
                for a in parsed.get("artifacts") or ()):
             notes.append("upstream_scan_partial")
         findings.extend(_artifact_findings(parsed.get("artifacts") or ()))
-        for path, text in parsed.get("manifest_texts") or ():
+        for path, text in _stable_manifest_paths(
+                parsed.get("manifest_texts") or ()):
             if is_ci_workflow_path(path):
                 findings.extend(_workflow_findings(f"upstream/{path}", text))
             size = len(text.encode("utf-8", "replace"))

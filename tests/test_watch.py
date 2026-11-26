@@ -207,6 +207,7 @@ def test_a_second_cycle_reports_the_takeover_once(fake_aur, monkeypatch):
     fired = {f["rule_id"] for f in second.cluster_findings}
     assert {"H044", "H026"} <= fired
     assert ("pkg", "H026") in second.new_alerts
+    assert ("pkg", "H044") not in second.new_alerts
     # The recipe text did not change across the adoption.  There is no
     # previous revision to diff against, so the notification must not carry a
     # full-addition diff that reads as if the whole PKGBUILD were new.

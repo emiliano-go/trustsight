@@ -45,7 +45,7 @@ from ...recipedoc import recipe_states
 from ...rules import find_line_in_diff
 from ...diffdoc import parse_diff_lines
 from ...tokenizer import split_lines
-from ._checksums import _is_checksum_array, _package_fetch_client, addendum4_findings, array_order_changes, isolated_checksum_insertion, per_arch_checksums_cover_sources
+from ._checksums import _family_values, _is_checksum_array, _package_fetch_client, addendum4_findings, array_order_changes, isolated_checksum_insertion, per_arch_checksums_cover_sources
 from ._common import _BINARY_ARTIFACT_RE, _TRUSTED_BUCKETS
 from ._hooks import install_script_findings
 from ._hygiene import _build_hygiene_findings, _splicing_findings, capability_in_diff, diff_structure_findings
@@ -507,19 +507,37 @@ def _structural_findings_from_request(request: ScanRequest) -> list[dict]:
                 weight_override=15,
                 line=find_line_in_diff(diff_text, r"""sha256sums\s*=\s*\('"""))
         elif not version_moved:
-            # A signed upstream_hash baseline that names this exact
-            # url|version|sha256 triple is the vendor's own statement of the
-            # artifact, so the checksum change is corroborated rather than
-            # unexplained: report it, never score it.  An uncorroborated swap
-            # keeps the HIGH weight.
-            corroborated = _upstream_hash_corroborated(
-                current_text, verified_upstream_hashes)
-            add("C001", "Checksum Changed Without Source Change With Stable Version",
-                "INFO" if corroborated else "HIGH", "integrity",
-                "sha256sums changed but source URLs and pkgver/pkgrel/epoch "
-                "unchanged",
-                weight_override=0 if corroborated else None,
-                line=find_line_in_diff(diff_text, r"""sha256sums\s*=\s*\('"""))
+            old_sums = (_family_values(scope_pre.arrays, "sha256sums")
+                        if scope_pre is not None else ())
+            new_sums = (_family_values(scope_post.arrays, "sha256sums")
+                        if scope_post is not None else ())
+            old_skip = any(str(value).strip().upper() in ("SKIP", "NONE")
+                           for value in old_sums)
+            new_skip = any(str(value).strip().upper() in ("SKIP", "NONE")
+                           for value in new_sums)
+            if old_skip and not new_skip:
+                # SKIP -> a real digest is a verification improvement for a
+                # VCS source, not the surgical swap C001 describes.
+                add("C002", "Checksum Updated With Version Bump", "INFO",
+                    "integrity",
+                    "checksum populated for a VCS source",
+                    line=find_line_in_diff(diff_text, r"""sha256sums\s*=\s*\('"""))
+            else:
+                # A signed upstream_hash baseline that names this exact
+                # url|version|sha256 triple is the vendor's own statement of
+                # the artifact, so the checksum change is corroborated rather
+                # than unexplained: report it, never score it.  An
+                # uncorroborated swap keeps the HIGH weight.
+                corroborated = _upstream_hash_corroborated(
+                    current_text, verified_upstream_hashes)
+                add("C001",
+                    "Checksum Changed Without Source Change With Stable Version",
+                    "INFO" if corroborated else "HIGH", "integrity",
+                    "sha256sums changed but source URLs and pkgver/pkgrel/epoch "
+                    "unchanged",
+                    weight_override=0 if corroborated else None,
+                    line=find_line_in_diff(
+                        diff_text, r"""sha256sums\s*=\s*\('"""))
         else:
             add("C002", "Checksum Updated With Version Bump", "INFO", "integrity",
                 "sha256sums updated alongside a version move",

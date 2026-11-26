@@ -292,3 +292,18 @@ def test_h065_node_print_introspection_is_not_obfuscation():
 
 def test_h065_quote_assembly_still_fires():
     assert "H065" in _ids(_diff("PKGBUILD", '  b"u"n --version'))
+
+
+# C001: populating a VCS checksum is an improvement, not a swap.
+
+def test_c001_skip_to_real_hash_for_a_vcs_source_is_c002():
+    cur = ("pkgname=p\npkgver=1\npkgrel=1\n"
+           "source=('git+https://github.com/x/y')\n"
+           f"sha256sums=('{'b' * 64}')\n")
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,4 +1,4 @@\n"
+            " pkgname=p\n pkgver=1\n pkgrel=1\n"
+            " source=('git+https://github.com/x/y')\n"
+            f"-sha256sums=('SKIP')\n+sha256sums=('{'b' * 64}')\n")
+    ids = _ids(diff, cur)
+    assert "C001" not in ids and "C002" in ids
+

@@ -6,6 +6,9 @@
 
 ### Fixed
 
+- **Cluster context no longer alerts on every member.** Ownership transitions, adoption bursts, maintainer-baseline deviations and new packset families still describe the corpus, but a member is only announced when it has its own scored finding.
+- **C001 stands down when a VCS checksum moves from SKIP to a real digest.** Populating the hash is a verification improvement, not a surgical swap.
+
 - **C001 no longer fires across a version bump.** A bump that also adds a fetch or a script execution is C036 at MEDIUM; C001 stays on the stable-version shape its name describes.
 - **H064 no longer reads a `conflicts` entry as a `provides`/`replaces` claim.** A conflict refuses co-installation without claiming the name, so it does not name scope expansion.
 

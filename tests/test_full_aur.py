@@ -587,12 +587,20 @@ def test_context_cluster_rules_do_not_alert(monkeypatch):
         {"rule_id": "H046", "severity": "MEDIUM",
          "name": "Orphan/Adoption Dependency", "match": "x",
          "params": {"members": ["dep-pkg"]}},
+        {"rule_id": "H073", "severity": "MEDIUM",
+         "name": "Introduction Rate Deviation", "match": "packset",
+         "params": {"members": ["packset-member"]}},
+        {"rule_id": "H058", "severity": "MEDIUM",
+         "name": "Maintainer Baseline Deviation", "match": "bulk edit",
+         "params": {"members": ["bulk-pkg"]}},
     ])
 
     pipeline.run_baseline_build()
 
     assert ("dep-pkg", "H046") in seen
     assert ("sdl2", "H061") not in seen
+    assert ("packset-member", "H073") not in seen
+    assert ("bulk-pkg", "H058") not in seen
 
 
 def test_impersonation_gated_bursts_do_not_alert(monkeypatch):

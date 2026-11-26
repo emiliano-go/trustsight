@@ -1,48 +1,33 @@
 {
   "benign/7zip.json": {
-    "allow": [
-      "A003",
-      "A005"
-    ],
+    "allow": [],
     "kind": "benign",
     "lane": "manifest",
-    "note": "Official build, 17 entries; known census rules only."
+    "note": "Official build, 17 entries; only the known census rules fire."
   },
   "benign/bash.json": {
-    "allow": [
-      "A003",
-      "A005"
-    ],
+    "allow": [],
     "kind": "benign",
     "lane": "manifest",
-    "note": "Official build, 267 entries; known census rules only."
+    "note": "Official build, 267 entries; only the known census rules fire."
   },
   "benign/coreutils.json": {
-    "allow": [
-      "A003",
-      "A005"
-    ],
+    "allow": [],
     "kind": "benign",
     "lane": "manifest",
-    "note": "Official build, 398 entries; known census rules only."
+    "note": "Official build, 398 entries; only the known census rules fire."
   },
   "benign/curl.json": {
-    "allow": [
-      "A003",
-      "A005"
-    ],
+    "allow": [],
     "kind": "benign",
     "lane": "manifest",
-    "note": "Official build, 567 entries; known census rules only."
+    "note": "Official build, 567 entries; only the known census rules fire."
   },
   "benign/file.json": {
-    "allow": [
-      "A003",
-      "A005"
-    ],
+    "allow": [],
     "kind": "benign",
     "lane": "manifest",
-    "note": "Official build, 23 entries; known census rules only."
+    "note": "Official build, 23 entries; only the known census rules fire."
   },
   "benign/git.json": {
     "allow": [
@@ -51,187 +36,133 @@
     ],
     "kind": "benign",
     "lane": "manifest",
-    "note": "Official build, 600 entries; known census rules only."
+    "note": "Official build, 600 entries; only the known census rules fire."
   },
   "benign/gzip.json": {
-    "allow": [
-      "A003",
-      "A005"
-    ],
+    "allow": [],
     "kind": "benign",
     "lane": "manifest",
-    "note": "Official build, 31 entries; known census rules only."
+    "note": "Official build, 31 entries; only the known census rules fire."
   },
   "benign/jq.json": {
-    "allow": [
-      "A003",
-      "A005"
-    ],
+    "allow": [],
     "kind": "benign",
     "lane": "manifest",
-    "note": "Official build, 23 entries; known census rules only."
+    "note": "Official build, 23 entries; only the known census rules fire."
   },
   "benign/less.json": {
-    "allow": [
-      "A003",
-      "A005"
-    ],
+    "allow": [],
     "kind": "benign",
     "lane": "manifest",
-    "note": "Official build, 16 entries; known census rules only."
+    "note": "Official build, 16 entries; only the known census rules fire."
   },
   "benign/libjpeg-turbo.json": {
-    "allow": [
-      "A003",
-      "A005"
-    ],
+    "allow": [],
     "kind": "benign",
     "lane": "manifest",
-    "note": "Official build, 52 entries; known census rules only."
+    "note": "Official build, 52 entries; only the known census rules fire."
   },
   "benign/libpng.json": {
-    "allow": [
-      "A003",
-      "A005"
-    ],
+    "allow": [],
     "kind": "benign",
     "lane": "manifest",
-    "note": "Official build, 26 entries; known census rules only."
+    "note": "Official build, 26 entries; only the known census rules fire."
   },
   "benign/man-db.json": {
-    "allow": [
-      "A003",
-      "A005"
-    ],
+    "allow": [],
     "kind": "benign",
     "lane": "manifest",
-    "note": "Official build, 533 entries; known census rules only."
+    "note": "Official build, 533 entries; only the known census rules fire."
   },
   "benign/nano.json": {
-    "allow": [
-      "A003",
-      "A005"
-    ],
+    "allow": [],
     "kind": "benign",
     "lane": "manifest",
-    "note": "Official build, 188 entries; known census rules only."
+    "note": "Official build, 188 entries; only the known census rules fire."
   },
   "benign/noto-fonts.json": {
-    "allow": [
-      "A003",
-      "A005"
-    ],
+    "allow": [],
     "kind": "benign",
     "lane": "manifest",
-    "note": "Official build, 635 entries; known census rules only."
+    "note": "Official build, 635 entries; only the known census rules fire."
   },
   "benign/python-pip.json": {
-    "allow": [
-      "A003",
-      "A005"
-    ],
+    "allow": [],
     "kind": "benign",
     "lane": "manifest",
-    "note": "Official build, 1466 entries; known census rules only."
+    "note": "Official build, 1466 entries; only the known census rules fire."
   },
   "benign/python-setuptools.json": {
-    "allow": [
-      "A003",
-      "A005"
-    ],
+    "allow": [],
     "kind": "benign",
     "lane": "manifest",
-    "note": "Official build, 466 entries; known census rules only."
+    "note": "Official build, 466 entries; only the known census rules fire."
   },
   "benign/python.json": {
     "allow": [
-      "A003",
-      "A005"
+      "A003"
     ],
     "kind": "benign",
     "lane": "manifest",
-    "note": "Official build, 3185 entries; known census rules only."
+    "note": "Official build, 3185 entries; only the known census rules fire."
   },
   "benign/rsync.json": {
     "allow": [
-      "A003",
-      "A005"
+      "A003"
     ],
     "kind": "benign",
     "lane": "manifest",
-    "note": "Official build, 49 entries; known census rules only."
+    "note": "Official build, 49 entries; only the known census rules fire."
   },
   "benign/tar.json": {
-    "allow": [
-      "A003",
-      "A005"
-    ],
+    "allow": [],
     "kind": "benign",
     "lane": "manifest",
-    "note": "Official build, 135 entries; known census rules only."
+    "note": "Official build, 135 entries; only the known census rules fire."
   },
   "benign/tmux.json": {
-    "allow": [
-      "A003",
-      "A005"
-    ],
+    "allow": [],
     "kind": "benign",
     "lane": "manifest",
-    "note": "Official build, 10 entries; known census rules only."
+    "note": "Official build, 10 entries; only the known census rules fire."
   },
   "benign/vim.json": {
-    "allow": [
-      "A003",
-      "A005"
-    ],
+    "allow": [],
     "kind": "benign",
     "lane": "manifest",
-    "note": "Official build, 161 entries; known census rules only."
+    "note": "Official build, 161 entries; only the known census rules fire."
   },
   "benign/wget.json": {
-    "allow": [
-      "A003",
-      "A005"
-    ],
+    "allow": [],
     "kind": "benign",
     "lane": "manifest",
-    "note": "Official build, 176 entries; known census rules only."
+    "note": "Official build, 176 entries; only the known census rules fire."
   },
   "benign/which.json": {
-    "allow": [
-      "A003",
-      "A005"
-    ],
+    "allow": [],
     "kind": "benign",
     "lane": "manifest",
-    "note": "Official build, 9 entries; known census rules only."
+    "note": "Official build, 9 entries; only the known census rules fire."
   },
   "benign/xz.json": {
-    "allow": [
-      "A003",
-      "A005"
-    ],
+    "allow": [],
     "kind": "benign",
     "lane": "manifest",
-    "note": "Official build, 308 entries; known census rules only."
+    "note": "Official build, 308 entries; only the known census rules fire."
   },
   "benign/zsh.json": {
     "allow": [
-      "A003",
       "A005"
     ],
     "kind": "benign",
     "lane": "manifest",
-    "note": "Official build, 1215 entries; known census rules only."
+    "note": "Official build, 1215 entries; only the known census rules fire."
   },
   "benign/zstd.json": {
-    "allow": [
-      "A003",
-      "A005"
-    ],
+    "allow": [],
     "kind": "benign",
     "lane": "manifest",
-    "note": "Official build, 32 entries; known census rules only."
+    "note": "Official build, 32 entries; only the known census rules fire."
   },
   "built/l9-clinic/manifest.json": {
     "expect": [
@@ -288,6 +219,12 @@
     "kind": "positive",
     "lane": "manifest",
     "note": "A linked library whose stem is not in depends."
+  },
+  "rule-fixtures/a003-provides-negative.json": {
+    "expect": [],
+    "kind": "negative",
+    "lane": "manifest",
+    "note": "The linked soname is supplied by a declared provides entry."
   },
   "rule-fixtures/a004-negative.json": {
     "expect": [],

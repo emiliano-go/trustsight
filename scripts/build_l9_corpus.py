@@ -75,6 +75,12 @@ FIXTURES: dict[str, tuple[str, str, list[str], str, dict]] = {
         {"manifest": [_manifest("/usr/bin/l9-app", 0o755,
                                 elf={"needed": ["libl9evil.so.2"]})],
          "declared": {"depends": ["glibc", "libl9evil"]}}),
+    "a003-provides-negative.json": ("manifest", "negative", [],
+        "The linked soname is supplied by a declared provides entry.",
+        {"manifest": [_manifest("/usr/bin/l9-app", 0o755,
+                                elf={"needed": ["libl9evil.so.2"]})],
+         "declared": {"depends": ["glibc"],
+                      "provides": ["libl9evil.so=2-64"]}}),
     "a004-positive.json": ("manifest", "positive", ["A004"],
         "The built .INSTALL differs from the recipe's install= file.",
         {"manifest": [],
@@ -242,7 +248,7 @@ def import_benign(packages: list[str]) -> int:
         if not archives:
             print(f"skip {package}: no cached archive")
             continue
-        doc = build_manifest(archives[-1])
+        doc = build_manifest(archives[-1], libs_closure=True)
         doc["declared"]["units"] = _unit_paths(doc["manifest"])
         fired = {f["rule_id"] for f in inspect_manifest(
             doc["manifest"], doc["declared"])}
@@ -261,11 +267,17 @@ def import_benign(packages: list[str]) -> int:
             json.dumps(compact, separators=(",", ":"), sort_keys=True) + "\n")
         expected[f"benign/{name}"] = {
             "lane": "manifest", "kind": "benign",
-            "allow": BENIGN_ALLOW,
+            # Record what the control actually trips.  A003 stays a real
+            # finding for a weakly linked optional helper/provider; pinning
+            # it per control keeps the gate from accepting a new one.
+            "allow": sorted(fired & set(BENIGN_ALLOW)),
             "note": f"Official build, {len(doc['manifest'])} entries; "
-                    "known census rules only.",
+                    "only the known census rules fire.",
         }
         imported += 1
+    for key in [key for key in expected
+                if key.startswith("benign/") and not (OUT / key).exists()]:
+        del expected[key]
     (OUT / "expected.json").write_text(
         json.dumps(dict(sorted(expected.items())), indent=2, sort_keys=True)
         + "\n")

@@ -939,6 +939,12 @@ def _register_full_aur(app: typer.Typer) -> None:
                      if p.get("name")]
         if limit:
             names = names[:limit]
+        from ..api._validation import _validate_name
+
+        # Validate before any file is opened: the manifest path is built from
+        # the package name, so an unchecked name is a path traversal.
+        for name in names:
+            _validate_name(name)
         client = TrustSight()
         results = [
             client.verify_build(
@@ -969,8 +975,12 @@ def _register_full_aur(app: typer.Typer) -> None:
         from ..analysis.artifact import MAX_MANIFEST_BYTES
         from ..bounded_io import ReadTooLarge, read_file_capped
 
-        path = directory / f"{package}.json"
-        if not path.is_file():
+        root = directory.resolve()
+        try:
+            path = (root / f"{package}.json").resolve()
+        except OSError:
+            return None
+        if not path.is_relative_to(root) or not path.is_file():
             return None
         try:
             return read_file_capped(

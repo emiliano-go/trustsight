@@ -34,6 +34,27 @@ def test_a003_fires_for_a_library_outside_depends():
     assert "A003" in _ids(manifest, {"depends": ["zlib"]})
 
 
+def test_a003_accepts_a_soname_named_in_provides():
+    manifest = [{"path": "/usr/bin/app",
+                 "elf": {"needed": ["libz.so.1"]}}]
+    declared = {"depends": ["glibc"], "provides": ["libz.so=1-64"]}
+    assert "A003" not in _ids(manifest, declared)
+
+
+def test_a003_still_fires_when_neither_depends_nor_provides_covers_it():
+    manifest = [{"path": "/usr/bin/app",
+                 "elf": {"needed": ["libevil.so.2"]}}]
+    declared = {"depends": ["glibc"], "provides": ["libz.so=1-64"]}
+    assert "A003" in _ids(manifest, declared)
+
+
+def test_a003_accepts_the_closure_library_list():
+    manifest = [{"path": "/usr/bin/app",
+                 "elf": {"needed": ["libc.so.6", "libz.so.1"]}}]
+    declared = {"depends": ["glibc"], "libs": ["libc.so.6", "libz.so.1"]}
+    assert "A003" not in _ids(manifest, declared)
+
+
 def test_a004_fires_when_the_built_install_differs():
     declared = {
         "install_text": "post_install() { echo hi; }",

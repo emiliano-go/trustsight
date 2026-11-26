@@ -48,6 +48,12 @@ def _rows() -> list[str]:
         if entry is not None and entry.status == "anergic":
             weight = "0 (anergic)"
             boundary = "calibration"
+        elif entry is not None and entry.weight is not None:
+            # A promoted rule may still carry an explicit 0: that is the
+            # reviewed "report-only, never score" decision, not a severity
+            # weight.
+            weight = str(entry.weight)
+            boundary = "calibration" if entry.weight == 0 else "promoted"
         else:
             weight = str(weights.get(severity, 0))
             boundary = "boundary" if rule_id.startswith("W") else ""

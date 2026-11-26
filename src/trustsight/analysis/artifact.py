@@ -230,8 +230,65 @@ def inspect_manifest_bounded(manifest, declared=None) -> dict:
             if cut:
                 truncated = True
                 note("declared depends")
-            depends.add(dep.split(">", 1)[0].split("=", 1)[0].strip())
+            dep = dep.split(">", 1)[0].split("=", 1)[0].strip()
+            if dep:
+                depends.add(dep)
+                if ".so" in dep:
+                    depends.add(dep.split(".so", 1)[0])
     elif raw_depends:
+        truncated = True
+        note("invalid declared")
+
+    # ``provides`` carries the sonames a dependency package supplies, e.g.
+    # ``libz.so=1-64``.  A linked library is covered when either the package
+    # name or one of its provided sonames matches.
+    provided: set[str] = set()
+    raw_provides = declared.get("provides") or ()
+    if isinstance(raw_provides, str):
+        raw_provides = (raw_provides,)
+    if isinstance(raw_provides, (list, tuple)):
+        for index, item in enumerate(raw_provides):
+            if index >= MAX_DECLARED_DEPENDS:
+                truncated = True
+                note("declared provides")
+                break
+            if not isinstance(item, str):
+                continue
+            item, cut = _cap_utf8(item, MAX_PATH_BYTES)
+            if cut:
+                truncated = True
+                note("declared provides")
+            item = item.split("=", 1)[0].strip()
+            if item:
+                provided.add(item)
+                provided.add(item.split(".so", 1)[0])
+    elif raw_provides:
+        truncated = True
+        note("invalid declared")
+
+    # ``libs`` is the closure's shared-object surface: every soname the
+    # declared dependencies provide.  A caller that can resolve the closure
+    # supplies it; otherwise the comparison falls back to depends/provides.
+    raw_libs = declared.get("libs") or ()
+    if isinstance(raw_libs, str):
+        raw_libs = (raw_libs,)
+    if isinstance(raw_libs, (list, tuple)):
+        for index, item in enumerate(raw_libs):
+            if index >= MAX_DECLARED_DEPENDS:
+                truncated = True
+                note("declared libs")
+                break
+            if not isinstance(item, str):
+                continue
+            item, cut = _cap_utf8(item, MAX_PATH_BYTES)
+            if cut:
+                truncated = True
+                note("declared libs")
+            base = item.rsplit("/", 1)[-1].split("=", 1)[0].strip()
+            if base:
+                provided.add(base)
+                provided.add(base.split(".so", 1)[0])
+    elif raw_libs:
         truncated = True
         note("invalid declared")
 
@@ -380,9 +437,11 @@ def inspect_manifest_bounded(manifest, declared=None) -> dict:
                 truncated = True
                 note("library names")
             base = lib.rsplit("/", 1)[-1]
-            if not base or base.split(".so", 1)[0] in depends:
+            stem = base.split(".so", 1)[0]
+            if (not base or stem in depends or base in depends
+                    or stem in provided or base in provided):
                 continue
-            if ".so" in base and base not in depends:
+            if ".so" in base:
                 out.append({
                     "rule_id": "A003", "name": "Library Outside Depends",
                     "severity": "MEDIUM", "category": "artifact",
@@ -412,8 +471,9 @@ def inspect_manifest_bounded(manifest, declared=None) -> dict:
             out.append({
                 "rule_id": "A007", "name": "Privileged Surface In Artifact",
                 "severity": "MEDIUM", "category": "artifact",
-                "match": (f"{path} is a polkit/sudoers/PAM/kernel-module surface "
-                          "the declared recipe does not explain"),
+                "match": (f"{path} is a privileged surface "
+                          "(polkit/sudoers/PAM/kernel module); review the "
+                          "recipe that installs it"),
                 "file": path,
             })
         if elf:

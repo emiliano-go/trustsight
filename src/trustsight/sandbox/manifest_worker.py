@@ -82,8 +82,14 @@ def _handle(body: bytes) -> dict:
             if isinstance(document, dict):
                 # An operator handoff may carry the declared surface beside
                 # the manifest.  Only the worker parses it; the parent never
-                # reads attacker JSON.
-                declared = document.get("declared") or declared
+                # reads attacker JSON.  The two forms cannot be mixed: a
+                # caller-supplied declaration must not be silently replaced
+                # by one the manifest author wrote.
+                wrapper_declared = document.get("declared")
+                if wrapper_declared is not None:
+                    if declared:
+                        return {"error": "declared supplied twice"}
+                    declared = wrapper_declared
                 if not isinstance(declared, dict):
                     return {"error": "invalid artifact manifest declaration"}
                 document = document.get("manifest")

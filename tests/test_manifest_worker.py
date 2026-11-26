@@ -201,6 +201,22 @@ def test_the_worker_reads_the_operator_wrapper():
     assert response["result"]["findings"] == []
 
 
+def test_the_worker_refuses_declared_in_both_places():
+    """A caller's declaration must never be replaced by the manifest text."""
+    import json
+
+    body = json.dumps({
+        "path": "__artifact_manifest__",
+        "text": json.dumps({
+            "manifest": [{"path": "/usr/bin/x", "setuid": True}],
+            "declared": {"mode_intent": "documented setuid"},
+        }),
+        "declared": {"mode_intent": ""},
+    }).encode()
+    response = manifest_worker._handle(body)
+    assert "error" in response
+
+
 def test_the_worker_rejects_a_pathless_artifact_record():
     import json
 

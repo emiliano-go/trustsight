@@ -170,6 +170,7 @@ def _evaluate(benign: list[dict], malicious: list[dict]) -> list[Gate]:
         gate_manifest_benign_corpus(),
         gate_coverage_ledger_complete(),
         gate_artifact_corpus(),
+        gate_l9_corpus(),
     ]
     if malicious:
         gates.append(gate_separation(benign, malicious))
@@ -332,6 +333,7 @@ from scripts.calibration._gates import (
     gate_homograph_single_script,
     gate_ioc_exact_match,
     gate_known_gaps_unchanged,
+    gate_l9_corpus,
     gate_malicious_recall,
     gate_manifest_benign_corpus,
     gate_meta_escalation_below_cap,

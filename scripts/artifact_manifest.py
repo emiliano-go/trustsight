@@ -24,6 +24,7 @@ import argparse
 import hashlib
 import json
 import os
+import posixpath
 import re
 import subprocess
 import sys
@@ -34,15 +35,46 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from trustsight.analysis.artifact import MAX_CONTENT_BYTES  # noqa: E402
+from trustsight.analysis.artifact import MAX_DECLARED_TEXT_BYTES  # noqa: E402
 from trustsight.analysis.artifact import MAX_MANIFEST_ENTRIES  # noqa: E402
 from trustsight.analysis.elf import parse_elf  # noqa: E402
 
 #: Per-member read window for ELF parsing.  Larger than the section-header
 #: window the parser needs in practice, small enough to keep memory flat.
 ELF_READ_BYTES = 8 * 1024 * 1024
+#: Total decompressed bytes one archive may cost before it is refused.  The
+#: producer runs on attacker-supplied packages, so a zstd bomb must not turn
+#: into an unbounded read.
+MAX_DECOMPRESSED_BYTES = 2 * 1024 * 1024 * 1024
+#: Metadata files are read under their own small ceilings.
+MAX_PKGINFO_BYTES = 1024 * 1024
 #: Files whose shipped content the A011-A013 rules read.
 _CONTENT_SUFFIXES = (".hook", ".rules", ".install")
 _XATTR_CAPS = "SCHILY.xattr.security.capability"
+
+
+class ArchiveTooLarge(RuntimeError):
+    """The decompressed archive exceeded the producer's byte budget."""
+
+
+class _BoundedStream:
+    """A read-only view that refuses past a decompressed byte budget."""
+
+    def __init__(self, inner, limit: int) -> None:
+        self._inner = inner
+        self._limit = limit
+        self._seen = 0
+
+    def read(self, size: int = -1):
+        data = self._inner.read(size)
+        self._seen += len(data)
+        if self._seen > self._limit:
+            raise ArchiveTooLarge(
+                f"decompressed archive exceeds {self._limit} bytes")
+        return data
+
+    def close(self) -> None:
+        self._inner.close()
 
 
 def _pkg_version(path: Path) -> str:
@@ -57,16 +89,27 @@ def _stream(path: Path):
     proc = subprocess.Popen(
         ["zstd", "-dc", str(path)],
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
     )
     if proc.stdout is None:  # pragma: no cover - Popen contract
         raise RuntimeError("zstd produced no output stream")
-    return proc, proc.stdout
+    return proc, _BoundedStream(proc.stdout, MAX_DECOMPRESSED_BYTES)
+
+
+def _safe_path(name: str) -> str | None:
+    """Normalise a member name, or refuse one that escapes the package root."""
+    normalised = posixpath.normpath(str(name).replace("\\", "/"))
+    if (normalised in (".", "..") or normalised.startswith("../")
+            or normalised.startswith("/") or ":" in normalised.split("/", 1)[0]):
+        return None
+    return "/" + normalised
 
 
 def _manifest_entry(name: str, member: tarfile.TarInfo,
                     handle) -> dict | None:
-    path = "/" + name.lstrip("./").lstrip("/")
+    path = _safe_path(name)
+    if path is None:
+        return None
     if member.isdir():
         return {"path": path.rstrip("/") + "/", "mode": member.mode & 0o7777}
     if not member.isfile():
@@ -125,6 +168,14 @@ def _declared_from_pkginfo(text: str) -> dict:
     return {"depends": sorted(set(depends)), "provides": sorted(set(provides))}
 
 
+def _pkginfo_name(text: str) -> str:
+    for line in text.splitlines():
+        key, sep, value = line.partition(" = ")
+        if sep and key == "pkgname":
+            return value.strip()
+    return ""
+
+
 def _declared_install_text(recipe: Path) -> str | None:
     """The recipe's ``install=`` file body, when the recipe names one."""
     try:
@@ -141,8 +192,58 @@ def _declared_install_text(recipe: Path) -> str | None:
         return None
 
 
+def _pacman_lines(args: list[str]) -> list[str]:
+    try:
+        result = subprocess.run(
+            ["pacman", *args], capture_output=True, text=True, timeout=20)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if result.returncode != 0:
+        return []
+    return result.stdout.splitlines()
+
+
+def _installed_depends(package: str) -> list[str]:
+    for line in _pacman_lines(["-Qi", package]):
+        if line.startswith("Depends On") and ":" in line:
+            return [item.split(":", 1)[0] for item in line.split(":", 1)[1].split()]
+    return []
+
+
+def _package_sonames(package: str) -> set[str]:
+    out: set[str] = set()
+    for line in _pacman_lines(["-Ql", package]):
+        _pkg, _, path = line.partition(" ")
+        base = path.strip().rsplit("/", 1)[-1]
+        if ".so" in base and not base.endswith("/"):
+            out.add(base)
+    return out
+
+
+def _closure_libs(roots: list[str], *, max_depth: int = 4,
+                  max_packages: int = 256) -> list[str]:
+    """Sonames the declared dependency closure (and the package) provides."""
+    seen: set[str] = set()
+    libs: set[str] = set()
+    queue = [(name, 0) for name in roots]
+    while queue and len(seen) < max_packages:
+        package, depth = queue.pop(0)
+        package = package.split(">", 1)[0].split("=", 1)[0].strip()
+        if not package or package in seen:
+            continue
+        if not _pacman_lines(["-Qq", package]):
+            continue
+        seen.add(package)
+        libs |= _package_sonames(package)
+        if depth < max_depth:
+            queue.extend((dep, depth + 1)
+                         for dep in _installed_depends(package))
+    return sorted(libs)
+
+
 def build_manifest(archive: Path, *, recipe: Path | None = None,
-                   units: list[str] | None = None) -> dict:
+                   units: list[str] | None = None,
+                   libs_closure: bool = False) -> dict:
     proc, stdout = _stream(archive)
     manifest: list[dict] = []
     declared: dict = {"depends": [], "units": sorted(units or [])}
@@ -155,12 +256,15 @@ def build_manifest(archive: Path, *, recipe: Path | None = None,
                 if name in (".PKGINFO", ".BUILDINFO", ".MTREE"):
                     handle = tar.extractfile(member)
                     if handle is not None and name == ".PKGINFO":
-                        pkginfo = handle.read().decode("utf-8", "replace")
+                        pkginfo = handle.read(
+                            MAX_PKGINFO_BYTES).decode("utf-8", "replace")
                     continue
                 if name == ".INSTALL":
                     handle = tar.extractfile(member)
                     if handle is not None:
-                        built_install = handle.read().decode("utf-8", "replace")
+                        built_install = handle.read(
+                            MAX_DECLARED_TEXT_BYTES).decode(
+                                "utf-8", "replace")
                     continue
                 handle = tar.extractfile(member) if member.isfile() else None
                 entry = _manifest_entry(name, member, handle)
@@ -168,24 +272,34 @@ def build_manifest(archive: Path, *, recipe: Path | None = None,
                     manifest.append(entry)
     finally:
         stdout.close()
-        proc.wait(timeout=30)
+        try:
+            proc.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
 
     if pkginfo:
         declared.update(_declared_from_pkginfo(pkginfo))
+    if libs_closure:
+        roots = [_pkginfo_name(pkginfo), *declared.get("depends", [])]
+        declared["libs"] = _closure_libs([r for r in roots if r])
     if built_install:
         declared["built_install_text"] = built_install
     recipe_install = _declared_install_text(recipe) if recipe else None
     if recipe_install is not None:
         declared["install_text"] = recipe_install
 
-    digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+    digest = hashlib.sha256()
+    with archive.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
     return {
         "package": _pkg_version(archive),
         "manifest": manifest,
         "declared": declared,
         "provenance": {
             "archive": str(archive),
-            "archive_sha256": digest,
+            "archive_sha256": digest.hexdigest(),
             "producer": "scripts/artifact_manifest.py",
             "entries": len(manifest),
             "truncated_at": MAX_MANIFEST_ENTRIES,
@@ -193,7 +307,7 @@ def build_manifest(archive: Path, *, recipe: Path | None = None,
     }
 
 
-def _installed_manifest(name: str) -> dict:
+def _installed_manifest(name: str, *, libs_closure: bool = False) -> dict:
     """Build a manifest from an installed package tree (no archive needed)."""
     files = subprocess.run(
         ["pacman", "-Ql", name], capture_output=True, text=True, check=True,
@@ -247,6 +361,8 @@ def _installed_manifest(name: str) -> dict:
     for line in depends.splitlines():
         if line.startswith("Depends On") and ":" in line:
             declared["depends"] = sorted(line.split(":", 1)[1].split())
+    if libs_closure:
+        declared["libs"] = _closure_libs([name, *declared["depends"]])
     return {
         "package": name,
         "manifest": manifest,
@@ -271,14 +387,20 @@ def main() -> int:
                         help="PKGBUILD, for declared install= text")
     parser.add_argument("--units", action="append", default=[],
                         help="declared unit path (repeatable)")
+    parser.add_argument("--libs-closure", action="store_true",
+                        help="resolve the dependency closure's sonames into "
+                             "declared.libs (needs the local pacman DB)")
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     if bool(args.archive) == bool(args.installed):
         parser.error("pass exactly one of ARCHIVE or --installed")
     if args.installed:
-        doc = _installed_manifest(args.installed)
+        doc = _installed_manifest(args.installed,
+                                  libs_closure=args.libs_closure)
     else:
-        doc = build_manifest(args.archive, recipe=args.recipe, units=args.units)
+        doc = build_manifest(args.archive, recipe=args.recipe,
+                             units=args.units,
+                             libs_closure=args.libs_closure)
     args.out.write_text(json.dumps(doc, indent=2, sort_keys=True) + "\n")
     print(f"{doc['package']}: {len(doc['manifest'])} entries -> {args.out}")
     return 0

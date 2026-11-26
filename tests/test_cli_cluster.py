@@ -389,6 +389,32 @@ def test_full_aur_verify_reports_l9_unavailable_by_default():
     assert body["results"][0]["status"] == "l9_unavailable"
 
 
+def test_full_aur_verify_hands_operator_manifests_to_the_lane(
+        tmp_path, monkeypatch):
+    """--manifest-dir is the batch lane's whole handoff, named <package>.json."""
+    (tmp_path / "demo.json").write_text('{"manifest": []}')
+    seen = {}
+
+    def fake_verify(self, name, **kwargs):
+        seen[name] = kwargs.get("manifest_text")
+        return {"package": name, "status": "l9_analyzed", "findings": []}
+
+    monkeypatch.setattr("trustsight.api.TrustSight.verify_build", fake_verify)
+    result = CliRunner().invoke(
+        app, ["full-aur", "verify", "--package", "demo",
+              "--manifest-dir", str(tmp_path), "--json"])
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.stdout)["results"][0]["status"] == "l9_analyzed"
+    assert seen["demo"] == '{"manifest": []}'
+
+
+def test_full_aur_verify_rejects_a_missing_manifest_dir(tmp_path):
+    result = CliRunner().invoke(
+        app, ["full-aur", "verify", "--package", "demo",
+              "--manifest-dir", str(tmp_path / "missing")])
+    assert result.exit_code != 0
+
+
 def test_full_aur_watch_invokes_the_loop(monkeypatch):
     # `full-aur` refuses to start when TRUSTSIGHT_OFFLINE is set, which the
     # suite sets for every test. What is asserted here is the argument

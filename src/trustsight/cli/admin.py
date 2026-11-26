@@ -908,14 +908,20 @@ def _register_full_aur(app: typer.Typer) -> None:
         package: list[str] = typer.Option(
             [], "--package", help="Verify only these packages (repeatable)"),
         limit: int = typer.Option(0, "--limit", help="Cap the number verified (0 = all)"),
+        manifest_dir: Path | None = typer.Option(
+            None, "--manifest-dir",
+            help="Directory of <package>.json artifact manifests produced by "
+                 "an external build; without one every package reports "
+                 "l9_unavailable."),
         json_output: bool = typer.Option(False, "--json", help="Output JSON"),
     ):
         """Batch L9 verification for corpus operators.
 
-        Results land in the corpus DB as artifact properties, feeding future
-        reproducibility comparison.  The static core never runs package code:
-        with the lane disabled, or no sandbox container, every package reports
-        ``l9_unavailable`` - a weight-0 boundary, never a verdict.
+        TrustSight does not build packages: the manifests in ``--manifest-dir``
+        are the whole handoff, named ``<package>.json``.  The static core never
+        runs package code.  With the lane disabled, a missing manifest, or no
+        sandbox container, every package reports ``l9_unavailable`` - a
+        weight-0 boundary, never a verdict.
         """
         from ..api import TrustSight
         from ..config import ensure_default_configs
@@ -923,6 +929,9 @@ def _register_full_aur(app: typer.Typer) -> None:
 
         ensure_default_configs()
         init_db()
+        if manifest_dir is not None and not manifest_dir.is_dir():
+            raise typer.BadParameter(
+                f"--manifest-dir is not a directory: {manifest_dir}")
         names = [str(n) for n in package if n]
         if not names:
             names = [str(p.get("name")) for p in get_all_packages()
@@ -930,7 +939,11 @@ def _register_full_aur(app: typer.Typer) -> None:
         if limit:
             names = names[:limit]
         client = TrustSight()
-        results = [client.verify_build(name) for name in names]
+        results = [
+            client.verify_build(
+                name, manifest_text=_batch_manifest_text(manifest_dir, name))
+            for name in names
+        ]
         unavailable = sum(
             1 for r in results if r["status"] == "l9_unavailable")
         if json_output:
@@ -943,5 +956,29 @@ def _register_full_aur(app: typer.Typer) -> None:
             return
         for result in results:
             typer.echo(f"{result['package']}: {result['status']}")
+
+    def _batch_manifest_text(directory: Path | None, package: str) -> str | None:
+        """The operator-supplied manifest for one package, or ``None``.
+
+        The parent enforces only the size bound and hands the bytes to the
+        read-role sandbox; it never parses attacker-controlled manifest JSON.
+        """
+        if directory is None:
+            return None
+        from ..analysis.artifact import MAX_MANIFEST_BYTES
+        from ..bounded_io import ReadTooLarge, read_file_capped
+
+        path = directory / f"{package}.json"
+        if not path.is_file():
+            return None
+        try:
+            return read_file_capped(
+                path, MAX_MANIFEST_BYTES, f"manifest for {package}",
+            ).decode("utf-8")
+        except ReadTooLarge as exc:
+            raise typer.BadParameter(str(exc)) from exc
+        except (OSError, UnicodeDecodeError) as exc:
+            raise typer.BadParameter(
+                f"manifest for {package} could not be read: {exc}") from exc
 
     app.add_typer(full_aur_app, name="full-aur")

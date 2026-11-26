@@ -8,9 +8,11 @@ extracted manifest is asserted against the producer.
 
 from __future__ import annotations
 
+import io
 import json
 import shutil
 import sys
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -104,3 +106,101 @@ def test_built_fixture_runs_through_the_production_lane(monkeypatch) -> None:
     fired = {f["rule_id"] for f in result["findings"]}
     assert result["status"] == "l9_analyzed"
     assert fired == set(EXPECTED["built/l9-clinic/manifest.json"]["expect"])
+
+
+def _verify(monkeypatch, body: dict, package: str = "l9-fixture") -> dict:
+    monkeypatch.setattr(
+        "trustsight.config.load_config",
+        lambda: {"verify": {"enabled": True}},
+    )
+    from trustsight.api import TrustSight
+
+    return TrustSight(auto_import_seed=False).verify_build(
+        package,
+        manifest=body.get("manifest") or [],
+        declared=body.get("declared") or {},
+        static_clean=True,
+    )
+
+
+MANIFEST_FIXTURES = sorted(
+    relative for relative, record in EXPECTED.items()
+    if record["lane"] == "manifest"
+)
+
+
+@pytest.mark.parametrize("relative", MANIFEST_FIXTURES)
+def test_manifest_fixture_through_the_sandbox(monkeypatch, relative: str) -> None:
+    body = _body(relative)
+    result = _verify(monkeypatch, body, package="l9-fixture")
+    if result["status"] == "l9_unavailable":
+        pytest.skip(result.get("reason", "L9 sandbox unavailable"))
+    fired = {f["rule_id"] for f in result["findings"]}
+    record = EXPECTED[relative]
+    if record["kind"] == "benign":
+        assert not (fired - set(record.get("allow") or [])), (
+            f"{relative}: benign control fired {sorted(fired)}")
+    else:
+        assert fired == set(record["expect"]), (
+            f"{relative}: sandbox fired {sorted(fired)}, "
+            f"expected {record['expect']}")
+
+
+def test_lane_is_deterministic(monkeypatch) -> None:
+    body = json.loads(
+        (CORPUS / "built" / "l9-clinic" / "manifest.json").read_text())
+    first = _verify(monkeypatch, body, package="l9-clinic")
+    second = _verify(monkeypatch, body, package="l9-clinic")
+    if first["status"] == "l9_unavailable":
+        pytest.skip(first.get("reason", "L9 sandbox unavailable"))
+    assert first["findings"] == second["findings"]
+
+
+def test_cap_hit_is_partial_not_clean(monkeypatch) -> None:
+    body = {"manifest": [{"path": f"/usr/share/l9/{index}"}
+                         for index in range(10_001)], "declared": {}}
+    result = _verify(monkeypatch, body)
+    if result["status"] == "l9_unavailable":
+        pytest.skip(result.get("reason", "L9 sandbox unavailable"))
+    assert result["status"] == "l9_partial"
+    assert result.get("truncated") is True
+
+
+def test_disabled_lane_reports_a_boundary(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "trustsight.config.load_config",
+        lambda: {"verify": {"enabled": False}},
+    )
+    from trustsight.api import TrustSight
+
+    result = TrustSight(auto_import_seed=False).verify_build(
+        "l9-fixture", manifest=[{"path": "/usr/bin/x", "mode": 0o4755}])
+    assert result["status"] == "l9_unavailable"
+    assert result["findings"] == []
+    assert "disabled" in result["reason"]
+
+
+def test_unavailable_worker_never_reads_as_clean(monkeypatch) -> None:
+    from trustsight.sandbox import manifest_client
+
+    def down(**_kwargs):
+        raise manifest_client.ManifestUnavailable("sandbox down")
+
+    monkeypatch.setattr(manifest_client, "inspect_artifact_manifest", down)
+    result = _verify(monkeypatch, {"manifest": [], "declared": {}})
+    assert result["status"] == "l9_unavailable"
+    assert result["findings"] == []
+    assert "sandbox down" in result["reason"]
+
+
+def test_producer_carries_the_capability_xattr() -> None:
+    from artifact_manifest import _manifest_entry
+
+    member = tarfile.TarInfo("usr/bin/l9-cap")
+    member.mode = 0o755
+    member.size = 0
+    member.pax_headers = {"SCHILY.xattr.security.capability": "cap_net_raw+ep"}
+    entry = _manifest_entry(member.name, member, io.BytesIO(b""))
+    assert entry is not None
+    assert entry["caps"].startswith("0x")
+    assert "A006" in {f["rule_id"] for f in inspect_manifest([entry], {})}

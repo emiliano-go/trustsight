@@ -274,10 +274,13 @@ def _walk_corpus_dependencies(
     from ...depth import DepthResult, default_metadata, resolve_depth, walk_dependencies
 
     resolved = resolve_depth(depth, config)
-    provider = default_metadata()
+    provider = None
     if resolved == 0:
+        # Depth 0 means the closure is not read.  Building the provider
+        # anyway indexes the whole metadata dump for an answer nothing uses.
         result = DepthResult()
     else:
+        provider = default_metadata()
         result = walk_dependencies(
             pkg_name,
             depth=resolved,
@@ -286,6 +289,8 @@ def _walk_corpus_dependencies(
             already_seen=set(seen) if seen else None,
         )
     if added_names:
+        if provider is None:
+            provider = default_metadata()
         reported = {report.name for report in result.reports}
         try:
             result.added_aur_unreported = any(

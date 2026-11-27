@@ -177,6 +177,7 @@ def _variant_suffixes() -> tuple[str, ...]:
     return tuple(suffixes) if suffixes else DEFAULT_VARIANT_SUFFIXES
 
 
+@lru_cache(maxsize=16384)
 def normalize_dependency(raw: str) -> str:
     """Reduce a dependency entry to the bare package name.
 

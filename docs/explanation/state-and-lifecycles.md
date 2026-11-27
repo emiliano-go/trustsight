@@ -75,7 +75,7 @@ Sandbox workers have a lifecycle: absent, starting, ready, busy, retired after t
 The table is generated. `Where` is the first implementation anchor, and `Pinned by` is the first contract or round-trip test; the registry lists the rest. A machine marked **explicit** has a state type and transition functions; an **implicit** one encodes the same rules in ordinary variables and branches.
 
 <!-- generated: state-machines -->
-*20 documented machines; 83 further modules classified as single-pass scanners, memos or one-way latches.*
+*20 documented machines; 84 further modules classified as single-pass scanners, memos or one-way latches.*
 
 | Machine | Kind | Status | States | Where | Pinned by |
 |---|---|---|---|---|---|

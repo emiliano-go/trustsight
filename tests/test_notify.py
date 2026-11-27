@@ -896,7 +896,7 @@ def test_an_alert_carries_the_bounded_manifest_delta():
     so the notification has to carry its dependency delta itself."""
     from types import SimpleNamespace
 
-    from trustsight.full_aur._baseline_build import (
+    from trustsight.full_aur._cycle import (
         MAX_NOTIFY_MANIFESTS,
         MAX_NOTIFY_MANIFEST_NAMES,
         _manifests_summary,

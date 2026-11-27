@@ -126,6 +126,17 @@ def clear_current_dump() -> None:
     _current_dump = None
 
 
+def snapshot_fingerprint() -> Optional[tuple[str, int, int]]:
+    """The ``(path, mtime_ns, size)`` key of the parsed snapshot, if loaded.
+
+    The snapshot cache holds at most one entry, so this is the identity of
+    the metadata a provider would be built from.  ``None`` means nothing is
+    loaded (the caller should let the provider fall back to its own key).
+    """
+    with _snapshot_cache_lock:
+        return next(iter(_snapshot_cache), None)
+
+
 def metadata_unchanged() -> bool:
     """True when the last fetch was a 304 over a snapshot already on disk."""
     return _unchanged

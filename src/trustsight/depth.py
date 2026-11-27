@@ -48,6 +48,7 @@ the reader was not told about.
 from __future__ import annotations
 
 import json
+import threading
 
 from dataclasses import dataclass, field
 from typing import Callable, Iterable, Optional, Protocol
@@ -633,6 +634,48 @@ class RpcMetadata:
         return out
 
 
+#: One provider per process.  ``SnapshotMetadata`` indexes every package's
+#: ``Provides`` aliases at construction time, which is O(snapshot) - on the
+#: 124k-package dump that is a few hundred milliseconds.  A batch analysis
+#: was paying it once per package because every call built a new provider
+#: from the same parsed snapshot.  The provider is immutable once built, so
+#: the same object answers every call until the underlying dump changes.
+_default_provider_lock = threading.Lock()
+_default_provider: tuple[object, "MetadataProvider"] | None = None
+
+
+def _metadata_cache_key(fresh, packages):
+    """Identity of the metadata a provider would be built from, or ``None``.
+
+    ``id()`` alone is not enough for an in-memory dump: a watch cycle may
+    add packages to the same dict in place, and a provider built before the
+    addition answers the rest of the cycle from the stale index.  The size
+    is part of the identity for that reason.
+    """
+    if fresh:
+        return ("dump", id(fresh), len(fresh))
+    if packages:
+        from .full_aur.metadata import snapshot_fingerprint
+
+        fingerprint = snapshot_fingerprint()
+        if fingerprint is not None:
+            return ("snapshot", fingerprint)
+        return ("snapshot", id(packages), len(packages))
+    return None
+
+
+def reset_default_metadata() -> None:
+    """Drop the process-wide provider cache.
+
+    For tests, and for a caller that has deliberately replaced the snapshot
+    underneath the process.  Normal invalidation is automatic: the cache key
+    follows the dump identity and the snapshot fingerprint.
+    """
+    global _default_provider
+    with _default_provider_lock:
+        _default_provider = None
+
+
 def default_metadata() -> MetadataProvider:
     """The freshest dump this process holds, then the snapshot, then the RPC.
 
@@ -640,16 +683,31 @@ def default_metadata() -> MetadataProvider:
     metadata has the answer in memory, and a --since replay advances no
     snapshot file, so reading the file there falls to the RPC and the daily
     rate budget is gone in hours.
+
+    The result is cached for the life of the process (see
+    ``_default_provider``); the RPC provider is not cached because it is
+    network-backed and answers change over time.
     """
     from .full_aur.metadata import current_dump, load_metadata
 
     fresh = current_dump()
-    if fresh:
-        return SnapshotMetadata(fresh)
-    try:
-        packages = load_metadata()
-    except Exception:
-        packages = None
-    if packages:
-        return SnapshotMetadata(packages)
-    return RpcMetadata()
+    packages = None
+    if not fresh:
+        try:
+            packages = load_metadata()
+        except Exception:
+            packages = None
+    if not fresh and not packages:
+        return RpcMetadata()
+    source = fresh if fresh else packages
+    key = _metadata_cache_key(fresh, packages)
+    if key is None:
+        return SnapshotMetadata(source)
+    global _default_provider
+    with _default_provider_lock:
+        cached = _default_provider
+        if cached is not None and cached[0] == key:
+            return cached[1]
+        provider = SnapshotMetadata(source)
+        _default_provider = (key, provider)
+        return provider

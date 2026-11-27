@@ -4,6 +4,7 @@ import os
 import sqlite3
 import tempfile
 from pathlib import Path
+from typing import NoReturn
 
 import typer
 
@@ -238,11 +239,7 @@ def _register_seed(app: typer.Typer) -> None:
                     "  trustsight seed fetch\n"
                     "or pass an existing seed with --file."
                 )
-                if json_output:
-                    typer.echo(json.dumps({"error": msg}))
-                else:
-                    _print_colored(msg, "red", stderr=True)
-                raise typer.Exit(code=2)
+                _fail(msg, json_output)
             seed = bundled
 
         already = seed_observation_count()
@@ -276,11 +273,7 @@ def _register_seed(app: typer.Typer) -> None:
                 stats = import_seed(seed)
         except (OSError, ValueError, sqlite3.DatabaseError) as exc:
             msg = f"Failed to import seed from {seed}: {exc}"
-            if json_output:
-                typer.echo(json.dumps({"error": msg}))
-            else:
-                _print_colored(msg, "red", stderr=True)
-            raise typer.Exit(code=2)
+            _fail(msg, json_output)
 
         if json_output:
             stats["effective_observations"] = effective_observation_count()
@@ -506,490 +499,477 @@ def _register_status(app: typer.Typer) -> None:
 
 
 
+def full_aur_cmd(
+    ctx: typer.Context,
+    resume: bool = typer.Option(False, "--resume", help="Continue an interrupted bootstrap (now implied: cycles resume automatically)"),
+    bootstrap: bool = typer.Option(False, "--bootstrap", help="Allow a from-scratch bootstrap of the whole AUR when no snapshot exists (capped per cycle, resumes)"),
+    export: str | None = typer.Option(None, "--export", help="Path to write the baseline artifact (.tar.zst)"),
+    sign: str | None = typer.Option(None, "--sign", help="Path to ed25519 private key for signing"),
+    watch: bool = typer.Option(False, "--watch", help="Keep running cycles on an interval until interrupted"),
+    interval: int | None = typer.Option(None, "--interval", help="Seconds between --watch cycles (default 3600, floor 60)"),
+    cycles: int = typer.Option(0, "--cycles", help="Stop --watch after this many cycles (0 = until interrupted)"),
+    notify: str | None = typer.Option(None, "--notify", help="POST new alerts as JSON to this webhook URL each cycle (overrides [notify] webhook in config.toml)"),
+    over_threshold: int | None = typer.Option(None, "--over-threshold", help="Alert bar: packages scoring strictly above this land in the cycle's over_threshold list (default 30, the benign corpus p95)"),
+    since: str | None = typer.Option(None, "--since", help="Replay change history from this date (YYYY-MM-DD, UTC), one AUR day per cycle, then join the live stream"),
+    depth: int | None = typer.Option(None, "--depth", help="AUR dependency levels to analyse: 0 off, 1 default, n levels, -1 every level (bounded)"),
+    auto_pull_baselines: bool = typer.Option(False, "--auto-pull-baselines", help="With --watch, pull and import a newer baseline seed after each cycle"),
+    auto_pull_iocs: bool = typer.Option(False, "--auto-pull-iocs", help="With --watch, pull and import newer IOC feeds after each cycle"),
+    auto_pull_watchlists: bool = typer.Option(False, "--auto-pull-watchlists", help="With --watch, pull and import a newer watchlist release after each cycle"),
+    transitions: str | None = typer.Option(None, "--transitions", help="Show this package's recorded property timeline and exit (read-only; works offline)"),
+    limit: int = typer.Option(500, "--limit", help="With --transitions, the newest rows to show (0 = all)"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+):
+    """Bootstrap or update the full-AUR baseline corpus.
+
+    Without a prior snapshot a full bootstrap fetches every PKGBUILD in
+    the AUR, so it must be asked for with --bootstrap. Every cycle is
+    capped (limits.corpus_max_per_cycle) and resumes automatically, so a
+    large amount of work advances in gentle chunks. With --watch the
+    cycle repeats on an interval.
+    """
+    if ctx.invoked_subcommand is not None:
+        return
+    from .. import release
+    from ..full_aur.pipeline import run_baseline_build, run_watch
+    ensure_default_configs()
+    init_db()
+    if transitions is not None:
+        if watch or bootstrap or export or sign or since is not None:
+            msg = ("--transitions is a read-only view and cannot be "
+                   "combined with --watch/--bootstrap/--export/--sign/"
+                   "--since")
+            _fail(msg, json_output)
+        if limit < 0:
+            msg = "--limit must be 0 (all rows) or a positive count"
+            _fail(msg, json_output)
+        _print_property_transitions(
+            transitions, json_output=json_output, limit=limit or None
+        )
+        return
+    since_ts = None
+    if since is not None:
+        from datetime import datetime, timezone
+        try:
+            since_ts = int(datetime.strptime(since, "%Y-%m-%d")
+                           .replace(tzinfo=timezone.utc).timestamp())
+        except ValueError:
+            msg = f"--since wants a date as YYYY-MM-DD, got {since!r}"
+            _fail(msg, json_output)
+        if since_ts >= int(datetime.now(timezone.utc).timestamp()):
+            msg = "--since must name a day in the past"
+            _fail(msg, json_output)
+    if release.offline():
+        msg = "full-aur needs the AUR network channel; TRUSTSIGHT_OFFLINE is set."
+        if json_output:
+            typer.echo(json.dumps({"error": msg}))
+        else:
+            _print_colored(msg, "red", stderr=True)
+        raise typer.Exit(code=2)
+    if depth is not None and depth < -1:
+        msg = "--depth must be -1 (every level), 0 (off) or a positive level count"
+        if json_output:
+            typer.echo(json.dumps({"error": msg}))
+        else:
+            _print_colored(msg, "red", stderr=True)
+        raise typer.Exit(code=2)
+    if (auto_pull_baselines or auto_pull_iocs
+            or auto_pull_watchlists) and not watch:
+        msg = ("--auto-pull-baselines/--auto-pull-iocs/"
+               "--auto-pull-watchlists pull data across cycles and only "
+               "make sense with --watch.")
+        if json_output:
+            typer.echo(json.dumps({"error": msg}))
+        else:
+            _print_colored(msg, "red", stderr=True)
+        raise typer.Exit(code=2)
+    if watch:
+        if export or sign or bootstrap or resume:
+            msg = ("--export/--sign describe a single artifact, and "
+                   "--bootstrap/--resume a single cycle; run them "
+                   "without --watch.")
+            _fail(msg, json_output)
+        if cycles < 0:
+            msg = "--cycles must be 0 (until interrupted) or a positive count"
+            _fail(msg, json_output)
+        from ..full_aur.watch_lock import WatchAlreadyRunning, watch_lock
+
+        try:
+            with watch_lock():
+                results = run_watch(
+                    interval=interval, cycles=cycles,
+                    json_output=json_output, notify_url=notify,
+                    over_threshold=over_threshold, since=since_ts,
+                    depth=depth,
+                    auto_pull_baselines=auto_pull_baselines,
+                    auto_pull_iocs=auto_pull_iocs,
+                    auto_pull_watchlists=auto_pull_watchlists,
+                )
+        except WatchAlreadyRunning as exc:
+            msg = str(exc)
+            _fail(msg, json_output)
+        # A watch that ended on a refusal never analysed anything: the
+        # single-shot path already maps that to exit 2, and the loop is
+        # the same "could not run" case.
+        if results and results[-1].refused:
+            raise typer.Exit(code=2)
+        return
+    result = run_baseline_build(
+        resume=resume, export_path=export, sign_key=sign,
+        json_output=json_output, bootstrap=bootstrap,
+        over_threshold=over_threshold, since=since_ts,
+        depth=depth,
+    )
+    # Single-shot cycles alert too: a bootstrap chunk is where a
+    # high-scoring package is most likely to land.
+    from ..notify import maybe_notify
+
+    maybe_notify(result, notify)
+    if result.refused:
+        raise typer.Exit(code=2)
+
+
+def full_aur_maintenance_cmd(
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Report only; change nothing"),
+    vacuum: bool = typer.Option(False, "--vacuum", help="Reclaim space after pruning (slow)"),
+    prune_cycle_events_days: int = typer.Option(
+        0, "--prune-cycle-events-days",
+        help="Delete cycle events older than this many days (0 keeps all)",
+    ),
+    prune_alert_state_days: int = typer.Option(
+        0, "--prune-alert-state-days",
+        help="Delete alert history not seen for this many days (0 keeps all)",
+    ),
+):
+    """Report or reclaim watcher database growth."""
+    from ..db import (
+        database_stats, init_db, prune_alert_state, prune_cycle_events,
+        vacuum_database,
+    )
+
+    init_db()
+    before = database_stats()
+    report = {"before": before, "dry_run": dry_run, "pruned": {}}
+    if not dry_run:
+        if prune_cycle_events_days:
+            report["pruned"]["cycle_events"] = prune_cycle_events(
+                prune_cycle_events_days)
+        if prune_alert_state_days:
+            report["pruned"]["alert_state"] = prune_alert_state(
+                prune_alert_state_days)
+        if vacuum:
+            vacuum_database()
+            report["vacuumed"] = True
+        report["after"] = database_stats()
+    if json_output:
+        typer.echo(json.dumps(report, indent=2))
+        return
+    size = before["bytes"]
+    typer.echo(f"Database: {before['path']} ({size} bytes, WAL {before['wal_bytes']})")
+    outbox = before["outbox"]
+    typer.echo(
+        f"Outbox: {outbox['pending']} pending, {outbox['parked']} parked"
+    )
+    if dry_run:
+        typer.echo("Dry run: nothing changed")
+    else:
+        for table, count in report["pruned"].items():
+            typer.echo(f"Pruned {count} {table} row(s)")
+        if report.get("vacuumed"):
+            typer.echo("Vacuum complete")
+
+
+def full_aur_health_cmd(
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+    optional: bool = typer.Option(
+        False, "--optional",
+        help="Exit 0 when this database has no watcher state",
+    ),
+):
+    """Report whether the watch loop is alive and delivering."""
+    from ..full_aur.watch_state import health
+
+    state = health()
+    if json_output:
+        typer.echo(json.dumps(state, indent=2))
+    else:
+        if not state.get("watching"):
+            typer.echo("No watcher state recorded")
+        else:
+            typer.echo(
+                f"Watcher: {'healthy' if state['healthy'] else 'unhealthy'}"
+                f"{' - ' + state['reason'] if state.get('reason') else ''}"
+            )
+            typer.echo(
+                f"  last success: {state.get('last_success') or 'never'}"
+                f"  failures: {state.get('consecutive_failures', 0)}"
+            )
+            outbox = state.get("outbox", {})
+            typer.echo(
+                f"  outbox: {outbox.get('pending', 0)} pending, "
+                f"{outbox.get('parked', 0)} parked"
+            )
+    if not state.get("healthy"):
+        raise typer.Exit(code=1)
+    if not state.get("watching") and not optional:
+        raise typer.Exit(code=1)
+
+
+def full_aur_export_scans_cmd(
+    output: Path = typer.Option(..., "--output", help="NDJSON output path"),
+    since: str = typer.Option("", "--since", help="First UTC day, YYYY-MM-DD"),
+    until: str = typer.Option("", "--until", help="Last UTC day, YYYY-MM-DD"),
+):
+    """Export analysis history as compact ``trustsight.scans`` NDJSON.
+
+    The export groups rows by UTC day into synthetic backfill cycles.  It
+    carries no diff and no fact JSON; the feed's scan tables only need the
+    package, score, risk, versions, rules and coverage gaps.
+    """
+    from .. import __version__
+    from ..db import get_connection
+    from ..scoring import risk_level
+
+    clauses = ["h.timestamp IS NOT NULL", "h.timestamp != ''"]
+    params: list[str] = []
+    if since:
+        clauses.append("substr(h.timestamp, 1, 10) >= ?")
+        params.append(since)
+    if until:
+        clauses.append("substr(h.timestamp, 1, 10) <= ?")
+        params.append(until)
+    sql = f"""
+        SELECT h.id, h.timestamp, h.old_version, h.new_version,
+               h.final_score, h.fact_json, h.raw_diff_blob, p.name,
+               tr.rule_id, tr.severity
+          FROM analysis_history h
+          JOIN packages p ON p.id = h.package_id
+          LEFT JOIN triggered_rules tr ON tr.history_id = h.id
+         WHERE {' AND '.join(clauses)}
+         ORDER BY h.timestamp, h.id, tr.rule_id
+    """
+    output_path = Path(output)
+    if output_path.is_symlink():
+        raise typer.BadParameter(
+            f"{output_path} is a symlink; refusing to write through it")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def _day_documents(day: str, records: dict[int, dict]):
+        ordered = sorted(records.values(), key=lambda item: item["package"])
+        stamps = [str(item.pop("_stamp")) for item in ordered]
+        started = min(stamps)
+        finished = max(stamps)
+        for index in range(0, len(ordered), 500):
+            chunk = ordered[index:index + 500]
+            yield {
+                "event": "trustsight.scans",
+                "tool": "trustsight",
+                "tool_version": __version__,
+                "cycle_id": f"backfill:{day}",
+                "started_at": started,
+                "finished_at": finished,
+                "partial": False,
+                "bootstrap": False,
+                "backfill_day": day,
+                "chunk_index": index // 500,
+                "chunk_count": (len(ordered) + 499) // 500,
+                "summary": {
+                    "attempted": len(ordered),
+                    "succeeded": len(ordered),
+                    "fetch_failed": 0,
+                    "not_vetted": 0,
+                    "vanished": 0,
+                    "reserved": 0,
+                    "with_diff": sum(
+                        1 for item in ordered if item["has_diff"]),
+                    "alerts": 0,
+                },
+                "scans": chunk,
+            }
+
+    # Stream the history day by day into a private temporary file and
+    # replace the target atomically: a corpus export can be large, and a
+    # partial file must never be mistaken for a complete one.
+    count = 0
+    chunks = 0
+    fd, tmp_name = tempfile.mkstemp(
+        dir=str(output_path.parent), prefix=".scans-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            with get_connection() as conn:
+                cursor = conn.execute(sql, params)
+                current_day = None
+                records: dict[int, dict] = {}
+                for row in cursor:
+                    stamp = str(row["timestamp"] or "")
+                    day = stamp[:10]
+                    if not day:
+                        continue
+                    if day != current_day:
+                        if current_day is not None:
+                            for doc in _day_documents(current_day, records):
+                                handle.write(json.dumps(
+                                    doc, separators=(",", ":"),
+                                    sort_keys=True) + "\n")
+                                chunks += 1
+                        current_day = day
+                        records = {}
+                    record = records.get(row["id"])
+                    if record is None:
+                        count += 1
+                        facts = {}
+                        try:
+                            facts = json.loads(row["fact_json"] or "{}")
+                        except (TypeError, ValueError):
+                            facts = {}
+                        score = int(row["final_score"] or 0)
+                        record = {
+                            "package": row["name"],
+                            "status": "ok",
+                            "score": score,
+                            "risk": str(facts.get("risk") or risk_level(score)),
+                            "old_version": str(row["old_version"] or ""),
+                            "new_version": str(row["new_version"] or ""),
+                            "maintainer": "",
+                            "rules": [],
+                            "coverage_gaps": list(
+                                facts.get("coverage_gaps") or ()),
+                            "has_diff": bool(row["raw_diff_blob"]),
+                            "_stamp": stamp,
+                        }
+                        records[row["id"]] = record
+                    rule_id = str(row["rule_id"] or "")
+                    if rule_id and all(
+                            r["id"] != rule_id for r in record["rules"]):
+                        record["rules"].append({
+                            "id": rule_id,
+                            "severity": str(row["severity"] or ""),
+                        })
+                if current_day is not None:
+                    for doc in _day_documents(current_day, records):
+                        handle.write(json.dumps(
+                            doc, separators=(",", ":"), sort_keys=True)
+                            + "\n")
+                        chunks += 1
+        os.replace(tmp_name, output_path)
+    except BaseException:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+        raise
+    typer.echo(
+        f"exported {count} scans in {chunks} chunk(s) to {output_path}")
+
+
+def full_aur_verify_cmd(
+    package: list[str] = typer.Option(
+        [], "--package", help="Verify only these packages (repeatable)"),
+    limit: int = typer.Option(0, "--limit", help="Cap the number verified (0 = all)"),
+    manifest_dir: Path | None = typer.Option(
+        None, "--manifest-dir",
+        help="Directory of <package>.json artifact manifests produced by "
+             "an external build (a JSON array, or {manifest, declared}); "
+             "without one every package reports l9_unavailable."),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+):
+    """Batch L9 verification for corpus operators.
+
+    TrustSight does not build packages: the manifests in ``--manifest-dir``
+    are the whole handoff, named ``<package>.json`` (a JSON array, or an
+    object carrying ``manifest`` and ``declared``).  The static core never
+    runs package code.  With the lane disabled, a missing manifest, or no
+    sandbox container, every package reports ``l9_unavailable`` - a
+    weight-0 boundary, never a verdict.
+    """
+    from ..api import TrustSight
+    from ..config import ensure_default_configs
+    from ..db import get_all_packages, init_db
+
+    ensure_default_configs()
+    init_db()
+    if manifest_dir is not None and not manifest_dir.is_dir():
+        raise typer.BadParameter(
+            f"--manifest-dir is not a directory: {manifest_dir}")
+    names = [str(n) for n in package if n]
+    if not names:
+        names = [str(p.get("name")) for p in get_all_packages()
+                 if p.get("name")]
+    if limit:
+        names = names[:limit]
+    from ..api._validation import _validate_name
+
+    # Validate before any file is opened: the manifest path is built from
+    # the package name, so an unchecked name is a path traversal.
+    for name in names:
+        _validate_name(name)
+    client = TrustSight()
+    results = [
+        client.verify_build(
+            name, manifest_text=_batch_manifest_text(manifest_dir, name))
+        for name in names
+    ]
+    unavailable = sum(
+        1 for r in results if r["status"] == "l9_unavailable")
+    if json_output:
+        typer.echo(json.dumps(
+            {"packages": len(results), "results": results}, indent=2))
+        return
+    if results and unavailable == len(results):
+        typer.echo(
+            f"L9 build lane unavailable for all {len(results)} package(s)")
+        return
+    for result in results:
+        typer.echo(f"{result['package']}: {result['status']}")
+
+
+def _batch_manifest_text(directory: Path | None, package: str) -> str | None:
+    """The operator-supplied manifest for one package, or ``None``.
+
+    The parent enforces only the size bound and hands the bytes to the
+    read-role sandbox; it never parses attacker-controlled manifest JSON.
+    """
+    if directory is None:
+        return None
+    from ..analysis.artifact import MAX_MANIFEST_BYTES
+    from ..bounded_io import ReadTooLarge, read_file_capped
+
+    root = directory.resolve()
+    try:
+        path = (root / f"{package}.json").resolve()
+    except OSError:
+        return None
+    if not path.is_relative_to(root) or not path.is_file():
+        return None
+    try:
+        return read_file_capped(
+            path, MAX_MANIFEST_BYTES, f"manifest for {package}",
+        ).decode("utf-8")
+    except ReadTooLarge as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    except (OSError, UnicodeDecodeError) as exc:
+        raise typer.BadParameter(
+            f"manifest for {package} could not be read: {exc}") from exc
+
+
+def _fail(message: str, json_output: bool = False) -> NoReturn:
+    """Report a refused command line and exit 2, as JSON under --json."""
+    if json_output:
+        typer.echo(json.dumps({"error": message}))
+    else:
+        _print_colored(message, "red", stderr=True)
+    raise typer.Exit(code=2)
+
+
 def _register_full_aur(app: typer.Typer) -> None:
+    """Register the ``full-aur`` group and its subcommands."""
     full_aur_app = typer.Typer(
         help="Bootstrap or update the full-AUR baseline corpus.",
         invoke_without_command=True, no_args_is_help=False,
     )
-
-    @full_aur_app.callback()
-    def full_aur_cmd(
-        ctx: typer.Context,
-        resume: bool = typer.Option(False, "--resume", help="Continue an interrupted bootstrap (now implied: cycles resume automatically)"),
-        bootstrap: bool = typer.Option(False, "--bootstrap", help="Allow a from-scratch bootstrap of the whole AUR when no snapshot exists (capped per cycle, resumes)"),
-        export: str | None = typer.Option(None, "--export", help="Path to write the baseline artifact (.tar.zst)"),
-        sign: str | None = typer.Option(None, "--sign", help="Path to ed25519 private key for signing"),
-        watch: bool = typer.Option(False, "--watch", help="Keep running cycles on an interval until interrupted"),
-        interval: int | None = typer.Option(None, "--interval", help="Seconds between --watch cycles (default 3600, floor 60)"),
-        cycles: int = typer.Option(0, "--cycles", help="Stop --watch after this many cycles (0 = until interrupted)"),
-        notify: str | None = typer.Option(None, "--notify", help="POST new alerts as JSON to this webhook URL each cycle (overrides [notify] webhook in config.toml)"),
-        over_threshold: int | None = typer.Option(None, "--over-threshold", help="Alert bar: packages scoring strictly above this land in the cycle's over_threshold list (default 30, the benign corpus p95)"),
-        since: str | None = typer.Option(None, "--since", help="Replay change history from this date (YYYY-MM-DD, UTC), one AUR day per cycle, then join the live stream"),
-        depth: int | None = typer.Option(None, "--depth", help="AUR dependency levels to analyse: 0 off, 1 default, n levels, -1 every level (bounded)"),
-        auto_pull_baselines: bool = typer.Option(False, "--auto-pull-baselines", help="With --watch, pull and import a newer baseline seed after each cycle"),
-        auto_pull_iocs: bool = typer.Option(False, "--auto-pull-iocs", help="With --watch, pull and import newer IOC feeds after each cycle"),
-        auto_pull_watchlists: bool = typer.Option(False, "--auto-pull-watchlists", help="With --watch, pull and import a newer watchlist release after each cycle"),
-        transitions: str | None = typer.Option(None, "--transitions", help="Show this package's recorded property timeline and exit (read-only; works offline)"),
-        limit: int = typer.Option(500, "--limit", help="With --transitions, the newest rows to show (0 = all)"),
-        json_output: bool = typer.Option(False, "--json", help="Output JSON"),
-    ):
-        """Bootstrap or update the full-AUR baseline corpus.
-
-        Without a prior snapshot a full bootstrap fetches every PKGBUILD in
-        the AUR, so it must be asked for with --bootstrap. Every cycle is
-        capped (limits.corpus_max_per_cycle) and resumes automatically, so a
-        large amount of work advances in gentle chunks. With --watch the
-        cycle repeats on an interval.
-        """
-        if ctx.invoked_subcommand is not None:
-            return
-        from .. import release
-        from ..full_aur.pipeline import run_baseline_build, run_watch
-        ensure_default_configs()
-        init_db()
-        if transitions is not None:
-            if watch or bootstrap or export or sign or since is not None:
-                msg = ("--transitions is a read-only view and cannot be "
-                       "combined with --watch/--bootstrap/--export/--sign/"
-                       "--since")
-                if json_output:
-                    typer.echo(json.dumps({"error": msg}))
-                else:
-                    _print_colored(msg, "red", stderr=True)
-                raise typer.Exit(code=2)
-            if limit < 0:
-                msg = "--limit must be 0 (all rows) or a positive count"
-                if json_output:
-                    typer.echo(json.dumps({"error": msg}))
-                else:
-                    _print_colored(msg, "red", stderr=True)
-                raise typer.Exit(code=2)
-            _print_property_transitions(
-                transitions, json_output=json_output, limit=limit or None
-            )
-            return
-        since_ts = None
-        if since is not None:
-            from datetime import datetime, timezone
-            try:
-                since_ts = int(datetime.strptime(since, "%Y-%m-%d")
-                               .replace(tzinfo=timezone.utc).timestamp())
-            except ValueError:
-                msg = f"--since wants a date as YYYY-MM-DD, got {since!r}"
-                if json_output:
-                    typer.echo(json.dumps({"error": msg}))
-                else:
-                    _print_colored(msg, "red", stderr=True)
-                raise typer.Exit(code=2)
-            if since_ts >= int(datetime.now(timezone.utc).timestamp()):
-                msg = "--since must name a day in the past"
-                if json_output:
-                    typer.echo(json.dumps({"error": msg}))
-                else:
-                    _print_colored(msg, "red", stderr=True)
-                raise typer.Exit(code=2)
-        if release.offline():
-            msg = "full-aur needs the AUR network channel; TRUSTSIGHT_OFFLINE is set."
-            if json_output:
-                typer.echo(json.dumps({"error": msg}))
-            else:
-                _print_colored(msg, "red", stderr=True)
-            raise typer.Exit(code=2)
-        if depth is not None and depth < -1:
-            msg = "--depth must be -1 (every level), 0 (off) or a positive level count"
-            if json_output:
-                typer.echo(json.dumps({"error": msg}))
-            else:
-                _print_colored(msg, "red", stderr=True)
-            raise typer.Exit(code=2)
-        if (auto_pull_baselines or auto_pull_iocs
-                or auto_pull_watchlists) and not watch:
-            msg = ("--auto-pull-baselines/--auto-pull-iocs/"
-                   "--auto-pull-watchlists pull data across cycles and only "
-                   "make sense with --watch.")
-            if json_output:
-                typer.echo(json.dumps({"error": msg}))
-            else:
-                _print_colored(msg, "red", stderr=True)
-            raise typer.Exit(code=2)
-        if watch:
-            if export or sign or bootstrap or resume:
-                msg = ("--export/--sign describe a single artifact, and "
-                       "--bootstrap/--resume a single cycle; run them "
-                       "without --watch.")
-                if json_output:
-                    typer.echo(json.dumps({"error": msg}))
-                else:
-                    _print_colored(msg, "red", stderr=True)
-                raise typer.Exit(code=2)
-            if cycles < 0:
-                msg = "--cycles must be 0 (until interrupted) or a positive count"
-                if json_output:
-                    typer.echo(json.dumps({"error": msg}))
-                else:
-                    _print_colored(msg, "red", stderr=True)
-                raise typer.Exit(code=2)
-            from ..full_aur.watch_lock import WatchAlreadyRunning, watch_lock
-
-            try:
-                with watch_lock():
-                    results = run_watch(
-                        interval=interval, cycles=cycles,
-                        json_output=json_output, notify_url=notify,
-                        over_threshold=over_threshold, since=since_ts,
-                        depth=depth,
-                        auto_pull_baselines=auto_pull_baselines,
-                        auto_pull_iocs=auto_pull_iocs,
-                        auto_pull_watchlists=auto_pull_watchlists,
-                    )
-            except WatchAlreadyRunning as exc:
-                msg = str(exc)
-                if json_output:
-                    typer.echo(json.dumps({"error": msg}))
-                else:
-                    _print_colored(msg, "red", stderr=True)
-                raise typer.Exit(code=2)
-            # A watch that ended on a refusal never analysed anything: the
-            # single-shot path already maps that to exit 2, and the loop is
-            # the same "could not run" case.
-            if results and results[-1].refused:
-                raise typer.Exit(code=2)
-            return
-        result = run_baseline_build(
-            resume=resume, export_path=export, sign_key=sign,
-            json_output=json_output, bootstrap=bootstrap,
-            over_threshold=over_threshold, since=since_ts,
-            depth=depth,
-        )
-        # Single-shot cycles alert too: a bootstrap chunk is where a
-        # high-scoring package is most likely to land.
-        from ..notify import maybe_notify
-
-        maybe_notify(result, notify)
-        if result.refused:
-            raise typer.Exit(code=2)
-
-    @full_aur_app.command("maintenance")
-    def full_aur_maintenance_cmd(
-        json_output: bool = typer.Option(False, "--json", help="Output JSON"),
-        dry_run: bool = typer.Option(False, "--dry-run", help="Report only; change nothing"),
-        vacuum: bool = typer.Option(False, "--vacuum", help="Reclaim space after pruning (slow)"),
-        prune_cycle_events_days: int = typer.Option(
-            0, "--prune-cycle-events-days",
-            help="Delete cycle events older than this many days (0 keeps all)",
-        ),
-        prune_alert_state_days: int = typer.Option(
-            0, "--prune-alert-state-days",
-            help="Delete alert history not seen for this many days (0 keeps all)",
-        ),
-    ):
-        """Report or reclaim watcher database growth."""
-        from ..db import (
-            database_stats, init_db, prune_alert_state, prune_cycle_events,
-            vacuum_database,
-        )
-
-        init_db()
-        before = database_stats()
-        report = {"before": before, "dry_run": dry_run, "pruned": {}}
-        if not dry_run:
-            if prune_cycle_events_days:
-                report["pruned"]["cycle_events"] = prune_cycle_events(
-                    prune_cycle_events_days)
-            if prune_alert_state_days:
-                report["pruned"]["alert_state"] = prune_alert_state(
-                    prune_alert_state_days)
-            if vacuum:
-                vacuum_database()
-                report["vacuumed"] = True
-            report["after"] = database_stats()
-        if json_output:
-            typer.echo(json.dumps(report, indent=2))
-            return
-        size = before["bytes"]
-        typer.echo(f"Database: {before['path']} ({size} bytes, WAL {before['wal_bytes']})")
-        outbox = before["outbox"]
-        typer.echo(
-            f"Outbox: {outbox['pending']} pending, {outbox['parked']} parked"
-        )
-        if dry_run:
-            typer.echo("Dry run: nothing changed")
-        else:
-            for table, count in report["pruned"].items():
-                typer.echo(f"Pruned {count} {table} row(s)")
-            if report.get("vacuumed"):
-                typer.echo("Vacuum complete")
-
-    @full_aur_app.command("health")
-    def full_aur_health_cmd(
-        json_output: bool = typer.Option(False, "--json", help="Output JSON"),
-        optional: bool = typer.Option(
-            False, "--optional",
-            help="Exit 0 when this database has no watcher state",
-        ),
-    ):
-        """Report whether the watch loop is alive and delivering."""
-        from ..full_aur.watch_state import health
-
-        state = health()
-        if json_output:
-            typer.echo(json.dumps(state, indent=2))
-        else:
-            if not state.get("watching"):
-                typer.echo("No watcher state recorded")
-            else:
-                typer.echo(
-                    f"Watcher: {'healthy' if state['healthy'] else 'unhealthy'}"
-                    f"{' - ' + state['reason'] if state.get('reason') else ''}"
-                )
-                typer.echo(
-                    f"  last success: {state.get('last_success') or 'never'}"
-                    f"  failures: {state.get('consecutive_failures', 0)}"
-                )
-                outbox = state.get("outbox", {})
-                typer.echo(
-                    f"  outbox: {outbox.get('pending', 0)} pending, "
-                    f"{outbox.get('parked', 0)} parked"
-                )
-        if not state.get("healthy"):
-            raise typer.Exit(code=1)
-        if not state.get("watching") and not optional:
-            raise typer.Exit(code=1)
-
-    @full_aur_app.command("export-scans")
-    def full_aur_export_scans_cmd(
-        output: Path = typer.Option(..., "--output", help="NDJSON output path"),
-        since: str = typer.Option("", "--since", help="First UTC day, YYYY-MM-DD"),
-        until: str = typer.Option("", "--until", help="Last UTC day, YYYY-MM-DD"),
-    ):
-        """Export analysis history as compact ``trustsight.scans`` NDJSON.
-
-        The export groups rows by UTC day into synthetic backfill cycles.  It
-        carries no diff and no fact JSON; the feed's scan tables only need the
-        package, score, risk, versions, rules and coverage gaps.
-        """
-        from .. import __version__
-        from ..db import get_connection
-        from ..scoring import risk_level
-
-        clauses = ["h.timestamp IS NOT NULL", "h.timestamp != ''"]
-        params: list[str] = []
-        if since:
-            clauses.append("substr(h.timestamp, 1, 10) >= ?")
-            params.append(since)
-        if until:
-            clauses.append("substr(h.timestamp, 1, 10) <= ?")
-            params.append(until)
-        sql = f"""
-            SELECT h.id, h.timestamp, h.old_version, h.new_version,
-                   h.final_score, h.fact_json, h.raw_diff_blob, p.name,
-                   tr.rule_id, tr.severity
-              FROM analysis_history h
-              JOIN packages p ON p.id = h.package_id
-              LEFT JOIN triggered_rules tr ON tr.history_id = h.id
-             WHERE {' AND '.join(clauses)}
-             ORDER BY h.timestamp, h.id, tr.rule_id
-        """
-        output_path = Path(output)
-        if output_path.is_symlink():
-            raise typer.BadParameter(
-                f"{output_path} is a symlink; refusing to write through it")
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-
-        def _day_documents(day: str, records: dict[int, dict]):
-            ordered = sorted(records.values(), key=lambda item: item["package"])
-            stamps = [str(item.pop("_stamp")) for item in ordered]
-            started = min(stamps)
-            finished = max(stamps)
-            for index in range(0, len(ordered), 500):
-                chunk = ordered[index:index + 500]
-                yield {
-                    "event": "trustsight.scans",
-                    "tool": "trustsight",
-                    "tool_version": __version__,
-                    "cycle_id": f"backfill:{day}",
-                    "started_at": started,
-                    "finished_at": finished,
-                    "partial": False,
-                    "bootstrap": False,
-                    "backfill_day": day,
-                    "chunk_index": index // 500,
-                    "chunk_count": (len(ordered) + 499) // 500,
-                    "summary": {
-                        "attempted": len(ordered),
-                        "succeeded": len(ordered),
-                        "fetch_failed": 0,
-                        "not_vetted": 0,
-                        "vanished": 0,
-                        "reserved": 0,
-                        "with_diff": sum(
-                            1 for item in ordered if item["has_diff"]),
-                        "alerts": 0,
-                    },
-                    "scans": chunk,
-                }
-
-        # Stream the history day by day into a private temporary file and
-        # replace the target atomically: a corpus export can be large, and a
-        # partial file must never be mistaken for a complete one.
-        count = 0
-        chunks = 0
-        fd, tmp_name = tempfile.mkstemp(
-            dir=str(output_path.parent), prefix=".scans-", suffix=".tmp")
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                with get_connection() as conn:
-                    cursor = conn.execute(sql, params)
-                    current_day = None
-                    records: dict[int, dict] = {}
-                    for row in cursor:
-                        stamp = str(row["timestamp"] or "")
-                        day = stamp[:10]
-                        if not day:
-                            continue
-                        if day != current_day:
-                            if current_day is not None:
-                                for doc in _day_documents(current_day, records):
-                                    handle.write(json.dumps(
-                                        doc, separators=(",", ":"),
-                                        sort_keys=True) + "\n")
-                                    chunks += 1
-                            current_day = day
-                            records = {}
-                        record = records.get(row["id"])
-                        if record is None:
-                            count += 1
-                            facts = {}
-                            try:
-                                facts = json.loads(row["fact_json"] or "{}")
-                            except (TypeError, ValueError):
-                                facts = {}
-                            score = int(row["final_score"] or 0)
-                            record = {
-                                "package": row["name"],
-                                "status": "ok",
-                                "score": score,
-                                "risk": str(facts.get("risk") or risk_level(score)),
-                                "old_version": str(row["old_version"] or ""),
-                                "new_version": str(row["new_version"] or ""),
-                                "maintainer": "",
-                                "rules": [],
-                                "coverage_gaps": list(
-                                    facts.get("coverage_gaps") or ()),
-                                "has_diff": bool(row["raw_diff_blob"]),
-                                "_stamp": stamp,
-                            }
-                            records[row["id"]] = record
-                        rule_id = str(row["rule_id"] or "")
-                        if rule_id and all(
-                                r["id"] != rule_id for r in record["rules"]):
-                            record["rules"].append({
-                                "id": rule_id,
-                                "severity": str(row["severity"] or ""),
-                            })
-                    if current_day is not None:
-                        for doc in _day_documents(current_day, records):
-                            handle.write(json.dumps(
-                                doc, separators=(",", ":"), sort_keys=True)
-                                + "\n")
-                            chunks += 1
-            os.replace(tmp_name, output_path)
-        except BaseException:
-            try:
-                os.unlink(tmp_name)
-            except OSError:
-                pass
-            raise
-        typer.echo(
-            f"exported {count} scans in {chunks} chunk(s) to {output_path}")
-
-    @full_aur_app.command("verify")
-    def full_aur_verify_cmd(
-        package: list[str] = typer.Option(
-            [], "--package", help="Verify only these packages (repeatable)"),
-        limit: int = typer.Option(0, "--limit", help="Cap the number verified (0 = all)"),
-        manifest_dir: Path | None = typer.Option(
-            None, "--manifest-dir",
-            help="Directory of <package>.json artifact manifests produced by "
-                 "an external build (a JSON array, or {manifest, declared}); "
-                 "without one every package reports l9_unavailable."),
-        json_output: bool = typer.Option(False, "--json", help="Output JSON"),
-    ):
-        """Batch L9 verification for corpus operators.
-
-        TrustSight does not build packages: the manifests in ``--manifest-dir``
-        are the whole handoff, named ``<package>.json`` (a JSON array, or an
-        object carrying ``manifest`` and ``declared``).  The static core never
-        runs package code.  With the lane disabled, a missing manifest, or no
-        sandbox container, every package reports ``l9_unavailable`` - a
-        weight-0 boundary, never a verdict.
-        """
-        from ..api import TrustSight
-        from ..config import ensure_default_configs
-        from ..db import get_all_packages, init_db
-
-        ensure_default_configs()
-        init_db()
-        if manifest_dir is not None and not manifest_dir.is_dir():
-            raise typer.BadParameter(
-                f"--manifest-dir is not a directory: {manifest_dir}")
-        names = [str(n) for n in package if n]
-        if not names:
-            names = [str(p.get("name")) for p in get_all_packages()
-                     if p.get("name")]
-        if limit:
-            names = names[:limit]
-        from ..api._validation import _validate_name
-
-        # Validate before any file is opened: the manifest path is built from
-        # the package name, so an unchecked name is a path traversal.
-        for name in names:
-            _validate_name(name)
-        client = TrustSight()
-        results = [
-            client.verify_build(
-                name, manifest_text=_batch_manifest_text(manifest_dir, name))
-            for name in names
-        ]
-        unavailable = sum(
-            1 for r in results if r["status"] == "l9_unavailable")
-        if json_output:
-            typer.echo(json.dumps(
-                {"packages": len(results), "results": results}, indent=2))
-            return
-        if results and unavailable == len(results):
-            typer.echo(
-                f"L9 build lane unavailable for all {len(results)} package(s)")
-            return
-        for result in results:
-            typer.echo(f"{result['package']}: {result['status']}")
-
-    def _batch_manifest_text(directory: Path | None, package: str) -> str | None:
-        """The operator-supplied manifest for one package, or ``None``.
-
-        The parent enforces only the size bound and hands the bytes to the
-        read-role sandbox; it never parses attacker-controlled manifest JSON.
-        """
-        if directory is None:
-            return None
-        from ..analysis.artifact import MAX_MANIFEST_BYTES
-        from ..bounded_io import ReadTooLarge, read_file_capped
-
-        root = directory.resolve()
-        try:
-            path = (root / f"{package}.json").resolve()
-        except OSError:
-            return None
-        if not path.is_relative_to(root) or not path.is_file():
-            return None
-        try:
-            return read_file_capped(
-                path, MAX_MANIFEST_BYTES, f"manifest for {package}",
-            ).decode("utf-8")
-        except ReadTooLarge as exc:
-            raise typer.BadParameter(str(exc)) from exc
-        except (OSError, UnicodeDecodeError) as exc:
-            raise typer.BadParameter(
-                f"manifest for {package} could not be read: {exc}") from exc
-
+    full_aur_app.callback()(full_aur_cmd)
+    full_aur_app.command("maintenance")(full_aur_maintenance_cmd)
+    full_aur_app.command("health")(full_aur_health_cmd)
+    full_aur_app.command("export-scans")(full_aur_export_scans_cmd)
+    full_aur_app.command("verify")(full_aur_verify_cmd)
     app.add_typer(full_aur_app, name="full-aur")

@@ -2,10 +2,8 @@
 
 from dataclasses import dataclass
 
-from trustsight.full_aur._baseline_build import (
-    _dependency_analysis,
-    _scan_records,
-)
+from trustsight.full_aur._baseline_build import _scan_records
+from trustsight.full_aur._cycle import _dependency_analysis
 
 
 @dataclass

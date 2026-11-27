@@ -548,3 +548,9 @@ reason = "one-shot Unix-socket request/response: the only state is a local conne
 modules = [
   "upstream_fetcher_client.py",
 ]
+
+[[exempt]]
+reason = "per-package helpers for the corpus cycle: the accumulators live only for the cycle that owns them and carry no lifecycle of their own; the cycle's modes are narrated under corpus-cycle"
+modules = [
+  "full_aur/_cycle.py",
+]
